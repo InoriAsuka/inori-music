@@ -1,0 +1,251 @@
+package httpapi
+
+import (
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+
+	"inori-music/services/api/internal/storage"
+)
+
+const maxRequestBodyBytes = 1 << 20
+
+// HandlerOption configures the HTTP API handler.
+type HandlerOption func(*Handler)
+
+// WithAdminToken enables Bearer Token authentication for administrator routes.
+func WithAdminToken(token string) HandlerOption {
+	return func(handler *Handler) {
+		handler.adminToken = strings.TrimSpace(token)
+	}
+}
+
+// Handler serves versioned administrative HTTP endpoints.
+type Handler struct {
+	storage    *storage.Service
+	adminToken string
+}
+
+type storageBackendRequest struct {
+	ID          string                `json:"id"`
+	Type        storage.BackendType   `json:"type"`
+	DisplayName string                `json:"displayName"`
+	Enabled     bool                  `json:"enabled"`
+	IsDefault   bool                  `json:"isDefault"`
+	Priority    int                   `json:"priority"`
+	Config      storage.BackendConfig `json:"config"`
+}
+
+func (request storageBackendRequest) backend() storage.StorageBackend {
+	return storage.StorageBackend{
+		ID:          request.ID,
+		Type:        request.Type,
+		DisplayName: request.DisplayName,
+		Enabled:     request.Enabled,
+		IsDefault:   request.IsDefault,
+		Priority:    request.Priority,
+		Config:      request.Config,
+	}
+}
+
+func NewHandler(storageService *storage.Service, options ...HandlerOption) *Handler {
+	handler := &Handler{storage: storageService}
+	for _, option := range options {
+		option(handler)
+	}
+	return handler
+}
+
+func (handler *Handler) Routes() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /healthz", handler.health)
+	mux.HandleFunc("GET /api/v1/admin/storage/backends", handler.requireAdminAuth(handler.listStorageBackends))
+	mux.HandleFunc("POST /api/v1/admin/storage/backends", handler.requireAdminAuth(handler.registerStorageBackend))
+	mux.HandleFunc("POST /api/v1/admin/storage/backends/validate", handler.requireAdminAuth(handler.validateStorageBackend))
+	mux.HandleFunc("POST /api/v1/admin/storage/backends/{id}/default", handler.requireAdminAuth(handler.setDefaultStorageBackend))
+	mux.HandleFunc("POST /api/v1/admin/storage/backends/{id}/disable", handler.requireAdminAuth(handler.disableStorageBackend))
+	mux.HandleFunc("POST /api/v1/admin/storage/backends/{id}/probe", handler.requireAdminAuth(handler.probeStorageBackend))
+	mux.HandleFunc("GET /api/v1/admin/storage/backends/{id}/health", handler.requireAdminAuth(handler.getStorageBackendHealth))
+	mux.HandleFunc("/healthz", handler.methodNotAllowed)
+	mux.HandleFunc("/api/v1/admin/storage/backends", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/storage/backends/validate", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/storage/backends/{id}/default", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/storage/backends/{id}/disable", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/storage/backends/{id}/probe", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/storage/backends/{id}/health", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/", handler.requireAdminAuth(handler.notFound))
+	mux.HandleFunc("/", handler.notFound)
+	return mux
+}
+
+func (handler *Handler) health(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (handler *Handler) methodNotAllowed(w http.ResponseWriter, _ *http.Request) {
+	writeAPIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+}
+
+func (handler *Handler) notFound(w http.ResponseWriter, _ *http.Request) {
+	writeAPIError(w, http.StatusNotFound, "not_found", "resource not found")
+}
+
+func (handler *Handler) requireAdminAuth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if handler.adminToken == "" {
+			writeAPIError(w, http.StatusServiceUnavailable, "admin_auth_not_configured", "administrator token is not configured")
+			return
+		}
+
+		token, ok := bearerToken(r.Header.Get("Authorization"))
+		if !ok || !constantTimeTokenEqual(token, handler.adminToken) {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="inori-admin"`)
+			writeAPIError(w, http.StatusUnauthorized, "unauthorized", "valid administrator bearer token is required")
+			return
+		}
+
+		next(w, r)
+	}
+}
+
+func bearerToken(header string) (string, bool) {
+	parts := strings.Fields(header)
+	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") || parts[1] == "" {
+		return "", false
+	}
+	return parts[1], true
+}
+
+func constantTimeTokenEqual(candidate string, expected string) bool {
+	candidateHash := sha256.Sum256([]byte(candidate))
+	expectedHash := sha256.Sum256([]byte(expected))
+	return subtle.ConstantTimeCompare(candidateHash[:], expectedHash[:]) == 1
+}
+
+func (handler *Handler) listStorageBackends(w http.ResponseWriter, r *http.Request) {
+	backends, err := handler.storage.ListBackends(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"backends": backends})
+}
+
+func (handler *Handler) registerStorageBackend(w http.ResponseWriter, r *http.Request) {
+	var request storageBackendRequest
+	if err := decodeJSON(w, r, &request); err != nil {
+		writeError(w, err)
+		return
+	}
+	registered, err := handler.storage.RegisterBackend(r.Context(), request.backend())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, registered)
+}
+
+func (handler *Handler) validateStorageBackend(w http.ResponseWriter, r *http.Request) {
+	var request storageBackendRequest
+	if err := decodeJSON(w, r, &request); err != nil {
+		writeError(w, err)
+		return
+	}
+	validated, err := handler.storage.ValidateBackend(request.backend())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, validated)
+}
+
+func (handler *Handler) setDefaultStorageBackend(w http.ResponseWriter, r *http.Request) {
+	backend, err := handler.storage.SetDefaultBackend(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, backend)
+}
+
+func (handler *Handler) disableStorageBackend(w http.ResponseWriter, r *http.Request) {
+	backend, err := handler.storage.DisableBackend(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, backend)
+}
+
+func (handler *Handler) probeStorageBackend(w http.ResponseWriter, r *http.Request) {
+	result, err := handler.storage.ProbeBackend(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (handler *Handler) getStorageBackendHealth(w http.ResponseWriter, r *http.Request) {
+	result, err := handler.storage.GetBackendHealth(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func decodeJSON(w http.ResponseWriter, r *http.Request, target any) error {
+	contentType := strings.ToLower(strings.TrimSpace(strings.Split(r.Header.Get("Content-Type"), ";")[0]))
+	if contentType != "application/json" {
+		return fmt.Errorf("%w: Content-Type must be application/json", storage.ErrInvalidBackend)
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return fmt.Errorf("%w: request body: %v", storage.ErrInvalidBackend, err)
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return fmt.Errorf("%w: request body must contain one JSON value", storage.ErrInvalidBackend)
+	}
+	return nil
+}
+
+func writeError(w http.ResponseWriter, err error) {
+	status := http.StatusInternalServerError
+	code := "internal_error"
+	switch {
+	case errors.Is(err, storage.ErrInvalidBackend):
+		status = http.StatusBadRequest
+		code = "invalid_backend"
+	case errors.Is(err, storage.ErrNotFound):
+		status = http.StatusNotFound
+		code = "not_found"
+	case errors.Is(err, storage.ErrConflict), errors.Is(err, storage.ErrBackendDisabled):
+		status = http.StatusConflict
+		code = "conflict"
+	case errors.Is(err, storage.ErrProbeUnsupported):
+		status = http.StatusUnprocessableEntity
+		code = "probe_unsupported"
+	case errors.Is(err, storage.ErrProbeFailed):
+		status = http.StatusUnprocessableEntity
+		code = "probe_failed"
+	}
+	writeAPIError(w, status, code, strings.TrimSpace(err.Error()))
+}
+
+func writeAPIError(w http.ResponseWriter, status int, code string, message string) {
+	writeJSON(w, status, map[string]any{"error": map[string]string{"code": code, "message": message}})
+}
+
+func writeJSON(w http.ResponseWriter, status int, value any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(value)
+}
