@@ -39,7 +39,7 @@ v0.1.0
 
 ## Future Implementation Tasks
 
-- [ ] Scaffold the Go API service and storage domain module.
+- [x] Scaffold the Go API service and storage domain module.
 - [ ] Implement `StorageBackend` and `MediaObject` database models.
 - [ ] Implement local filesystem backend validation.
 - [ ] Implement mounted filesystem backend support for NFS and SMB through validated mount paths.
@@ -47,7 +47,7 @@ v0.1.0
 - [ ] Add storage health check jobs.
 - [ ] Add administrative API endpoints for storage backend management.
 - [ ] Add OpenAPI contracts for storage administration.
-- [ ] Add integration tests for local and S3-compatible storage adapters.
+- [ ] Add integration tests for local and S3-compatible storage adapters. Domain unit tests were added in phase 2; real adapter integration tests remain pending.
 
 ## Completion Notes
 

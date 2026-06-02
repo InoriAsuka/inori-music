@@ -4,7 +4,7 @@
 
 ## Version
 
-Current architecture baseline version: `0.1.0`.
+Current architecture baseline version: `0.2.0`.
 
 ## 0.x Architecture Direction
 
@@ -28,6 +28,10 @@ The first phase establishes the media storage architecture before runtime implem
 - `distributed`: distributed storage such as Ceph, Garage, SeaweedFS, or similar systems through S3-compatible APIs, mounted filesystems, or future dedicated adapters.
 
 Large audio files are stored outside the relational database. The database stores metadata, backend IDs, object keys, content hashes, lifecycle state, and references.
+
+## Phase 2: Storage Domain Scaffold
+
+The second phase starts the Go API service scaffold and implements the storage administration domain as executable, tested server-side code. The initial domain package validates backend configuration, infers backend capabilities, manages default backend selection, and provides an in-memory repository for early development.
 
 ## Repository Planning Artifacts
 

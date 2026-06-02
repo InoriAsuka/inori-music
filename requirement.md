@@ -8,6 +8,8 @@ Inori Music is a full-platform centralized music playback system that supports b
 
 The current 0.x line focuses on architecture bootstrapping, requirements traceability, and the first runnable service foundations. The first phase defines the server-managed media storage architecture before feature implementation begins.
 
+The next development phase starts the Go API service scaffold and implements the storage administration domain as testable server-side code.
+
 ## Storage Requirements
 
 ### Media Storage Scope
@@ -67,6 +69,14 @@ The server-side primary database for 0.x should be PostgreSQL-first. The client-
 The 0.x server-side search should begin with PostgreSQL full-text search, normalized fields, aliases, and ranking rules. External search engines are optional future integrations when scale, language quality, or typo-tolerance requirements exceed PostgreSQL capabilities.
 
 ## Requirement History
+
+### v0.2.0 - 2026-06-02
+
+- Started the server API scaffold for the storage administration domain.
+- Required a typed storage domain model for backend families, capability detection, health status, and media object references.
+- Required a validation service that rejects invalid backend configuration before a backend can be registered or selected as default.
+- Required an in-memory repository implementation for early domain tests before PostgreSQL migrations are introduced.
+- Required unit tests for local, NFS, SMB, S3-compatible, distributed backend validation, default backend selection, and unsafe configuration rejection.
 
 ### v0.1.0 - 2026-06-02
 
