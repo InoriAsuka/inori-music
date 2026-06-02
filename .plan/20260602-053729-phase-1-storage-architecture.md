@@ -43,7 +43,7 @@ v0.1.0
 - [ ] Implement `StorageBackend` and `MediaObject` database models.
 - [x] Implement local filesystem backend validation and safe real probe checks.
 - [x] Implement mounted filesystem backend validation and safe real probe checks for NFS and SMB paths.
-- [ ] Implement S3-compatible backend validation.
+- [x] Implement S3-compatible backend validation and safe real probe checks.
 - [ ] Add scheduled storage health check jobs. On-demand probes were added in phase 5.
 - [x] Add administrative API endpoints for storage backend management.
 - [ ] Add OpenAPI contracts for storage administration.

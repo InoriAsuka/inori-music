@@ -10,7 +10,7 @@ If `INORI_ADMIN_TOKEN` is not configured, `/api/v1/admin/*` routes fail closed w
 
 This API supports safe real filesystem probes for LocalSystem, NFS, SMB, and `distributed` backends using the `mounted-filesystem` adapter. Filesystem probes create, write, full-read, range-read, and remove only a short-lived server-owned probe file inside the configured root. The server does not mount or unmount remote filesystems.
 
-S3-compatible credentials, buckets, and dedicated distributed adapters are not probed yet. Static validation only checks request shape and configuration consistency; the explicit probe endpoint checks supported mounted filesystem semantics.
+This API also supports conservative S3-compatible object probes for `s3` backends and `distributed` backends using the `s3-compatible` adapter. S3-compatible probes put, full-read, range-read, and delete only a short-lived server-owned probe object under `.inori-music-probe/`. Static validation still only checks request shape and configuration consistency; the explicit probe endpoint checks supported mounted filesystem or S3-compatible semantics.
 
 ## Endpoints
 
@@ -43,7 +43,9 @@ Missing, malformed, or invalid credentials return `401 unauthorized` when the to
 - Each backend configuration must contain exactly one family branch matching its `type`.
 - Static validation does not imply external connectivity or permission validation.
 - Filesystem probes operate only on an application-owned `.inori-music-probe-*` temporary file and clean it up after the check.
+- S3-compatible probes operate only on an application-owned `.inori-music-probe/*` object key and clean it up after the check.
 - NFS and SMB mounts must already exist at the host level; the application does not mount remote shares.
+- S3-compatible credentials are resolved from environment variable names in `accessKeySecretRef` and `secretKeySecretRef`; secret values must not be stored in repository files.
 
 ## Example
 
@@ -89,7 +91,7 @@ Current error codes:
 | `404` | `not_found` | The route or backend does not exist. |
 | `405` | `method_not_allowed` | The route exists but does not support the requested method. |
 | `409` | `conflict` | The requested lifecycle transition conflicts with current state, such as probing a disabled backend. |
-| `422` | `probe_unsupported` | The backend does not yet have a real probe adapter; its health state remains unchanged. |
+| `422` | `probe_unsupported` | The backend does not yet have a real probe adapter, such as a future dedicated distributed adapter; its health state remains unchanged. |
 | `422` | `probe_failed` | A supported real probe could not complete successfully. |
 | `500` | `internal_error` | An unexpected server failure occurred. |
 | `503` | `admin_auth_not_configured` | No bootstrap admin token has been configured. |

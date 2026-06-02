@@ -83,10 +83,14 @@ type S3Config struct {
 }
 
 type DistributedConfig struct {
-	Adapter   string `json:"adapter"`
-	Endpoint  string `json:"endpoint,omitempty"`
-	Bucket    string `json:"bucket,omitempty"`
-	MountPath string `json:"mountPath,omitempty"`
+	Adapter            string `json:"adapter"`
+	Endpoint           string `json:"endpoint,omitempty"`
+	Region             string `json:"region,omitempty"`
+	Bucket             string `json:"bucket,omitempty"`
+	PathStyle          bool   `json:"pathStyle"`
+	AccessKeySecretRef string `json:"accessKeySecretRef,omitempty"`
+	SecretKeySecretRef string `json:"secretKeySecretRef,omitempty"`
+	MountPath          string `json:"mountPath,omitempty"`
 }
 
 // MediaObject references a stored binary asset without embedding large media in the database.

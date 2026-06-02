@@ -202,8 +202,8 @@ When an administrator creates or updates a storage backend, the server should:
 
 1. LocalSystem adapter.
 2. Mounted filesystem support for NFS and SMB using validated mount paths.
-3. S3-compatible adapter.
-4. Health check and capability tracking for LocalSystem, NFS, SMB, and mounted-filesystem distributed adapters.
+3. S3-compatible adapter and safe short-lived object probes.
+4. Health check and capability tracking for LocalSystem, NFS, SMB, S3-compatible, and distributed mounted-filesystem or S3-compatible adapters.
 5. Distributed storage adapters through S3-compatible or mounted filesystem strategies.
 6. Dedicated distributed-storage adapters only when a real deployment requires them.
 
@@ -216,4 +216,15 @@ LocalSystem, NFS, SMB, and `distributed` backends using the `mounted-filesystem`
 3. Perform full-read and range-read verification.
 4. Close and remove the same probe file.
 
-The probe never scans, modifies, or deletes unrelated media files. NFS and SMB mounting remain host-level operational responsibilities. S3-compatible and dedicated distributed probes require later adapters.
+The probe never scans, modifies, or deletes unrelated media files. NFS and SMB mounting remain host-level operational responsibilities. S3-compatible object probes are implemented separately with short-lived `.inori-music-probe/*` object keys. Dedicated distributed probes beyond mounted-filesystem and S3-compatible adapters require later adapters.
+
+## S3-Compatible Probe Safety
+
+S3-compatible backends can be verified through a conservative object probe. The probe resolves credentials from `accessKeySecretRef` and `secretKeySecretRef` environment variable names, then performs only these operations inside a server-owned `.inori-music-probe/` prefix:
+
+1. Put one short-lived probe object.
+2. Perform full-read verification.
+3. Perform range-read verification.
+4. Delete the same probe object with best-effort cleanup if a later step fails.
+
+The S3-compatible probe validates basic object API behavior only. It does not validate provider-specific lifecycle policies, versioning, object lock, event notifications, or bucket-level administration.

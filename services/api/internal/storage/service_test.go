@@ -3,10 +3,9 @@ package storage
 import (
 	"context"
 	"errors"
-<<<<<<< codex
 	"path/filepath"
-=======
->>>>>>> main
+	"path/filepath"
+
 	"testing"
 	"time"
 )
@@ -158,7 +157,6 @@ func TestServiceRegistrationResetsServerOwnedState(t *testing.T) {
 		t.Fatalf("registered createdAt = %v, want server time after %v", registered.CreatedAt, checkTime)
 	}
 }
-<<<<<<< codex
 
 func TestServiceProbeBackendUpdatesHealth(t *testing.T) {
 	ctx := context.Background()
@@ -191,7 +189,7 @@ func TestServiceProbeBackendUpdatesHealth(t *testing.T) {
 	}
 }
 
-func TestServiceProbeBackendRecordsFailure(t *testing.T) {
+func TestServiceProbeBackendRecordsMissingS3CredentialFailure(t *testing.T) {
 	ctx := context.Background()
 	service := NewService(NewMemoryRepository())
 	_, err := service.RegisterBackend(ctx, StorageBackend{
@@ -206,18 +204,18 @@ func TestServiceProbeBackendRecordsFailure(t *testing.T) {
 	}
 
 	result, err := service.ProbeBackend(ctx, "s3-main")
-	if !errors.Is(err, ErrProbeUnsupported) {
-		t.Fatalf("ProbeBackend() error = %v, want ErrProbeUnsupported", err)
+	if !errors.Is(err, ErrProbeFailed) {
+		t.Fatalf("ProbeBackend() error = %v, want ErrProbeFailed", err)
 	}
-	if result.Status != HealthStatusUnknown || !result.CheckedAt.IsZero() {
-		t.Fatalf("ProbeBackend() result = %+v, want unchanged unknown state for unsupported probe", result)
+	if result.Status != HealthStatusUnhealthy || result.CheckedAt.IsZero() {
+		t.Fatalf("ProbeBackend() result = %+v, want unhealthy checked state for failed s3 probe", result)
 	}
 	health, err := service.GetBackendHealth(ctx, "s3-main")
 	if err != nil {
 		t.Fatalf("GetBackendHealth() error = %v", err)
 	}
-	if health.Status != HealthStatusUnknown || !health.CheckedAt.IsZero() {
-		t.Fatalf("GetBackendHealth() = %+v, want unchanged unknown state", health)
+	if health.Status != HealthStatusUnhealthy || health.CheckedAt.IsZero() {
+		t.Fatalf("GetBackendHealth() = %+v, want unhealthy checked state", health)
 	}
 }
 
@@ -274,5 +272,3 @@ func TestServiceProbeBackendRecordsFilesystemFailure(t *testing.T) {
 		t.Fatalf("GetBackendHealth() = %+v, want unhealthy checked state", health)
 	}
 }
-=======
->>>>>>> main

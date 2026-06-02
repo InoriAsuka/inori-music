@@ -51,9 +51,9 @@ v0.3.0
 - [ ] Add encrypted backend configuration persistence.
 - [ ] Add OpenAPI contracts and contract validation.
 - [x] Add real local and mounted-filesystem backend probes.
-- [ ] Add S3-compatible backend probes.
+- [x] Add S3-compatible backend probes.
 - [ ] Add scheduled storage health refresh jobs and capacity reporting. On-demand health endpoints were added in phase 5.
 
 ## Completion Notes
 
-This phase exposes static storage configuration management over HTTP. At phase-3 completion it intentionally did not claim that a backend was reachable. Phase 5 later added explicit on-demand probes for local and mounted-filesystem semantics; S3-compatible probes remain future work.
+This phase exposes static storage configuration management over HTTP. At phase-3 completion it intentionally did not claim that a backend was reachable. Phase 5 later added explicit on-demand probes for local and mounted-filesystem semantics; phase 6 later added S3-compatible object probes.

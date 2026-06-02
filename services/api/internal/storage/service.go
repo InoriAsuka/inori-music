@@ -15,7 +15,7 @@ type Service struct {
 }
 
 func NewService(repository Repository) *Service {
-	return &Service{repository: repository, prober: NewFilesystemProber(), now: time.Now}
+	return &Service{repository: repository, prober: NewCompositeProber(NewFilesystemProber(), NewS3Prober()), now: time.Now}
 }
 
 // ValidateBackend checks a backend candidate without persisting it or probing external systems.

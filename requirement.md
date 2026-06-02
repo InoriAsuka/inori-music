@@ -16,6 +16,8 @@ The phase-4 development scope protects storage administration routes with explic
 
 The phase-5 development scope adds safe, real filesystem probe checks and persists the latest backend health state in the server-managed repository.
 
+The phase-6 development scope adds safe, real S3-compatible object probes using short-lived server-owned probe objects and secret references resolved from environment variables.
+
 ## Storage Requirements
 
 ### Media Storage Scope
@@ -75,6 +77,15 @@ The server-side primary database for 0.x should be PostgreSQL-first. The client-
 The 0.x server-side search should begin with PostgreSQL full-text search, normalized fields, aliases, and ranking rules. External search engines are optional future integrations when scale, language quality, or typo-tolerance requirements exceed PostgreSQL capabilities.
 
 ## Requirement History
+
+### v0.6.0 - 2026-06-02
+
+- Required safe real S3-compatible object probes for `s3` and distributed `s3-compatible` storage backends.
+- Required S3 probes to resolve credentials from `accessKeySecretRef` and `secretKeySecretRef` environment variable names without logging secret values.
+- Required S3 probes to put, full-read, range-read, and delete only a short-lived server-owned probe object.
+- Required S3 probe cleanup to run even when read or validation steps fail after object creation.
+- Required S3 probe tests using a local fake S3-compatible HTTP server instead of external cloud services.
+- Required probe docs to distinguish supported filesystem and S3-compatible probes from future dedicated distributed adapters.
 
 ### v0.5.0 - 2026-06-02
 

@@ -129,7 +129,7 @@ func TestStorageBackendProbeWorkflow(t *testing.T) {
 	assertJSONField(t, health, "status", "healthy")
 }
 
-func TestStorageBackendProbeUnsupported(t *testing.T) {
+func TestStorageBackendProbeMissingS3CredentialFailure(t *testing.T) {
 	handler := newTestHandler()
 	s3 := `{"id":"s3-probe","type":"s3","displayName":"S3","enabled":true,"config":{"s3":{"endpoint":"https://s3.example.com","bucket":"inori","accessKeySecretRef":"A","secretKeySecretRef":"S"}}}`
 	registered := performRequest(t, handler, http.MethodPost, "/api/v1/admin/storage/backends", s3)
@@ -137,12 +137,12 @@ func TestStorageBackendProbeUnsupported(t *testing.T) {
 		t.Fatalf("register status = %d body = %s", registered.Code, registered.Body.String())
 	}
 	probed := performRequest(t, handler, http.MethodPost, "/api/v1/admin/storage/backends/s3-probe/probe", "")
-	assertAPIError(t, probed, http.StatusUnprocessableEntity, "probe_unsupported")
+	assertAPIError(t, probed, http.StatusUnprocessableEntity, "probe_failed")
 	health := performRequest(t, handler, http.MethodGet, "/api/v1/admin/storage/backends/s3-probe/health", "")
 	if health.Code != http.StatusOK {
 		t.Fatalf("health status = %d body = %s", health.Code, health.Body.String())
 	}
-	assertJSONField(t, health, "status", "unknown")
+	assertJSONField(t, health, "status", "unhealthy")
 }
 
 func TestStorageBackendErrors(t *testing.T) {

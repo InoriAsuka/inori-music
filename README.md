@@ -4,7 +4,7 @@
 
 ## Version
 
-Current architecture baseline version: `0.5.0`.
+Current architecture baseline version: `0.6.0`.
 
 ## 0.x Architecture Direction
 
@@ -44,6 +44,10 @@ The fourth phase protects storage administration routes with Bearer Token authen
 ## Phase 5: Filesystem Health Probes
 
 The fifth phase adds safe real health probes for LocalSystem, NFS, SMB, and mounted-filesystem distributed backends. Each probe creates, reads, range-reads, and removes only a short-lived server-owned file inside the configured root, then records the latest backend health state.
+
+## Phase 6: S3-Compatible Object Probes
+
+The sixth phase adds safe real S3-compatible probes for `s3` backends and distributed backends using the `s3-compatible` adapter. Each probe writes, full-reads, range-reads, and deletes only a short-lived server-owned object key, with credentials resolved from configured environment variable references.
 
 ## Run the API Scaffold
 
