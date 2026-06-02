@@ -45,9 +45,9 @@ v0.2.0
 - [ ] Add encrypted configuration persistence.
 - [x] Add HTTP admin endpoints.
 - [ ] Add OpenAPI contracts.
-- [ ] Add real filesystem probe checks for local, NFS, and SMB mount paths.
+- [x] Add real filesystem probe checks for local, NFS, and SMB mount paths.
 - [ ] Add S3-compatible probe checks with temporary test objects.
-- [ ] Add scheduled health checks and capacity metadata refresh.
+- [ ] Add scheduled health checks and capacity metadata refresh. On-demand probes were added in phase 5.
 
 ## Completion Notes
 

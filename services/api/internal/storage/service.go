@@ -10,11 +10,12 @@ import (
 // Service coordinates storage backend administration rules.
 type Service struct {
 	repository Repository
+	prober     Prober
 	now        func() time.Time
 }
 
 func NewService(repository Repository) *Service {
-	return &Service{repository: repository, now: time.Now}
+	return &Service{repository: repository, prober: NewFilesystemProber(), now: time.Now}
 }
 
 // ValidateBackend checks a backend candidate without persisting it or probing external systems.
@@ -58,6 +59,50 @@ func (service *Service) RegisterBackend(ctx context.Context, backend StorageBack
 
 func (service *Service) ListBackends(ctx context.Context) ([]StorageBackend, error) {
 	return service.repository.List(ctx)
+}
+
+func (service *Service) GetBackendHealth(ctx context.Context, id string) (ProbeResult, error) {
+	backend, err := service.repository.Get(ctx, id)
+	if err != nil {
+		return ProbeResult{}, err
+	}
+	result := ProbeResult{BackendID: backend.ID, Status: backend.HealthStatus}
+	if backend.LastHealthCheckAt != nil {
+		result.CheckedAt = *backend.LastHealthCheckAt
+	}
+	return result, nil
+}
+
+func (service *Service) ProbeBackend(ctx context.Context, id string) (ProbeResult, error) {
+	backend, err := service.repository.Get(ctx, id)
+	if err != nil {
+		return ProbeResult{}, err
+	}
+	if !backend.Enabled {
+		return ProbeResult{BackendID: backend.ID, Status: HealthStatusDisabled}, fmt.Errorf("%w: %s", ErrBackendDisabled, id)
+	}
+
+	checkedAt := service.now().UTC()
+	probeErr := service.prober.Probe(ctx, backend)
+	if errors.Is(probeErr, ErrProbeUnsupported) {
+		return ProbeResult{BackendID: backend.ID, Status: backend.HealthStatus, Message: probeErr.Error()}, probeErr
+	}
+	backend.LastHealthCheckAt = &checkedAt
+	backend.UpdatedAt = checkedAt
+	backend.HealthStatus = HealthStatusHealthy
+	result := ProbeResult{BackendID: backend.ID, Status: HealthStatusHealthy, CheckedAt: checkedAt}
+	if probeErr != nil {
+		backend.HealthStatus = HealthStatusUnhealthy
+		result.Status = HealthStatusUnhealthy
+		result.Message = probeErr.Error()
+	}
+	if err := service.repository.Save(ctx, backend); err != nil {
+		return ProbeResult{}, err
+	}
+	if probeErr != nil {
+		return result, probeErr
+	}
+	return result, nil
 }
 
 func (service *Service) SetDefaultBackend(ctx context.Context, id string) (StorageBackend, error) {

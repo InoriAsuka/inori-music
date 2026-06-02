@@ -3,6 +3,10 @@ package storage
 import (
 	"context"
 	"errors"
+<<<<<<< codex
+	"path/filepath"
+=======
+>>>>>>> main
 	"testing"
 	"time"
 )
@@ -154,3 +158,121 @@ func TestServiceRegistrationResetsServerOwnedState(t *testing.T) {
 		t.Fatalf("registered createdAt = %v, want server time after %v", registered.CreatedAt, checkTime)
 	}
 }
+<<<<<<< codex
+
+func TestServiceProbeBackendUpdatesHealth(t *testing.T) {
+	ctx := context.Background()
+	service := NewService(NewMemoryRepository())
+	root := t.TempDir()
+	_, err := service.RegisterBackend(ctx, StorageBackend{
+		ID:          "local-main",
+		Type:        BackendTypeLocal,
+		DisplayName: "Local",
+		Enabled:     true,
+		Config:      BackendConfig{Local: &LocalConfig{RootPath: root}},
+	})
+	if err != nil {
+		t.Fatalf("RegisterBackend() error = %v", err)
+	}
+
+	result, err := service.ProbeBackend(ctx, "local-main")
+	if err != nil {
+		t.Fatalf("ProbeBackend() error = %v", err)
+	}
+	if result.Status != HealthStatusHealthy || result.CheckedAt.IsZero() {
+		t.Fatalf("ProbeBackend() result = %+v, want healthy checked result", result)
+	}
+	health, err := service.GetBackendHealth(ctx, "local-main")
+	if err != nil {
+		t.Fatalf("GetBackendHealth() error = %v", err)
+	}
+	if health.Status != HealthStatusHealthy || !health.CheckedAt.Equal(result.CheckedAt) {
+		t.Fatalf("GetBackendHealth() = %+v, want latest probe state %+v", health, result)
+	}
+}
+
+func TestServiceProbeBackendRecordsFailure(t *testing.T) {
+	ctx := context.Background()
+	service := NewService(NewMemoryRepository())
+	_, err := service.RegisterBackend(ctx, StorageBackend{
+		ID:          "s3-main",
+		Type:        BackendTypeS3,
+		DisplayName: "S3",
+		Enabled:     true,
+		Config:      BackendConfig{S3: &S3Config{Endpoint: "https://s3.example.com", Bucket: "inori", AccessKeySecretRef: "A", SecretKeySecretRef: "S"}},
+	})
+	if err != nil {
+		t.Fatalf("RegisterBackend() error = %v", err)
+	}
+
+	result, err := service.ProbeBackend(ctx, "s3-main")
+	if !errors.Is(err, ErrProbeUnsupported) {
+		t.Fatalf("ProbeBackend() error = %v, want ErrProbeUnsupported", err)
+	}
+	if result.Status != HealthStatusUnknown || !result.CheckedAt.IsZero() {
+		t.Fatalf("ProbeBackend() result = %+v, want unchanged unknown state for unsupported probe", result)
+	}
+	health, err := service.GetBackendHealth(ctx, "s3-main")
+	if err != nil {
+		t.Fatalf("GetBackendHealth() error = %v", err)
+	}
+	if health.Status != HealthStatusUnknown || !health.CheckedAt.IsZero() {
+		t.Fatalf("GetBackendHealth() = %+v, want unchanged unknown state", health)
+	}
+}
+
+func TestServiceProbeBackendRejectsDisabledBackend(t *testing.T) {
+	ctx := context.Background()
+	service := NewService(NewMemoryRepository())
+	_, err := service.RegisterBackend(ctx, StorageBackend{
+		ID:          "local-disabled",
+		Type:        BackendTypeLocal,
+		DisplayName: "Disabled",
+		Enabled:     false,
+		Config:      BackendConfig{Local: &LocalConfig{RootPath: t.TempDir()}},
+	})
+	if err != nil {
+		t.Fatalf("RegisterBackend() error = %v", err)
+	}
+
+	result, err := service.ProbeBackend(ctx, "local-disabled")
+	if !errors.Is(err, ErrBackendDisabled) {
+		t.Fatalf("ProbeBackend() error = %v, want ErrBackendDisabled", err)
+	}
+	if result.Status != HealthStatusDisabled {
+		t.Fatalf("ProbeBackend() result = %+v, want disabled", result)
+	}
+}
+
+func TestServiceProbeBackendRecordsFilesystemFailure(t *testing.T) {
+	ctx := context.Background()
+	service := NewService(NewMemoryRepository())
+	missingRoot := filepath.Join(t.TempDir(), "missing")
+	_, err := service.RegisterBackend(ctx, StorageBackend{
+		ID:          "local-missing",
+		Type:        BackendTypeLocal,
+		DisplayName: "Missing",
+		Enabled:     true,
+		Config:      BackendConfig{Local: &LocalConfig{RootPath: missingRoot}},
+	})
+	if err != nil {
+		t.Fatalf("RegisterBackend() error = %v", err)
+	}
+
+	result, err := service.ProbeBackend(ctx, "local-missing")
+	if !errors.Is(err, ErrProbeFailed) {
+		t.Fatalf("ProbeBackend() error = %v, want ErrProbeFailed", err)
+	}
+	if result.Status != HealthStatusUnhealthy || result.CheckedAt.IsZero() {
+		t.Fatalf("ProbeBackend() result = %+v, want unhealthy checked result", result)
+	}
+	health, err := service.GetBackendHealth(ctx, "local-missing")
+	if err != nil {
+		t.Fatalf("GetBackendHealth() error = %v", err)
+	}
+	if health.Status != HealthStatusUnhealthy || health.CheckedAt.IsZero() {
+		t.Fatalf("GetBackendHealth() = %+v, want unhealthy checked state", health)
+	}
+}
+=======
+>>>>>>> main

@@ -12,7 +12,9 @@ The phase-2 development scope starts the Go API service scaffold and implements 
 
 The phase-3 development scope exposes the storage administration domain through a versioned HTTP JSON API for server-side backend management.
 
-The phase-4 development scope protects storage administration routes with an explicit administrator bearer token and keeps health checks unauthenticated for deployment probes.
+The phase-4 development scope protects storage administration routes with explicit administrator Bearer Token authentication while keeping health checks public.
+
+The phase-5 development scope adds safe, real filesystem probe checks and persists the latest backend health state in the server-managed repository.
 
 ## Storage Requirements
 
@@ -74,15 +76,23 @@ The 0.x server-side search should begin with PostgreSQL full-text search, normal
 
 ## Requirement History
 
+### v0.5.0 - 2026-06-02
+
+- Required safe real probe checks for LocalSystem, NFS, SMB, and mounted-filesystem distributed storage backends.
+- Required probes to create, write, read, range-read, and remove only a short-lived server-owned probe file inside the configured storage root.
+- Required probe failures to update backend health state without deleting or modifying unrelated user media.
+- Required disabled backends and unsupported probe adapters to return explicit domain errors.
+- Required authenticated HTTP operations to probe a registered backend and inspect its latest health state.
+- Required probe tests for successful local filesystems, cleanup, missing directories, unsupported S3 probes, disabled backends, and HTTP health workflows.
+
 ### v0.4.0 - 2026-06-02
 
-- Required administrator authentication for all storage administration routes.
-- Required `GET /healthz` to remain unauthenticated for process and deployment health probes.
-- Required server startup to reject missing admin token configuration unless an explicit insecure development mode is enabled, and reject weak configured tokens.
-- Required stable JSON error envelopes for unauthenticated, invalid-token, and auth-not-configured states.
-- Required constant-time bearer token comparison for configured admin tokens.
-- Required documentation for local development, token configuration, and insecure development mode limitations.
-- Required handler and startup tests for authenticated and unauthenticated scenarios.
+- Required administrator authentication for all `/api/v1/admin/*` routes before further storage management work.
+- Required `/healthz` to remain public for local process and container health checks.
+- Required `INORI_ADMIN_TOKEN` as the initial bootstrap credential source for the Go API server.
+- Required admin routes to fail closed with `503 admin_auth_not_configured` when no token is configured.
+- Required malformed, missing, and invalid credentials to use stable JSON error envelopes.
+- Required constant-time token comparison and tests for public health, missing auth, invalid auth, configured auth, and disabled auth states.
 
 ### v0.3.0 - 2026-06-02
 

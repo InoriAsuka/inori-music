@@ -10,12 +10,57 @@ import (
 	"inori-music/services/api/internal/storage"
 )
 
-func TestHealth(t *testing.T) {
-	response := performRequest(t, newTestHandler(), http.MethodGet, "/healthz", "")
-	if response.Code != http.StatusOK {
-		t.Fatalf("GET /healthz status = %d, want %d", response.Code, http.StatusOK)
+const testAdminToken = "test-admin-token"
+
+func TestHealthIsPublic(t *testing.T) {
+	for _, handler := range []http.Handler{newTestHandler(), newUnauthenticatedTestHandler()} {
+		response := performRequestWithoutAuth(t, handler, http.MethodGet, "/healthz", "")
+		if response.Code != http.StatusOK {
+			t.Fatalf("GET /healthz status = %d, want %d", response.Code, http.StatusOK)
+		}
+		assertJSONField(t, response, "status", "ok")
 	}
-	assertJSONField(t, response, "status", "ok")
+}
+
+func TestAdminAuth(t *testing.T) {
+	handler := newTestHandler()
+	tests := []struct {
+		name   string
+		header string
+		status int
+		code   string
+	}{
+		{name: "missing", status: http.StatusUnauthorized, code: "unauthorized"},
+		{name: "malformed", header: "Basic abc", status: http.StatusUnauthorized, code: "unauthorized"},
+		{name: "invalid", header: "Bearer wrong-token", status: http.StatusUnauthorized, code: "unauthorized"},
+		{name: "case insensitive scheme", header: "bearer " + testAdminToken, status: http.StatusOK},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			response := performRequestWithAuthHeader(t, handler, http.MethodGet, "/api/v1/admin/storage/backends", "", tt.header)
+			if tt.code != "" {
+				assertAPIError(t, response, tt.status, tt.code)
+				if response.Header().Get("WWW-Authenticate") == "" {
+					t.Fatal("WWW-Authenticate header should be set for unauthorized responses")
+				}
+				return
+			}
+			if response.Code != tt.status {
+				t.Fatalf("status = %d, want %d, body = %s", response.Code, tt.status, response.Body.String())
+			}
+		})
+	}
+}
+
+func TestAdminAuthFailsClosedWhenTokenIsNotConfigured(t *testing.T) {
+	response := performRequestWithoutAuth(t, newUnauthenticatedTestHandler(), http.MethodGet, "/api/v1/admin/storage/backends", "")
+	assertAPIError(t, response, http.StatusServiceUnavailable, "admin_auth_not_configured")
+}
+
+func TestUnknownAdminRouteRequiresAuth(t *testing.T) {
+	response := performRequestWithoutAuth(t, newTestHandler(), http.MethodGet, "/api/v1/admin/missing", "")
+	assertAPIError(t, response, http.StatusUnauthorized, "unauthorized")
 }
 
 func TestStorageBackendWorkflow(t *testing.T) {
@@ -63,6 +108,43 @@ func TestStorageBackendWorkflow(t *testing.T) {
 	}
 }
 
+func TestStorageBackendProbeWorkflow(t *testing.T) {
+	handler := newTestHandler()
+	root := t.TempDir()
+	local := `{"id":"local-probe","type":"local","displayName":"Local Probe","enabled":true,"config":{"local":{"rootPath":"` + root + `"}}}`
+
+	registered := performRequest(t, handler, http.MethodPost, "/api/v1/admin/storage/backends", local)
+	if registered.Code != http.StatusCreated {
+		t.Fatalf("register status = %d body = %s", registered.Code, registered.Body.String())
+	}
+	probed := performRequest(t, handler, http.MethodPost, "/api/v1/admin/storage/backends/local-probe/probe", "")
+	if probed.Code != http.StatusOK {
+		t.Fatalf("probe status = %d body = %s", probed.Code, probed.Body.String())
+	}
+	assertJSONField(t, probed, "status", "healthy")
+	health := performRequest(t, handler, http.MethodGet, "/api/v1/admin/storage/backends/local-probe/health", "")
+	if health.Code != http.StatusOK {
+		t.Fatalf("health status = %d body = %s", health.Code, health.Body.String())
+	}
+	assertJSONField(t, health, "status", "healthy")
+}
+
+func TestStorageBackendProbeUnsupported(t *testing.T) {
+	handler := newTestHandler()
+	s3 := `{"id":"s3-probe","type":"s3","displayName":"S3","enabled":true,"config":{"s3":{"endpoint":"https://s3.example.com","bucket":"inori","accessKeySecretRef":"A","secretKeySecretRef":"S"}}}`
+	registered := performRequest(t, handler, http.MethodPost, "/api/v1/admin/storage/backends", s3)
+	if registered.Code != http.StatusCreated {
+		t.Fatalf("register status = %d body = %s", registered.Code, registered.Body.String())
+	}
+	probed := performRequest(t, handler, http.MethodPost, "/api/v1/admin/storage/backends/s3-probe/probe", "")
+	assertAPIError(t, probed, http.StatusUnprocessableEntity, "probe_unsupported")
+	health := performRequest(t, handler, http.MethodGet, "/api/v1/admin/storage/backends/s3-probe/health", "")
+	if health.Code != http.StatusOK {
+		t.Fatalf("health status = %d body = %s", health.Code, health.Body.String())
+	}
+	assertJSONField(t, health, "status", "unknown")
+}
+
 func TestStorageBackendErrors(t *testing.T) {
 	handler := newTestHandler()
 	valid := `{"id":"local-main","type":"local","displayName":"Local Media","enabled":true,"config":{"local":{"rootPath":"/srv/inori/media"}}}`
@@ -82,7 +164,8 @@ func TestStorageBackendErrors(t *testing.T) {
 		{name: "server owned field", method: http.MethodPost, path: "/api/v1/admin/storage/backends", body: `{"id":"local-main","healthStatus":"healthy"}`, status: http.StatusBadRequest, code: "invalid_backend"},
 		{name: "oversized body", method: http.MethodPost, path: "/api/v1/admin/storage/backends", body: strings.Repeat(" ", maxRequestBodyBytes+1), status: http.StatusBadRequest, code: "invalid_backend"},
 		{name: "not found", method: http.MethodPost, path: "/api/v1/admin/storage/backends/missing/default", status: http.StatusNotFound, code: "not_found"},
-		{name: "unknown route", method: http.MethodGet, path: "/missing", status: http.StatusNotFound, code: "not_found"},
+		{name: "unknown public route", method: http.MethodGet, path: "/missing", status: http.StatusNotFound, code: "not_found"},
+		{name: "unknown admin route", method: http.MethodGet, path: "/api/v1/admin/missing", status: http.StatusNotFound, code: "not_found"},
 		{name: "unsupported method", method: http.MethodPut, path: "/api/v1/admin/storage/backends", status: http.StatusMethodNotAllowed, code: "method_not_allowed"},
 	}
 
@@ -101,59 +184,39 @@ func TestStorageBackendErrors(t *testing.T) {
 	assertAPIError(t, duplicate, http.StatusConflict, "conflict")
 }
 
-const testAdminToken = "0123456789abcdef0123456789abcdef"
-
-func TestAdminAuthentication(t *testing.T) {
-	secureHandler := newTestHandler()
-	noAuth := performRequestWithToken(t, secureHandler, http.MethodGet, "/api/v1/admin/storage/backends", "", "")
-	assertAPIError(t, noAuth, http.StatusUnauthorized, "unauthorized")
-	if noAuth.Header().Get("WWW-Authenticate") == "" {
-		t.Fatal("missing WWW-Authenticate header")
-	}
-
-	badAuth := performRequestWithToken(t, secureHandler, http.MethodGet, "/api/v1/admin/storage/backends", "", "wrong-token")
-	assertAPIError(t, badAuth, http.StatusUnauthorized, "unauthorized")
-
-	health := performRequestWithToken(t, secureHandler, http.MethodGet, "/healthz", "", "")
-	if health.Code != http.StatusOK {
-		t.Fatalf("health without auth status = %d, want %d", health.Code, http.StatusOK)
-	}
-
-	unconfiguredHandler := NewHandler(storage.NewService(storage.NewMemoryRepository())).Routes()
-	unconfigured := performRequestWithToken(t, unconfiguredHandler, http.MethodGet, "/api/v1/admin/storage/backends", "", testAdminToken)
-	assertAPIError(t, unconfigured, http.StatusServiceUnavailable, "auth_not_configured")
-
-	insecureHandler := NewHandler(storage.NewService(storage.NewMemoryRepository()), WithInsecureAdminAuth()).Routes()
-	insecure := performRequestWithToken(t, insecureHandler, http.MethodGet, "/api/v1/admin/storage/backends", "", "")
-	if insecure.Code != http.StatusOK {
-		t.Fatalf("insecure dev status = %d, want %d, body = %s", insecure.Code, http.StatusOK, insecure.Body.String())
-	}
-}
-
 func newTestHandler() http.Handler {
 	return NewHandler(storage.NewService(storage.NewMemoryRepository()), WithAdminToken(testAdminToken)).Routes()
 }
 
+func newUnauthenticatedTestHandler() http.Handler {
+	return NewHandler(storage.NewService(storage.NewMemoryRepository())).Routes()
+}
+
 func performRequest(t *testing.T, handler http.Handler, method string, path string, body string) *httptest.ResponseRecorder {
 	t.Helper()
-	return performRequestWithOptions(t, handler, method, path, body, true, testAdminToken)
+	return performRequestWithContentType(t, handler, method, path, body, true)
 }
 
 func performRequestWithContentType(t *testing.T, handler http.Handler, method string, path string, body string, includeContentType bool) *httptest.ResponseRecorder {
 	t.Helper()
-	return performRequestWithOptions(t, handler, method, path, body, includeContentType, testAdminToken)
+	return performRequestWithAuthHeaderAndContentType(t, handler, method, path, body, "Bearer "+testAdminToken, includeContentType)
 }
 
-func performRequestWithToken(t *testing.T, handler http.Handler, method string, path string, body string, token string) *httptest.ResponseRecorder {
+func performRequestWithoutAuth(t *testing.T, handler http.Handler, method string, path string, body string) *httptest.ResponseRecorder {
 	t.Helper()
-	return performRequestWithOptions(t, handler, method, path, body, true, token)
+	return performRequestWithAuthHeaderAndContentType(t, handler, method, path, body, "", true)
 }
 
-func performRequestWithOptions(t *testing.T, handler http.Handler, method string, path string, body string, includeContentType bool, token string) *httptest.ResponseRecorder {
+func performRequestWithAuthHeader(t *testing.T, handler http.Handler, method string, path string, body string, authHeader string) *httptest.ResponseRecorder {
+	t.Helper()
+	return performRequestWithAuthHeaderAndContentType(t, handler, method, path, body, authHeader, true)
+}
+
+func performRequestWithAuthHeaderAndContentType(t *testing.T, handler http.Handler, method string, path string, body string, authHeader string, includeContentType bool) *httptest.ResponseRecorder {
 	t.Helper()
 	request := httptest.NewRequest(method, path, strings.NewReader(body))
-	if token != "" {
-		request.Header.Set("Authorization", "Bearer "+token)
+	if authHeader != "" {
+		request.Header.Set("Authorization", authHeader)
 	}
 	if body != "" && includeContentType {
 		request.Header.Set("Content-Type", "application/json")

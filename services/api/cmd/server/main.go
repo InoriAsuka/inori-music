@@ -11,30 +11,23 @@ import (
 )
 
 func main() {
-	config, err := loadServerConfig(os.Getenv)
-	if err != nil {
-		log.Fatal(err)
+	address := os.Getenv("INORI_HTTP_ADDR")
+	if address == "" {
+		address = "127.0.0.1:8080"
 	}
-	if config.InsecureDevAuth && config.AdminToken == "" {
-		log.Print("warning: INORI_INSECURE_DEV_AUTH=1 disables admin bearer authentication; use only for local development")
+	adminToken := os.Getenv("INORI_ADMIN_TOKEN")
+	if adminToken == "" {
+		log.Print("INORI_ADMIN_TOKEN is not set; /api/v1/admin routes will return 503")
 	}
 
 	storageService := storage.NewService(storage.NewMemoryRepository())
-	options := []httpapi.Option{}
-	if config.AdminToken != "" {
-		options = append(options, httpapi.WithAdminToken(config.AdminToken))
-	}
-	if config.InsecureDevAuth && config.AdminToken == "" {
-		options = append(options, httpapi.WithInsecureAdminAuth())
-	}
-
 	server := &http.Server{
-		Addr:              config.Address,
-		Handler:           httpapi.NewHandler(storageService, options...).Routes(),
+		Addr:              address,
+		Handler:           httpapi.NewHandler(storageService, httpapi.WithAdminToken(adminToken)).Routes(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	log.Printf("inori-music api server listening on %s", config.Address)
+	log.Printf("inori-music api server listening on %s", address)
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
 	}

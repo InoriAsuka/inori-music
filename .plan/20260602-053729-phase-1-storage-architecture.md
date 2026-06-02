@@ -41,10 +41,10 @@ v0.1.0
 
 - [x] Scaffold the Go API service and storage domain module.
 - [ ] Implement `StorageBackend` and `MediaObject` database models.
-- [ ] Implement local filesystem backend validation.
-- [ ] Implement mounted filesystem backend support for NFS and SMB through validated mount paths.
+- [x] Implement local filesystem backend validation and safe real probe checks.
+- [x] Implement mounted filesystem backend validation and safe real probe checks for NFS and SMB paths.
 - [ ] Implement S3-compatible backend validation.
-- [ ] Add storage health check jobs.
+- [ ] Add scheduled storage health check jobs. On-demand probes were added in phase 5.
 - [x] Add administrative API endpoints for storage backend management.
 - [ ] Add OpenAPI contracts for storage administration.
 - [ ] Add integration tests for local and S3-compatible storage adapters. Domain unit tests were added in phase 2; real adapter integration tests remain pending.

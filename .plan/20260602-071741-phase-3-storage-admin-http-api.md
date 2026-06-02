@@ -45,14 +45,15 @@ v0.3.0
 
 ## Future Implementation Tasks
 
-- [x] Add authentication middleware.
-- [ ] Add full administrator authorization middleware.
+- [x] Add bootstrap administrator authentication middleware.
+- [ ] Add role-based administrator authorization middleware.
 - [ ] Add PostgreSQL persistence and migrations.
 - [ ] Add encrypted backend configuration persistence.
 - [ ] Add OpenAPI contracts and contract validation.
-- [ ] Add real local, mounted-filesystem, and S3-compatible backend probes.
-- [ ] Add storage health refresh jobs and capacity reporting.
+- [x] Add real local and mounted-filesystem backend probes.
+- [ ] Add S3-compatible backend probes.
+- [ ] Add scheduled storage health refresh jobs and capacity reporting. On-demand health endpoints were added in phase 5.
 
 ## Completion Notes
 
-This phase exposes static storage configuration management over HTTP. It intentionally does not claim that a backend is reachable: network, mount, permission, and object probe checks remain a later phase.
+This phase exposes static storage configuration management over HTTP. At phase-3 completion it intentionally did not claim that a backend was reachable. Phase 5 later added explicit on-demand probes for local and mounted-filesystem semantics; S3-compatible probes remain future work.

@@ -203,6 +203,17 @@ When an administrator creates or updates a storage backend, the server should:
 1. LocalSystem adapter.
 2. Mounted filesystem support for NFS and SMB using validated mount paths.
 3. S3-compatible adapter.
-4. Health check and capability tracking.
+4. Health check and capability tracking for LocalSystem, NFS, SMB, and mounted-filesystem distributed adapters.
 5. Distributed storage adapters through S3-compatible or mounted filesystem strategies.
 6. Dedicated distributed-storage adapters only when a real deployment requires them.
+
+## Filesystem Probe Safety
+
+LocalSystem, NFS, SMB, and `distributed` backends using the `mounted-filesystem` adapter can be verified through a real filesystem probe. The probe intentionally performs only these operations inside the configured root:
+
+1. Create one application-owned `.inori-music-probe-*` temporary file.
+2. Write and sync a fixed probe payload.
+3. Perform full-read and range-read verification.
+4. Close and remove the same probe file.
+
+The probe never scans, modifies, or deletes unrelated media files. NFS and SMB mounting remain host-level operational responsibilities. S3-compatible and dedicated distributed probes require later adapters.
