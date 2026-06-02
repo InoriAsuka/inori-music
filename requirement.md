@@ -12,6 +12,8 @@ The phase-2 development scope starts the Go API service scaffold and implements 
 
 The phase-3 development scope exposes the storage administration domain through a versioned HTTP JSON API for server-side backend management.
 
+The phase-4 development scope protects storage administration routes with an explicit administrator bearer token and keeps health checks unauthenticated for deployment probes.
+
 ## Storage Requirements
 
 ### Media Storage Scope
@@ -71,6 +73,16 @@ The server-side primary database for 0.x should be PostgreSQL-first. The client-
 The 0.x server-side search should begin with PostgreSQL full-text search, normalized fields, aliases, and ranking rules. External search engines are optional future integrations when scale, language quality, or typo-tolerance requirements exceed PostgreSQL capabilities.
 
 ## Requirement History
+
+### v0.4.0 - 2026-06-02
+
+- Required administrator authentication for all storage administration routes.
+- Required `GET /healthz` to remain unauthenticated for process and deployment health probes.
+- Required server startup to reject missing admin token configuration unless an explicit insecure development mode is enabled, and reject weak configured tokens.
+- Required stable JSON error envelopes for unauthenticated, invalid-token, and auth-not-configured states.
+- Required constant-time bearer token comparison for configured admin tokens.
+- Required documentation for local development, token configuration, and insecure development mode limitations.
+- Required handler and startup tests for authenticated and unauthenticated scenarios.
 
 ### v0.3.0 - 2026-06-02
 

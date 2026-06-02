@@ -1,6 +1,8 @@
 package httpapi
 
 import (
+	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,7 +17,26 @@ const maxRequestBodyBytes = 1 << 20
 
 // Handler serves versioned administrative HTTP endpoints.
 type Handler struct {
-	storage *storage.Service
+	storage                *storage.Service
+	adminToken             string
+	allowInsecureAdminAuth bool
+}
+
+// Option configures HTTP API behavior.
+type Option func(*Handler)
+
+// WithAdminToken enables bearer-token authentication for administrative routes.
+func WithAdminToken(token string) Option {
+	return func(handler *Handler) {
+		handler.adminToken = token
+	}
+}
+
+// WithInsecureAdminAuth disables admin auth and is intended only for local development.
+func WithInsecureAdminAuth() Option {
+	return func(handler *Handler) {
+		handler.allowInsecureAdminAuth = true
+	}
 }
 
 type storageBackendRequest struct {
@@ -40,18 +61,22 @@ func (request storageBackendRequest) backend() storage.StorageBackend {
 	}
 }
 
-func NewHandler(storageService *storage.Service) *Handler {
-	return &Handler{storage: storageService}
+func NewHandler(storageService *storage.Service, options ...Option) *Handler {
+	handler := &Handler{storage: storageService}
+	for _, option := range options {
+		option(handler)
+	}
+	return handler
 }
 
 func (handler *Handler) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", handler.health)
-	mux.HandleFunc("GET /api/v1/admin/storage/backends", handler.listStorageBackends)
-	mux.HandleFunc("POST /api/v1/admin/storage/backends", handler.registerStorageBackend)
-	mux.HandleFunc("POST /api/v1/admin/storage/backends/validate", handler.validateStorageBackend)
-	mux.HandleFunc("POST /api/v1/admin/storage/backends/{id}/default", handler.setDefaultStorageBackend)
-	mux.HandleFunc("POST /api/v1/admin/storage/backends/{id}/disable", handler.disableStorageBackend)
+	mux.HandleFunc("GET /api/v1/admin/storage/backends", handler.requireAdmin(handler.listStorageBackends))
+	mux.HandleFunc("POST /api/v1/admin/storage/backends", handler.requireAdmin(handler.registerStorageBackend))
+	mux.HandleFunc("POST /api/v1/admin/storage/backends/validate", handler.requireAdmin(handler.validateStorageBackend))
+	mux.HandleFunc("POST /api/v1/admin/storage/backends/{id}/default", handler.requireAdmin(handler.setDefaultStorageBackend))
+	mux.HandleFunc("POST /api/v1/admin/storage/backends/{id}/disable", handler.requireAdmin(handler.disableStorageBackend))
 	mux.HandleFunc("/healthz", handler.methodNotAllowed)
 	mux.HandleFunc("/api/v1/admin/storage/backends", handler.methodNotAllowed)
 	mux.HandleFunc("/api/v1/admin/storage/backends/validate", handler.methodNotAllowed)
@@ -71,6 +96,38 @@ func (handler *Handler) methodNotAllowed(w http.ResponseWriter, _ *http.Request)
 
 func (handler *Handler) notFound(w http.ResponseWriter, _ *http.Request) {
 	writeAPIError(w, http.StatusNotFound, "not_found", "resource not found")
+}
+
+func (handler *Handler) requireAdmin(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if handler.allowInsecureAdminAuth {
+			next(w, r)
+			return
+		}
+		if handler.adminToken == "" {
+			writeAPIError(w, http.StatusServiceUnavailable, "auth_not_configured", "admin authentication is not configured")
+			return
+		}
+
+		provided, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
+		if !ok || provided == "" {
+			writeUnauthorized(w)
+			return
+		}
+		providedHash := sha256.Sum256([]byte(provided))
+		configuredHash := sha256.Sum256([]byte(handler.adminToken))
+		if subtle.ConstantTimeCompare(providedHash[:], configuredHash[:]) != 1 {
+			writeUnauthorized(w)
+			return
+		}
+
+		next(w, r)
+	}
+}
+
+func writeUnauthorized(w http.ResponseWriter) {
+	w.Header().Set("WWW-Authenticate", `Bearer realm="inori-admin"`)
+	writeAPIError(w, http.StatusUnauthorized, "unauthorized", "valid admin bearer token is required")
 }
 
 func (handler *Handler) listStorageBackends(w http.ResponseWriter, r *http.Request) {

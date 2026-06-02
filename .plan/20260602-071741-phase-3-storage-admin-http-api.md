@@ -45,7 +45,8 @@ v0.3.0
 
 ## Future Implementation Tasks
 
-- [ ] Add authentication and administrator authorization middleware.
+- [x] Add authentication middleware.
+- [ ] Add full administrator authorization middleware.
 - [ ] Add PostgreSQL persistence and migrations.
 - [ ] Add encrypted backend configuration persistence.
 - [ ] Add OpenAPI contracts and contract validation.

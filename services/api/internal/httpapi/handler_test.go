@@ -101,18 +101,60 @@ func TestStorageBackendErrors(t *testing.T) {
 	assertAPIError(t, duplicate, http.StatusConflict, "conflict")
 }
 
+const testAdminToken = "0123456789abcdef0123456789abcdef"
+
+func TestAdminAuthentication(t *testing.T) {
+	secureHandler := newTestHandler()
+	noAuth := performRequestWithToken(t, secureHandler, http.MethodGet, "/api/v1/admin/storage/backends", "", "")
+	assertAPIError(t, noAuth, http.StatusUnauthorized, "unauthorized")
+	if noAuth.Header().Get("WWW-Authenticate") == "" {
+		t.Fatal("missing WWW-Authenticate header")
+	}
+
+	badAuth := performRequestWithToken(t, secureHandler, http.MethodGet, "/api/v1/admin/storage/backends", "", "wrong-token")
+	assertAPIError(t, badAuth, http.StatusUnauthorized, "unauthorized")
+
+	health := performRequestWithToken(t, secureHandler, http.MethodGet, "/healthz", "", "")
+	if health.Code != http.StatusOK {
+		t.Fatalf("health without auth status = %d, want %d", health.Code, http.StatusOK)
+	}
+
+	unconfiguredHandler := NewHandler(storage.NewService(storage.NewMemoryRepository())).Routes()
+	unconfigured := performRequestWithToken(t, unconfiguredHandler, http.MethodGet, "/api/v1/admin/storage/backends", "", testAdminToken)
+	assertAPIError(t, unconfigured, http.StatusServiceUnavailable, "auth_not_configured")
+
+	insecureHandler := NewHandler(storage.NewService(storage.NewMemoryRepository()), WithInsecureAdminAuth()).Routes()
+	insecure := performRequestWithToken(t, insecureHandler, http.MethodGet, "/api/v1/admin/storage/backends", "", "")
+	if insecure.Code != http.StatusOK {
+		t.Fatalf("insecure dev status = %d, want %d, body = %s", insecure.Code, http.StatusOK, insecure.Body.String())
+	}
+}
+
 func newTestHandler() http.Handler {
-	return NewHandler(storage.NewService(storage.NewMemoryRepository())).Routes()
+	return NewHandler(storage.NewService(storage.NewMemoryRepository()), WithAdminToken(testAdminToken)).Routes()
 }
 
 func performRequest(t *testing.T, handler http.Handler, method string, path string, body string) *httptest.ResponseRecorder {
 	t.Helper()
-	return performRequestWithContentType(t, handler, method, path, body, true)
+	return performRequestWithOptions(t, handler, method, path, body, true, testAdminToken)
 }
 
 func performRequestWithContentType(t *testing.T, handler http.Handler, method string, path string, body string, includeContentType bool) *httptest.ResponseRecorder {
 	t.Helper()
+	return performRequestWithOptions(t, handler, method, path, body, includeContentType, testAdminToken)
+}
+
+func performRequestWithToken(t *testing.T, handler http.Handler, method string, path string, body string, token string) *httptest.ResponseRecorder {
+	t.Helper()
+	return performRequestWithOptions(t, handler, method, path, body, true, token)
+}
+
+func performRequestWithOptions(t *testing.T, handler http.Handler, method string, path string, body string, includeContentType bool, token string) *httptest.ResponseRecorder {
+	t.Helper()
 	request := httptest.NewRequest(method, path, strings.NewReader(body))
+	if token != "" {
+		request.Header.Set("Authorization", "Bearer "+token)
+	}
 	if body != "" && includeContentType {
 		request.Header.Set("Content-Type", "application/json")
 	}

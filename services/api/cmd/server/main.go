@@ -11,19 +11,30 @@ import (
 )
 
 func main() {
-	address := os.Getenv("INORI_HTTP_ADDR")
-	if address == "" {
-		address = "127.0.0.1:8080"
+	config, err := loadServerConfig(os.Getenv)
+	if err != nil {
+		log.Fatal(err)
+	}
+	if config.InsecureDevAuth && config.AdminToken == "" {
+		log.Print("warning: INORI_INSECURE_DEV_AUTH=1 disables admin bearer authentication; use only for local development")
 	}
 
 	storageService := storage.NewService(storage.NewMemoryRepository())
+	options := []httpapi.Option{}
+	if config.AdminToken != "" {
+		options = append(options, httpapi.WithAdminToken(config.AdminToken))
+	}
+	if config.InsecureDevAuth && config.AdminToken == "" {
+		options = append(options, httpapi.WithInsecureAdminAuth())
+	}
+
 	server := &http.Server{
-		Addr:              address,
-		Handler:           httpapi.NewHandler(storageService).Routes(),
+		Addr:              config.Address,
+		Handler:           httpapi.NewHandler(storageService, options...).Routes(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
-	log.Printf("inori-music api server listening on %s", address)
+	log.Printf("inori-music api server listening on %s", config.Address)
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		log.Fatal(err)
 	}

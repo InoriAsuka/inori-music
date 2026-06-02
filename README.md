@@ -4,7 +4,7 @@
 
 ## Version
 
-Current architecture baseline version: `0.3.0`.
+Current architecture baseline version: `0.4.0`.
 
 ## 0.x Architecture Direction
 
@@ -37,13 +37,17 @@ The second phase starts the Go API service scaffold and implements the storage a
 
 The third phase exposes the storage administration domain through a runnable, versioned HTTP JSON API. The server provides health, validation, registration, listing, default-selection, and disable operations while keeping real storage probes, authentication, persistence, and OpenAPI contracts as subsequent tasks.
 
+## Phase 4: Admin API Authentication
+
+The fourth phase protects storage administration routes with an explicit administrator bearer token while keeping `GET /healthz` unauthenticated for deployment probes. Missing admin tokens are rejected at startup unless local insecure development mode is explicitly enabled, and weak configured tokens are always rejected.
+
 ## Run the API Scaffold
 
 ```bash
-go run ./services/api/cmd/server
+INORI_ADMIN_TOKEN='replace-with-a-long-random-development-token' go run ./services/api/cmd/server
 ```
 
-The HTTP server binds to `127.0.0.1:8080` by default. Override the listener with `INORI_HTTP_ADDR` only after applying appropriate network controls. See [`docs/architecture/storage-admin-http-api.md`](docs/architecture/storage-admin-http-api.md) for the current endpoint contract and security limitations.
+The HTTP server binds to `127.0.0.1:8080` by default. Override the listener with `INORI_HTTP_ADDR` only after applying appropriate network controls. For local-only experiments without an admin token, set `INORI_INSECURE_DEV_AUTH=1`; do not use that mode outside development. Admin routes require `Authorization: Bearer <INORI_ADMIN_TOKEN>`. See [`docs/architecture/storage-admin-http-api.md`](docs/architecture/storage-admin-http-api.md) for the current endpoint contract and security limitations.
 
 ## Repository Planning Artifacts
 
