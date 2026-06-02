@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 )
 
 func TestServiceRegistersAndSelectsDefaultBackend(t *testing.T) {
@@ -125,5 +126,31 @@ func TestServiceCanDisableNonDefaultBackend(t *testing.T) {
 	}
 	if disabled.Enabled || disabled.HealthStatus != HealthStatusDisabled {
 		t.Fatalf("disabled backend = %+v, want disabled health state", disabled)
+	}
+}
+
+func TestServiceRegistrationResetsServerOwnedState(t *testing.T) {
+	ctx := context.Background()
+	service := NewService(NewMemoryRepository())
+	checkTime := time.Date(2020, time.January, 2, 3, 4, 5, 0, time.UTC)
+
+	registered, err := service.RegisterBackend(ctx, StorageBackend{
+		ID:                "local-main",
+		Type:              BackendTypeLocal,
+		DisplayName:       "Local",
+		Enabled:           true,
+		HealthStatus:      HealthStatusHealthy,
+		LastHealthCheckAt: &checkTime,
+		CreatedAt:         checkTime,
+		Config:            BackendConfig{Local: &LocalConfig{RootPath: "/srv/inori/media"}},
+	})
+	if err != nil {
+		t.Fatalf("RegisterBackend() error = %v", err)
+	}
+	if registered.HealthStatus != HealthStatusUnknown || registered.LastHealthCheckAt != nil {
+		t.Fatalf("registered health state = %+v, want reset server-owned health", registered)
+	}
+	if !registered.CreatedAt.After(checkTime) {
+		t.Fatalf("registered createdAt = %v, want server time after %v", registered.CreatedAt, checkTime)
 	}
 }

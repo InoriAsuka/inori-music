@@ -4,7 +4,7 @@
 
 ## Version
 
-Current architecture baseline version: `0.2.0`.
+Current architecture baseline version: `0.3.0`.
 
 ## 0.x Architecture Direction
 
@@ -33,6 +33,18 @@ Large audio files are stored outside the relational database. The database store
 
 The second phase starts the Go API service scaffold and implements the storage administration domain as executable, tested server-side code. The initial domain package validates backend configuration, infers backend capabilities, manages default backend selection, and provides an in-memory repository for early development.
 
+## Phase 3: Storage Admin HTTP API
+
+The third phase exposes the storage administration domain through a runnable, versioned HTTP JSON API. The server provides health, validation, registration, listing, default-selection, and disable operations while keeping real storage probes, authentication, persistence, and OpenAPI contracts as subsequent tasks.
+
+## Run the API Scaffold
+
+```bash
+go run ./services/api/cmd/server
+```
+
+The HTTP server binds to `127.0.0.1:8080` by default. Override the listener with `INORI_HTTP_ADDR` only after applying appropriate network controls. See [`docs/architecture/storage-admin-http-api.md`](docs/architecture/storage-admin-http-api.md) for the current endpoint contract and security limitations.
+
 ## Repository Planning Artifacts
 
 - [`requirement.md`](requirement.md): versioned requirement baseline and requirement history.
@@ -43,5 +55,6 @@ The second phase starts the Go API service scaffold and implements the storage a
 ## Current Documents
 
 - [`docs/architecture/storage-backends.md`](docs/architecture/storage-backends.md)
+- [`docs/architecture/storage-admin-http-api.md`](docs/architecture/storage-admin-http-api.md)
 - [`docs/adr/ADR-0001-server-managed-multi-backend-media-storage.md`](docs/adr/ADR-0001-server-managed-multi-backend-media-storage.md)
 - [`docs/adr/ADR-0002-postgresql-first-database-and-search.md`](docs/adr/ADR-0002-postgresql-first-database-and-search.md)

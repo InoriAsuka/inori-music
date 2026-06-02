@@ -25,80 +25,80 @@ const (
 
 // CapabilitySet describes the operations the service can safely use for a backend.
 type CapabilitySet struct {
-	ServerRangeReads             bool
-	PresignedURLs                bool
-	MultipartUpload              bool
-	NativeLifecyclePolicy        bool
-	CrossNodeAccess              bool
-	RequiresMountValidation      bool
-	RequiresCredentialValidation bool
+	ServerRangeReads             bool `json:"serverRangeReads"`
+	PresignedURLs                bool `json:"presignedUrls"`
+	MultipartUpload              bool `json:"multipartUpload"`
+	NativeLifecyclePolicy        bool `json:"nativeLifecyclePolicy"`
+	CrossNodeAccess              bool `json:"crossNodeAccess"`
+	RequiresMountValidation      bool `json:"requiresMountValidation"`
+	RequiresCredentialValidation bool `json:"requiresCredentialValidation"`
 }
 
 // StorageBackend is the server-owned configuration record for a media backend.
 type StorageBackend struct {
-	ID                string
-	Type              BackendType
-	DisplayName       string
-	Enabled           bool
-	IsDefault         bool
-	Priority          int
-	HealthStatus      HealthStatus
-	LastHealthCheckAt *time.Time
-	Capabilities      CapabilitySet
-	Config            BackendConfig
-	CreatedAt         time.Time
-	UpdatedAt         time.Time
+	ID                string        `json:"id"`
+	Type              BackendType   `json:"type"`
+	DisplayName       string        `json:"displayName"`
+	Enabled           bool          `json:"enabled"`
+	IsDefault         bool          `json:"isDefault"`
+	Priority          int           `json:"priority"`
+	HealthStatus      HealthStatus  `json:"healthStatus"`
+	LastHealthCheckAt *time.Time    `json:"lastHealthCheckAt,omitempty"`
+	Capabilities      CapabilitySet `json:"capabilities"`
+	Config            BackendConfig `json:"config"`
+	CreatedAt         time.Time     `json:"createdAt,omitempty"`
+	UpdatedAt         time.Time     `json:"updatedAt,omitempty"`
 }
 
-// BackendConfig stores one backend-family-specific configuration.
+// BackendConfig stores exactly one backend-family-specific configuration.
 type BackendConfig struct {
-	Local       *LocalConfig
-	NFS         *NFSConfig
-	SMB         *SMBConfig
-	S3          *S3Config
-	Distributed *DistributedConfig
+	Local       *LocalConfig       `json:"local,omitempty"`
+	NFS         *NFSConfig         `json:"nfs,omitempty"`
+	SMB         *SMBConfig         `json:"smb,omitempty"`
+	S3          *S3Config          `json:"s3,omitempty"`
+	Distributed *DistributedConfig `json:"distributed,omitempty"`
 }
 
 type LocalConfig struct {
-	RootPath string
+	RootPath string `json:"rootPath"`
 }
 
 type NFSConfig struct {
-	MountPath      string
-	ExpectedRemote string
+	MountPath      string `json:"mountPath"`
+	ExpectedRemote string `json:"expectedRemote"`
 }
 
 type SMBConfig struct {
-	MountPath     string
-	ExpectedShare string
+	MountPath     string `json:"mountPath"`
+	ExpectedShare string `json:"expectedShare"`
 }
 
 type S3Config struct {
-	Endpoint           string
-	Region             string
-	Bucket             string
-	PathStyle          bool
-	AccessKeySecretRef string
-	SecretKeySecretRef string
+	Endpoint           string `json:"endpoint"`
+	Region             string `json:"region,omitempty"`
+	Bucket             string `json:"bucket"`
+	PathStyle          bool   `json:"pathStyle"`
+	AccessKeySecretRef string `json:"accessKeySecretRef"`
+	SecretKeySecretRef string `json:"secretKeySecretRef"`
 }
 
 type DistributedConfig struct {
-	Adapter   string
-	Endpoint  string
-	Bucket    string
-	MountPath string
+	Adapter   string `json:"adapter"`
+	Endpoint  string `json:"endpoint,omitempty"`
+	Bucket    string `json:"bucket,omitempty"`
+	MountPath string `json:"mountPath,omitempty"`
 }
 
 // MediaObject references a stored binary asset without embedding large media in the database.
 type MediaObject struct {
-	ID             string
-	BackendID      string
-	ObjectKey      string
-	ContentHash    string
-	SizeBytes      int64
-	MIMEType       string
-	AssetKind      string
-	LifecycleState string
-	CreatedAt      time.Time
-	UpdatedAt      time.Time
+	ID             string    `json:"id"`
+	BackendID      string    `json:"backendId"`
+	ObjectKey      string    `json:"objectKey"`
+	ContentHash    string    `json:"contentHash"`
+	SizeBytes      int64     `json:"sizeBytes"`
+	MIMEType       string    `json:"mimeType"`
+	AssetKind      string    `json:"assetKind"`
+	LifecycleState string    `json:"lifecycleState"`
+	CreatedAt      time.Time `json:"createdAt"`
+	UpdatedAt      time.Time `json:"updatedAt"`
 }

@@ -72,6 +72,8 @@ func TestValidateBackendFamilies(t *testing.T) {
 func TestValidateBackendRejectsUnsafeOrIncompleteConfig(t *testing.T) {
 	tests := []StorageBackend{
 		{ID: "missing-config", Type: BackendTypeLocal, DisplayName: "Missing", Enabled: true},
+		{ID: "multiple-configs", Type: BackendTypeLocal, DisplayName: "Multiple", Enabled: true, Config: BackendConfig{Local: &LocalConfig{RootPath: "/srv/inori"}, SMB: &SMBConfig{MountPath: "/mnt/smb", ExpectedShare: "//nas/music"}}},
+		{ID: "mismatched-config", Type: BackendTypeLocal, DisplayName: "Mismatch", Enabled: true, Config: BackendConfig{NFS: &NFSConfig{MountPath: "/mnt/nfs", ExpectedRemote: "nas:/music"}}},
 		{ID: "root-path", Type: BackendTypeLocal, DisplayName: "Root", Enabled: true, Config: BackendConfig{Local: &LocalConfig{RootPath: "/"}}},
 		{ID: "bad-smb", Type: BackendTypeSMB, DisplayName: "Bad SMB", Enabled: true, Config: BackendConfig{SMB: &SMBConfig{MountPath: "/mnt/smb", ExpectedShare: "nas/music"}}},
 		{ID: "bad-s3", Type: BackendTypeS3, DisplayName: "Bad S3", Enabled: true, Config: BackendConfig{S3: &S3Config{Endpoint: "ftp://s3.example.com", Bucket: "inori", AccessKeySecretRef: "A", SecretKeySecretRef: "S"}}},

@@ -17,6 +17,14 @@ func NewService(repository Repository) *Service {
 	return &Service{repository: repository, now: time.Now}
 }
 
+// ValidateBackend checks a backend candidate without persisting it or probing external systems.
+func (service *Service) ValidateBackend(backend StorageBackend) (StorageBackend, error) {
+	if err := ValidateBackend(&backend); err != nil {
+		return StorageBackend{}, err
+	}
+	return backend, nil
+}
+
 func (service *Service) RegisterBackend(ctx context.Context, backend StorageBackend) (StorageBackend, error) {
 	if err := ValidateBackend(&backend); err != nil {
 		return StorageBackend{}, err
@@ -28,9 +36,9 @@ func (service *Service) RegisterBackend(ctx context.Context, backend StorageBack
 	}
 
 	now := service.now().UTC()
-	if backend.CreatedAt.IsZero() {
-		backend.CreatedAt = now
-	}
+	backend.HealthStatus = HealthStatusUnknown
+	backend.LastHealthCheckAt = nil
+	backend.CreatedAt = now
 	backend.UpdatedAt = now
 
 	if backend.IsDefault {

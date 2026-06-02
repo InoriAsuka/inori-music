@@ -29,6 +29,9 @@ func ValidateBackend(backend *StorageBackend) error {
 		return fmt.Errorf("%w: display name is required", ErrInvalidBackend)
 	}
 
+	if err := validateConfigShape(backend.Type, backend.Config); err != nil {
+		return err
+	}
 	if err := validateTypedConfig(backend.Type, backend.Config); err != nil {
 		return err
 	}
@@ -87,6 +90,30 @@ func InferCapabilities(backendType BackendType, config BackendConfig) Capability
 	default:
 		return CapabilitySet{}
 	}
+}
+
+func validateConfigShape(backendType BackendType, config BackendConfig) error {
+	count := 0
+	for _, configured := range []bool{config.Local != nil, config.NFS != nil, config.SMB != nil, config.S3 != nil, config.Distributed != nil} {
+		if configured {
+			count++
+		}
+	}
+	if count != 1 {
+		return fmt.Errorf("%w: config must contain exactly one backend family, got %d", ErrInvalidBackend, count)
+	}
+
+	matchesType := map[BackendType]bool{
+		BackendTypeLocal:       config.Local != nil,
+		BackendTypeNFS:         config.NFS != nil,
+		BackendTypeSMB:         config.SMB != nil,
+		BackendTypeS3:          config.S3 != nil,
+		BackendTypeDistributed: config.Distributed != nil,
+	}
+	if !matchesType[backendType] {
+		return fmt.Errorf("%w: config does not match backend type %q", ErrInvalidBackend, backendType)
+	}
+	return nil
 }
 
 func validateTypedConfig(backendType BackendType, config BackendConfig) error {

@@ -43,7 +43,8 @@ v0.2.0
 
 - [ ] Add PostgreSQL migrations for storage backends and media objects.
 - [ ] Add encrypted configuration persistence.
-- [ ] Add HTTP admin endpoints and OpenAPI contracts.
+- [x] Add HTTP admin endpoints.
+- [ ] Add OpenAPI contracts.
 - [ ] Add real filesystem probe checks for local, NFS, and SMB mount paths.
 - [ ] Add S3-compatible probe checks with temporary test objects.
 - [ ] Add scheduled health checks and capacity metadata refresh.

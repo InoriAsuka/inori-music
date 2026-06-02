@@ -45,7 +45,7 @@ v0.1.0
 - [ ] Implement mounted filesystem backend support for NFS and SMB through validated mount paths.
 - [ ] Implement S3-compatible backend validation.
 - [ ] Add storage health check jobs.
-- [ ] Add administrative API endpoints for storage backend management.
+- [x] Add administrative API endpoints for storage backend management.
 - [ ] Add OpenAPI contracts for storage administration.
 - [ ] Add integration tests for local and S3-compatible storage adapters. Domain unit tests were added in phase 2; real adapter integration tests remain pending.
 
