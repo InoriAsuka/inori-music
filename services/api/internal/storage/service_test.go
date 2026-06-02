@@ -3,7 +3,10 @@ package storage
 import (
 	"context"
 	"errors"
+<<<<<<< codex
 	"path/filepath"
+=======
+>>>>>>> main
 	"testing"
 	"time"
 )
@@ -155,6 +158,7 @@ func TestServiceRegistrationResetsServerOwnedState(t *testing.T) {
 		t.Fatalf("registered createdAt = %v, want server time after %v", registered.CreatedAt, checkTime)
 	}
 }
+<<<<<<< codex
 
 func TestServiceProbeBackendUpdatesHealth(t *testing.T) {
 	ctx := context.Background()
@@ -270,3 +274,5 @@ func TestServiceProbeBackendRecordsFilesystemFailure(t *testing.T) {
 		t.Fatalf("GetBackendHealth() = %+v, want unhealthy checked state", health)
 	}
 }
+=======
+>>>>>>> main
