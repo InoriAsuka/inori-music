@@ -4,7 +4,7 @@
 
 ## Version
 
-Current architecture baseline version: `0.12.0`.
+Current architecture baseline version: `0.13.0`.
 
 ## 0.x Architecture Direction
 
@@ -72,6 +72,10 @@ The eleventh phase exposes authenticated media object registry endpoints for adm
 ## Phase 12: Durable Media Object Repository
 
 The twelfth phase adds optional file-backed media object metadata persistence. Set `INORI_MEDIA_OBJECT_REPOSITORY_FILE=/path/to/media-objects.json` to retain media object references across API restarts before PostgreSQL media metadata persistence is introduced.
+
+## Phase 13: Media Object Integrity Verification
+
+The thirteenth phase adds authenticated read-only integrity verification for registered media object references. Filesystem-backed objects can be checked for existence, regular-file shape, byte size, and `sha256` content hash without modifying media bytes.
 
 ## Run the API Scaffold
 

@@ -145,7 +145,9 @@
                   "internal_error",
                   "admin_auth_not_configured",
                   "invalid_media_object",
-                  "media_registry_not_configured"
+                  "media_registry_not_configured",
+                  "media_object_verification_unsupported",
+                  "media_object_verification_failed"
                 ],
                 "type": "string"
               },
@@ -476,6 +478,52 @@
             }
           }
         ]
+      },
+      "MediaObjectVerificationResult": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "mediaObjectId",
+          "backendId",
+          "objectKey",
+          "verifiedAt",
+          "sizeBytes",
+          "contentHash",
+          "status"
+        ],
+        "properties": {
+          "mediaObjectId": {
+            "type": "string"
+          },
+          "backendId": {
+            "type": "string"
+          },
+          "objectKey": {
+            "type": "string"
+          },
+          "verifiedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "contentHash": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "verified",
+              "failed"
+            ]
+          },
+          "message": {
+            "type": "string"
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -511,7 +559,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "0.11.0"
+    "version": "0.13.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -1304,6 +1352,83 @@
             }
           },
           "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/MediaObjectId"
+        }
+      ]
+    },
+    "/api/v1/admin/media/objects/{id}/verify": {
+      "post": {
+        "summary": "Verify a media object metadata reference against stored bytes.",
+        "responses": {
+          "200": {
+            "description": "Verification result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaObjectVerificationResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
             "description": "Error",
             "content": {
               "application/json": {

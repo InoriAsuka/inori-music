@@ -101,11 +101,12 @@ func (repo *MemoryMediaObjectRepository) ListMediaObjectsByContentHash(_ context
 type MediaObjectService struct {
 	backendRepository Repository
 	mediaRepository   MediaObjectRepository
+	verifier          MediaObjectVerifier
 	now               func() time.Time
 }
 
 func NewMediaObjectService(backendRepository Repository, mediaRepository MediaObjectRepository) *MediaObjectService {
-	return &MediaObjectService{backendRepository: backendRepository, mediaRepository: mediaRepository, now: time.Now}
+	return &MediaObjectService{backendRepository: backendRepository, mediaRepository: mediaRepository, verifier: NewFilesystemMediaObjectVerifier(), now: time.Now}
 }
 
 func (service *MediaObjectService) RegisterMediaObject(ctx context.Context, object MediaObject) (MediaObject, error) {
@@ -143,6 +144,33 @@ func (service *MediaObjectService) ListMediaObjectsByBackend(ctx context.Context
 
 func (service *MediaObjectService) ListMediaObjectsByContentHash(ctx context.Context, contentHash string) ([]MediaObject, error) {
 	return service.mediaRepository.ListMediaObjectsByContentHash(ctx, strings.TrimSpace(contentHash))
+}
+
+func (service *MediaObjectService) VerifyMediaObject(ctx context.Context, id string) (MediaObjectVerificationResult, error) {
+	object, err := service.mediaRepository.GetMediaObject(ctx, id)
+	if err != nil {
+		return MediaObjectVerificationResult{}, err
+	}
+	backend, err := service.backendRepository.Get(ctx, object.BackendID)
+	if err != nil {
+		return MediaObjectVerificationResult{}, err
+	}
+	if !backend.Enabled {
+		return MediaObjectVerificationResult{MediaObjectID: object.ID, BackendID: object.BackendID, ObjectKey: object.ObjectKey, Status: "failed"}, fmt.Errorf("%w: backend %s", ErrBackendDisabled, object.BackendID)
+	}
+	result, err := service.verifier.Verify(ctx, backend, object)
+	result.VerifiedAt = service.now().UTC()
+	if result.MediaObjectID == "" {
+		result.MediaObjectID = object.ID
+		result.BackendID = object.BackendID
+		result.ObjectKey = object.ObjectKey
+	}
+	if err != nil {
+		result.Status = "failed"
+		result.Message = err.Error()
+		return result, err
+	}
+	return result, nil
 }
 
 // ValidateMediaObject checks static media object metadata before persistence.

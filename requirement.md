@@ -30,6 +30,8 @@ The phase-11 development scope exposes authenticated media object registry HTTP 
 
 The phase-12 development scope adds optional durable file-backed persistence for media object metadata so development and self-hosted API servers can retain media object references across restarts before PostgreSQL persistence lands.
 
+The phase-13 development scope adds media object integrity verification for metadata references, beginning with read-only filesystem verification for LocalSystem, NFS, SMB, and mounted-filesystem distributed backends.
+
 ## Storage Requirements
 
 ### Media Storage Scope
@@ -89,6 +91,14 @@ The server-side primary database for 0.x should be PostgreSQL-first. The client-
 The 0.x server-side search should begin with PostgreSQL full-text search, normalized fields, aliases, and ranking rules. External search engines are optional future integrations when scale, language quality, or typo-tolerance requirements exceed PostgreSQL capabilities.
 
 ## Requirement History
+
+### v0.13.0 - 2026-06-03
+
+- Required authenticated media object integrity verification by media object ID.
+- Required read-only verification for filesystem-backed media objects by checking existence, regular-file shape, byte size, and `sha256` content hash.
+- Required verification to reject absolute or escaping object paths and to avoid mutating media bytes.
+- Required explicit unsupported responses for non-filesystem or unsupported hash algorithms.
+- Required OpenAPI and handler tests for successful verification, hash mismatch, disabled backend rejection, unsupported S3 verification, and missing media objects.
 
 ### v0.12.0 - 2026-06-03
 

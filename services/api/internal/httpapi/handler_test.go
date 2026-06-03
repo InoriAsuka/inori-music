@@ -1,9 +1,14 @@
 package httpapi
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -240,6 +245,54 @@ func TestMediaObjectRouteRejectsDisabledBackendAndRequiresAuth(t *testing.T) {
 	object := `{"id":"media-disabled","backendId":"local-disabled","objectKey":"safe.flac","contentHash":"sha256:abcdef","sizeBytes":1234,"mimeType":"audio/flac","assetKind":"original_audio","lifecycleState":"active"}`
 	assertAPIError(t, performRequest(t, handler, http.MethodPost, "/api/v1/admin/media/objects", object), http.StatusConflict, "conflict")
 	assertAPIError(t, performRequestWithoutAuth(t, handler, http.MethodPost, "/api/v1/admin/media/objects", object), http.StatusUnauthorized, "unauthorized")
+}
+
+func TestMediaObjectVerificationRoute(t *testing.T) {
+	handler := newTestHandler()
+	root := t.TempDir()
+	content := []byte("verify me")
+	objectPath := filepath.Join(root, "albums", "track.flac")
+	if err := os.MkdirAll(filepath.Dir(objectPath), 0o700); err != nil {
+		t.Fatalf("MkdirAll() error = %v", err)
+	}
+	if err := os.WriteFile(objectPath, content, 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	backend := `{"id":"local-main","type":"local","displayName":"Local Media","enabled":true,"config":{"local":{"rootPath":"` + root + `"}}}`
+	backendResponse := performRequest(t, handler, http.MethodPost, "/api/v1/admin/storage/backends", backend)
+	if backendResponse.Code != http.StatusCreated {
+		t.Fatalf("backend register status = %d body = %s", backendResponse.Code, backendResponse.Body.String())
+	}
+	sum := sha256.Sum256(content)
+	object := `{"id":"media-verify","backendId":"local-main","objectKey":"albums/track.flac","contentHash":"sha256:` + hex.EncodeToString(sum[:]) + `","sizeBytes":` + strconv.Itoa(len(content)) + `,"mimeType":"audio/flac","assetKind":"original_audio","lifecycleState":"active"}`
+	registered := performRequest(t, handler, http.MethodPost, "/api/v1/admin/media/objects", object)
+	if registered.Code != http.StatusCreated {
+		t.Fatalf("media register status = %d body = %s", registered.Code, registered.Body.String())
+	}
+
+	verified := performRequest(t, handler, http.MethodPost, "/api/v1/admin/media/objects/media-verify/verify", "")
+	if verified.Code != http.StatusOK {
+		t.Fatalf("verify status = %d body = %s", verified.Code, verified.Body.String())
+	}
+	assertJSONField(t, verified, "status", "verified")
+}
+
+func TestMediaObjectVerificationRouteErrors(t *testing.T) {
+	handler := newTestHandler()
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "bad.flac"), []byte("actual"), 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	backend := `{"id":"local-main","type":"local","displayName":"Local Media","enabled":true,"config":{"local":{"rootPath":"` + root + `"}}}`
+	if response := performRequest(t, handler, http.MethodPost, "/api/v1/admin/storage/backends", backend); response.Code != http.StatusCreated {
+		t.Fatalf("backend register status = %d body = %s", response.Code, response.Body.String())
+	}
+	object := `{"id":"media-bad","backendId":"local-main","objectKey":"bad.flac","contentHash":"sha256:0000","sizeBytes":6,"mimeType":"audio/flac","assetKind":"original_audio","lifecycleState":"active"}`
+	if response := performRequest(t, handler, http.MethodPost, "/api/v1/admin/media/objects", object); response.Code != http.StatusCreated {
+		t.Fatalf("media register status = %d body = %s", response.Code, response.Body.String())
+	}
+	assertAPIError(t, performRequest(t, handler, http.MethodPost, "/api/v1/admin/media/objects/media-bad/verify", ""), http.StatusUnprocessableEntity, "media_object_verification_failed")
+	assertAPIError(t, performRequest(t, handler, http.MethodPost, "/api/v1/admin/media/objects/missing/verify", ""), http.StatusNotFound, "not_found")
 }
 
 func TestStorageBackendErrors(t *testing.T) {

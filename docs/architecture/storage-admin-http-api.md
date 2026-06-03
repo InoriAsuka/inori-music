@@ -34,6 +34,7 @@ The versioned OpenAPI 3.1 contract lives at [`packages/api-contract/openapi/stor
 | `GET` | `/api/v1/admin/media/objects?contentHash=...` | List media object metadata by content hash. |
 | `POST` | `/api/v1/admin/media/objects` | Register media object metadata for an enabled backend. |
 | `GET` | `/api/v1/admin/media/objects/{id}` | Read one media object metadata record by ID. |
+| `POST` | `/api/v1/admin/media/objects/{id}/verify` | Verify media object size and `sha256` hash where supported. |
 
 ## Authentication
 
