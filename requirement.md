@@ -20,6 +20,8 @@ The phase-6 development scope adds safe, real S3-compatible object probes using 
 
 The phase-7 development scope adds batch health refresh, filesystem capacity reporting, and an optional background refresh scheduler.
 
+The phase-8 development scope adds a versioned OpenAPI 3.1 contract for the storage administration HTTP API and contract tests that keep the route surface documented.
+
 ## Storage Requirements
 
 ### Media Storage Scope
@@ -79,6 +81,14 @@ The server-side primary database for 0.x should be PostgreSQL-first. The client-
 The 0.x server-side search should begin with PostgreSQL full-text search, normalized fields, aliases, and ranking rules. External search engines are optional future integrations when scale, language quality, or typo-tolerance requirements exceed PostgreSQL capabilities.
 
 ## Requirement History
+
+### v0.8.0 - 2026-06-03
+
+- Required a versioned OpenAPI 3.1 contract for the storage administration HTTP API.
+- Required OpenAPI documentation for health, backend lifecycle, validation, refresh, default, disable, probe, health-state, and capacity endpoints.
+- Required a Bearer authentication security scheme in the OpenAPI contract for `/api/v1/admin/*` routes while leaving `/healthz` public.
+- Required schema coverage for backend configuration families, capabilities, probe results, capacity reports, refresh reports, and error envelopes.
+- Required contract tests to verify every implemented storage admin route is represented in the OpenAPI document with the expected method and security posture.
 
 ### v0.7.0 - 2026-06-02
 

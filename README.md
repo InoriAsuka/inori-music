@@ -4,7 +4,7 @@
 
 ## Version
 
-Current architecture baseline version: `0.7.0`.
+Current architecture baseline version: `0.8.0`.
 
 ## 0.x Architecture Direction
 
@@ -53,6 +53,10 @@ The sixth phase adds safe real S3-compatible probes for `s3` backends and distri
 
 The seventh phase adds authenticated batch refresh, optional background refresh through `INORI_STORAGE_REFRESH_INTERVAL`, and filesystem capacity reporting for LocalSystem, NFS, SMB, and mounted-filesystem distributed backends. S3-compatible capacity remains explicitly unsupported because object stores do not expose one uniform bucket-capacity API.
 
+## Phase 8: OpenAPI Contract
+
+The eighth phase adds a versioned OpenAPI 3.1 contract for the storage administration API at [`packages/api-contract/openapi/storage-admin.v1.json`](packages/api-contract/openapi/storage-admin.v1.json), with tests that verify implemented routes and authentication requirements remain documented.
+
 ## Run the API Scaffold
 
 ```bash
@@ -74,5 +78,6 @@ The HTTP server binds to `127.0.0.1:8080` by default. Admin routes require `Auth
 
 - [`docs/architecture/storage-backends.md`](docs/architecture/storage-backends.md)
 - [`docs/architecture/storage-admin-http-api.md`](docs/architecture/storage-admin-http-api.md)
+- [`packages/api-contract/openapi/storage-admin.v1.json`](packages/api-contract/openapi/storage-admin.v1.json)
 - [`docs/adr/ADR-0001-server-managed-multi-backend-media-storage.md`](docs/adr/ADR-0001-server-managed-multi-backend-media-storage.md)
 - [`docs/adr/ADR-0002-postgresql-first-database-and-search.md`](docs/adr/ADR-0002-postgresql-first-database-and-search.md)

@@ -12,6 +12,10 @@ This API supports safe real filesystem probes for LocalSystem, NFS, SMB, and `di
 
 This API also supports conservative S3-compatible object probes for `s3` backends and `distributed` backends using the `s3-compatible` adapter. S3-compatible probes put, full-read, range-read, and delete only a short-lived server-owned probe object under `.inori-music-probe/`. Static validation still only checks request shape and configuration consistency; the explicit probe endpoint checks supported mounted filesystem or S3-compatible semantics.
 
+## OpenAPI Contract
+
+The versioned OpenAPI 3.1 contract lives at [`packages/api-contract/openapi/storage-admin.v1.json`](../../packages/api-contract/openapi/storage-admin.v1.json). Contract tests parse this document and verify that implemented storage administration routes remain documented with the correct Bearer authentication posture.
+
 ## Endpoints
 
 | Method | Path | Purpose |

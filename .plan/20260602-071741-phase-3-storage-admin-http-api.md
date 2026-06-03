@@ -49,7 +49,7 @@ v0.3.0
 - [ ] Add role-based administrator authorization middleware.
 - [ ] Add PostgreSQL persistence and migrations.
 - [ ] Add encrypted backend configuration persistence.
-- [ ] Add OpenAPI contracts and contract validation.
+- [x] Add OpenAPI contracts and contract validation.
 - [x] Add real local and mounted-filesystem backend probes.
 - [x] Add S3-compatible backend probes.
 - [x] Add scheduled storage health refresh jobs and filesystem capacity reporting. On-demand health endpoints were added in phase 5 and scheduled refresh in phase 7.
