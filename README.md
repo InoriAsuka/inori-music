@@ -4,7 +4,7 @@
 
 ## Version
 
-Current architecture baseline version: `0.6.0`.
+Current architecture baseline version: `0.7.0`.
 
 ## 0.x Architecture Direction
 
@@ -49,13 +49,19 @@ The fifth phase adds safe real health probes for LocalSystem, NFS, SMB, and moun
 
 The sixth phase adds safe real S3-compatible probes for `s3` backends and distributed backends using the `s3-compatible` adapter. Each probe writes, full-reads, range-reads, and deletes only a short-lived server-owned object key, with credentials resolved from configured environment variable references.
 
+## Phase 7: Health Refresh and Capacity Reporting
+
+The seventh phase adds authenticated batch refresh, optional background refresh through `INORI_STORAGE_REFRESH_INTERVAL`, and filesystem capacity reporting for LocalSystem, NFS, SMB, and mounted-filesystem distributed backends. S3-compatible capacity remains explicitly unsupported because object stores do not expose one uniform bucket-capacity API.
+
 ## Run the API Scaffold
 
 ```bash
-INORI_ADMIN_TOKEN=change-me-development-token go run ./services/api/cmd/server
+INORI_ADMIN_TOKEN=change-me-development-token \
+INORI_STORAGE_REFRESH_INTERVAL=15m \
+go run ./services/api/cmd/server
 ```
 
-The HTTP server binds to `127.0.0.1:8080` by default. Admin routes require `Authorization: Bearer <INORI_ADMIN_TOKEN>`. Override the listener with `INORI_HTTP_ADDR` only after applying appropriate network controls. See [`docs/architecture/storage-admin-http-api.md`](docs/architecture/storage-admin-http-api.md) for the current endpoint contract and security limitations.
+The HTTP server binds to `127.0.0.1:8080` by default. Admin routes require `Authorization: Bearer <INORI_ADMIN_TOKEN>`. Periodic storage refresh is disabled unless `INORI_STORAGE_REFRESH_INTERVAL` is set to a positive Go duration such as `15m`. Override the listener with `INORI_HTTP_ADDR` only after applying appropriate network controls. See [`docs/architecture/storage-admin-http-api.md`](docs/architecture/storage-admin-http-api.md) for the current endpoint contract and security limitations.
 
 ## Repository Planning Artifacts
 

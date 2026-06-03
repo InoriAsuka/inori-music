@@ -228,3 +228,9 @@ S3-compatible backends can be verified through a conservative object probe. The 
 4. Delete the same probe object with best-effort cleanup if a later step fails.
 
 The S3-compatible probe validates basic object API behavior only. It does not validate provider-specific lifecycle policies, versioning, object lock, event notifications, or bucket-level administration.
+
+## Refresh Scheduling and Capacity
+
+Administrators can refresh all enabled backends on demand. A refresh run isolates backend failures, records supported health results, skips disabled backends, and continues processing the remaining backends. The server can also run the same refresh periodically when `INORI_STORAGE_REFRESH_INTERVAL` contains a positive Go duration such as `15m`.
+
+Filesystem-backed storage reports total, available, and used bytes from mounted-path filesystem statistics. S3-compatible services do not provide one portable bucket-capacity API, so S3-compatible capacity intentionally remains unsupported until provider-specific quota integrations are designed.

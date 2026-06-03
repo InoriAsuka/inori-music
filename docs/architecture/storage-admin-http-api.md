@@ -20,10 +20,12 @@ This API also supports conservative S3-compatible object probes for `s3` backend
 | `GET` | `/api/v1/admin/storage/backends` | List configured storage backends. |
 | `POST` | `/api/v1/admin/storage/backends` | Validate and register a backend. |
 | `POST` | `/api/v1/admin/storage/backends/validate` | Validate a candidate without persisting it. |
+| `POST` | `/api/v1/admin/storage/backends/refresh` | Refresh probe and supported capacity state for all enabled backends. |
 | `POST` | `/api/v1/admin/storage/backends/{id}/default` | Select an enabled backend as default. |
 | `POST` | `/api/v1/admin/storage/backends/{id}/disable` | Disable a non-default backend. |
 | `POST` | `/api/v1/admin/storage/backends/{id}/probe` | Run a safe real backend probe where supported. |
 | `GET` | `/api/v1/admin/storage/backends/{id}/health` | Read the latest recorded backend health state. |
+| `GET` | `/api/v1/admin/storage/backends/{id}/capacity` | Read and record current capacity where supported. |
 
 ## Authentication
 
@@ -46,6 +48,9 @@ Missing, malformed, or invalid credentials return `401 unauthorized` when the to
 - S3-compatible probes operate only on an application-owned `.inori-music-probe/*` object key and clean it up after the check.
 - NFS and SMB mounts must already exist at the host level; the application does not mount remote shares.
 - S3-compatible credentials are resolved from environment variable names in `accessKeySecretRef` and `secretKeySecretRef`; secret values must not be stored in repository files.
+- Periodic refresh is disabled by default and enabled with a positive Go duration in `INORI_STORAGE_REFRESH_INTERVAL`, such as `15m`.
+- Batch refresh skips disabled backends and returns isolated per-backend errors instead of stopping after the first failure.
+- Filesystem capacity is derived from mounted-path statistics. S3-compatible capacity is explicitly unsupported until provider-specific integrations exist.
 
 ## Example
 
@@ -93,9 +98,16 @@ Current error codes:
 | `409` | `conflict` | The requested lifecycle transition conflicts with current state, such as probing a disabled backend. |
 | `422` | `probe_unsupported` | The backend does not yet have a real probe adapter, such as a future dedicated distributed adapter; its health state remains unchanged. |
 | `422` | `probe_failed` | A supported real probe could not complete successfully. |
+| `422` | `capacity_unsupported` | The backend does not expose a supported capacity provider. |
 | `500` | `internal_error` | An unexpected server failure occurred. |
 | `503` | `admin_auth_not_configured` | No bootstrap admin token has been configured. |
 
 ## Next Security Step
 
 Before exposing these routes beyond a trusted loopback or development environment, replace the bootstrap token with persistent administrator identities or service accounts, add authorization roles, encrypt stored secrets, record audit logs, define token rotation, and apply deployment-level transport security.
+
+## Background Refresh
+
+Set `INORI_STORAGE_REFRESH_INTERVAL` to a positive Go duration such as `15m` to enable periodic batch refresh. The scheduler is disabled by default, stops when the server receives interrupt or `SIGTERM`, skips disabled backends, and preserves per-backend errors in each refresh report instead of aborting the whole run.
+
+Filesystem capacity reports include total, available, and used bytes from mounted-path statistics. S3-compatible capacity returns `capacity_unsupported` until provider-specific quota integrations are designed.

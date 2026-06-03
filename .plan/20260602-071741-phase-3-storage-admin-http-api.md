@@ -52,7 +52,7 @@ v0.3.0
 - [ ] Add OpenAPI contracts and contract validation.
 - [x] Add real local and mounted-filesystem backend probes.
 - [x] Add S3-compatible backend probes.
-- [ ] Add scheduled storage health refresh jobs and capacity reporting. On-demand health endpoints were added in phase 5.
+- [x] Add scheduled storage health refresh jobs and filesystem capacity reporting. On-demand health endpoints were added in phase 5 and scheduled refresh in phase 7.
 
 ## Completion Notes
 

@@ -39,7 +39,7 @@ v0.6.0
 
 ## Future Implementation Tasks
 
-- [ ] Add scheduled probe refresh and capacity reporting.
+- [x] Add scheduled probe refresh and filesystem capacity reporting.
 - [ ] Add PostgreSQL persistence for latest health state and probe history.
 - [ ] Add probe timeouts and retry policy configuration.
 - [ ] Add object-storage provider compatibility notes for MinIO, R2, B2, Ceph RGW, Garage, and SeaweedFS.

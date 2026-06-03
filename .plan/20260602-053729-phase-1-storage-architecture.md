@@ -44,7 +44,7 @@ v0.1.0
 - [x] Implement local filesystem backend validation and safe real probe checks.
 - [x] Implement mounted filesystem backend validation and safe real probe checks for NFS and SMB paths.
 - [x] Implement S3-compatible backend validation and safe real probe checks.
-- [ ] Add scheduled storage health check jobs. On-demand probes were added in phase 5.
+- [x] Add scheduled storage health check jobs. On-demand probes were added in phase 5 and scheduled refresh in phase 7.
 - [x] Add administrative API endpoints for storage backend management.
 - [ ] Add OpenAPI contracts for storage administration.
 - [ ] Add integration tests for local and S3-compatible storage adapters. Domain unit tests were added in phase 2; real adapter integration tests remain pending.

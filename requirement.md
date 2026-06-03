@@ -18,6 +18,8 @@ The phase-5 development scope adds safe, real filesystem probe checks and persis
 
 The phase-6 development scope adds safe, real S3-compatible object probes using short-lived server-owned probe objects and secret references resolved from environment variables.
 
+The phase-7 development scope adds batch health refresh, filesystem capacity reporting, and an optional background refresh scheduler.
+
 ## Storage Requirements
 
 ### Media Storage Scope
@@ -77,6 +79,16 @@ The server-side primary database for 0.x should be PostgreSQL-first. The client-
 The 0.x server-side search should begin with PostgreSQL full-text search, normalized fields, aliases, and ranking rules. External search engines are optional future integrations when scale, language quality, or typo-tolerance requirements exceed PostgreSQL capabilities.
 
 ## Requirement History
+
+### v0.7.0 - 2026-06-02
+
+- Required authenticated batch refresh for all enabled storage backends.
+- Required batch refresh to continue after individual backend failures and return per-backend outcomes.
+- Required filesystem capacity reports for LocalSystem, NFS, SMB, and mounted-filesystem distributed backends.
+- Required explicit unsupported responses for capacity providers that are not implemented yet, including S3-compatible backends.
+- Required an optional background refresh scheduler configured through `INORI_STORAGE_REFRESH_INTERVAL`.
+- Required scheduler shutdown when the server context is canceled.
+- Required tests for batch refresh isolation, disabled backend skipping, filesystem capacity reporting, unsupported capacity, and scheduler lifecycle.
 
 ### v0.6.0 - 2026-06-02
 

@@ -47,7 +47,7 @@ v0.2.0
 - [ ] Add OpenAPI contracts.
 - [x] Add real filesystem probe checks for local, NFS, and SMB mount paths.
 - [x] Add S3-compatible probe checks with temporary test objects.
-- [ ] Add scheduled health checks and capacity metadata refresh. On-demand probes were added in phase 5.
+- [x] Add scheduled health checks and capacity metadata refresh. On-demand probes were added in phase 5 and scheduled refresh in phase 7.
 
 ## Completion Notes
 

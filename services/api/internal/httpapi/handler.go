@@ -67,17 +67,21 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/storage/backends", handler.requireAdminAuth(handler.listStorageBackends))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends", handler.requireAdminAuth(handler.registerStorageBackend))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends/validate", handler.requireAdminAuth(handler.validateStorageBackend))
+	mux.HandleFunc("POST /api/v1/admin/storage/backends/refresh", handler.requireAdminAuth(handler.refreshStorageBackends))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends/{id}/default", handler.requireAdminAuth(handler.setDefaultStorageBackend))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends/{id}/disable", handler.requireAdminAuth(handler.disableStorageBackend))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends/{id}/probe", handler.requireAdminAuth(handler.probeStorageBackend))
 	mux.HandleFunc("GET /api/v1/admin/storage/backends/{id}/health", handler.requireAdminAuth(handler.getStorageBackendHealth))
+	mux.HandleFunc("GET /api/v1/admin/storage/backends/{id}/capacity", handler.requireAdminAuth(handler.getStorageBackendCapacity))
 	mux.HandleFunc("/healthz", handler.methodNotAllowed)
 	mux.HandleFunc("/api/v1/admin/storage/backends", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/storage/backends/validate", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/storage/backends/refresh", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/storage/backends/{id}/default", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/storage/backends/{id}/disable", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/storage/backends/{id}/probe", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/storage/backends/{id}/health", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/storage/backends/{id}/capacity", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/", handler.requireAdminAuth(handler.notFound))
 	mux.HandleFunc("/", handler.notFound)
 	return mux
@@ -150,6 +154,15 @@ func (handler *Handler) registerStorageBackend(w http.ResponseWriter, r *http.Re
 	writeJSON(w, http.StatusCreated, registered)
 }
 
+func (handler *Handler) refreshStorageBackends(w http.ResponseWriter, r *http.Request) {
+	report, err := handler.storage.RefreshEnabledBackends(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
+}
+
 func (handler *Handler) validateStorageBackend(w http.ResponseWriter, r *http.Request) {
 	var request storageBackendRequest
 	if err := decodeJSON(w, r, &request); err != nil {
@@ -189,6 +202,15 @@ func (handler *Handler) probeStorageBackend(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	writeJSON(w, http.StatusOK, result)
+}
+
+func (handler *Handler) getStorageBackendCapacity(w http.ResponseWriter, r *http.Request) {
+	report, err := handler.storage.GetBackendCapacity(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
 }
 
 func (handler *Handler) getStorageBackendHealth(w http.ResponseWriter, r *http.Request) {
@@ -236,6 +258,9 @@ func writeError(w http.ResponseWriter, err error) {
 	case errors.Is(err, storage.ErrProbeFailed):
 		status = http.StatusUnprocessableEntity
 		code = "probe_failed"
+	case errors.Is(err, storage.ErrCapacityUnsupported):
+		status = http.StatusUnprocessableEntity
+		code = "capacity_unsupported"
 	}
 	writeAPIError(w, status, code, strings.TrimSpace(err.Error()))
 }

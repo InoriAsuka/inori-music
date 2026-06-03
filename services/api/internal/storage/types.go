@@ -36,18 +36,19 @@ type CapabilitySet struct {
 
 // StorageBackend is the server-owned configuration record for a media backend.
 type StorageBackend struct {
-	ID                string        `json:"id"`
-	Type              BackendType   `json:"type"`
-	DisplayName       string        `json:"displayName"`
-	Enabled           bool          `json:"enabled"`
-	IsDefault         bool          `json:"isDefault"`
-	Priority          int           `json:"priority"`
-	HealthStatus      HealthStatus  `json:"healthStatus"`
-	LastHealthCheckAt *time.Time    `json:"lastHealthCheckAt,omitempty"`
-	Capabilities      CapabilitySet `json:"capabilities"`
-	Config            BackendConfig `json:"config"`
-	CreatedAt         time.Time     `json:"createdAt,omitempty"`
-	UpdatedAt         time.Time     `json:"updatedAt,omitempty"`
+	ID                string          `json:"id"`
+	Type              BackendType     `json:"type"`
+	DisplayName       string          `json:"displayName"`
+	Enabled           bool            `json:"enabled"`
+	IsDefault         bool            `json:"isDefault"`
+	Priority          int             `json:"priority"`
+	HealthStatus      HealthStatus    `json:"healthStatus"`
+	LastHealthCheckAt *time.Time      `json:"lastHealthCheckAt,omitempty"`
+	LastCapacity      *CapacityReport `json:"lastCapacity,omitempty"`
+	Capabilities      CapabilitySet   `json:"capabilities"`
+	Config            BackendConfig   `json:"config"`
+	CreatedAt         time.Time       `json:"createdAt,omitempty"`
+	UpdatedAt         time.Time       `json:"updatedAt,omitempty"`
 }
 
 // BackendConfig stores exactly one backend-family-specific configuration.

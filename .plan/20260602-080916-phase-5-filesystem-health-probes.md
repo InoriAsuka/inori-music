@@ -46,7 +46,7 @@ v0.5.0
 
 - [x] Add S3-compatible object probes with short-lived objects.
 - [ ] Add dedicated distributed adapter probes.
-- [ ] Add scheduled health refresh jobs and capacity reporting.
+- [x] Add scheduled health refresh jobs and filesystem capacity reporting.
 - [ ] Add PostgreSQL persistence for probe history and latest health state.
 - [ ] Add probe timeout and cancellation policies for slow network mounts.
 

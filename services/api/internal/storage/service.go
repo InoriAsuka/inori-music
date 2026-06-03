@@ -9,13 +9,14 @@ import (
 
 // Service coordinates storage backend administration rules.
 type Service struct {
-	repository Repository
-	prober     Prober
-	now        func() time.Time
+	repository       Repository
+	prober           Prober
+	capacityProvider CapacityProvider
+	now              func() time.Time
 }
 
 func NewService(repository Repository) *Service {
-	return &Service{repository: repository, prober: NewCompositeProber(NewFilesystemProber(), NewS3Prober()), now: time.Now}
+	return &Service{repository: repository, prober: NewCompositeProber(NewFilesystemProber(), NewS3Prober()), capacityProvider: NewFilesystemCapacityProvider(), now: time.Now}
 }
 
 // ValidateBackend checks a backend candidate without persisting it or probing external systems.
@@ -59,6 +60,28 @@ func (service *Service) RegisterBackend(ctx context.Context, backend StorageBack
 
 func (service *Service) ListBackends(ctx context.Context) ([]StorageBackend, error) {
 	return service.repository.List(ctx)
+}
+
+func (service *Service) GetBackendCapacity(ctx context.Context, id string) (CapacityReport, error) {
+	backend, err := service.repository.Get(ctx, id)
+	if err != nil {
+		return CapacityReport{}, err
+	}
+	if !backend.Enabled {
+		return CapacityReport{}, fmt.Errorf("%w: %s", ErrBackendDisabled, id)
+	}
+	report, err := service.capacityProvider.Capacity(ctx, backend)
+	if err != nil {
+		return CapacityReport{}, err
+	}
+	report.BackendID = backend.ID
+	report.CheckedAt = service.now().UTC()
+	backend.LastCapacity = &report
+	backend.UpdatedAt = report.CheckedAt
+	if err := service.repository.Save(ctx, backend); err != nil {
+		return CapacityReport{}, err
+	}
+	return report, nil
 }
 
 func (service *Service) GetBackendHealth(ctx context.Context, id string) (ProbeResult, error) {

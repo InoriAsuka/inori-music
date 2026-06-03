@@ -145,6 +145,45 @@ func TestStorageBackendProbeMissingS3CredentialFailure(t *testing.T) {
 	assertJSONField(t, health, "status", "unhealthy")
 }
 
+func TestStorageBackendRefreshAndCapacityWorkflow(t *testing.T) {
+	handler := newTestHandler()
+	root := t.TempDir()
+	local := `{"id":"local-capacity","type":"local","displayName":"Local Capacity","enabled":true,"config":{"local":{"rootPath":"` + root + `"}}}`
+	registered := performRequest(t, handler, http.MethodPost, "/api/v1/admin/storage/backends", local)
+	if registered.Code != http.StatusCreated {
+		t.Fatalf("register status = %d body = %s", registered.Code, registered.Body.String())
+	}
+	capacity := performRequest(t, handler, http.MethodGet, "/api/v1/admin/storage/backends/local-capacity/capacity", "")
+	if capacity.Code != http.StatusOK {
+		t.Fatalf("capacity status = %d body = %s", capacity.Code, capacity.Body.String())
+	}
+	var capacityBody storage.CapacityReport
+	decodeResponse(t, capacity, &capacityBody)
+	if capacityBody.TotalBytes == 0 {
+		t.Fatal("capacity totalBytes should be positive")
+	}
+	refresh := performRequest(t, handler, http.MethodPost, "/api/v1/admin/storage/backends/refresh", "")
+	if refresh.Code != http.StatusOK {
+		t.Fatalf("refresh status = %d body = %s", refresh.Code, refresh.Body.String())
+	}
+	var refreshBody storage.RefreshReport
+	decodeResponse(t, refresh, &refreshBody)
+	if len(refreshBody.Results) != 1 || refreshBody.Results[0].Probe == nil || refreshBody.Results[0].Capacity == nil {
+		t.Fatalf("refresh results = %+v, want probe and capacity", refreshBody.Results)
+	}
+}
+
+func TestStorageBackendCapacityUnsupported(t *testing.T) {
+	handler := newTestHandler()
+	s3 := `{"id":"s3-capacity","type":"s3","displayName":"S3","enabled":true,"config":{"s3":{"endpoint":"https://s3.example.com","bucket":"inori","accessKeySecretRef":"A","secretKeySecretRef":"S"}}}`
+	registered := performRequest(t, handler, http.MethodPost, "/api/v1/admin/storage/backends", s3)
+	if registered.Code != http.StatusCreated {
+		t.Fatalf("register status = %d body = %s", registered.Code, registered.Body.String())
+	}
+	capacity := performRequest(t, handler, http.MethodGet, "/api/v1/admin/storage/backends/s3-capacity/capacity", "")
+	assertAPIError(t, capacity, http.StatusUnprocessableEntity, "capacity_unsupported")
+}
+
 func TestStorageBackendErrors(t *testing.T) {
 	handler := newTestHandler()
 	valid := `{"id":"local-main","type":"local","displayName":"Local Media","enabled":true,"config":{"local":{"rootPath":"/srv/inori/media"}}}`
