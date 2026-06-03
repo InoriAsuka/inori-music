@@ -4,7 +4,7 @@
 
 ## Version
 
-Current architecture baseline version: `0.8.0`.
+Current architecture baseline version: `0.9.0`.
 
 ## 0.x Architecture Direction
 
@@ -57,15 +57,20 @@ The seventh phase adds authenticated batch refresh, optional background refresh 
 
 The eighth phase adds a versioned OpenAPI 3.1 contract for the storage administration API at [`packages/api-contract/openapi/storage-admin.v1.json`](packages/api-contract/openapi/storage-admin.v1.json), with tests that verify implemented routes and authentication requirements remain documented.
 
+## Phase 9: Durable File Repository
+
+The ninth phase adds optional file-backed storage backend persistence for development and self-hosted deployments. Set `INORI_STORAGE_REPOSITORY_FILE=/path/to/storage-backends.json` to persist backend configuration, health, and capacity state across API server restarts; leave it unset to keep the existing in-memory repository.
+
 ## Run the API Scaffold
 
 ```bash
 INORI_ADMIN_TOKEN=change-me-development-token \
+INORI_STORAGE_REPOSITORY_FILE=./var/storage-backends.json \
 INORI_STORAGE_REFRESH_INTERVAL=15m \
 go run ./services/api/cmd/server
 ```
 
-The HTTP server binds to `127.0.0.1:8080` by default. Admin routes require `Authorization: Bearer <INORI_ADMIN_TOKEN>`. Periodic storage refresh is disabled unless `INORI_STORAGE_REFRESH_INTERVAL` is set to a positive Go duration such as `15m`. Override the listener with `INORI_HTTP_ADDR` only after applying appropriate network controls. See [`docs/architecture/storage-admin-http-api.md`](docs/architecture/storage-admin-http-api.md) for the current endpoint contract and security limitations.
+The HTTP server binds to `127.0.0.1:8080` by default. Admin routes require `Authorization: Bearer <INORI_ADMIN_TOKEN>`. `INORI_STORAGE_REPOSITORY_FILE` enables durable JSON-backed backend configuration; when unset, the server uses the in-memory development repository. Periodic storage refresh is disabled unless `INORI_STORAGE_REFRESH_INTERVAL` is set to a positive Go duration such as `15m`. Override the listener with `INORI_HTTP_ADDR` only after applying appropriate network controls. See [`docs/architecture/storage-admin-http-api.md`](docs/architecture/storage-admin-http-api.md) for the current endpoint contract and security limitations.
 
 ## Repository Planning Artifacts
 
@@ -78,6 +83,7 @@ The HTTP server binds to `127.0.0.1:8080` by default. Admin routes require `Auth
 
 - [`docs/architecture/storage-backends.md`](docs/architecture/storage-backends.md)
 - [`docs/architecture/storage-admin-http-api.md`](docs/architecture/storage-admin-http-api.md)
+- [`docs/architecture/storage-persistence.md`](docs/architecture/storage-persistence.md)
 - [`packages/api-contract/openapi/storage-admin.v1.json`](packages/api-contract/openapi/storage-admin.v1.json)
 - [`docs/adr/ADR-0001-server-managed-multi-backend-media-storage.md`](docs/adr/ADR-0001-server-managed-multi-backend-media-storage.md)
 - [`docs/adr/ADR-0002-postgresql-first-database-and-search.md`](docs/adr/ADR-0002-postgresql-first-database-and-search.md)

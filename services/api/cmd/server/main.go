@@ -23,7 +23,11 @@ func main() {
 		log.Print("INORI_ADMIN_TOKEN is not set; /api/v1/admin routes will return 503")
 	}
 
-	storageService := storage.NewService(storage.NewMemoryRepository())
+	repository, err := storageRepository()
+	if err != nil {
+		log.Fatal(err)
+	}
+	storageService := storage.NewService(repository)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if interval := storageRefreshInterval(); interval > 0 {
@@ -69,4 +73,13 @@ func storageRefreshInterval() time.Duration {
 		return 0
 	}
 	return interval
+}
+
+func storageRepository() (storage.Repository, error) {
+	path := os.Getenv("INORI_STORAGE_REPOSITORY_FILE")
+	if path == "" {
+		return storage.NewMemoryRepository(), nil
+	}
+	log.Printf("storage repository file enabled at %s", path)
+	return storage.NewFileRepository(path)
 }

@@ -22,6 +22,8 @@ The phase-7 development scope adds batch health refresh, filesystem capacity rep
 
 The phase-8 development scope adds a versioned OpenAPI 3.1 contract for the storage administration HTTP API and contract tests that keep the route surface documented.
 
+The phase-9 development scope adds an optional durable file-backed repository for storage backend configuration so development and self-hosted servers can retain backend state across restarts before PostgreSQL persistence lands.
+
 ## Storage Requirements
 
 ### Media Storage Scope
@@ -81,6 +83,14 @@ The server-side primary database for 0.x should be PostgreSQL-first. The client-
 The 0.x server-side search should begin with PostgreSQL full-text search, normalized fields, aliases, and ranking rules. External search engines are optional future integrations when scale, language quality, or typo-tolerance requirements exceed PostgreSQL capabilities.
 
 ## Requirement History
+
+### v0.9.0 - 2026-06-03
+
+- Required an optional durable repository implementation for storage backend configuration without adding external database dependencies.
+- Required `INORI_STORAGE_REPOSITORY_FILE` to switch the API server from in-memory storage to an atomic JSON file repository.
+- Required persisted backend state to include server-owned health and capacity metadata so probe and refresh results survive process restarts.
+- Required repository writes to be atomic at the file level and create parent directories when needed.
+- Required tests for persistence across repository reopening, default-backend clearing, malformed repository files, and server repository selection.
 
 ### v0.8.0 - 2026-06-03
 

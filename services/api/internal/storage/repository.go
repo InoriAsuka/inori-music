@@ -3,7 +3,6 @@ package storage
 import (
 	"context"
 	"fmt"
-	"sort"
 	"sync"
 )
 
@@ -51,17 +50,7 @@ func (repo *MemoryRepository) List(_ context.Context) ([]StorageBackend, error) 
 	repo.mu.RLock()
 	defer repo.mu.RUnlock()
 
-	backends := make([]StorageBackend, 0, len(repo.backends))
-	for _, backend := range repo.backends {
-		backends = append(backends, backend)
-	}
-	sort.Slice(backends, func(i, j int) bool {
-		if backends[i].Priority == backends[j].Priority {
-			return backends[i].ID < backends[j].ID
-		}
-		return backends[i].Priority < backends[j].Priority
-	})
-	return backends, nil
+	return sortedBackends(repo.backends), nil
 }
 
 func (repo *MemoryRepository) ClearDefault(_ context.Context) error {
