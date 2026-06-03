@@ -51,3 +51,26 @@ func TestStorageRepositoryUsesFileWhenConfigured(t *testing.T) {
 		t.Fatalf("storageRepository() = %T, want *storage.FileRepository", repo)
 	}
 }
+
+func TestMediaObjectRepositoryDefaultsToMemory(t *testing.T) {
+	t.Setenv("INORI_MEDIA_OBJECT_REPOSITORY_FILE", "")
+	repo, err := mediaObjectRepository()
+	if err != nil {
+		t.Fatalf("mediaObjectRepository() error = %v", err)
+	}
+	if _, ok := repo.(*storage.MemoryMediaObjectRepository); !ok {
+		t.Fatalf("mediaObjectRepository() = %T, want *storage.MemoryMediaObjectRepository", repo)
+	}
+}
+
+func TestMediaObjectRepositoryUsesFileWhenConfigured(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "media-objects.json")
+	t.Setenv("INORI_MEDIA_OBJECT_REPOSITORY_FILE", path)
+	repo, err := mediaObjectRepository()
+	if err != nil {
+		t.Fatalf("mediaObjectRepository() error = %v", err)
+	}
+	if _, ok := repo.(*storage.FileMediaObjectRepository); !ok {
+		t.Fatalf("mediaObjectRepository() = %T, want *storage.FileMediaObjectRepository", repo)
+	}
+}

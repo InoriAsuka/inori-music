@@ -28,6 +28,8 @@ The phase-10 development scope adds a media object registry scaffold that valida
 
 The phase-11 development scope exposes authenticated media object registry HTTP endpoints so administrator and import clients can register, fetch, and filter media object metadata through the API scaffold.
 
+The phase-12 development scope adds optional durable file-backed persistence for media object metadata so development and self-hosted API servers can retain media object references across restarts before PostgreSQL persistence lands.
+
 ## Storage Requirements
 
 ### Media Storage Scope
@@ -87,6 +89,14 @@ The server-side primary database for 0.x should be PostgreSQL-first. The client-
 The 0.x server-side search should begin with PostgreSQL full-text search, normalized fields, aliases, and ranking rules. External search engines are optional future integrations when scale, language quality, or typo-tolerance requirements exceed PostgreSQL capabilities.
 
 ## Requirement History
+
+### v0.12.0 - 2026-06-03
+
+- Required an optional durable repository implementation for media object metadata without adding external database dependencies.
+- Required `INORI_MEDIA_OBJECT_REPOSITORY_FILE` to switch the API server from in-memory media object storage to an atomic JSON file repository.
+- Required persisted media object state to retain server-owned timestamps and metadata references across API restarts.
+- Required file writes to create parent directories and use temp-file, sync, close, and atomic rename semantics.
+- Required tests for media object persistence across repository reopening, stable filtered listings, malformed repository files, unsupported schema versions, and server repository selection.
 
 ### v0.11.0 - 2026-06-03
 

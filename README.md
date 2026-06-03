@@ -4,7 +4,7 @@
 
 ## Version
 
-Current architecture baseline version: `0.11.0`.
+Current architecture baseline version: `0.12.0`.
 
 ## 0.x Architecture Direction
 
@@ -69,16 +69,21 @@ The tenth phase adds a server-side media object registry scaffold for binary ass
 
 The eleventh phase exposes authenticated media object registry endpoints for administrator and import clients. The API can register media object references, fetch an object by ID, and list objects by `backendId` or `contentHash` filters.
 
+## Phase 12: Durable Media Object Repository
+
+The twelfth phase adds optional file-backed media object metadata persistence. Set `INORI_MEDIA_OBJECT_REPOSITORY_FILE=/path/to/media-objects.json` to retain media object references across API restarts before PostgreSQL media metadata persistence is introduced.
+
 ## Run the API Scaffold
 
 ```bash
 INORI_ADMIN_TOKEN=change-me-development-token \
 INORI_STORAGE_REPOSITORY_FILE=./var/storage-backends.json \
+INORI_MEDIA_OBJECT_REPOSITORY_FILE=./var/media-objects.json \
 INORI_STORAGE_REFRESH_INTERVAL=15m \
 go run ./services/api/cmd/server
 ```
 
-The HTTP server binds to `127.0.0.1:8080` by default. Admin routes require `Authorization: Bearer <INORI_ADMIN_TOKEN>`. `INORI_STORAGE_REPOSITORY_FILE` enables durable JSON-backed backend configuration; when unset, the server uses the in-memory development repository. Periodic storage refresh is disabled unless `INORI_STORAGE_REFRESH_INTERVAL` is set to a positive Go duration such as `15m`. Override the listener with `INORI_HTTP_ADDR` only after applying appropriate network controls. See [`docs/architecture/storage-admin-http-api.md`](docs/architecture/storage-admin-http-api.md) for the current endpoint contract and security limitations.
+The HTTP server binds to `127.0.0.1:8080` by default. Admin routes require `Authorization: Bearer <INORI_ADMIN_TOKEN>`. `INORI_STORAGE_REPOSITORY_FILE` enables durable JSON-backed backend configuration; `INORI_MEDIA_OBJECT_REPOSITORY_FILE` enables durable JSON-backed media object metadata. When unset, each repository uses its in-memory development implementation. Periodic storage refresh is disabled unless `INORI_STORAGE_REFRESH_INTERVAL` is set to a positive Go duration such as `15m`. Override the listener with `INORI_HTTP_ADDR` only after applying appropriate network controls. See [`docs/architecture/storage-admin-http-api.md`](docs/architecture/storage-admin-http-api.md) for the current endpoint contract and security limitations.
 
 ## Repository Planning Artifacts
 

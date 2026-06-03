@@ -28,7 +28,11 @@ func main() {
 		log.Fatal(err)
 	}
 	storageService := storage.NewService(repository)
-	mediaObjectService := storage.NewMediaObjectService(repository, storage.NewMemoryMediaObjectRepository())
+	mediaObjectRepository, err := mediaObjectRepository()
+	if err != nil {
+		log.Fatal(err)
+	}
+	mediaObjectService := storage.NewMediaObjectService(repository, mediaObjectRepository)
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if interval := storageRefreshInterval(); interval > 0 {
@@ -83,4 +87,13 @@ func storageRepository() (storage.Repository, error) {
 	}
 	log.Printf("storage repository file enabled at %s", path)
 	return storage.NewFileRepository(path)
+}
+
+func mediaObjectRepository() (storage.MediaObjectRepository, error) {
+	path := os.Getenv("INORI_MEDIA_OBJECT_REPOSITORY_FILE")
+	if path == "" {
+		return storage.NewMemoryMediaObjectRepository(), nil
+	}
+	log.Printf("media object repository file enabled at %s", path)
+	return storage.NewFileMediaObjectRepository(path)
 }

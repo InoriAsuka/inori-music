@@ -43,4 +43,4 @@ These endpoints still do not upload, stream, delete, or move media bytes.
 
 ## Future Direction
 
-The first implementation uses an in-memory repository for domain tests. PostgreSQL should later own media object metadata, with indexes for backend ID, object key, content hash, asset kind, lifecycle state, and ownership/library relationships.
+The first implementation uses an in-memory repository for domain tests. Phase 12 adds `INORI_MEDIA_OBJECT_REPOSITORY_FILE` for optional single-node JSON persistence of media object metadata before database migrations exist. PostgreSQL should later own media object metadata, with indexes for backend ID, object key, content hash, asset kind, lifecycle state, and ownership/library relationships.

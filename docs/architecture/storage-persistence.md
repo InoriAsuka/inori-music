@@ -2,17 +2,25 @@
 
 ## Scope
 
-Phase 9 adds an optional durable repository for server-managed storage backend configuration before the PostgreSQL persistence layer is introduced.
+Phase 9 adds an optional durable repository for server-managed storage backend configuration before the PostgreSQL persistence layer is introduced. Phase 12 applies the same bootstrap persistence pattern to media object metadata.
 
-The API server keeps `MemoryRepository` as the default for tests and ephemeral development. Operators can set `INORI_STORAGE_REPOSITORY_FILE` to enable the file-backed repository:
+The API server keeps `MemoryRepository` and `MemoryMediaObjectRepository` as the defaults for tests and ephemeral development. Operators can set `INORI_STORAGE_REPOSITORY_FILE` to enable the file-backed storage backend repository:
 
 ```bash
 INORI_STORAGE_REPOSITORY_FILE=/var/lib/inori-music/storage-backends.json
 ```
 
+Set `INORI_MEDIA_OBJECT_REPOSITORY_FILE` to enable durable media object metadata references:
+
+```bash
+INORI_MEDIA_OBJECT_REPOSITORY_FILE=/var/lib/inori-music/media-objects.json
+```
+
 ## File Repository Semantics
 
-The file repository stores backend configuration, server-owned health state, capacity reports, timestamps, and inferred capabilities in a JSON document. It does not store raw storage credentials; S3-compatible backends continue to reference environment variable names through `accessKeySecretRef` and `secretKeySecretRef`.
+The storage backend file repository stores backend configuration, server-owned health state, capacity reports, timestamps, and inferred capabilities in a JSON document. It does not store raw storage credentials; S3-compatible backends continue to reference environment variable names through `accessKeySecretRef` and `secretKeySecretRef`.
+
+The media object file repository stores metadata-only binary asset references, including backend ID, object key, content hash, byte size, MIME type, asset kind, lifecycle state, and server-owned timestamps. It does not store media bytes.
 
 Writes use a conservative local-filesystem sequence:
 
@@ -25,7 +33,7 @@ This makes single-process writes crash-tolerant on normal local filesystems. It 
 
 ## Recommended Use
 
-Use the file repository for:
+Use file repositories for:
 
 - Local development.
 - Single-node self-hosted deployments.
