@@ -143,7 +143,9 @@
                   "probe_failed",
                   "capacity_unsupported",
                   "internal_error",
-                  "admin_auth_not_configured"
+                  "admin_auth_not_configured",
+                  "invalid_media_object",
+                  "media_registry_not_configured"
                 ],
                 "type": "string"
               },
@@ -386,6 +388,94 @@
           "config"
         ],
         "type": "object"
+      },
+      "MediaObjectRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "backendId",
+          "objectKey",
+          "contentHash",
+          "sizeBytes",
+          "mimeType",
+          "assetKind",
+          "lifecycleState"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "backendId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "objectKey": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Relative slash-delimited storage key."
+          },
+          "contentHash": {
+            "type": "string",
+            "pattern": "^[^\\s/\\\\:]+:[^\\s/\\\\]+$"
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0
+          },
+          "mimeType": {
+            "type": "string",
+            "minLength": 3
+          },
+          "assetKind": {
+            "type": "string",
+            "enum": [
+              "original_audio",
+              "transcoded_audio",
+              "artwork",
+              "lyrics",
+              "waveform",
+              "analysis",
+              "import_package",
+              "backup"
+            ]
+          },
+          "lifecycleState": {
+            "type": "string",
+            "enum": [
+              "staged",
+              "active",
+              "archived",
+              "deleted"
+            ]
+          }
+        }
+      },
+      "MediaObject": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/MediaObjectRequest"
+          },
+          {
+            "type": "object",
+            "required": [
+              "createdAt",
+              "updatedAt"
+            ],
+            "properties": {
+              "createdAt": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "updatedAt": {
+                "type": "string",
+                "format": "date-time"
+              }
+            }
+          }
+        ]
       }
     },
     "securitySchemes": {
@@ -405,13 +495,23 @@
           "type": "string",
           "minLength": 1
         }
+      },
+      "MediaObjectId": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "description": "Media object identifier assigned by the media object registry.",
+        "schema": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     }
   },
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "0.8.0"
+    "version": "0.11.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -1013,6 +1113,228 @@
         "security": [],
         "summary": "Return process health."
       }
+    },
+    "/api/v1/admin/media/objects": {
+      "get": {
+        "summary": "List media objects by backend ID or content hash.",
+        "parameters": [
+          {
+            "name": "backendId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "List media objects stored on this backend. Mutually exclusive with contentHash."
+          },
+          {
+            "name": "contentHash",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "List media objects with this content hash. Mutually exclusive with backendId."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Media objects",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "objects"
+                  ],
+                  "properties": {
+                    "objects": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/MediaObject"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "post": {
+        "summary": "Register a media object metadata reference.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MediaObjectRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Registered media object",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaObject"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/media/objects/{id}": {
+      "get": {
+        "summary": "Get a media object by ID.",
+        "responses": {
+          "200": {
+            "description": "Media object",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaObject"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/MediaObjectId"
+        }
+      ]
     }
   },
   "servers": [

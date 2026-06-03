@@ -30,6 +30,17 @@ Content hashes use an `algorithm:value` shape so future import and deduplication
 - `archived`: retained but not preferred for normal playback or display.
 - `deleted`: metadata tombstone for future safe-delete and audit workflows.
 
+## HTTP Administration API
+
+Phase 11 exposes authenticated administrator endpoints for metadata-only workflows:
+
+- `POST /api/v1/admin/media/objects` registers a media object reference for an enabled backend.
+- `GET /api/v1/admin/media/objects/{id}` fetches one media object reference.
+- `GET /api/v1/admin/media/objects?backendId=...` lists references by backend.
+- `GET /api/v1/admin/media/objects?contentHash=...` lists references by content hash for future deduplication workflows.
+
+These endpoints still do not upload, stream, delete, or move media bytes.
+
 ## Future Direction
 
 The first implementation uses an in-memory repository for domain tests. PostgreSQL should later own media object metadata, with indexes for backend ID, object key, content hash, asset kind, lifecycle state, and ownership/library relationships.

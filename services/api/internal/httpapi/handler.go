@@ -25,10 +25,18 @@ func WithAdminToken(token string) HandlerOption {
 	}
 }
 
+// WithMediaObjectService enables media object registry routes.
+func WithMediaObjectService(mediaObjects *storage.MediaObjectService) HandlerOption {
+	return func(handler *Handler) {
+		handler.mediaObjects = mediaObjects
+	}
+}
+
 // Handler serves versioned administrative HTTP endpoints.
 type Handler struct {
-	storage    *storage.Service
-	adminToken string
+	storage      *storage.Service
+	mediaObjects *storage.MediaObjectService
+	adminToken   string
 }
 
 type storageBackendRequest struct {
@@ -41,6 +49,17 @@ type storageBackendRequest struct {
 	Config      storage.BackendConfig `json:"config"`
 }
 
+type mediaObjectRequest struct {
+	ID             string `json:"id"`
+	BackendID      string `json:"backendId"`
+	ObjectKey      string `json:"objectKey"`
+	ContentHash    string `json:"contentHash"`
+	SizeBytes      int64  `json:"sizeBytes"`
+	MIMEType       string `json:"mimeType"`
+	AssetKind      string `json:"assetKind"`
+	LifecycleState string `json:"lifecycleState"`
+}
+
 func (request storageBackendRequest) backend() storage.StorageBackend {
 	return storage.StorageBackend{
 		ID:          request.ID,
@@ -50,6 +69,19 @@ func (request storageBackendRequest) backend() storage.StorageBackend {
 		IsDefault:   request.IsDefault,
 		Priority:    request.Priority,
 		Config:      request.Config,
+	}
+}
+
+func (request mediaObjectRequest) object() storage.MediaObject {
+	return storage.MediaObject{
+		ID:             request.ID,
+		BackendID:      request.BackendID,
+		ObjectKey:      request.ObjectKey,
+		ContentHash:    request.ContentHash,
+		SizeBytes:      request.SizeBytes,
+		MIMEType:       request.MIMEType,
+		AssetKind:      request.AssetKind,
+		LifecycleState: request.LifecycleState,
 	}
 }
 
@@ -73,6 +105,9 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/admin/storage/backends/{id}/probe", handler.requireAdminAuth(handler.probeStorageBackend))
 	mux.HandleFunc("GET /api/v1/admin/storage/backends/{id}/health", handler.requireAdminAuth(handler.getStorageBackendHealth))
 	mux.HandleFunc("GET /api/v1/admin/storage/backends/{id}/capacity", handler.requireAdminAuth(handler.getStorageBackendCapacity))
+	mux.HandleFunc("GET /api/v1/admin/media/objects", handler.requireAdminAuth(handler.listMediaObjects))
+	mux.HandleFunc("POST /api/v1/admin/media/objects", handler.requireAdminAuth(handler.registerMediaObject))
+	mux.HandleFunc("GET /api/v1/admin/media/objects/{id}", handler.requireAdminAuth(handler.getMediaObject))
 	mux.HandleFunc("/healthz", handler.methodNotAllowed)
 	mux.HandleFunc("/api/v1/admin/storage/backends", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/storage/backends/validate", handler.requireAdminAuth(handler.methodNotAllowed))
@@ -82,6 +117,8 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("/api/v1/admin/storage/backends/{id}/probe", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/storage/backends/{id}/health", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/storage/backends/{id}/capacity", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/media/objects", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/media/objects/{id}", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/", handler.requireAdminAuth(handler.notFound))
 	mux.HandleFunc("/", handler.notFound)
 	return mux
@@ -222,19 +259,81 @@ func (handler *Handler) getStorageBackendHealth(w http.ResponseWriter, r *http.R
 	writeJSON(w, http.StatusOK, result)
 }
 
+func (handler *Handler) registerMediaObject(w http.ResponseWriter, r *http.Request) {
+	if handler.mediaObjects == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "media_registry_not_configured", "media object registry is not configured")
+		return
+	}
+	var request mediaObjectRequest
+	if err := decodeJSONWithSentinel(w, r, &request, storage.ErrInvalidMediaObject); err != nil {
+		writeError(w, err)
+		return
+	}
+	registered, err := handler.mediaObjects.RegisterMediaObject(r.Context(), request.object())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, registered)
+}
+
+func (handler *Handler) getMediaObject(w http.ResponseWriter, r *http.Request) {
+	if handler.mediaObjects == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "media_registry_not_configured", "media object registry is not configured")
+		return
+	}
+	object, err := handler.mediaObjects.GetMediaObject(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, object)
+}
+
+func (handler *Handler) listMediaObjects(w http.ResponseWriter, r *http.Request) {
+	if handler.mediaObjects == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "media_registry_not_configured", "media object registry is not configured")
+		return
+	}
+	backendID := strings.TrimSpace(r.URL.Query().Get("backendId"))
+	contentHash := strings.TrimSpace(r.URL.Query().Get("contentHash"))
+	if (backendID == "" && contentHash == "") || (backendID != "" && contentHash != "") {
+		writeError(w, fmt.Errorf("%w: exactly one of backendId or contentHash is required", storage.ErrInvalidMediaObject))
+		return
+	}
+	var (
+		objects []storage.MediaObject
+		err     error
+	)
+	if backendID != "" {
+		objects, err = handler.mediaObjects.ListMediaObjectsByBackend(r.Context(), backendID)
+	} else {
+		objects, err = handler.mediaObjects.ListMediaObjectsByContentHash(r.Context(), contentHash)
+	}
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"objects": objects})
+}
+
 func decodeJSON(w http.ResponseWriter, r *http.Request, target any) error {
+	return decodeJSONWithSentinel(w, r, target, storage.ErrInvalidBackend)
+}
+
+func decodeJSONWithSentinel(w http.ResponseWriter, r *http.Request, target any, sentinel error) error {
 	contentType := strings.ToLower(strings.TrimSpace(strings.Split(r.Header.Get("Content-Type"), ";")[0]))
 	if contentType != "application/json" {
-		return fmt.Errorf("%w: Content-Type must be application/json", storage.ErrInvalidBackend)
+		return fmt.Errorf("%w: Content-Type must be application/json", sentinel)
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
-		return fmt.Errorf("%w: request body: %v", storage.ErrInvalidBackend, err)
+		return fmt.Errorf("%w: request body: %v", sentinel, err)
 	}
 	if err := decoder.Decode(&struct{}{}); err != io.EOF {
-		return fmt.Errorf("%w: request body must contain one JSON value", storage.ErrInvalidBackend)
+		return fmt.Errorf("%w: request body must contain one JSON value", sentinel)
 	}
 	return nil
 }
@@ -243,6 +342,9 @@ func writeError(w http.ResponseWriter, err error) {
 	status := http.StatusInternalServerError
 	code := "internal_error"
 	switch {
+	case errors.Is(err, storage.ErrInvalidMediaObject):
+		status = http.StatusBadRequest
+		code = "invalid_media_object"
 	case errors.Is(err, storage.ErrInvalidBackend):
 		status = http.StatusBadRequest
 		code = "invalid_backend"

@@ -26,6 +26,8 @@ The phase-9 development scope adds an optional durable file-backed repository fo
 
 The phase-10 development scope adds a media object registry scaffold that validates and records binary asset references against enabled storage backends without storing media bytes in the API service.
 
+The phase-11 development scope exposes authenticated media object registry HTTP endpoints so administrator and import clients can register, fetch, and filter media object metadata through the API scaffold.
+
 ## Storage Requirements
 
 ### Media Storage Scope
@@ -85,6 +87,14 @@ The server-side primary database for 0.x should be PostgreSQL-first. The client-
 The 0.x server-side search should begin with PostgreSQL full-text search, normalized fields, aliases, and ranking rules. External search engines are optional future integrations when scale, language quality, or typo-tolerance requirements exceed PostgreSQL capabilities.
 
 ## Requirement History
+
+### v0.11.0 - 2026-06-03
+
+- Required authenticated HTTP endpoints for media object registration, lookup by ID, listing by backend ID, and listing by content hash.
+- Required strict JSON decoding for media object registration with server-owned timestamps excluded from request bodies.
+- Required media object API errors to use a distinct `invalid_media_object` code for invalid metadata.
+- Required the OpenAPI contract to document media object endpoints, schemas, query filters, path parameters, and error code additions.
+- Required handler tests for registration, lookup, backend/content-hash filtering, invalid object input, disabled backend rejection, and authentication.
 
 ### v0.10.0 - 2026-06-03
 

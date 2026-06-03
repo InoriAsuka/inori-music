@@ -28,6 +28,7 @@ func main() {
 		log.Fatal(err)
 	}
 	storageService := storage.NewService(repository)
+	mediaObjectService := storage.NewMediaObjectService(repository, storage.NewMemoryMediaObjectRepository())
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if interval := storageRefreshInterval(); interval > 0 {
@@ -44,7 +45,7 @@ func main() {
 
 	server := &http.Server{
 		Addr:              address,
-		Handler:           httpapi.NewHandler(storageService, httpapi.WithAdminToken(adminToken)).Routes(),
+		Handler:           httpapi.NewHandler(storageService, httpapi.WithAdminToken(adminToken), httpapi.WithMediaObjectService(mediaObjectService)).Routes(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	go func() {

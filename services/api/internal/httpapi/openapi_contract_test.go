@@ -21,6 +21,8 @@ func TestStorageAdminOpenAPIContractCoversRoutes(t *testing.T) {
 		"/api/v1/admin/storage/backends/{id}/probe":    {"post"},
 		"/api/v1/admin/storage/backends/{id}/health":   {"get"},
 		"/api/v1/admin/storage/backends/{id}/capacity": {"get"},
+		"/api/v1/admin/media/objects":                  {"get", "post"},
+		"/api/v1/admin/media/objects/{id}":             {"get"},
 	}
 
 	for path, methods := range expected {
@@ -44,6 +46,9 @@ func TestStorageAdminOpenAPIContractPathParameters(t *testing.T) {
 	if _, ok := parameters["BackendId"].(map[string]any); !ok {
 		t.Fatal("OpenAPI BackendId path parameter is missing")
 	}
+	if _, ok := parameters["MediaObjectId"].(map[string]any); !ok {
+		t.Fatal("OpenAPI MediaObjectId path parameter is missing")
+	}
 
 	for path, item := range paths {
 		if !strings.Contains(path, "{id}") {
@@ -54,9 +59,13 @@ func TestStorageAdminOpenAPIContractPathParameters(t *testing.T) {
 		if !ok || len(refs) != 1 {
 			t.Fatalf("path %s parameters = %#v, want BackendId reference", path, pathItem["parameters"])
 		}
+		want := "#/components/parameters/BackendId"
+		if strings.HasPrefix(path, "/api/v1/admin/media/objects/") {
+			want = "#/components/parameters/MediaObjectId"
+		}
 		ref := refs[0].(map[string]any)["$ref"]
-		if ref != "#/components/parameters/BackendId" {
-			t.Fatalf("path %s parameter ref = %#v, want BackendId", path, ref)
+		if ref != want {
+			t.Fatalf("path %s parameter ref = %#v, want %s", path, ref, want)
 		}
 	}
 }
@@ -102,7 +111,7 @@ func TestStorageAdminOpenAPIContractSchemasAndErrors(t *testing.T) {
 	document := loadOpenAPIContract(t)
 	components := document["components"].(map[string]any)
 	schemas := components["schemas"].(map[string]any)
-	for _, name := range []string{"StorageBackend", "StorageBackendRequest", "BackendConfig", "LocalConfig", "NFSConfig", "SMBConfig", "S3Config", "DistributedConfig", "CapabilitySet", "ProbeResult", "CapacityReport", "RefreshReport", "RefreshResult", "ErrorEnvelope"} {
+	for _, name := range []string{"StorageBackend", "StorageBackendRequest", "BackendConfig", "LocalConfig", "NFSConfig", "SMBConfig", "S3Config", "DistributedConfig", "CapabilitySet", "ProbeResult", "CapacityReport", "RefreshReport", "RefreshResult", "MediaObject", "MediaObjectRequest", "ErrorEnvelope"} {
 		if _, ok := schemas[name].(map[string]any); !ok {
 			t.Fatalf("schema %q is missing", name)
 		}
@@ -112,7 +121,7 @@ func TestStorageAdminOpenAPIContractSchemasAndErrors(t *testing.T) {
 	errorProperty := errorEnvelope["properties"].(map[string]any)["error"].(map[string]any)
 	codeProperty := errorProperty["properties"].(map[string]any)["code"].(map[string]any)
 	enums := codeProperty["enum"].([]any)
-	for _, code := range []string{"invalid_backend", "unauthorized", "not_found", "method_not_allowed", "conflict", "probe_unsupported", "probe_failed", "capacity_unsupported", "internal_error", "admin_auth_not_configured"} {
+	for _, code := range []string{"invalid_backend", "invalid_media_object", "unauthorized", "not_found", "method_not_allowed", "conflict", "probe_unsupported", "probe_failed", "capacity_unsupported", "internal_error", "admin_auth_not_configured", "media_registry_not_configured"} {
 		if !containsString(enums, code) {
 			t.Fatalf("error code %q is missing from OpenAPI enum %#v", code, enums)
 		}

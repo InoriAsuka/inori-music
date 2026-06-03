@@ -4,7 +4,7 @@
 
 ## Version
 
-Current architecture baseline version: `0.10.0`.
+Current architecture baseline version: `0.11.0`.
 
 ## 0.x Architecture Direction
 
@@ -64,6 +64,10 @@ The ninth phase adds optional file-backed storage backend persistence for develo
 ## Phase 10: Media Object Registry Scaffold
 
 The tenth phase adds a server-side media object registry scaffold for binary asset references. The registry validates object IDs, enabled backend references, relative object keys, content hashes, sizes, MIME types, asset kinds, and lifecycle states while keeping actual audio and artwork bytes in configured storage backends.
+
+## Phase 11: Media Object Admin HTTP API
+
+The eleventh phase exposes authenticated media object registry endpoints for administrator and import clients. The API can register media object references, fetch an object by ID, and list objects by `backendId` or `contentHash` filters.
 
 ## Run the API Scaffold
 

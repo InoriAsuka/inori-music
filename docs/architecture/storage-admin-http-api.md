@@ -30,6 +30,10 @@ The versioned OpenAPI 3.1 contract lives at [`packages/api-contract/openapi/stor
 | `POST` | `/api/v1/admin/storage/backends/{id}/probe` | Run a safe real backend probe where supported. |
 | `GET` | `/api/v1/admin/storage/backends/{id}/health` | Read the latest recorded backend health state. |
 | `GET` | `/api/v1/admin/storage/backends/{id}/capacity` | Read and record current capacity where supported. |
+| `GET` | `/api/v1/admin/media/objects?backendId=...` | List media object metadata stored on a backend. |
+| `GET` | `/api/v1/admin/media/objects?contentHash=...` | List media object metadata by content hash. |
+| `POST` | `/api/v1/admin/media/objects` | Register media object metadata for an enabled backend. |
+| `GET` | `/api/v1/admin/media/objects/{id}` | Read one media object metadata record by ID. |
 
 ## Authentication
 

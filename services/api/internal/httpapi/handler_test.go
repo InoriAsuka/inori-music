@@ -184,6 +184,64 @@ func TestStorageBackendCapacityUnsupported(t *testing.T) {
 	assertAPIError(t, capacity, http.StatusUnprocessableEntity, "capacity_unsupported")
 }
 
+func TestMediaObjectRoutesRegisterLookupAndFilter(t *testing.T) {
+	handler := newTestHandler()
+	backend := `{"id":"local-main","type":"local","displayName":"Local Media","enabled":true,"config":{"local":{"rootPath":"/srv/inori/media"}}}`
+	backendResponse := performRequest(t, handler, http.MethodPost, "/api/v1/admin/storage/backends", backend)
+	if backendResponse.Code != http.StatusCreated {
+		t.Fatalf("backend register status = %d body = %s", backendResponse.Code, backendResponse.Body.String())
+	}
+
+	object := `{"id":"media-1","backendId":"local-main","objectKey":"albums/inori/track-01.flac","contentHash":"sha256:abcdef","sizeBytes":1234,"mimeType":"audio/flac","assetKind":"original_audio","lifecycleState":"active"}`
+	registered := performRequest(t, handler, http.MethodPost, "/api/v1/admin/media/objects", object)
+	if registered.Code != http.StatusCreated {
+		t.Fatalf("media register status = %d body = %s", registered.Code, registered.Body.String())
+	}
+	assertJSONField(t, registered, "id", "media-1")
+
+	lookup := performRequest(t, handler, http.MethodGet, "/api/v1/admin/media/objects/media-1", "")
+	if lookup.Code != http.StatusOK {
+		t.Fatalf("media lookup status = %d body = %s", lookup.Code, lookup.Body.String())
+	}
+	assertJSONField(t, lookup, "objectKey", "albums/inori/track-01.flac")
+
+	byBackend := performRequest(t, handler, http.MethodGet, "/api/v1/admin/media/objects?backendId=local-main", "")
+	assertMediaObjectListLength(t, byBackend, 1)
+	byHash := performRequest(t, handler, http.MethodGet, "/api/v1/admin/media/objects?contentHash=sha256:abcdef", "")
+	assertMediaObjectListLength(t, byHash, 1)
+}
+
+func TestMediaObjectRouteRejectsInvalidInput(t *testing.T) {
+	handler := newTestHandler()
+	backend := `{"id":"local-main","type":"local","displayName":"Local Media","enabled":true,"config":{"local":{"rootPath":"/srv/inori/media"}}}`
+	backendResponse := performRequest(t, handler, http.MethodPost, "/api/v1/admin/storage/backends", backend)
+	if backendResponse.Code != http.StatusCreated {
+		t.Fatalf("backend register status = %d body = %s", backendResponse.Code, backendResponse.Body.String())
+	}
+
+	unsafeKey := `{"id":"media-unsafe","backendId":"local-main","objectKey":"../escape.flac","contentHash":"sha256:abcdef","sizeBytes":1234,"mimeType":"audio/flac","assetKind":"original_audio","lifecycleState":"active"}`
+	assertAPIError(t, performRequest(t, handler, http.MethodPost, "/api/v1/admin/media/objects", unsafeKey), http.StatusBadRequest, "invalid_media_object")
+
+	serverOwned := `{"id":"media-owned","backendId":"local-main","objectKey":"safe.flac","contentHash":"sha256:abcdef","sizeBytes":1234,"mimeType":"audio/flac","assetKind":"original_audio","lifecycleState":"active","createdAt":"2026-06-03T00:00:00Z"}`
+	assertAPIError(t, performRequest(t, handler, http.MethodPost, "/api/v1/admin/media/objects", serverOwned), http.StatusBadRequest, "invalid_media_object")
+
+	assertAPIError(t, performRequest(t, handler, http.MethodGet, "/api/v1/admin/media/objects", ""), http.StatusBadRequest, "invalid_media_object")
+	assertAPIError(t, performRequest(t, handler, http.MethodGet, "/api/v1/admin/media/objects?backendId=local-main&contentHash=sha256:abcdef", ""), http.StatusBadRequest, "invalid_media_object")
+}
+
+func TestMediaObjectRouteRejectsDisabledBackendAndRequiresAuth(t *testing.T) {
+	handler := newTestHandler()
+	backend := `{"id":"local-disabled","type":"local","displayName":"Disabled","enabled":false,"config":{"local":{"rootPath":"/srv/inori/media"}}}`
+	backendResponse := performRequest(t, handler, http.MethodPost, "/api/v1/admin/storage/backends", backend)
+	if backendResponse.Code != http.StatusCreated {
+		t.Fatalf("backend register status = %d body = %s", backendResponse.Code, backendResponse.Body.String())
+	}
+
+	object := `{"id":"media-disabled","backendId":"local-disabled","objectKey":"safe.flac","contentHash":"sha256:abcdef","sizeBytes":1234,"mimeType":"audio/flac","assetKind":"original_audio","lifecycleState":"active"}`
+	assertAPIError(t, performRequest(t, handler, http.MethodPost, "/api/v1/admin/media/objects", object), http.StatusConflict, "conflict")
+	assertAPIError(t, performRequestWithoutAuth(t, handler, http.MethodPost, "/api/v1/admin/media/objects", object), http.StatusUnauthorized, "unauthorized")
+}
+
 func TestStorageBackendErrors(t *testing.T) {
 	handler := newTestHandler()
 	valid := `{"id":"local-main","type":"local","displayName":"Local Media","enabled":true,"config":{"local":{"rootPath":"/srv/inori/media"}}}`
@@ -224,7 +282,12 @@ func TestStorageBackendErrors(t *testing.T) {
 }
 
 func newTestHandler() http.Handler {
-	return NewHandler(storage.NewService(storage.NewMemoryRepository()), WithAdminToken(testAdminToken)).Routes()
+	repository := storage.NewMemoryRepository()
+	return NewHandler(
+		storage.NewService(repository),
+		WithAdminToken(testAdminToken),
+		WithMediaObjectService(storage.NewMediaObjectService(repository, storage.NewMemoryMediaObjectRepository())),
+	).Routes()
 }
 
 func newUnauthenticatedTestHandler() http.Handler {
@@ -287,6 +350,20 @@ func assertJSONField(t *testing.T, response *httptest.ResponseRecorder, field st
 	decodeResponse(t, response, &body)
 	if body[field] != want {
 		t.Fatalf("field %q = %#v, want %#v", field, body[field], want)
+	}
+}
+
+func assertMediaObjectListLength(t *testing.T, response *httptest.ResponseRecorder, want int) {
+	t.Helper()
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d, body = %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	var body struct {
+		Objects []storage.MediaObject `json:"objects"`
+	}
+	decodeResponse(t, response, &body)
+	if len(body.Objects) != want {
+		t.Fatalf("objects length = %d, want %d, body = %s", len(body.Objects), want, response.Body.String())
 	}
 }
 
