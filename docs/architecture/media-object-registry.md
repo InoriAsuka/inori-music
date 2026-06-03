@@ -1,0 +1,35 @@
+# Media Object Registry
+
+## Scope
+
+Phase 10 introduces a domain scaffold for media object metadata. A media object is a server-owned reference to a binary asset stored in one configured storage backend.
+
+The registry stores metadata such as backend ID, object key, content hash, byte size, MIME type, asset kind, lifecycle state, and timestamps. It does not store audio, artwork, lyrics, waveform, or backup bytes inside the API service or relational database.
+
+## Validation Rules
+
+A media object must reference an existing enabled storage backend. Object keys must be relative storage keys and must not be absolute paths, empty paths, current-directory aliases, parent-directory traversal, or backslash-delimited Windows paths.
+
+Content hashes use an `algorithm:value` shape so future import and deduplication workflows can distinguish algorithms such as `sha256` or `blake3`. Sizes must be non-negative, MIME types must be present, and both asset kind and lifecycle state must be from the supported domain constants.
+
+## Supported Asset Kinds
+
+- `original_audio`
+- `transcoded_audio`
+- `artwork`
+- `lyrics`
+- `waveform`
+- `analysis`
+- `import_package`
+- `backup`
+
+## Lifecycle States
+
+- `staged`: registered during an import or verification workflow.
+- `active`: usable by library, playback, and client synchronization flows.
+- `archived`: retained but not preferred for normal playback or display.
+- `deleted`: metadata tombstone for future safe-delete and audit workflows.
+
+## Future Direction
+
+The first implementation uses an in-memory repository for domain tests. PostgreSQL should later own media object metadata, with indexes for backend ID, object key, content hash, asset kind, lifecycle state, and ownership/library relationships.

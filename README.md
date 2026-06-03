@@ -4,7 +4,7 @@
 
 ## Version
 
-Current architecture baseline version: `0.9.0`.
+Current architecture baseline version: `0.10.0`.
 
 ## 0.x Architecture Direction
 
@@ -61,6 +61,10 @@ The eighth phase adds a versioned OpenAPI 3.1 contract for the storage administr
 
 The ninth phase adds optional file-backed storage backend persistence for development and self-hosted deployments. Set `INORI_STORAGE_REPOSITORY_FILE=/path/to/storage-backends.json` to persist backend configuration, health, and capacity state across API server restarts; leave it unset to keep the existing in-memory repository.
 
+## Phase 10: Media Object Registry Scaffold
+
+The tenth phase adds a server-side media object registry scaffold for binary asset references. The registry validates object IDs, enabled backend references, relative object keys, content hashes, sizes, MIME types, asset kinds, and lifecycle states while keeping actual audio and artwork bytes in configured storage backends.
+
 ## Run the API Scaffold
 
 ```bash
@@ -84,6 +88,7 @@ The HTTP server binds to `127.0.0.1:8080` by default. Admin routes require `Auth
 - [`docs/architecture/storage-backends.md`](docs/architecture/storage-backends.md)
 - [`docs/architecture/storage-admin-http-api.md`](docs/architecture/storage-admin-http-api.md)
 - [`docs/architecture/storage-persistence.md`](docs/architecture/storage-persistence.md)
+- [`docs/architecture/media-object-registry.md`](docs/architecture/media-object-registry.md)
 - [`packages/api-contract/openapi/storage-admin.v1.json`](packages/api-contract/openapi/storage-admin.v1.json)
 - [`docs/adr/ADR-0001-server-managed-multi-backend-media-storage.md`](docs/adr/ADR-0001-server-managed-multi-backend-media-storage.md)
 - [`docs/adr/ADR-0002-postgresql-first-database-and-search.md`](docs/adr/ADR-0002-postgresql-first-database-and-search.md)

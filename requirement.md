@@ -24,6 +24,8 @@ The phase-8 development scope adds a versioned OpenAPI 3.1 contract for the stor
 
 The phase-9 development scope adds an optional durable file-backed repository for storage backend configuration so development and self-hosted servers can retain backend state across restarts before PostgreSQL persistence lands.
 
+The phase-10 development scope adds a media object registry scaffold that validates and records binary asset references against enabled storage backends without storing media bytes in the API service.
+
 ## Storage Requirements
 
 ### Media Storage Scope
@@ -83,6 +85,14 @@ The server-side primary database for 0.x should be PostgreSQL-first. The client-
 The 0.x server-side search should begin with PostgreSQL full-text search, normalized fields, aliases, and ranking rules. External search engines are optional future integrations when scale, language quality, or typo-tolerance requirements exceed PostgreSQL capabilities.
 
 ## Requirement History
+
+### v0.10.0 - 2026-06-03
+
+- Required a media object registry scaffold for binary asset references stored outside the relational database.
+- Required media object validation for IDs, enabled backend references, relative object keys, content hashes, non-negative sizes, MIME types, asset kinds, and lifecycle states.
+- Required an in-memory media object repository for early domain tests before PostgreSQL media metadata persistence is introduced.
+- Required service-level registration to reject disabled or missing storage backends.
+- Required tests for successful registration, invalid object keys, disabled backend rejection, stable backend listing, and content-hash lookup.
 
 ### v0.9.0 - 2026-06-03
 
