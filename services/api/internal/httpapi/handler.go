@@ -393,6 +393,8 @@ func (handler *Handler) listMediaObjects(w http.ResponseWriter, r *http.Request)
 		VerificationStatus: r.URL.Query().Get("verificationStatus"),
 		LifecycleState:     r.URL.Query().Get("lifecycleState"),
 		AssetKind:          r.URL.Query().Get("assetKind"),
+		SortBy:             r.URL.Query().Get("sortBy"),
+		SortOrder:          r.URL.Query().Get("sortOrder"),
 		Limit:              limit,
 		Offset:             offset,
 	})

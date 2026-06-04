@@ -15,7 +15,7 @@ The HTTP API exposes authenticated admin endpoints for managing storage backends
 - `POST /api/v1/admin/storage/backends/validate`: validate a candidate backend without persisting it.
 - `POST /api/v1/admin/storage/backends/refresh`: refresh backend health and supported capacity state.
 - `POST /api/v1/admin/storage/backends/{id}/probe`: run a safe backend probe.
-- `GET /api/v1/admin/media/objects`: list media objects by exactly one metadata filter with pagination.
+- `GET /api/v1/admin/media/objects`: list media objects by exactly one metadata filter with sorting and pagination.
 - `POST /api/v1/admin/media/objects`: register media object metadata.
 - `GET /api/v1/admin/media/objects/stats`: read metadata-only statistics.
 - `POST /api/v1/admin/media/objects/{id}/lifecycle`: update lifecycle metadata.

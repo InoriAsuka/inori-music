@@ -4,7 +4,7 @@ A centralized music platform targeting Web, Android, iOS, and desktop clients wh
 
 ## Version
 
-Current architecture baseline version: `0.23.0`.
+Current architecture baseline version: `0.24.0`.
 
 ## Documentation Policy
 
@@ -112,6 +112,10 @@ Split README content and localize documentation in the previous phase.
 ### Phase 23: English Documentation Policy
 
 Restore Markdown documentation to English as the repository documentation policy.
+
+### Phase 24: Media Object List Sorting
+
+Support deterministic media object list sorting by backend/object key, created time, updated time, size, object key, or ID before pagination.
 
 ## Run the API Scaffold
 

@@ -204,8 +204,8 @@ func TestMediaObjectRoutesRegisterLookupAndFilter(t *testing.T) {
 	}
 	assertJSONField(t, registered, "id", "media-1")
 	for _, extra := range []string{
-		`{"id":"media-2","backendId":"local-main","objectKey":"albums/inori/track-02.flac","contentHash":"sha256:2222","sizeBytes":1234,"mimeType":"audio/flac","assetKind":"original_audio","lifecycleState":"active"}`,
-		`{"id":"media-3","backendId":"local-main","objectKey":"albums/inori/track-03.flac","contentHash":"sha256:3333","sizeBytes":1234,"mimeType":"audio/flac","assetKind":"original_audio","lifecycleState":"active"}`,
+		`{"id":"media-2","backendId":"local-main","objectKey":"albums/inori/track-02.flac","contentHash":"sha256:2222","sizeBytes":900,"mimeType":"audio/flac","assetKind":"original_audio","lifecycleState":"active"}`,
+		`{"id":"media-3","backendId":"local-main","objectKey":"albums/inori/track-03.flac","contentHash":"sha256:3333","sizeBytes":2000,"mimeType":"audio/flac","assetKind":"original_audio","lifecycleState":"active"}`,
 	} {
 		if response := performRequest(t, handler, http.MethodPost, "/api/v1/admin/media/objects", extra); response.Code != http.StatusCreated {
 			t.Fatalf("extra media register status = %d body = %s", response.Code, response.Body.String())
@@ -237,6 +237,8 @@ func TestMediaObjectRoutesRegisterLookupAndFilter(t *testing.T) {
 	assertMediaObjectListLength(t, byBackend, 3)
 	paged := performRequest(t, handler, http.MethodGet, "/api/v1/admin/media/objects?backendId=local-main&limit=1&offset=1", "")
 	assertMediaObjectPage(t, paged, 1, 1, 3, true)
+	sorted := performRequest(t, handler, http.MethodGet, "/api/v1/admin/media/objects?backendId=local-main&sortBy=size_bytes&sortOrder=desc&limit=2", "")
+	assertMediaObjectIDs(t, sorted, []string{"media-3", "media-1"})
 	byHash := performRequest(t, handler, http.MethodGet, "/api/v1/admin/media/objects?contentHash=sha256:abcdef", "")
 	assertMediaObjectListLength(t, byHash, 1)
 	byVerificationStatus := performRequest(t, handler, http.MethodGet, "/api/v1/admin/media/objects?verificationStatus=unknown", "")
@@ -244,6 +246,8 @@ func TestMediaObjectRoutesRegisterLookupAndFilter(t *testing.T) {
 	assertAPIError(t, performRequest(t, handler, http.MethodGet, "/api/v1/admin/media/objects?backendId=local-main&verificationStatus=unknown", ""), http.StatusBadRequest, "invalid_media_object")
 	assertAPIError(t, performRequest(t, handler, http.MethodGet, "/api/v1/admin/media/objects?verificationStatus=stale", ""), http.StatusBadRequest, "invalid_media_object")
 	assertAPIError(t, performRequest(t, handler, http.MethodGet, "/api/v1/admin/media/objects?backendId=local-main&limit=0", ""), http.StatusBadRequest, "invalid_media_object")
+	assertAPIError(t, performRequest(t, handler, http.MethodGet, "/api/v1/admin/media/objects?backendId=local-main&sortBy=missing", ""), http.StatusBadRequest, "invalid_media_object")
+	assertAPIError(t, performRequest(t, handler, http.MethodGet, "/api/v1/admin/media/objects?backendId=local-main&sortOrder=sideways", ""), http.StatusBadRequest, "invalid_media_object")
 
 	stats := performRequest(t, handler, http.MethodGet, "/api/v1/admin/media/objects/stats?backendId=local-main", "")
 	if stats.Code != http.StatusOK {
@@ -251,7 +255,7 @@ func TestMediaObjectRoutesRegisterLookupAndFilter(t *testing.T) {
 	}
 	var statsBody storage.MediaObjectStats
 	decodeResponse(t, stats, &statsBody)
-	if statsBody.BackendID != "local-main" || statsBody.TotalObjects != 3 || statsBody.TotalSizeBytes != 3702 || statsBody.ByVerificationStatus["unknown"] != 3 {
+	if statsBody.BackendID != "local-main" || statsBody.TotalObjects != 3 || statsBody.TotalSizeBytes != 4134 || statsBody.ByVerificationStatus["unknown"] != 3 {
 		t.Fatalf("stats = %+v, want backend totals and unknown verification count", statsBody)
 	}
 	assertAPIError(t, performRequestWithoutAuth(t, handler, http.MethodGet, "/api/v1/admin/media/objects/stats", ""), http.StatusUnauthorized, "unauthorized")
@@ -496,6 +500,25 @@ func assertJSONField(t *testing.T, response *httptest.ResponseRecorder, field st
 	decodeResponse(t, response, &body)
 	if body[field] != want {
 		t.Fatalf("field %q = %#v, want %#v", field, body[field], want)
+	}
+}
+
+func assertMediaObjectIDs(t *testing.T, response *httptest.ResponseRecorder, want []string) {
+	t.Helper()
+	if response.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d, body = %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	var body struct {
+		Objects []storage.MediaObject `json:"objects"`
+	}
+	decodeResponse(t, response, &body)
+	if len(body.Objects) != len(want) {
+		t.Fatalf("objects length = %d, want %d, body = %s", len(body.Objects), len(want), response.Body.String())
+	}
+	for i, object := range body.Objects {
+		if object.ID != want[i] {
+			t.Fatalf("object[%d].id = %q, want %q; body = %s", i, object.ID, want[i], response.Body.String())
+		}
 	}
 }
 

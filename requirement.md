@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.23.0`
+`0.24.0`
 
 ## Product Goal
 
@@ -28,6 +28,7 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Markdown documentation is maintained in English.
 - Phase work must be recorded under `.plan/` with requirements, task checklists, non-goals, and follow-up candidates.
 - README, requirements, ADRs, and architecture notes must stay aligned with the current version baseline.
+- Media object list APIs must support deterministic sort controls before pagination so admin clients can build predictable tables.
 
 ## Requirement History
 
@@ -144,4 +145,9 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 ### v0.23.0 - 2026-06-04
 
 - Restore Markdown documentation to English as the repository documentation policy.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.24.0 - 2026-06-04
+
+- Support media object list sorting by `backend_object_key`, `created_at`, `updated_at`, `size_bytes`, `object_key`, or `id`, with `asc` or `desc` order before pagination.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

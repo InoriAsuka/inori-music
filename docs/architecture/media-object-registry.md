@@ -10,7 +10,7 @@ A media object must reference an enabled storage backend. Object keys must be re
 
 ## Listing and Filters
 
-List endpoints use `limit` and `offset` pagination and require exactly one filter per request. Supported filters are `backendId`, `contentHash`, `verificationStatus`, `lifecycleState`, and `assetKind`. Filtering reads metadata only.
+List endpoints use `limit` and `offset` pagination and require exactly one filter per request. Supported filters are `backendId`, `contentHash`, `verificationStatus`, `lifecycleState`, and `assetKind`. Filtering reads metadata only. Optional sort controls run before pagination and support `backend_object_key`, `created_at`, `updated_at`, `size_bytes`, `object_key`, and `id` with `asc` or `desc` order.
 
 ## Verification and Lifecycle
 

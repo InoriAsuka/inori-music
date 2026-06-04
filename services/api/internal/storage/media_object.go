@@ -38,6 +38,22 @@ const (
 const (
 	DefaultMediaObjectListLimit = 100
 	MaxMediaObjectListLimit     = 500
+	DefaultMediaObjectSortBy    = "backend_object_key"
+	DefaultMediaObjectSortOrder = "asc"
+)
+
+const (
+	MediaObjectSortByBackendObjectKey = "backend_object_key"
+	MediaObjectSortByCreatedAt        = "created_at"
+	MediaObjectSortByUpdatedAt        = "updated_at"
+	MediaObjectSortBySizeBytes        = "size_bytes"
+	MediaObjectSortByObjectKey        = "object_key"
+	MediaObjectSortByID               = "id"
+)
+
+const (
+	MediaObjectSortOrderAscending  = "asc"
+	MediaObjectSortOrderDescending = "desc"
 )
 
 // MediaObjectListFilter describes a metadata-only media object list query.
@@ -47,6 +63,8 @@ type MediaObjectListFilter struct {
 	VerificationStatus string
 	LifecycleState     string
 	AssetKind          string
+	SortBy             string
+	SortOrder          string
 	Limit              int
 	Offset             int
 }
@@ -309,6 +327,7 @@ func (service *MediaObjectService) ListMediaObjects(ctx context.Context, filter 
 	if err != nil {
 		return MediaObjectListPage{}, err
 	}
+	sortMediaObjectsForList(objects, normalized.SortBy, normalized.SortOrder)
 	return paginateMediaObjects(objects, normalized.Limit, normalized.Offset), nil
 }
 
@@ -419,6 +438,8 @@ func normalizeMediaObjectListFilter(filter MediaObjectListFilter) (MediaObjectLi
 	filter.VerificationStatus = strings.TrimSpace(filter.VerificationStatus)
 	filter.LifecycleState = strings.TrimSpace(filter.LifecycleState)
 	filter.AssetKind = strings.TrimSpace(filter.AssetKind)
+	filter.SortBy = strings.TrimSpace(filter.SortBy)
+	filter.SortOrder = strings.TrimSpace(filter.SortOrder)
 	filterCount := 0
 	for _, value := range []string{filter.BackendID, filter.ContentHash, filter.VerificationStatus, filter.LifecycleState, filter.AssetKind} {
 		if value != "" {
@@ -449,6 +470,24 @@ func normalizeMediaObjectListFilter(filter MediaObjectListFilter) (MediaObjectLi
 		}
 		filter.AssetKind = normalized
 	}
+	if filter.SortBy == "" {
+		filter.SortBy = DefaultMediaObjectSortBy
+	} else {
+		normalized, err := normalizeMediaObjectSortBy(filter.SortBy)
+		if err != nil {
+			return MediaObjectListFilter{}, err
+		}
+		filter.SortBy = normalized
+	}
+	if filter.SortOrder == "" {
+		filter.SortOrder = DefaultMediaObjectSortOrder
+	} else {
+		normalized, err := normalizeMediaObjectSortOrder(filter.SortOrder)
+		if err != nil {
+			return MediaObjectListFilter{}, err
+		}
+		filter.SortOrder = normalized
+	}
 	if filter.Limit == 0 {
 		filter.Limit = DefaultMediaObjectListLimit
 	}
@@ -459,6 +498,26 @@ func normalizeMediaObjectListFilter(filter MediaObjectListFilter) (MediaObjectLi
 		return MediaObjectListFilter{}, fmt.Errorf("%w: offset must be non-negative", ErrInvalidMediaObject)
 	}
 	return filter, nil
+}
+
+func normalizeMediaObjectSortBy(sortBy string) (string, error) {
+	normalized := strings.ToLower(strings.TrimSpace(sortBy))
+	switch normalized {
+	case MediaObjectSortByBackendObjectKey, MediaObjectSortByCreatedAt, MediaObjectSortByUpdatedAt, MediaObjectSortBySizeBytes, MediaObjectSortByObjectKey, MediaObjectSortByID:
+		return normalized, nil
+	default:
+		return "", fmt.Errorf("%w: sortBy must be one of backend_object_key, created_at, updated_at, size_bytes, object_key, or id", ErrInvalidMediaObject)
+	}
+}
+
+func normalizeMediaObjectSortOrder(order string) (string, error) {
+	normalized := strings.ToLower(strings.TrimSpace(order))
+	switch normalized {
+	case MediaObjectSortOrderAscending, MediaObjectSortOrderDescending:
+		return normalized, nil
+	default:
+		return "", fmt.Errorf("%w: sortOrder must be asc or desc", ErrInvalidMediaObject)
+	}
 }
 
 func normalizeAssetKind(kind string) (string, error) {
@@ -504,6 +563,49 @@ func summarizeMediaObjects(backendID string, objects []MediaObject) MediaObjectS
 		stats.ByVerificationStatus[mediaObjectVerificationStatus(object)]++
 	}
 	return stats
+}
+
+func sortMediaObjectsForList(objects []MediaObject, sortBy string, sortOrder string) {
+	descending := sortOrder == MediaObjectSortOrderDescending
+	sort.SliceStable(objects, func(i, j int) bool {
+		if descending {
+			return mediaObjectLess(objects[j], objects[i], sortBy)
+		}
+		return mediaObjectLess(objects[i], objects[j], sortBy)
+	})
+}
+
+func mediaObjectLess(left MediaObject, right MediaObject, sortBy string) bool {
+	switch sortBy {
+	case MediaObjectSortByCreatedAt:
+		if !left.CreatedAt.Equal(right.CreatedAt) {
+			return left.CreatedAt.Before(right.CreatedAt)
+		}
+	case MediaObjectSortByUpdatedAt:
+		if !left.UpdatedAt.Equal(right.UpdatedAt) {
+			return left.UpdatedAt.Before(right.UpdatedAt)
+		}
+	case MediaObjectSortBySizeBytes:
+		if left.SizeBytes != right.SizeBytes {
+			return left.SizeBytes < right.SizeBytes
+		}
+	case MediaObjectSortByObjectKey:
+		if left.ObjectKey != right.ObjectKey {
+			return left.ObjectKey < right.ObjectKey
+		}
+	case MediaObjectSortByID:
+		if left.ID != right.ID {
+			return left.ID < right.ID
+		}
+	default:
+		if left.BackendID != right.BackendID {
+			return left.BackendID < right.BackendID
+		}
+		if left.ObjectKey != right.ObjectKey {
+			return left.ObjectKey < right.ObjectKey
+		}
+	}
+	return left.ID < right.ID
 }
 
 func paginateMediaObjects(objects []MediaObject, limit int, offset int) MediaObjectListPage {

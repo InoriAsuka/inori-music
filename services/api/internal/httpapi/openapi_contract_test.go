@@ -74,6 +74,32 @@ func TestStorageAdminOpenAPIContractPathParameters(t *testing.T) {
 	}
 }
 
+func TestStorageAdminOpenAPIContractMediaObjectListQueryParameters(t *testing.T) {
+	document := loadOpenAPIContract(t)
+	paths := document["paths"].(map[string]any)
+	listOperation := operation(t, paths, "/api/v1/admin/media/objects", "get")
+	parameters := listOperation["parameters"].([]any)
+	seen := make(map[string]map[string]any)
+	for _, parameter := range parameters {
+		item := parameter.(map[string]any)
+		name := item["name"].(string)
+		seen[name] = item
+	}
+	for _, name := range []string{"backendId", "contentHash", "verificationStatus", "lifecycleState", "assetKind", "sortBy", "sortOrder", "limit", "offset"} {
+		if _, ok := seen[name]; !ok {
+			t.Fatalf("media object list query parameter %q is missing", name)
+		}
+	}
+	sortBySchema := seen["sortBy"]["schema"].(map[string]any)
+	if !containsString(sortBySchema["enum"].([]any), "size_bytes") || sortBySchema["default"] != "backend_object_key" {
+		t.Fatalf("sortBy schema = %#v, want size_bytes enum and backend_object_key default", sortBySchema)
+	}
+	sortOrderSchema := seen["sortOrder"]["schema"].(map[string]any)
+	if !containsString(sortOrderSchema["enum"].([]any), "desc") || sortOrderSchema["default"] != "asc" {
+		t.Fatalf("sortOrder schema = %#v, want desc enum and asc default", sortOrderSchema)
+	}
+}
+
 func TestStorageAdminOpenAPIContractSecurity(t *testing.T) {
 	document := loadOpenAPIContract(t)
 	paths := document["paths"].(map[string]any)

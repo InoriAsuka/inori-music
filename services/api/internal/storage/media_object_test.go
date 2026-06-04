@@ -202,6 +202,38 @@ func TestMediaObjectServiceListsPaginatedObjects(t *testing.T) {
 	}
 }
 
+func TestMediaObjectServiceSortsListBeforePagination(t *testing.T) {
+	ctx := context.Background()
+	repo := NewMemoryMediaObjectRepository()
+	baseTime := time.Date(2026, 6, 4, 10, 20, 0, 0, time.UTC)
+	for _, object := range []MediaObject{
+		{ID: "small", BackendID: "local-main", ObjectKey: "small.flac", ContentHash: "sha256:same", SizeBytes: 10, MIMEType: "audio/flac", AssetKind: string(AssetKindOriginalAudio), LifecycleState: string(LifecycleStateActive), CreatedAt: baseTime.Add(2 * time.Minute), UpdatedAt: baseTime.Add(2 * time.Minute)},
+		{ID: "large", BackendID: "local-main", ObjectKey: "large.flac", ContentHash: "sha256:same", SizeBytes: 30, MIMEType: "audio/flac", AssetKind: string(AssetKindOriginalAudio), LifecycleState: string(LifecycleStateActive), CreatedAt: baseTime, UpdatedAt: baseTime},
+		{ID: "middle", BackendID: "local-main", ObjectKey: "middle.flac", ContentHash: "sha256:same", SizeBytes: 20, MIMEType: "audio/flac", AssetKind: string(AssetKindOriginalAudio), LifecycleState: string(LifecycleStateActive), CreatedAt: baseTime.Add(time.Minute), UpdatedAt: baseTime.Add(time.Minute)},
+	} {
+		if err := repo.SaveMediaObject(ctx, object); err != nil {
+			t.Fatalf("SaveMediaObject() error = %v", err)
+		}
+	}
+	service := NewMediaObjectService(NewMemoryRepository(), repo)
+
+	page, err := service.ListMediaObjects(ctx, MediaObjectListFilter{BackendID: "local-main", SortBy: MediaObjectSortBySizeBytes, SortOrder: MediaObjectSortOrderDescending, Limit: 2})
+	if err != nil {
+		t.Fatalf("ListMediaObjects(size desc) error = %v", err)
+	}
+	if len(page.Objects) != 2 || page.Objects[0].ID != "large" || page.Objects[1].ID != "middle" {
+		t.Fatalf("page objects = %+v, want size descending before pagination", page.Objects)
+	}
+
+	page, err = service.ListMediaObjects(ctx, MediaObjectListFilter{BackendID: "local-main", SortBy: MediaObjectSortByCreatedAt, SortOrder: MediaObjectSortOrderAscending, Limit: 3})
+	if err != nil {
+		t.Fatalf("ListMediaObjects(created asc) error = %v", err)
+	}
+	if page.Objects[0].ID != "large" || page.Objects[1].ID != "middle" || page.Objects[2].ID != "small" {
+		t.Fatalf("page objects = %+v, want created_at ascending", page.Objects)
+	}
+}
+
 func TestMediaObjectServiceRejectsInvalidPagination(t *testing.T) {
 	service := NewMediaObjectService(NewMemoryRepository(), NewMemoryMediaObjectRepository())
 	for _, filter := range []MediaObjectListFilter{
@@ -209,6 +241,8 @@ func TestMediaObjectServiceRejectsInvalidPagination(t *testing.T) {
 		{BackendID: "local-main", Limit: MaxMediaObjectListLimit + 1},
 		{BackendID: "local-main", Offset: -1},
 		{BackendID: "local-main", ContentHash: "sha256:same"},
+		{BackendID: "local-main", SortBy: "missing"},
+		{BackendID: "local-main", SortOrder: "sideways"},
 	} {
 		if _, err := service.ListMediaObjects(context.Background(), filter); !errors.Is(err, ErrInvalidMediaObject) {
 			t.Fatalf("ListMediaObjects(%+v) error = %v, want ErrInvalidMediaObject", filter, err)
