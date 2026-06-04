@@ -682,7 +682,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "0.20.0"
+    "version": "0.21.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -1297,7 +1297,7 @@
               "type": "string",
               "minLength": 1
             },
-            "description": "List media objects stored on this backend. Mutually exclusive with contentHash, verificationStatus, and lifecycleState."
+            "description": "List media objects stored on this backend. Mutually exclusive with contentHash, verificationStatus, lifecycleState, and assetKind."
           },
           {
             "name": "contentHash",
@@ -1307,7 +1307,7 @@
               "type": "string",
               "minLength": 1
             },
-            "description": "List media objects with this content hash. Mutually exclusive with backendId, verificationStatus, and lifecycleState."
+            "description": "List media objects with this content hash. Mutually exclusive with backendId, verificationStatus, lifecycleState, and assetKind."
           },
           {
             "name": "verificationStatus",
@@ -1321,7 +1321,7 @@
                 "unknown"
               ]
             },
-            "description": "List media objects by their latest verification state; unknown means no verification result has been recorded yet. Mutually exclusive with backendId, contentHash, and lifecycleState."
+            "description": "List media objects by their latest verification state; unknown means no verification result has been recorded yet. Mutually exclusive with backendId, contentHash, lifecycleState, and assetKind."
           },
           {
             "name": "lifecycleState",
@@ -1336,7 +1336,26 @@
                 "deleted"
               ]
             },
-            "description": "List media objects by metadata lifecycle state. Mutually exclusive with backendId, contentHash, and verificationStatus."
+            "description": "List media objects by metadata lifecycle state. Mutually exclusive with backendId, contentHash, verificationStatus, and assetKind."
+          },
+          {
+            "name": "assetKind",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "original_audio",
+                "transcoded_audio",
+                "artwork",
+                "lyrics",
+                "waveform",
+                "analysis",
+                "import_package",
+                "backup"
+              ]
+            },
+            "description": "List media objects by registered asset kind. Mutually exclusive with backendId, contentHash, verificationStatus, and lifecycleState."
           },
           {
             "name": "limit",
@@ -1424,7 +1443,7 @@
             "bearerAuth": []
           }
         ],
-        "description": "Returns a bounded media-object metadata page filtered by exactly one of backendId, contentHash, verificationStatus, or lifecycleState."
+        "description": "Returns a bounded media-object metadata page filtered by exactly one of backendId, contentHash, verificationStatus, lifecycleState, or assetKind."
       },
       "post": {
         "summary": "Register a media object metadata reference.",

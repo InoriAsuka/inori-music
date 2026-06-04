@@ -70,3 +70,8 @@ Administrators can update `lifecycleState` through a metadata-only route. The op
 ## Lifecycle Filtering
 
 Paginated media-object list requests can filter by `lifecycleState=staged|active|archived|deleted`. Lifecycle filtering is mutually exclusive with backend, content-hash, and verification-status filters, follows the same stable ordering and pagination semantics, and reads only persisted metadata.
+
+
+## Asset Kind Filtering
+
+Paginated media-object list requests can filter by `assetKind` for registered asset classes such as original audio, transcoded audio, artwork, lyrics, waveform data, analysis data, import packages, and backups. Asset-kind filtering is mutually exclusive with backend, content-hash, verification-status, and lifecycle filters, and reads only persisted metadata.

@@ -96,6 +96,14 @@ The 0.x server-side search should begin with PostgreSQL full-text search, normal
 
 ## Requirement History
 
+### v0.21.0 - 2026-06-04
+
+- Required media-object list filtering by asset kind for administrator asset-class review workflows.
+- Required `assetKind` to accept `original_audio`, `transcoded_audio`, `artwork`, `lyrics`, `waveform`, `analysis`, `import_package`, and `backup`.
+- Required list filtering to preserve the single-filter rule with `backendId`, `contentHash`, `verificationStatus`, `lifecycleState`, or `assetKind`.
+- Required asset-kind filtering to remain metadata-only and compatible with existing `limit` and `offset` pagination.
+- Required domain, HTTP, OpenAPI, and invalid-filter tests for asset-kind listing.
+
 ### v0.20.0 - 2026-06-04
 
 - Required media-object list filtering by lifecycle state after lifecycle administration was introduced.

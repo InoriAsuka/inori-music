@@ -392,6 +392,7 @@ func (handler *Handler) listMediaObjects(w http.ResponseWriter, r *http.Request)
 		ContentHash:        r.URL.Query().Get("contentHash"),
 		VerificationStatus: r.URL.Query().Get("verificationStatus"),
 		LifecycleState:     r.URL.Query().Get("lifecycleState"),
+		AssetKind:          r.URL.Query().Get("assetKind"),
 		Limit:              limit,
 		Offset:             offset,
 	})

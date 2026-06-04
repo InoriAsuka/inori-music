@@ -46,6 +46,7 @@ type MediaObjectListFilter struct {
 	ContentHash        string
 	VerificationStatus string
 	LifecycleState     string
+	AssetKind          string
 	Limit              int
 	Offset             int
 }
@@ -84,6 +85,7 @@ type MediaObjectRepository interface {
 	ListMediaObjectsByContentHash(ctx context.Context, contentHash string) ([]MediaObject, error)
 	ListMediaObjectsByVerificationStatus(ctx context.Context, status string) ([]MediaObject, error)
 	ListMediaObjectsByLifecycleState(ctx context.Context, state string) ([]MediaObject, error)
+	ListMediaObjectsByAssetKind(ctx context.Context, kind string) ([]MediaObject, error)
 }
 
 // MemoryMediaObjectRepository is a development repository for media object metadata.
@@ -170,6 +172,19 @@ func (repo *MemoryMediaObjectRepository) ListMediaObjectsByLifecycleState(_ cont
 	objects := make([]MediaObject, 0)
 	for _, object := range repo.objects {
 		if object.LifecycleState == state {
+			objects = append(objects, object)
+		}
+	}
+	return sortedMediaObjects(objects), nil
+}
+
+func (repo *MemoryMediaObjectRepository) ListMediaObjectsByAssetKind(_ context.Context, kind string) ([]MediaObject, error) {
+	kind = strings.TrimSpace(kind)
+	repo.mu.RLock()
+	defer repo.mu.RUnlock()
+	objects := make([]MediaObject, 0)
+	for _, object := range repo.objects {
+		if object.AssetKind == kind {
 			objects = append(objects, object)
 		}
 	}
@@ -265,6 +280,14 @@ func (service *MediaObjectService) ListMediaObjectsByLifecycleState(ctx context.
 	return service.mediaRepository.ListMediaObjectsByLifecycleState(ctx, normalized)
 }
 
+func (service *MediaObjectService) ListMediaObjectsByAssetKind(ctx context.Context, kind string) ([]MediaObject, error) {
+	normalized, err := normalizeAssetKind(kind)
+	if err != nil {
+		return nil, err
+	}
+	return service.mediaRepository.ListMediaObjectsByAssetKind(ctx, normalized)
+}
+
 func (service *MediaObjectService) ListMediaObjects(ctx context.Context, filter MediaObjectListFilter) (MediaObjectListPage, error) {
 	normalized, err := normalizeMediaObjectListFilter(filter)
 	if err != nil {
@@ -278,8 +301,10 @@ func (service *MediaObjectService) ListMediaObjects(ctx context.Context, filter 
 		objects, err = service.mediaRepository.ListMediaObjectsByContentHash(ctx, normalized.ContentHash)
 	} else if normalized.VerificationStatus != "" {
 		objects, err = service.mediaRepository.ListMediaObjectsByVerificationStatus(ctx, normalized.VerificationStatus)
-	} else {
+	} else if normalized.LifecycleState != "" {
 		objects, err = service.mediaRepository.ListMediaObjectsByLifecycleState(ctx, normalized.LifecycleState)
+	} else {
+		objects, err = service.mediaRepository.ListMediaObjectsByAssetKind(ctx, normalized.AssetKind)
 	}
 	if err != nil {
 		return MediaObjectListPage{}, err
@@ -393,14 +418,15 @@ func normalizeMediaObjectListFilter(filter MediaObjectListFilter) (MediaObjectLi
 	filter.ContentHash = strings.TrimSpace(filter.ContentHash)
 	filter.VerificationStatus = strings.TrimSpace(filter.VerificationStatus)
 	filter.LifecycleState = strings.TrimSpace(filter.LifecycleState)
+	filter.AssetKind = strings.TrimSpace(filter.AssetKind)
 	filterCount := 0
-	for _, value := range []string{filter.BackendID, filter.ContentHash, filter.VerificationStatus, filter.LifecycleState} {
+	for _, value := range []string{filter.BackendID, filter.ContentHash, filter.VerificationStatus, filter.LifecycleState, filter.AssetKind} {
 		if value != "" {
 			filterCount++
 		}
 	}
 	if filterCount != 1 {
-		return MediaObjectListFilter{}, fmt.Errorf("%w: exactly one of backendId, contentHash, verificationStatus, or lifecycleState is required", ErrInvalidMediaObject)
+		return MediaObjectListFilter{}, fmt.Errorf("%w: exactly one of backendId, contentHash, verificationStatus, lifecycleState, or assetKind is required", ErrInvalidMediaObject)
 	}
 	if filter.VerificationStatus != "" {
 		normalized, err := normalizeMediaObjectVerificationStatus(filter.VerificationStatus)
@@ -416,6 +442,13 @@ func normalizeMediaObjectListFilter(filter MediaObjectListFilter) (MediaObjectLi
 		}
 		filter.LifecycleState = normalized
 	}
+	if filter.AssetKind != "" {
+		normalized, err := normalizeAssetKind(filter.AssetKind)
+		if err != nil {
+			return MediaObjectListFilter{}, err
+		}
+		filter.AssetKind = normalized
+	}
 	if filter.Limit == 0 {
 		filter.Limit = DefaultMediaObjectListLimit
 	}
@@ -426,6 +459,14 @@ func normalizeMediaObjectListFilter(filter MediaObjectListFilter) (MediaObjectLi
 		return MediaObjectListFilter{}, fmt.Errorf("%w: offset must be non-negative", ErrInvalidMediaObject)
 	}
 	return filter, nil
+}
+
+func normalizeAssetKind(kind string) (string, error) {
+	normalized := strings.ToLower(strings.TrimSpace(kind))
+	if !validAssetKind(AssetKind(normalized)) {
+		return "", fmt.Errorf("%w: assetKind must be one of original_audio, transcoded_audio, artwork, lyrics, waveform, analysis, import_package, or backup", ErrInvalidMediaObject)
+	}
+	return normalized, nil
 }
 
 func normalizeLifecycleState(state string) (string, error) {

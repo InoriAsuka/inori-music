@@ -350,6 +350,48 @@ func TestMediaObjectServiceRejectsInvalidLifecycleStateFilter(t *testing.T) {
 	}
 }
 
+func TestMediaObjectServiceListsByAssetKind(t *testing.T) {
+	ctx := context.Background()
+	repo := NewMemoryMediaObjectRepository()
+	audio := validMediaObject()
+	audio.ID = "audio"
+	audio.ObjectKey = "audio.flac"
+	artwork := validMediaObject()
+	artwork.ID = "artwork"
+	artwork.ObjectKey = "cover.jpg"
+	artwork.AssetKind = string(AssetKindArtwork)
+	artwork.MIMEType = "image/jpeg"
+	for _, object := range []MediaObject{audio, artwork} {
+		if err := repo.SaveMediaObject(ctx, object); err != nil {
+			t.Fatalf("SaveMediaObject() error = %v", err)
+		}
+	}
+	service := NewMediaObjectService(NewMemoryRepository(), repo)
+
+	objects, err := service.ListMediaObjectsByAssetKind(ctx, string(AssetKindArtwork))
+	if err != nil {
+		t.Fatalf("ListMediaObjectsByAssetKind() error = %v", err)
+	}
+	if len(objects) != 1 || objects[0].ID != "artwork" {
+		t.Fatalf("artwork objects = %+v, want only artwork", objects)
+	}
+	page, err := service.ListMediaObjects(ctx, MediaObjectListFilter{AssetKind: string(AssetKindOriginalAudio), Limit: 10})
+	if err != nil {
+		t.Fatalf("ListMediaObjects(assetKind) error = %v", err)
+	}
+	if len(page.Objects) != 1 || page.Objects[0].ID != "audio" || page.Pagination.Total != 1 {
+		t.Fatalf("audio page = %+v, want only original audio", page)
+	}
+}
+
+func TestMediaObjectServiceRejectsInvalidAssetKindFilter(t *testing.T) {
+	service := NewMediaObjectService(NewMemoryRepository(), NewMemoryMediaObjectRepository())
+	_, err := service.ListMediaObjectsByAssetKind(context.Background(), "thumbnail")
+	if !errors.Is(err, ErrInvalidMediaObject) {
+		t.Fatalf("ListMediaObjectsByAssetKind() error = %v, want ErrInvalidMediaObject", err)
+	}
+}
+
 func TestMediaObjectServiceRejectsDuplicateObjectID(t *testing.T) {
 	ctx := context.Background()
 	backendRepo := NewMemoryRepository()

@@ -4,7 +4,7 @@
 
 ## Version
 
-Current architecture baseline version: `0.20.0`.
+Current architecture baseline version: `0.21.0`.
 
 ## 0.x Architecture Direction
 
@@ -104,6 +104,10 @@ The nineteenth phase adds authenticated metadata-only lifecycle updates at `POST
 ## Phase 20: Media Object Lifecycle Filter
 
 The twentieth phase adds `lifecycleState=staged|active|archived|deleted` filtering to the paginated media-object list endpoint so administrators can review lifecycle buckets without composing multiple filters.
+
+## Phase 21: Media Object Asset Kind Filter
+
+The twenty-first phase adds `assetKind=original_audio|transcoded_audio|artwork|lyrics|waveform|analysis|import_package|backup` filtering to the paginated media-object list endpoint for asset-class review workflows.
 
 ## Run the API Scaffold
 

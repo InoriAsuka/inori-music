@@ -229,6 +229,9 @@ func TestMediaObjectRoutesRegisterLookupAndFilter(t *testing.T) {
 	byLifecycle := performRequest(t, handler, http.MethodGet, "/api/v1/admin/media/objects?lifecycleState=archived", "")
 	assertMediaObjectListLength(t, byLifecycle, 1)
 	assertAPIError(t, performRequest(t, handler, http.MethodGet, "/api/v1/admin/media/objects?lifecycleState=missing", ""), http.StatusBadRequest, "invalid_media_object")
+	byAssetKind := performRequest(t, handler, http.MethodGet, "/api/v1/admin/media/objects?assetKind=original_audio", "")
+	assertMediaObjectListLength(t, byAssetKind, 3)
+	assertAPIError(t, performRequest(t, handler, http.MethodGet, "/api/v1/admin/media/objects?assetKind=thumbnail", ""), http.StatusBadRequest, "invalid_media_object")
 
 	byBackend := performRequest(t, handler, http.MethodGet, "/api/v1/admin/media/objects?backendId=local-main", "")
 	assertMediaObjectListLength(t, byBackend, 3)
