@@ -39,10 +39,14 @@ Phase 11 exposes authenticated administrator endpoints for metadata-only workflo
 - `GET /api/v1/admin/media/objects?backendId=...` lists references by backend.
 - `GET /api/v1/admin/media/objects?contentHash=...` lists references by content hash for future deduplication workflows.
 
-`POST /api/v1/admin/media/objects/{id}/verify` performs read-only integrity verification for one filesystem-backed object by checking file existence, regular-file shape, byte size, and `sha256` content hash. `POST /api/v1/admin/media/objects/verify?backendId=...` and `?contentHash=...` run the same checks for filtered object groups and continue after individual object failures.
+`POST /api/v1/admin/media/objects/{id}/verify` performs read-only integrity verification for one filesystem-backed object by checking file existence, regular-file shape, byte size, and `sha256` content hash. `POST /api/v1/admin/media/objects/verify?backendId=...` and `?contentHash=...` run the same checks for filtered object groups and continue after individual object failures. Each verification updates the media object's `lastVerification` metadata with the latest status, timestamp, size, content hash, and failure message when present.
 
 These endpoints still do not upload, stream, delete, move, or repair media bytes.
 
 ## Future Direction
 
 The first implementation uses an in-memory repository for domain tests. Phase 12 adds `INORI_MEDIA_OBJECT_REPOSITORY_FILE` for optional single-node JSON persistence of media object metadata before database migrations exist. PostgreSQL should later own media object metadata, with indexes for backend ID, object key, content hash, asset kind, lifecycle state, and ownership/library relationships.
+
+## Verification Status Listing
+
+Media-object list requests can filter by `verificationStatus=verified|failed|unknown`. The filter reads only persisted `lastVerification` metadata: `verified` and `failed` match the latest recorded result, while `unknown` returns objects that have not been verified yet. The list endpoint still accepts exactly one filter per request to avoid ambiguous admin workflows.

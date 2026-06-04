@@ -30,6 +30,13 @@ func TestMediaObjectServiceVerifiesFilesystemObject(t *testing.T) {
 	if result.Status != "verified" || result.SizeBytes != int64(len(content)) || result.VerifiedAt.IsZero() {
 		t.Fatalf("VerifyMediaObject() = %+v, want verified result", result)
 	}
+	stored, err := service.GetMediaObject(ctx, "media-original-1")
+	if err != nil {
+		t.Fatalf("GetMediaObject() error = %v", err)
+	}
+	if stored.LastVerification == nil || stored.LastVerification.Status != "verified" || stored.UpdatedAt.IsZero() {
+		t.Fatalf("stored object = %+v, want latest verified state", stored)
+	}
 }
 
 func TestMediaObjectServiceVerificationDetectsHashMismatch(t *testing.T) {
@@ -50,6 +57,13 @@ func TestMediaObjectServiceVerificationDetectsHashMismatch(t *testing.T) {
 	}
 	if result.Status != "failed" || result.Message == "" {
 		t.Fatalf("VerifyMediaObject() result = %+v, want failed message", result)
+	}
+	stored, getErr := service.GetMediaObject(ctx, "media-original-1")
+	if getErr != nil {
+		t.Fatalf("GetMediaObject() error = %v", getErr)
+	}
+	if stored.LastVerification == nil || stored.LastVerification.Status != "failed" || stored.LastVerification.Message == "" {
+		t.Fatalf("stored object = %+v, want latest failed state", stored)
 	}
 }
 
@@ -181,6 +195,15 @@ func TestMediaObjectServiceBatchVerificationContinuesAfterFailures(t *testing.T)
 	}
 	if statuses["good"] != "verified" || statuses["bad"] != "failed" {
 		t.Fatalf("statuses = %#v, want good verified and bad failed", statuses)
+	}
+	for _, id := range []string{"good", "bad"} {
+		stored, err := service.GetMediaObject(ctx, id)
+		if err != nil {
+			t.Fatalf("GetMediaObject(%s) error = %v", id, err)
+		}
+		if stored.LastVerification == nil || stored.LastVerification.Status != statuses[id] {
+			t.Fatalf("stored object %s = %+v, want latest verification %s", id, stored, statuses[id])
+		}
 	}
 }
 

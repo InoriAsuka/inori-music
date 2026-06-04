@@ -20,6 +20,7 @@ func TestFileMediaObjectRepositoryPersistsObjectsAcrossReopen(t *testing.T) {
 	object := validMediaObject()
 	object.CreatedAt = createdAt
 	object.UpdatedAt = createdAt
+	object.LastVerification = &MediaObjectVerificationResult{MediaObjectID: object.ID, BackendID: object.BackendID, ObjectKey: object.ObjectKey, VerifiedAt: createdAt, SizeBytes: object.SizeBytes, ContentHash: object.ContentHash, Status: "verified"}
 	if err := repo.SaveMediaObject(ctx, object); err != nil {
 		t.Fatalf("SaveMediaObject() error = %v", err)
 	}
@@ -32,8 +33,8 @@ func TestFileMediaObjectRepositoryPersistsObjectsAcrossReopen(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetMediaObject() error = %v", err)
 	}
-	if got.ID != object.ID || got.ObjectKey != object.ObjectKey || !got.CreatedAt.Equal(createdAt) || !got.UpdatedAt.Equal(createdAt) {
-		t.Fatalf("persisted object = %+v, want original metadata", got)
+	if got.ID != object.ID || got.ObjectKey != object.ObjectKey || !got.CreatedAt.Equal(createdAt) || !got.UpdatedAt.Equal(createdAt) || got.LastVerification == nil || got.LastVerification.Status != "verified" {
+		t.Fatalf("persisted object = %+v, want original metadata and latest verification", got)
 	}
 }
 
@@ -72,6 +73,13 @@ func TestFileMediaObjectRepositoryListsPersistedObjectsInStableOrder(t *testing.
 	}
 	if len(byHash) != 2 || byHash[0].ID != "a" || byHash[1].ID != "z" {
 		t.Fatalf("ListMediaObjectsByContentHash() = %+v, want object-key order", byHash)
+	}
+	unknown, err := reopened.ListMediaObjectsByVerificationStatus(ctx, "unknown")
+	if err != nil {
+		t.Fatalf("ListMediaObjectsByVerificationStatus() error = %v", err)
+	}
+	if len(unknown) != 3 || unknown[0].ID != "other" || unknown[1].ID != "a" || unknown[2].ID != "z" {
+		t.Fatalf("ListMediaObjectsByVerificationStatus(unknown) = %+v, want stable backend/object-key order", unknown)
 	}
 }
 

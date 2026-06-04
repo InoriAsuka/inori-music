@@ -4,7 +4,7 @@
 
 ## Version
 
-Current architecture baseline version: `0.14.0`.
+Current architecture baseline version: `0.16.0`.
 
 ## 0.x Architecture Direction
 
@@ -80,6 +80,14 @@ The thirteenth phase adds authenticated read-only integrity verification for reg
 ## Phase 14: Batch Media Object Verification
 
 The fourteenth phase adds authenticated batch verification by `backendId` or `contentHash` filters. Batch verification returns per-object outcomes and continues after individual object failures so operators can audit media groups without stopping at the first mismatch.
+
+## Phase 15: Latest Verification State
+
+The fifteenth phase persists each media object's latest verification result after single or batch verification. The result is metadata-only and records status, checked time, size, content hash, and failure message without modifying media bytes.
+
+## Phase 16: Media Verification Status Filter
+
+The sixteenth phase adds media-object listing by `verificationStatus=verified|failed|unknown`. The endpoint uses persisted `lastVerification` metadata only, enabling administrators to find failed or never-verified assets without reading media bytes.
 
 ## Run the API Scaffold
 

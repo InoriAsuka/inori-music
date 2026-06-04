@@ -34,6 +34,8 @@ The phase-13 development scope adds media object integrity verification for meta
 
 The phase-14 development scope adds batch media object integrity verification by backend ID or content hash so administrators and import workflows can validate groups of metadata references while continuing after individual object failures.
 
+The phase-15 development scope persists the latest media object verification result in media object metadata so operators can inspect recent integrity state after single or batch verification runs.
+
 ## Storage Requirements
 
 ### Media Storage Scope
@@ -93,6 +95,22 @@ The server-side primary database for 0.x should be PostgreSQL-first. The client-
 The 0.x server-side search should begin with PostgreSQL full-text search, normalized fields, aliases, and ranking rules. External search engines are optional future integrations when scale, language quality, or typo-tolerance requirements exceed PostgreSQL capabilities.
 
 ## Requirement History
+
+### v0.16.0 - 2026-06-04
+
+- Required `GET /api/v1/admin/media/objects` to support exactly one of `backendId`, `contentHash`, or `verificationStatus`.
+- Required `verificationStatus` to accept `verified`, `failed`, and `unknown`; `unknown` means no `lastVerification` result is present.
+- Required filtering to use persisted media object metadata only and never read media bytes.
+- Required memory and file-backed media object repositories to provide stable object-key ordering for status-filtered results.
+- Required HTTP, repository, OpenAPI, and validation tests for valid and invalid filter combinations.
+
+### v0.15.0 - 2026-06-04
+
+- Required media object metadata to retain the latest verification result after single-object verification.
+- Required batch verification to persist each object's latest verification result while still continuing after failures.
+- Required persisted verification metadata to include status, verification time, content hash, size, and failure message when present.
+- Required file-backed media object repositories to preserve latest verification metadata across restarts.
+- Required tests for latest verification persistence on success, failure, batch verification, and file repository reopening.
 
 ### v0.14.0 - 2026-06-03
 

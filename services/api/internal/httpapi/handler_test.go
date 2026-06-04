@@ -214,6 +214,10 @@ func TestMediaObjectRoutesRegisterLookupAndFilter(t *testing.T) {
 	assertMediaObjectListLength(t, byBackend, 1)
 	byHash := performRequest(t, handler, http.MethodGet, "/api/v1/admin/media/objects?contentHash=sha256:abcdef", "")
 	assertMediaObjectListLength(t, byHash, 1)
+	byVerificationStatus := performRequest(t, handler, http.MethodGet, "/api/v1/admin/media/objects?verificationStatus=unknown", "")
+	assertMediaObjectListLength(t, byVerificationStatus, 1)
+	assertAPIError(t, performRequest(t, handler, http.MethodGet, "/api/v1/admin/media/objects?backendId=local-main&verificationStatus=unknown", ""), http.StatusBadRequest, "invalid_media_object")
+	assertAPIError(t, performRequest(t, handler, http.MethodGet, "/api/v1/admin/media/objects?verificationStatus=stale", ""), http.StatusBadRequest, "invalid_media_object")
 }
 
 func TestMediaObjectRouteRejectsInvalidInput(t *testing.T) {
@@ -336,6 +340,8 @@ func TestMediaObjectBatchVerificationRoute(t *testing.T) {
 	if statuses["good"] != "verified" || statuses["bad"] != "failed" {
 		t.Fatalf("statuses = %#v, want mixed verification outcomes", statuses)
 	}
+	failedObjects := performRequest(t, handler, http.MethodGet, "/api/v1/admin/media/objects?verificationStatus=failed", "")
+	assertMediaObjectListLength(t, failedObjects, 1)
 }
 
 func TestMediaObjectBatchVerificationRouteRejectsInvalidFiltersAndRequiresAuth(t *testing.T) {

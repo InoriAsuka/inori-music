@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 )
 
 func TestMediaObjectServiceRegistersObjectForEnabledBackend(t *testing.T) {
@@ -127,6 +128,51 @@ func TestMediaObjectRepositoryListsByContentHash(t *testing.T) {
 	}
 	if len(objects) != 2 || objects[0].ID != "second" || objects[1].ID != "first" {
 		t.Fatalf("ListMediaObjectsByContentHash() = %+v, want stable object-key order", objects)
+	}
+}
+
+func TestMediaObjectRepositoryListsByVerificationStatus(t *testing.T) {
+	ctx := context.Background()
+	repo := NewMemoryMediaObjectRepository()
+	checkedAt := time.Date(2026, 6, 4, 2, 7, 0, 0, time.UTC)
+	verified := validMediaObject()
+	verified.ID = "verified"
+	verified.ObjectKey = "album/verified.flac"
+	verified.LastVerification = &MediaObjectVerificationResult{MediaObjectID: verified.ID, BackendID: verified.BackendID, ObjectKey: verified.ObjectKey, VerifiedAt: checkedAt, Status: "verified"}
+	failed := validMediaObject()
+	failed.ID = "failed"
+	failed.ObjectKey = "album/failed.flac"
+	failed.LastVerification = &MediaObjectVerificationResult{MediaObjectID: failed.ID, BackendID: failed.BackendID, ObjectKey: failed.ObjectKey, VerifiedAt: checkedAt, Status: "failed", Message: "sha256 mismatch"}
+	unknown := validMediaObject()
+	unknown.ID = "unknown"
+	unknown.ObjectKey = "album/unknown.flac"
+	for _, object := range []MediaObject{verified, failed, unknown} {
+		if err := repo.SaveMediaObject(ctx, object); err != nil {
+			t.Fatalf("SaveMediaObject() error = %v", err)
+		}
+	}
+
+	verifiedObjects, err := repo.ListMediaObjectsByVerificationStatus(ctx, "verified")
+	if err != nil {
+		t.Fatalf("ListMediaObjectsByVerificationStatus(verified) error = %v", err)
+	}
+	if len(verifiedObjects) != 1 || verifiedObjects[0].ID != "verified" {
+		t.Fatalf("verified objects = %+v, want only verified", verifiedObjects)
+	}
+	unknownObjects, err := repo.ListMediaObjectsByVerificationStatus(ctx, "unknown")
+	if err != nil {
+		t.Fatalf("ListMediaObjectsByVerificationStatus(unknown) error = %v", err)
+	}
+	if len(unknownObjects) != 1 || unknownObjects[0].ID != "unknown" {
+		t.Fatalf("unknown objects = %+v, want only unverified", unknownObjects)
+	}
+}
+
+func TestMediaObjectServiceRejectsInvalidVerificationStatusFilter(t *testing.T) {
+	service := NewMediaObjectService(NewMemoryRepository(), NewMemoryMediaObjectRepository())
+	_, err := service.ListMediaObjectsByVerificationStatus(context.Background(), "stale")
+	if !errors.Is(err, ErrInvalidMediaObject) {
+		t.Fatalf("ListMediaObjectsByVerificationStatus() error = %v, want ErrInvalidMediaObject", err)
 	}
 }
 

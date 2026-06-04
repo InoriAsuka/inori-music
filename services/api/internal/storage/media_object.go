@@ -41,6 +41,7 @@ type MediaObjectRepository interface {
 	GetMediaObject(ctx context.Context, id string) (MediaObject, error)
 	ListMediaObjectsByBackend(ctx context.Context, backendID string) ([]MediaObject, error)
 	ListMediaObjectsByContentHash(ctx context.Context, contentHash string) ([]MediaObject, error)
+	ListMediaObjectsByVerificationStatus(ctx context.Context, status string) ([]MediaObject, error)
 }
 
 // MemoryMediaObjectRepository is a development repository for media object metadata.
@@ -97,6 +98,19 @@ func (repo *MemoryMediaObjectRepository) ListMediaObjectsByContentHash(_ context
 	return sortedMediaObjects(objects), nil
 }
 
+func (repo *MemoryMediaObjectRepository) ListMediaObjectsByVerificationStatus(_ context.Context, status string) ([]MediaObject, error) {
+	status = strings.TrimSpace(status)
+	repo.mu.RLock()
+	defer repo.mu.RUnlock()
+	objects := make([]MediaObject, 0)
+	for _, object := range repo.objects {
+		if mediaObjectVerificationStatus(object) == status {
+			objects = append(objects, object)
+		}
+	}
+	return sortedMediaObjects(objects), nil
+}
+
 // MediaObjectService coordinates media object metadata registration rules.
 type MediaObjectService struct {
 	backendRepository Repository
@@ -146,6 +160,14 @@ func (service *MediaObjectService) ListMediaObjectsByContentHash(ctx context.Con
 	return service.mediaRepository.ListMediaObjectsByContentHash(ctx, strings.TrimSpace(contentHash))
 }
 
+func (service *MediaObjectService) ListMediaObjectsByVerificationStatus(ctx context.Context, status string) ([]MediaObject, error) {
+	normalized, err := normalizeMediaObjectVerificationStatus(status)
+	if err != nil {
+		return nil, err
+	}
+	return service.mediaRepository.ListMediaObjectsByVerificationStatus(ctx, normalized)
+}
+
 func (service *MediaObjectService) VerifyMediaObject(ctx context.Context, id string) (MediaObjectVerificationResult, error) {
 	object, err := service.mediaRepository.GetMediaObject(ctx, id)
 	if err != nil {
@@ -189,10 +211,19 @@ func (service *MediaObjectService) verifyMediaObjects(ctx context.Context, objec
 func (service *MediaObjectService) verifyMediaObject(ctx context.Context, object MediaObject) (MediaObjectVerificationResult, error) {
 	backend, err := service.backendRepository.Get(ctx, object.BackendID)
 	if err != nil {
-		return MediaObjectVerificationResult{MediaObjectID: object.ID, BackendID: object.BackendID, ObjectKey: object.ObjectKey, Status: "failed", VerifiedAt: service.now().UTC(), Message: err.Error()}, err
+		result := MediaObjectVerificationResult{MediaObjectID: object.ID, BackendID: object.BackendID, ObjectKey: object.ObjectKey, Status: "failed", VerifiedAt: service.now().UTC(), Message: err.Error()}
+		if saveErr := service.recordMediaObjectVerification(ctx, object, result); saveErr != nil {
+			return result, errors.Join(err, saveErr)
+		}
+		return result, err
 	}
 	if !backend.Enabled {
-		return MediaObjectVerificationResult{MediaObjectID: object.ID, BackendID: object.BackendID, ObjectKey: object.ObjectKey, Status: "failed", VerifiedAt: service.now().UTC()}, fmt.Errorf("%w: backend %s", ErrBackendDisabled, object.BackendID)
+		err := fmt.Errorf("%w: backend %s", ErrBackendDisabled, object.BackendID)
+		result := MediaObjectVerificationResult{MediaObjectID: object.ID, BackendID: object.BackendID, ObjectKey: object.ObjectKey, Status: "failed", VerifiedAt: service.now().UTC(), Message: err.Error()}
+		if saveErr := service.recordMediaObjectVerification(ctx, object, result); saveErr != nil {
+			return result, errors.Join(err, saveErr)
+		}
+		return result, err
 	}
 	result, err := service.verifier.Verify(ctx, backend, object)
 	result.VerifiedAt = service.now().UTC()
@@ -204,9 +235,38 @@ func (service *MediaObjectService) verifyMediaObject(ctx context.Context, object
 	if err != nil {
 		result.Status = "failed"
 		result.Message = err.Error()
+		if saveErr := service.recordMediaObjectVerification(ctx, object, result); saveErr != nil {
+			return result, errors.Join(err, saveErr)
+		}
 		return result, err
 	}
+	if saveErr := service.recordMediaObjectVerification(ctx, object, result); saveErr != nil {
+		return result, saveErr
+	}
 	return result, nil
+}
+
+func (service *MediaObjectService) recordMediaObjectVerification(ctx context.Context, object MediaObject, result MediaObjectVerificationResult) error {
+	object.LastVerification = &result
+	object.UpdatedAt = result.VerifiedAt
+	return service.mediaRepository.SaveMediaObject(ctx, object)
+}
+
+func normalizeMediaObjectVerificationStatus(status string) (string, error) {
+	normalized := strings.ToLower(strings.TrimSpace(status))
+	switch normalized {
+	case "verified", "failed", "unknown":
+		return normalized, nil
+	default:
+		return "", fmt.Errorf("%w: verificationStatus must be one of verified, failed, or unknown", ErrInvalidMediaObject)
+	}
+}
+
+func mediaObjectVerificationStatus(object MediaObject) string {
+	if object.LastVerification == nil || strings.TrimSpace(object.LastVerification.Status) == "" {
+		return "unknown"
+	}
+	return strings.ToLower(strings.TrimSpace(object.LastVerification.Status))
 }
 
 // ValidateMediaObject checks static media object metadata before persistence.

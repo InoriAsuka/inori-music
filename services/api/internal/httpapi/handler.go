@@ -340,8 +340,15 @@ func (handler *Handler) listMediaObjects(w http.ResponseWriter, r *http.Request)
 	}
 	backendID := strings.TrimSpace(r.URL.Query().Get("backendId"))
 	contentHash := strings.TrimSpace(r.URL.Query().Get("contentHash"))
-	if (backendID == "" && contentHash == "") || (backendID != "" && contentHash != "") {
-		writeError(w, fmt.Errorf("%w: exactly one of backendId or contentHash is required", storage.ErrInvalidMediaObject))
+	verificationStatus := strings.TrimSpace(r.URL.Query().Get("verificationStatus"))
+	filterCount := 0
+	for _, filter := range []string{backendID, contentHash, verificationStatus} {
+		if filter != "" {
+			filterCount++
+		}
+	}
+	if filterCount != 1 {
+		writeError(w, fmt.Errorf("%w: exactly one of backendId, contentHash, or verificationStatus is required", storage.ErrInvalidMediaObject))
 		return
 	}
 	var (
@@ -350,8 +357,10 @@ func (handler *Handler) listMediaObjects(w http.ResponseWriter, r *http.Request)
 	)
 	if backendID != "" {
 		objects, err = handler.mediaObjects.ListMediaObjectsByBackend(r.Context(), backendID)
-	} else {
+	} else if contentHash != "" {
 		objects, err = handler.mediaObjects.ListMediaObjectsByContentHash(r.Context(), contentHash)
+	} else {
+		objects, err = handler.mediaObjects.ListMediaObjectsByVerificationStatus(r.Context(), verificationStatus)
 	}
 	if err != nil {
 		writeError(w, err)

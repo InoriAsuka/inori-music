@@ -474,6 +474,9 @@
               "updatedAt": {
                 "type": "string",
                 "format": "date-time"
+              },
+              "lastVerification": {
+                "$ref": "#/components/schemas/MediaObjectVerificationResult"
               }
             }
           }
@@ -579,7 +582,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "0.14.0"
+    "version": "0.16.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -1194,7 +1197,7 @@
               "type": "string",
               "minLength": 1
             },
-            "description": "List media objects stored on this backend. Mutually exclusive with contentHash."
+            "description": "List media objects stored on this backend. Mutually exclusive with contentHash and verificationStatus."
           },
           {
             "name": "contentHash",
@@ -1204,7 +1207,21 @@
               "type": "string",
               "minLength": 1
             },
-            "description": "List media objects with this content hash. Mutually exclusive with backendId."
+            "description": "List media objects with this content hash. Mutually exclusive with backendId and verificationStatus."
+          },
+          {
+            "name": "verificationStatus",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "verified",
+                "failed",
+                "unknown"
+              ]
+            },
+            "description": "List media objects by their latest verification state; unknown means no verification result has been recorded yet. Mutually exclusive with backendId and contentHash."
           }
         ],
         "responses": {
@@ -1264,7 +1281,8 @@
           {
             "bearerAuth": []
           }
-        ]
+        ],
+        "description": "Returns media object metadata filtered by exactly one of backendId, contentHash, or verificationStatus."
       },
       "post": {
         "summary": "Register a media object metadata reference.",
