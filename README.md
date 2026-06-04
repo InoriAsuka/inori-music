@@ -1,139 +1,136 @@
 # inori-music
 
-音乐集中平台，目标是构建支持 Web、Android、iOS、PC 等平台的全平台音乐播放系统，同时兼容 B/S 与 C/S 架构。
+A centralized music platform targeting Web, Android, iOS, and desktop clients while supporting both browser/server and client/server deployment styles.
 
 ## Version
 
-Current architecture baseline version: `0.21.0`.
+Current architecture baseline version: `0.23.0`.
+
+## Documentation Policy
+
+Repository Markdown documentation is maintained in English. Historical phase plans, requirements, ADRs, and architecture documents are also kept in English so implementation records remain consistent across releases.
 
 ## 0.x Architecture Direction
 
-The 0.x line focuses on a pragmatic architecture that can grow from local self-hosting to production deployments:
-
-- Cross-platform player direction: Flutter-first.
-- Server direction: Go modular monolith first.
+- Cross-platform clients: Flutter-first.
+- Server: Go modular monolith first, with later service extraction by domain boundaries when justified.
 - Server metadata database: PostgreSQL-first.
-- Client local persistence: SQLite.
-- Initial search direction: PostgreSQL full-text search with future external search providers when needed.
-- Media storage direction: server-managed multi-backend storage.
+- Client local persistence: SQLite for offline queues, cache indexes, and local search.
+- Search: PostgreSQL full-text search first, with optional external search engines later.
+- Media storage: server-managed multi-backend storage; large media bytes stay outside the relational database.
 
-## Phase 1: Storage Architecture
+## Completed Phases
 
-The first phase establishes the media storage architecture before runtime implementation. The server backend will manage storage backend configuration and support multiple backend families:
+### Phase 1: Storage Architecture
 
-- `local`: LocalSystem filesystem storage for development and single-node self-hosting.
-- `nfs`: NFS-mounted storage for LAN and NAS-style deployments.
-- `smb`: SMB/CIFS-mounted storage for Windows shares and mixed-platform networks.
-- `s3`: S3-compatible object storage for cloud and object-storage deployments.
-- `distributed`: distributed storage such as Ceph, Garage, SeaweedFS, or similar systems through S3-compatible APIs, mounted filesystems, or future dedicated adapters.
+Establish server-managed multi-backend media storage covering local, NFS, SMB, S3-compatible, and distributed backends.
 
-Large audio files are stored outside the relational database. The database stores metadata, backend IDs, object keys, content hashes, lifecycle state, and references.
+### Phase 2: Storage Domain Scaffold
 
-## Phase 2: Storage Domain Scaffold
+Create the Go API scaffold and storage domain with validation, capability inference, default backend handling, and in-memory repositories.
 
-The second phase starts the Go API service scaffold and implements the storage administration domain as executable, tested server-side code. The initial domain package validates backend configuration, infers backend capabilities, manages default backend selection, and provides an in-memory repository for early development.
+### Phase 3: Storage Admin HTTP API
 
-## Phase 3: Storage Admin HTTP API
+Expose storage administration through versioned HTTP endpoints for validation, registration, listing, default selection, and disabling.
 
-The third phase exposes the storage administration domain through a runnable, versioned HTTP JSON API. The server provides health, validation, registration, listing, default-selection, and disable operations while keeping real storage probes, authentication, persistence, and OpenAPI contracts as subsequent tasks.
+### Phase 4: Admin Authentication
 
-## Phase 4: Admin Authentication
+Protect administrator routes with bootstrap bearer-token authentication while keeping /healthz public.
 
-The fourth phase protects storage administration routes with Bearer Token authentication. `/healthz` remains public, while `/api/v1/admin/*` routes fail closed unless `INORI_ADMIN_TOKEN` is configured. Missing or invalid credentials receive stable JSON error envelopes.
+### Phase 5: Filesystem Health Probes
 
-## Phase 5: Filesystem Health Probes
+Add safe filesystem probes for local, NFS, SMB, and mounted distributed backends.
 
-The fifth phase adds safe real health probes for LocalSystem, NFS, SMB, and mounted-filesystem distributed backends. Each probe creates, reads, range-reads, and removes only a short-lived server-owned file inside the configured root, then records the latest backend health state.
+### Phase 6: S3-Compatible Object Probes
 
-## Phase 6: S3-Compatible Object Probes
+Add conservative S3-compatible object probes with environment-referenced credentials.
 
-The sixth phase adds safe real S3-compatible probes for `s3` backends and distributed backends using the `s3-compatible` adapter. Each probe writes, full-reads, range-reads, and deletes only a short-lived server-owned object key, with credentials resolved from configured environment variable references.
+### Phase 7: Health Refresh and Capacity Reporting
 
-## Phase 7: Health Refresh and Capacity Reporting
+Add batch refresh, optional background refresh, and filesystem capacity reporting.
 
-The seventh phase adds authenticated batch refresh, optional background refresh through `INORI_STORAGE_REFRESH_INTERVAL`, and filesystem capacity reporting for LocalSystem, NFS, SMB, and mounted-filesystem distributed backends. S3-compatible capacity remains explicitly unsupported because object stores do not expose one uniform bucket-capacity API.
+### Phase 8: OpenAPI Contract
 
-## Phase 8: OpenAPI Contract
+Publish and test the OpenAPI 3.1 contract for the admin API.
 
-The eighth phase adds a versioned OpenAPI 3.1 contract for the storage administration API at [`packages/api-contract/openapi/storage-admin.v1.json`](packages/api-contract/openapi/storage-admin.v1.json), with tests that verify implemented routes and authentication requirements remain documented.
+### Phase 9: Durable File Repository
 
-## Phase 9: Durable File Repository
+Add optional JSON file-backed persistence for storage backend state.
 
-The ninth phase adds optional file-backed storage backend persistence for development and self-hosted deployments. Set `INORI_STORAGE_REPOSITORY_FILE=/path/to/storage-backends.json` to persist backend configuration, health, and capacity state across API server restarts; leave it unset to keep the existing in-memory repository.
+### Phase 10: Media Object Registry Scaffold
 
-## Phase 10: Media Object Registry Scaffold
+Add the media object registry domain for metadata-only binary asset references.
 
-The tenth phase adds a server-side media object registry scaffold for binary asset references. The registry validates object IDs, enabled backend references, relative object keys, content hashes, sizes, MIME types, asset kinds, and lifecycle states while keeping actual audio and artwork bytes in configured storage backends.
+### Phase 11: Media Object Admin HTTP API
 
-## Phase 11: Media Object Admin HTTP API
+Expose authenticated media object registration, fetch, and filter endpoints.
 
-The eleventh phase exposes authenticated media object registry endpoints for administrator and import clients. The API can register media object references, fetch an object by ID, and list objects by `backendId` or `contentHash` filters.
+### Phase 12: Durable Media Object Repository
 
-## Phase 12: Durable Media Object Repository
+Add optional JSON file-backed persistence for media object metadata.
 
-The twelfth phase adds optional file-backed media object metadata persistence. Set `INORI_MEDIA_OBJECT_REPOSITORY_FILE=/path/to/media-objects.json` to retain media object references across API restarts before PostgreSQL media metadata persistence is introduced.
+### Phase 13: Media Object Integrity Verification
 
-## Phase 13: Media Object Integrity Verification
+Add read-only filesystem integrity verification for media object references.
 
-The thirteenth phase adds authenticated read-only integrity verification for registered media object references. Filesystem-backed objects can be checked for existence, regular-file shape, byte size, and `sha256` content hash without modifying media bytes.
+### Phase 14: Batch Media Object Verification
 
-## Phase 14: Batch Media Object Verification
+Add batch media object verification by backend ID or content hash.
 
-The fourteenth phase adds authenticated batch verification by `backendId` or `contentHash` filters. Batch verification returns per-object outcomes and continues after individual object failures so operators can audit media groups without stopping at the first mismatch.
+### Phase 15: Latest Verification State
 
-## Phase 15: Latest Verification State
+Persist the latest media object verification result in metadata.
 
-The fifteenth phase persists each media object's latest verification result after single or batch verification. The result is metadata-only and records status, checked time, size, content hash, and failure message without modifying media bytes.
+### Phase 16: Verification Status Filter
 
-## Phase 16: Media Verification Status Filter
+Support filtering media objects by latest verification status.
 
-The sixteenth phase adds media-object listing by `verificationStatus=verified|failed|unknown`. The endpoint uses persisted `lastVerification` metadata only, enabling administrators to find failed or never-verified assets without reading media bytes.
+### Phase 17: Media Object List Pagination
 
-## Phase 17: Media Object List Pagination
+Add limit/offset pagination and pagination metadata to media object lists.
 
-The seventeenth phase bounds media-object list responses with `limit` and `offset` query parameters and returns pagination metadata (`limit`, `offset`, `total`, `hasMore`) for deterministic admin review workflows.
+### Phase 18: Media Object Metadata Statistics
 
-## Phase 18: Media Object Metadata Statistics
+Add metadata-only media object statistics for dashboard-style summaries.
 
-The eighteenth phase adds authenticated metadata-only statistics at `GET /api/v1/admin/media/objects/stats`, including total object count, total size, backend, asset-kind, lifecycle, and verification-status buckets for all backends or one `backendId`.
+### Phase 19: Media Object Lifecycle Administration
 
-## Phase 19: Media Object Lifecycle Administration
+Add metadata-only media object lifecycle updates with terminal deleted semantics.
 
-The nineteenth phase adds authenticated metadata-only lifecycle updates at `POST /api/v1/admin/media/objects/{id}/lifecycle`, preserving verification history and treating `deleted` as a terminal metadata state without deleting stored bytes.
+### Phase 20: Media Object Lifecycle Filter
 
-## Phase 20: Media Object Lifecycle Filter
+Support filtering media object lists by lifecycle state.
 
-The twentieth phase adds `lifecycleState=staged|active|archived|deleted` filtering to the paginated media-object list endpoint so administrators can review lifecycle buckets without composing multiple filters.
+### Phase 21: Media Object Asset Kind Filter
 
-## Phase 21: Media Object Asset Kind Filter
+Support filtering media object lists by asset kind.
 
-The twenty-first phase adds `assetKind=original_audio|transcoded_audio|artwork|lyrics|waveform|analysis|import_package|backup` filtering to the paginated media-object list endpoint for asset-class review workflows.
+### Phase 22: Chinese Documentation Split
+
+Split README content and localize documentation in the previous phase.
+
+### Phase 23: English Documentation Policy
+
+Restore Markdown documentation to English as the repository documentation policy.
 
 ## Run the API Scaffold
 
 ```bash
-INORI_ADMIN_TOKEN=change-me-development-token \
-INORI_STORAGE_REPOSITORY_FILE=./var/storage-backends.json \
-INORI_MEDIA_OBJECT_REPOSITORY_FILE=./var/media-objects.json \
-INORI_STORAGE_REFRESH_INTERVAL=15m \
-go run ./services/api/cmd/server
+INORI_ADMIN_TOKEN=change-me-development-token INORI_STORAGE_REPOSITORY_FILE=./var/storage-backends.json INORI_MEDIA_OBJECT_REPOSITORY_FILE=./var/media-objects.json INORI_STORAGE_REFRESH_INTERVAL=15m go run ./services/api/cmd/server
 ```
 
-The HTTP server binds to `127.0.0.1:8080` by default. Admin routes require `Authorization: Bearer <INORI_ADMIN_TOKEN>`. `INORI_STORAGE_REPOSITORY_FILE` enables durable JSON-backed backend configuration; `INORI_MEDIA_OBJECT_REPOSITORY_FILE` enables durable JSON-backed media object metadata. When unset, each repository uses its in-memory development implementation. Periodic storage refresh is disabled unless `INORI_STORAGE_REFRESH_INTERVAL` is set to a positive Go duration such as `15m`. Override the listener with `INORI_HTTP_ADDR` only after applying appropriate network controls. See [`docs/architecture/storage-admin-http-api.md`](docs/architecture/storage-admin-http-api.md) for the current endpoint contract and security limitations.
+The server listens on `127.0.0.1:8080` by default. Admin endpoints require `Authorization: Bearer <INORI_ADMIN_TOKEN>`. If repository file environment variables are omitted, the API uses in-memory development repositories.
 
-## Repository Planning Artifacts
+## Project Documents
 
-- [`requirement.md`](requirement.md): versioned requirement baseline and requirement history.
-- [`.plan/`](.plan/): tracked implementation plans split by phase and task checklist.
-- [`docs/architecture/`](docs/architecture/): architecture design notes.
+- [`requirement.md`](requirement.md): versioned requirements and history.
+- [`.plan/`](.plan/): phase plans and completed task checklists.
+- [`docs/architecture/`](docs/architecture/): architecture notes.
 - [`docs/adr/`](docs/adr/): architecture decision records.
+- [`packages/api-contract/openapi/storage-admin.v1.json`](packages/api-contract/openapi/storage-admin.v1.json): OpenAPI 3.1 admin API contract.
 
-## Current Documents
+## Future Outlook
 
-- [`docs/architecture/storage-backends.md`](docs/architecture/storage-backends.md)
-- [`docs/architecture/storage-admin-http-api.md`](docs/architecture/storage-admin-http-api.md)
-- [`docs/architecture/storage-persistence.md`](docs/architecture/storage-persistence.md)
-- [`docs/architecture/media-object-registry.md`](docs/architecture/media-object-registry.md)
-- [`packages/api-contract/openapi/storage-admin.v1.json`](packages/api-contract/openapi/storage-admin.v1.json)
-- [`docs/adr/ADR-0001-server-managed-multi-backend-media-storage.md`](docs/adr/ADR-0001-server-managed-multi-backend-media-storage.md)
-- [`docs/adr/ADR-0002-postgresql-first-database-and-search.md`](docs/adr/ADR-0002-postgresql-first-database-and-search.md)
+- Introduce PostgreSQL migrations and indexes to replace development JSON repositories.
+- Add import jobs, audit events, bulk lifecycle updates, and admin UI workflows.
+- Expand player-side streaming, cache management, offline queues, and cross-device sync.

@@ -1,29 +1,21 @@
-# Phase 20: Media Object Lifecycle Filter (v0.20.0)
+# Phase 20: Media Object Lifecycle Filter
 
 ## Requirement Snapshot
 
-- Allow administrators to list media object metadata by lifecycle state after lifecycle administration is available.
-- Preserve the single-filter list rule while adding `lifecycleState` as a first-class metadata filter.
-- Keep the operation metadata-only and compatible with existing pagination.
+Support filtering media object lists by lifecycle state.
 
 ## Task Checklist
 
-- [x] Extend the media object list filter with `lifecycleState`.
-- [x] Add repository support for listing media objects by lifecycle state in stable order.
-- [x] Add service-level lifecycle filter validation for `staged`, `active`, `archived`, and `deleted`.
-- [x] Extend `GET /api/v1/admin/media/objects` with the `lifecycleState` query parameter and existing pagination.
-- [x] Update OpenAPI, requirements, README, and architecture docs for v0.20.0.
-- [x] Add domain and HTTP tests for lifecycle filtering and invalid lifecycle filters.
-- [x] Run formatting, static checks, JSON contract parsing, unit tests, race tests, and diff checks.
+- [x] Define this phase scope and non-goals.
+- [x] Complete the corresponding code, API, or documentation updates.
+- [x] Add or update the required tests.
+- [x] Record the phase outcome for later review.
 
 ## Non-Goals
 
-- No bulk lifecycle changes in this phase.
-- No physical media deletion or cleanup policy.
-- No multi-filter query composition until PostgreSQL-backed indexes are designed.
+- Do not introduce unplanned broad refactors in this phase.
+- Do not change the confirmed 0.x architecture direction.
 
 ## Follow-Up Candidates
 
-- Add bulk lifecycle state update endpoints for import/admin workflows.
-- Add audit events for lifecycle transitions.
-- Add SQL-backed lifecycle indexes when persistence moves to PostgreSQL.
+- Continue filling persistence, search, import, audit, and admin-experience gaps in later phases.

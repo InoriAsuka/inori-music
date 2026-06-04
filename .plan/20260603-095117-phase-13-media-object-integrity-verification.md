@@ -1,49 +1,21 @@
-# Plan: Phase 13 Media Object Integrity Verification
+# Phase 13: Media Object Integrity Verification
 
-## Requirement Version
+## Requirement Snapshot
 
-v0.13.0
+Add read-only filesystem integrity verification for media object references.
 
-## Goals
+## Task Checklist
 
-- Add read-only media object integrity verification for registered metadata references.
-- Start with LocalSystem, NFS, SMB, and mounted-filesystem distributed backends.
-- Verify object existence, regular-file shape, byte size, and `sha256` content hashes.
-- Expose verification through the authenticated admin HTTP API and OpenAPI contract.
+- [x] Define this phase scope and non-goals.
+- [x] Complete the corresponding code, API, or documentation updates.
+- [x] Add or update the required tests.
+- [x] Record the phase outcome for later review.
 
-## Phase 1: Requirement Update
+## Non-Goals
 
-- [x] Append `v0.13.0` to `requirement.md`.
-- [x] Create this phase plan under `.plan/`.
-- [x] Bump `VERSION` and README baseline to `0.13.0`.
+- Do not introduce unplanned broad refactors in this phase.
+- Do not change the confirmed 0.x architecture direction.
 
-## Phase 2: Domain Implementation
+## Follow-Up Candidates
 
-- [x] Add media object verification result and errors.
-- [x] Add read-only filesystem verification for registered media objects.
-- [x] Reject disabled backends, unsupported backend families, unsupported hash algorithms, path traversal, size mismatch, and hash mismatch.
-
-## Phase 3: HTTP and Contract
-
-- [x] Add `POST /api/v1/admin/media/objects/{id}/verify`.
-- [x] Update OpenAPI paths, schemas, error enum, and route coverage tests.
-- [x] Add handler and domain tests for success and failure cases.
-
-## Phase 4: Validation
-
-- [x] Run `gofmt`.
-- [x] Run `git diff --check`.
-- [x] Run `go vet ./services/api/...`.
-- [x] Run `go test ./services/api/...`.
-- [x] Run `go test -race ./services/api/...`.
-
-## Future Implementation Tasks
-
-- [ ] Add S3-compatible object verification with range-safe reads and configured credentials.
-- [ ] Persist last verification status and timestamps in media object metadata.
-- [ ] Add batch verification for import and repair workflows.
-- [ ] Add additional hash algorithms after importer support is defined.
-
-## Completion Notes
-
-This phase verifies existing object bytes only. It does not upload, rewrite, delete, move, or repair media files.
+- Continue filling persistence, search, import, audit, and admin-experience gaps in later phases.

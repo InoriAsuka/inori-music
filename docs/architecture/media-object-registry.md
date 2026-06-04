@@ -1,77 +1,21 @@
-# Media Object Registry
+# Media Object Registry Architecture
 
-## Scope
+## Goal
 
-Phase 10 introduces a domain scaffold for media object metadata. A media object is a server-owned reference to a binary asset stored in one configured storage backend.
+The media object registry stores metadata references to binary assets, not the large media bytes themselves. Objects are described by backend ID, object key, content hash, size, MIME type, asset kind, lifecycle state, and latest verification state.
 
-The registry stores metadata such as backend ID, object key, content hash, byte size, MIME type, asset kind, lifecycle state, and timestamps. It does not store audio, artwork, lyrics, waveform, or backup bytes inside the API service or relational database.
+## Registration Rules
 
-## Validation Rules
+A media object must reference an enabled storage backend. Object keys must be relative, clean, slash-delimited keys and must not contain absolute paths, parent traversal, or backslashes. Content hashes use the `algorithm:value` shape.
 
-A media object must reference an existing enabled storage backend. Object keys must be relative storage keys and must not be absolute paths, empty paths, current-directory aliases, parent-directory traversal, or backslash-delimited Windows paths.
+## Listing and Filters
 
-Content hashes use an `algorithm:value` shape so future import and deduplication workflows can distinguish algorithms such as `sha256` or `blake3`. Sizes must be non-negative, MIME types must be present, and both asset kind and lifecycle state must be from the supported domain constants.
+List endpoints use `limit` and `offset` pagination and require exactly one filter per request. Supported filters are `backendId`, `contentHash`, `verificationStatus`, `lifecycleState`, and `assetKind`. Filtering reads metadata only.
 
-## Supported Asset Kinds
+## Verification and Lifecycle
 
-- `original_audio`
-- `transcoded_audio`
-- `artwork`
-- `lyrics`
-- `waveform`
-- `analysis`
-- `import_package`
-- `backup`
+Integrity verification is read-only and currently focuses on filesystem-backed size and `sha256` checks. Lifecycle updates change only `lifecycleState` and `updatedAt`, preserving storage references and latest verification results. `deleted` is terminal metadata and does not delete bytes from storage.
 
-## Lifecycle States
+## Statistics
 
-- `staged`: registered during an import or verification workflow.
-- `active`: usable by library, playback, and client synchronization flows.
-- `archived`: retained but not preferred for normal playback or display.
-- `deleted`: metadata tombstone for future safe-delete and audit workflows.
-
-## HTTP Administration API
-
-Phase 11 exposes authenticated administrator endpoints for metadata-only workflows:
-
-- `POST /api/v1/admin/media/objects` registers a media object reference for an enabled backend.
-- `GET /api/v1/admin/media/objects/{id}` fetches one media object reference.
-- `GET /api/v1/admin/media/objects?backendId=...` lists references by backend.
-- `GET /api/v1/admin/media/objects?contentHash=...` lists references by content hash for future deduplication workflows.
-
-`POST /api/v1/admin/media/objects/{id}/verify` performs read-only integrity verification for one filesystem-backed object by checking file existence, regular-file shape, byte size, and `sha256` content hash. `POST /api/v1/admin/media/objects/verify?backendId=...` and `?contentHash=...` run the same checks for filtered object groups and continue after individual object failures. Each verification updates the media object's `lastVerification` metadata with the latest status, timestamp, size, content hash, and failure message when present.
-
-These endpoints still do not upload, stream, delete, move, or repair media bytes.
-
-## Future Direction
-
-The first implementation uses an in-memory repository for domain tests. Phase 12 adds `INORI_MEDIA_OBJECT_REPOSITORY_FILE` for optional single-node JSON persistence of media object metadata before database migrations exist. PostgreSQL should later own media object metadata, with indexes for backend ID, object key, content hash, asset kind, lifecycle state, and ownership/library relationships.
-
-## Verification Status Listing
-
-Media-object list requests can filter by `verificationStatus=verified|failed|unknown`. The filter reads only persisted `lastVerification` metadata: `verified` and `failed` match the latest recorded result, while `unknown` returns objects that have not been verified yet. The list endpoint still accepts exactly one filter per request to avoid ambiguous admin workflows.
-
-
-## List Pagination
-
-Media-object list endpoints are bounded with offset pagination. Requests may pass `limit` and `offset` alongside exactly one metadata filter; omitted `limit` defaults to 100 and values above 500 are rejected. Responses include `pagination.limit`, `pagination.offset`, `pagination.total`, and `pagination.hasMore` so admin clients can review large metadata sets without requesting unbounded payloads.
-
-
-## Metadata Statistics
-
-The admin API exposes metadata-only object statistics for all media objects or a single `backendId`. The summary counts total objects, total referenced bytes, backend IDs, asset kinds, lifecycle states, and latest verification states from persisted metadata only; it never opens media files or probes storage backends.
-
-
-## Lifecycle Administration
-
-Administrators can update `lifecycleState` through a metadata-only route. The operation preserves object identity, backend references, object keys, content hashes, and latest verification results, and only changes `lifecycleState` plus `updatedAt`. The `deleted` state is terminal metadata: it prevents normal admin restoration through this bootstrap API and does not remove bytes from storage.
-
-
-## Lifecycle Filtering
-
-Paginated media-object list requests can filter by `lifecycleState=staged|active|archived|deleted`. Lifecycle filtering is mutually exclusive with backend, content-hash, and verification-status filters, follows the same stable ordering and pagination semantics, and reads only persisted metadata.
-
-
-## Asset Kind Filtering
-
-Paginated media-object list requests can filter by `assetKind` for registered asset classes such as original audio, transcoded audio, artwork, lyrics, waveform data, analysis data, import packages, and backups. Asset-kind filtering is mutually exclusive with backend, content-hash, verification-status, and lifecycle filters, and reads only persisted metadata.
+The statistics endpoint calculates object counts, total referenced bytes, backend distribution, asset kind, lifecycle state, and latest verification state from metadata only. It does not open media files or trigger probes.
