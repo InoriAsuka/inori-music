@@ -60,3 +60,8 @@ Media-object list endpoints are bounded with offset pagination. Requests may pas
 ## Metadata Statistics
 
 The admin API exposes metadata-only object statistics for all media objects or a single `backendId`. The summary counts total objects, total referenced bytes, backend IDs, asset kinds, lifecycle states, and latest verification states from persisted metadata only; it never opens media files or probes storage backends.
+
+
+## Lifecycle Administration
+
+Administrators can update `lifecycleState` through a metadata-only route. The operation preserves object identity, backend references, object keys, content hashes, and latest verification results, and only changes `lifecycleState` plus `updatedAt`. The `deleted` state is terminal metadata: it prevents normal admin restoration through this bootstrap API and does not remove bytes from storage.

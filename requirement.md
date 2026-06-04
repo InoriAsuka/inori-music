@@ -96,6 +96,14 @@ The 0.x server-side search should begin with PostgreSQL full-text search, normal
 
 ## Requirement History
 
+### v0.19.0 - 2026-06-04
+
+- Required authenticated media-object lifecycle metadata updates after registration.
+- Required lifecycle updates to preserve object identity, storage references, content hash, and latest verification state.
+- Required `deleted` to be a terminal metadata state that cannot transition back to non-deleted states.
+- Required lifecycle updates to mutate metadata only and never delete or rewrite media bytes.
+- Required domain, HTTP, OpenAPI, conflict, and authentication tests for the lifecycle endpoint.
+
 ### v0.18.0 - 2026-06-04
 
 - Required authenticated media-object metadata statistics for admin dashboards.

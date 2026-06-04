@@ -4,7 +4,7 @@
 
 ## Version
 
-Current architecture baseline version: `0.18.0`.
+Current architecture baseline version: `0.19.0`.
 
 ## 0.x Architecture Direction
 
@@ -96,6 +96,10 @@ The seventeenth phase bounds media-object list responses with `limit` and `offse
 ## Phase 18: Media Object Metadata Statistics
 
 The eighteenth phase adds authenticated metadata-only statistics at `GET /api/v1/admin/media/objects/stats`, including total object count, total size, backend, asset-kind, lifecycle, and verification-status buckets for all backends or one `backendId`.
+
+## Phase 19: Media Object Lifecycle Administration
+
+The nineteenth phase adds authenticated metadata-only lifecycle updates at `POST /api/v1/admin/media/objects/{id}/lifecycle`, preserving verification history and treating `deleted` as a terminal metadata state without deleting stored bytes.
 
 ## Run the API Scaffold
 

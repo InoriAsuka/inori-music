@@ -202,6 +202,30 @@ func (service *MediaObjectService) GetMediaObject(ctx context.Context, id string
 	return service.mediaRepository.GetMediaObject(ctx, id)
 }
 
+func (service *MediaObjectService) SetMediaObjectLifecycleState(ctx context.Context, id string, state string) (MediaObject, error) {
+	id = strings.TrimSpace(id)
+	state = strings.TrimSpace(state)
+	if id == "" {
+		return MediaObject{}, fmt.Errorf("%w: id is required", ErrInvalidMediaObject)
+	}
+	if !validLifecycleState(LifecycleState(state)) {
+		return MediaObject{}, fmt.Errorf("%w: unsupported lifecycle state %q", ErrInvalidMediaObject, state)
+	}
+	object, err := service.mediaRepository.GetMediaObject(ctx, id)
+	if err != nil {
+		return MediaObject{}, err
+	}
+	if LifecycleState(object.LifecycleState) == LifecycleStateDeleted && LifecycleState(state) != LifecycleStateDeleted {
+		return MediaObject{}, fmt.Errorf("%w: deleted media object %s cannot leave deleted lifecycle state", ErrConflict, id)
+	}
+	object.LifecycleState = state
+	object.UpdatedAt = service.now().UTC()
+	if err := service.mediaRepository.SaveMediaObject(ctx, object); err != nil {
+		return MediaObject{}, err
+	}
+	return object, nil
+}
+
 func (service *MediaObjectService) ListMediaObjectsByBackend(ctx context.Context, backendID string) ([]MediaObject, error) {
 	return service.mediaRepository.ListMediaObjectsByBackend(ctx, backendID)
 }

@@ -218,6 +218,14 @@ func TestMediaObjectRoutesRegisterLookupAndFilter(t *testing.T) {
 	}
 	assertJSONField(t, lookup, "objectKey", "albums/inori/track-01.flac")
 
+	lifecycle := performRequest(t, handler, http.MethodPost, "/api/v1/admin/media/objects/media-1/lifecycle", `{"lifecycleState":"archived"}`)
+	if lifecycle.Code != http.StatusOK {
+		t.Fatalf("lifecycle status = %d body = %s", lifecycle.Code, lifecycle.Body.String())
+	}
+	assertJSONField(t, lifecycle, "lifecycleState", "archived")
+	assertAPIError(t, performRequest(t, handler, http.MethodPost, "/api/v1/admin/media/objects/media-1/lifecycle", `{"lifecycleState":"missing"}`), http.StatusBadRequest, "invalid_media_object")
+	assertAPIError(t, performRequestWithoutAuth(t, handler, http.MethodPost, "/api/v1/admin/media/objects/media-1/lifecycle", `{"lifecycleState":"active"}`), http.StatusUnauthorized, "unauthorized")
+
 	byBackend := performRequest(t, handler, http.MethodGet, "/api/v1/admin/media/objects?backendId=local-main", "")
 	assertMediaObjectListLength(t, byBackend, 3)
 	paged := performRequest(t, handler, http.MethodGet, "/api/v1/admin/media/objects?backendId=local-main&limit=1&offset=1", "")

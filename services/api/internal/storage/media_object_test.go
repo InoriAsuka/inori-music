@@ -265,6 +265,50 @@ func TestMediaObjectServiceBuildsMetadataStats(t *testing.T) {
 	}
 }
 
+func TestMediaObjectServiceUpdatesLifecycleState(t *testing.T) {
+	ctx := context.Background()
+	backendRepo := NewMemoryRepository()
+	if err := backendRepo.Save(ctx, StorageBackend{ID: "local-main", Enabled: true}); err != nil {
+		t.Fatalf("Save(backend) error = %v", err)
+	}
+	repo := NewMemoryMediaObjectRepository()
+	service := NewMediaObjectService(backendRepo, repo)
+	registered, err := service.RegisterMediaObject(ctx, validMediaObject())
+	if err != nil {
+		t.Fatalf("RegisterMediaObject() error = %v", err)
+	}
+	registered.LastVerification = &MediaObjectVerificationResult{MediaObjectID: registered.ID, BackendID: registered.BackendID, ObjectKey: registered.ObjectKey, Status: "verified"}
+	if err := repo.SaveMediaObject(ctx, registered); err != nil {
+		t.Fatalf("SaveMediaObject() error = %v", err)
+	}
+
+	updated, err := service.SetMediaObjectLifecycleState(ctx, registered.ID, string(LifecycleStateArchived))
+	if err != nil {
+		t.Fatalf("SetMediaObjectLifecycleState() error = %v", err)
+	}
+	if updated.LifecycleState != string(LifecycleStateArchived) || updated.LastVerification == nil || updated.LastVerification.Status != "verified" || !updated.UpdatedAt.After(registered.UpdatedAt) {
+		t.Fatalf("updated object = %+v, want archived object preserving verification and updated timestamp", updated)
+	}
+}
+
+func TestMediaObjectServiceRejectsInvalidLifecycleTransitions(t *testing.T) {
+	ctx := context.Background()
+	repo := NewMemoryMediaObjectRepository()
+	deleted := validMediaObject()
+	deleted.LifecycleState = string(LifecycleStateDeleted)
+	if err := repo.SaveMediaObject(ctx, deleted); err != nil {
+		t.Fatalf("SaveMediaObject() error = %v", err)
+	}
+	service := NewMediaObjectService(NewMemoryRepository(), repo)
+
+	if _, err := service.SetMediaObjectLifecycleState(ctx, deleted.ID, string(LifecycleStateActive)); !errors.Is(err, ErrConflict) {
+		t.Fatalf("SetMediaObjectLifecycleState(deleted->active) error = %v, want ErrConflict", err)
+	}
+	if _, err := service.SetMediaObjectLifecycleState(ctx, deleted.ID, "missing"); !errors.Is(err, ErrInvalidMediaObject) {
+		t.Fatalf("SetMediaObjectLifecycleState(invalid) error = %v, want ErrInvalidMediaObject", err)
+	}
+}
+
 func TestMediaObjectServiceRejectsDuplicateObjectID(t *testing.T) {
 	ctx := context.Background()
 	backendRepo := NewMemoryRepository()
