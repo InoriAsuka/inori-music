@@ -226,6 +226,10 @@ func TestMediaObjectRoutesRegisterLookupAndFilter(t *testing.T) {
 	assertAPIError(t, performRequest(t, handler, http.MethodPost, "/api/v1/admin/media/objects/media-1/lifecycle", `{"lifecycleState":"missing"}`), http.StatusBadRequest, "invalid_media_object")
 	assertAPIError(t, performRequestWithoutAuth(t, handler, http.MethodPost, "/api/v1/admin/media/objects/media-1/lifecycle", `{"lifecycleState":"active"}`), http.StatusUnauthorized, "unauthorized")
 
+	byLifecycle := performRequest(t, handler, http.MethodGet, "/api/v1/admin/media/objects?lifecycleState=archived", "")
+	assertMediaObjectListLength(t, byLifecycle, 1)
+	assertAPIError(t, performRequest(t, handler, http.MethodGet, "/api/v1/admin/media/objects?lifecycleState=missing", ""), http.StatusBadRequest, "invalid_media_object")
+
 	byBackend := performRequest(t, handler, http.MethodGet, "/api/v1/admin/media/objects?backendId=local-main", "")
 	assertMediaObjectListLength(t, byBackend, 3)
 	paged := performRequest(t, handler, http.MethodGet, "/api/v1/admin/media/objects?backendId=local-main&limit=1&offset=1", "")

@@ -4,7 +4,7 @@
 
 ## Version
 
-Current architecture baseline version: `0.19.0`.
+Current architecture baseline version: `0.20.0`.
 
 ## 0.x Architecture Direction
 
@@ -100,6 +100,10 @@ The eighteenth phase adds authenticated metadata-only statistics at `GET /api/v1
 ## Phase 19: Media Object Lifecycle Administration
 
 The nineteenth phase adds authenticated metadata-only lifecycle updates at `POST /api/v1/admin/media/objects/{id}/lifecycle`, preserving verification history and treating `deleted` as a terminal metadata state without deleting stored bytes.
+
+## Phase 20: Media Object Lifecycle Filter
+
+The twentieth phase adds `lifecycleState=staged|active|archived|deleted` filtering to the paginated media-object list endpoint so administrators can review lifecycle buckets without composing multiple filters.
 
 ## Run the API Scaffold
 

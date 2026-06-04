@@ -65,3 +65,8 @@ The admin API exposes metadata-only object statistics for all media objects or a
 ## Lifecycle Administration
 
 Administrators can update `lifecycleState` through a metadata-only route. The operation preserves object identity, backend references, object keys, content hashes, and latest verification results, and only changes `lifecycleState` plus `updatedAt`. The `deleted` state is terminal metadata: it prevents normal admin restoration through this bootstrap API and does not remove bytes from storage.
+
+
+## Lifecycle Filtering
+
+Paginated media-object list requests can filter by `lifecycleState=staged|active|archived|deleted`. Lifecycle filtering is mutually exclusive with backend, content-hash, and verification-status filters, follows the same stable ordering and pagination semantics, and reads only persisted metadata.

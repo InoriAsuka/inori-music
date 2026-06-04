@@ -309,6 +309,47 @@ func TestMediaObjectServiceRejectsInvalidLifecycleTransitions(t *testing.T) {
 	}
 }
 
+func TestMediaObjectServiceListsByLifecycleState(t *testing.T) {
+	ctx := context.Background()
+	repo := NewMemoryMediaObjectRepository()
+	active := validMediaObject()
+	active.ID = "active"
+	active.ObjectKey = "active.flac"
+	archived := validMediaObject()
+	archived.ID = "archived"
+	archived.ObjectKey = "archived.flac"
+	archived.LifecycleState = string(LifecycleStateArchived)
+	for _, object := range []MediaObject{active, archived} {
+		if err := repo.SaveMediaObject(ctx, object); err != nil {
+			t.Fatalf("SaveMediaObject() error = %v", err)
+		}
+	}
+	service := NewMediaObjectService(NewMemoryRepository(), repo)
+
+	objects, err := service.ListMediaObjectsByLifecycleState(ctx, string(LifecycleStateArchived))
+	if err != nil {
+		t.Fatalf("ListMediaObjectsByLifecycleState() error = %v", err)
+	}
+	if len(objects) != 1 || objects[0].ID != "archived" {
+		t.Fatalf("archived objects = %+v, want only archived", objects)
+	}
+	page, err := service.ListMediaObjects(ctx, MediaObjectListFilter{LifecycleState: string(LifecycleStateActive), Limit: 10})
+	if err != nil {
+		t.Fatalf("ListMediaObjects(lifecycle) error = %v", err)
+	}
+	if len(page.Objects) != 1 || page.Objects[0].ID != "active" || page.Pagination.Total != 1 {
+		t.Fatalf("active page = %+v, want only active", page)
+	}
+}
+
+func TestMediaObjectServiceRejectsInvalidLifecycleStateFilter(t *testing.T) {
+	service := NewMediaObjectService(NewMemoryRepository(), NewMemoryMediaObjectRepository())
+	_, err := service.ListMediaObjectsByLifecycleState(context.Background(), "missing")
+	if !errors.Is(err, ErrInvalidMediaObject) {
+		t.Fatalf("ListMediaObjectsByLifecycleState() error = %v, want ErrInvalidMediaObject", err)
+	}
+}
+
 func TestMediaObjectServiceRejectsDuplicateObjectID(t *testing.T) {
 	ctx := context.Background()
 	backendRepo := NewMemoryRepository()

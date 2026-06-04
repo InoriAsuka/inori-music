@@ -96,6 +96,14 @@ The 0.x server-side search should begin with PostgreSQL full-text search, normal
 
 ## Requirement History
 
+### v0.20.0 - 2026-06-04
+
+- Required media-object list filtering by lifecycle state after lifecycle administration was introduced.
+- Required `lifecycleState` to accept `staged`, `active`, `archived`, and `deleted`.
+- Required list filtering to preserve the single-filter rule with `backendId`, `contentHash`, `verificationStatus`, or `lifecycleState`.
+- Required lifecycle filtering to remain metadata-only and compatible with existing `limit` and `offset` pagination.
+- Required domain, HTTP, OpenAPI, and invalid-filter tests for lifecycle state listing.
+
 ### v0.19.0 - 2026-06-04
 
 - Required authenticated media-object lifecycle metadata updates after registration.

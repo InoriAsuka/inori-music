@@ -391,6 +391,7 @@ func (handler *Handler) listMediaObjects(w http.ResponseWriter, r *http.Request)
 		BackendID:          r.URL.Query().Get("backendId"),
 		ContentHash:        r.URL.Query().Get("contentHash"),
 		VerificationStatus: r.URL.Query().Get("verificationStatus"),
+		LifecycleState:     r.URL.Query().Get("lifecycleState"),
 		Limit:              limit,
 		Offset:             offset,
 	})

@@ -132,6 +132,23 @@ func (repo *FileMediaObjectRepository) ListMediaObjectsByVerificationStatus(ctx 
 	return sortedMediaObjects(objects), nil
 }
 
+func (repo *FileMediaObjectRepository) ListMediaObjectsByLifecycleState(ctx context.Context, state string) ([]MediaObject, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	repo.mu.RLock()
+	defer repo.mu.RUnlock()
+
+	objects := make([]MediaObject, 0)
+	for _, object := range repo.objects {
+		if object.LifecycleState == strings.TrimSpace(state) {
+			objects = append(objects, object)
+		}
+	}
+	return sortedMediaObjects(objects), nil
+}
+
 func (repo *FileMediaObjectRepository) load() error {
 	content, err := os.ReadFile(repo.path)
 	if err != nil {
