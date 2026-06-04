@@ -1,21 +1,77 @@
-# 媒体对象登记架构
+# Media Object Registry
 
-## 目标
+## Scope
 
-媒体对象登记表只保存二进制资产的元数据引用，不保存大型媒体字节。对象通过后端 ID、对象键、内容哈希、大小、MIME 类型、资产类型、生命周期和最新校验状态进行描述。
+Phase 10 introduces a domain scaffold for media object metadata. A media object is a server-owned reference to a binary asset stored in one configured storage backend.
 
-## 登记规则
+The registry stores metadata such as backend ID, object key, content hash, byte size, MIME type, asset kind, lifecycle state, and timestamps. It does not store audio, artwork, lyrics, waveform, or backup bytes inside the API service or relational database.
 
-对象必须引用已启用的存储后端；对象键必须是相对的、已清理的斜杠分隔路径，不能包含绝对路径、父目录穿越或反斜杠。内容哈希采用 `算法:值` 形式。
+## Validation Rules
 
-## 列表与过滤
+A media object must reference an existing enabled storage backend. Object keys must be relative storage keys and must not be absolute paths, empty paths, current-directory aliases, parent-directory traversal, or backslash-delimited Windows paths.
 
-列表接口采用 `limit` 和 `offset` 分页，并要求每次只使用一个过滤条件。当前支持 `backendId`、`contentHash`、`verificationStatus`、`lifecycleState` 和 `assetKind`。过滤只读取元数据。
+Content hashes use an `algorithm:value` shape so future import and deduplication workflows can distinguish algorithms such as `sha256` or `blake3`. Sizes must be non-negative, MIME types must be present, and both asset kind and lifecycle state must be from the supported domain constants.
 
-## 校验与生命周期
+## Supported Asset Kinds
 
-完整性校验是只读操作，当前优先支持文件系统后端的大小与 `sha256` 校验。生命周期更新只修改 `lifecycleState` 和 `updatedAt`，保留对象引用和最新校验结果；`deleted` 是终态元数据，不会删除真实字节。
+- `original_audio`
+- `transcoded_audio`
+- `artwork`
+- `lyrics`
+- `waveform`
+- `analysis`
+- `import_package`
+- `backup`
 
-## 统计
+## Lifecycle States
 
-统计接口基于元数据计算对象总数、总字节数、后端分布、资产类型、生命周期和最新校验状态，不打开媒体文件也不触发探测。
+- `staged`: registered during an import or verification workflow.
+- `active`: usable by library, playback, and client synchronization flows.
+- `archived`: retained but not preferred for normal playback or display.
+- `deleted`: metadata tombstone for future safe-delete and audit workflows.
+
+## HTTP Administration API
+
+Phase 11 exposes authenticated administrator endpoints for metadata-only workflows:
+
+- `POST /api/v1/admin/media/objects` registers a media object reference for an enabled backend.
+- `GET /api/v1/admin/media/objects/{id}` fetches one media object reference.
+- `GET /api/v1/admin/media/objects?backendId=...` lists references by backend.
+- `GET /api/v1/admin/media/objects?contentHash=...` lists references by content hash for future deduplication workflows.
+
+`POST /api/v1/admin/media/objects/{id}/verify` performs read-only integrity verification for one filesystem-backed object by checking file existence, regular-file shape, byte size, and `sha256` content hash. `POST /api/v1/admin/media/objects/verify?backendId=...` and `?contentHash=...` run the same checks for filtered object groups and continue after individual object failures. Each verification updates the media object's `lastVerification` metadata with the latest status, timestamp, size, content hash, and failure message when present.
+
+These endpoints still do not upload, stream, delete, move, or repair media bytes.
+
+## Future Direction
+
+The first implementation uses an in-memory repository for domain tests. Phase 12 adds `INORI_MEDIA_OBJECT_REPOSITORY_FILE` for optional single-node JSON persistence of media object metadata before database migrations exist. PostgreSQL should later own media object metadata, with indexes for backend ID, object key, content hash, asset kind, lifecycle state, and ownership/library relationships.
+
+## Verification Status Listing
+
+Media-object list requests can filter by `verificationStatus=verified|failed|unknown`. The filter reads only persisted `lastVerification` metadata: `verified` and `failed` match the latest recorded result, while `unknown` returns objects that have not been verified yet. The list endpoint still accepts exactly one filter per request to avoid ambiguous admin workflows.
+
+
+## List Pagination
+
+Media-object list endpoints are bounded with offset pagination. Requests may pass `limit` and `offset` alongside exactly one metadata filter; omitted `limit` defaults to 100 and values above 500 are rejected. Responses include `pagination.limit`, `pagination.offset`, `pagination.total`, and `pagination.hasMore` so admin clients can review large metadata sets without requesting unbounded payloads.
+
+
+## Metadata Statistics
+
+The admin API exposes metadata-only object statistics for all media objects or a single `backendId`. The summary counts total objects, total referenced bytes, backend IDs, asset kinds, lifecycle states, and latest verification states from persisted metadata only; it never opens media files or probes storage backends.
+
+
+## Lifecycle Administration
+
+Administrators can update `lifecycleState` through a metadata-only route. The operation preserves object identity, backend references, object keys, content hashes, and latest verification results, and only changes `lifecycleState` plus `updatedAt`. The `deleted` state is terminal metadata: it prevents normal admin restoration through this bootstrap API and does not remove bytes from storage.
+
+
+## Lifecycle Filtering
+
+Paginated media-object list requests can filter by `lifecycleState=staged|active|archived|deleted`. Lifecycle filtering is mutually exclusive with backend, content-hash, and verification-status filters, follows the same stable ordering and pagination semantics, and reads only persisted metadata.
+
+
+## Asset Kind Filtering
+
+Paginated media-object list requests can filter by `assetKind` for registered asset classes such as original audio, transcoded audio, artwork, lyrics, waveform data, analysis data, import packages, and backups. Asset-kind filtering is mutually exclusive with backend, content-hash, verification-status, and lifecycle filters, and reads only persisted metadata.

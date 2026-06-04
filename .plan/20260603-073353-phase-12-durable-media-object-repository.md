@@ -1,21 +1,53 @@
-# 阶段 12：媒体对象文件仓储
+# Plan: Phase 12 Durable Media Object Repository
 
-## 需求快照
+## Requirement Version
 
-增加可选 JSON 文件仓储以持久化媒体对象元数据。
+v0.12.0
 
-## 任务清单
+## Goals
 
-- [x] 明确本阶段目标和非目标。
-- [x] 完成对应代码、接口或文档更新。
-- [x] 补充或更新必要测试。
-- [x] 记录阶段成果，便于后续回顾。
+- Add optional durable persistence for media object metadata before PostgreSQL is introduced.
+- Preserve `MemoryMediaObjectRepository` as the default for tests and ephemeral development.
+- Keep metadata persistence dependency-free and suitable for single-node self-hosting.
+- Use the same conservative atomic JSON file write pattern as the storage backend repository.
 
-## 非目标
+## Phase 1: Requirement Update
 
-- 不在本阶段引入未规划的大范围重构。
-- 不改变已经确认的 0.x 技术方向。
+- [x] Append `v0.12.0` to `requirement.md`.
+- [x] Create this phase plan under `.plan/`.
+- [x] Bump `VERSION` and README baseline to `0.12.0`.
 
-## 后续候选
+## Phase 2: Repository Implementation
 
-- 在后续阶段继续补齐持久化、检索、导入、审计和管理端体验。
+- [x] Add a file-backed `MediaObjectRepository` implementation.
+- [x] Load existing JSON media object metadata during startup.
+- [x] Persist repository changes with temp-file write, sync, close, and atomic rename.
+- [x] Create repository parent directories when needed.
+- [x] Preserve stable filtered ordering by backend/object key and content hash/object key.
+
+## Phase 3: Server Wiring
+
+- [x] Add `INORI_MEDIA_OBJECT_REPOSITORY_FILE` configuration.
+- [x] Keep `MemoryMediaObjectRepository` as the default when no media repository path is configured.
+- [x] Fail startup when the configured media object repository file cannot be loaded.
+
+## Phase 4: Validation
+
+- [x] Add unit tests for persistence, filtered listings, malformed files, unsupported schema versions, and empty IDs.
+- [x] Add command tests for repository selection.
+- [x] Run `gofmt`.
+- [x] Run `git diff --check`.
+- [x] Run `go vet ./services/api/...`.
+- [x] Run `go test ./services/api/...`.
+- [x] Run `go test -race ./services/api/...`.
+
+## Future Implementation Tasks
+
+- [ ] Add PostgreSQL media object repository and migrations.
+- [ ] Add JSON-to-PostgreSQL migration tooling.
+- [ ] Add pagination and indexes for large media object sets.
+- [ ] Add audit metadata once authenticated user identity is modeled.
+
+## Completion Notes
+
+This phase adds bootstrap metadata persistence only. It does not upload, stream, delete, move, or verify binary media files.

@@ -1,21 +1,52 @@
-# 阶段 8：OpenAPI 合同
+# Plan: Phase 8 OpenAPI Contract
 
-## 需求快照
+## Requirement Version
 
-发布 OpenAPI 3.1 合同并通过测试约束路由与安全声明。
+v0.8.0
 
-## 任务清单
+## Goals
 
-- [x] 明确本阶段目标和非目标。
-- [x] 完成对应代码、接口或文档更新。
-- [x] 补充或更新必要测试。
-- [x] 记录阶段成果，便于后续回顾。
+- Publish a versioned OpenAPI 3.1 contract for the storage administration HTTP API.
+- Capture the current route surface, request bodies, response envelopes, and Bearer authentication requirements.
+- Add automated contract tests so future handler changes must update the API contract.
+- Keep the contract dependency-free and parseable with the Go standard library.
 
-## 非目标
+## Phase 1: Requirement Update
 
-- 不在本阶段引入未规划的大范围重构。
-- 不改变已经确认的 0.x 技术方向。
+- [x] Append `v0.8.0` to `requirement.md`.
+- [x] Create this phase plan under `.plan/`.
+- [x] Bump `VERSION` and README baseline to `0.8.0`.
 
-## 后续候选
+## Phase 2: OpenAPI Contract
 
-- 在后续阶段继续补齐持久化、检索、导入、审计和管理端体验。
+- [x] Add `packages/api-contract/openapi/storage-admin.v1.json`.
+- [x] Document `/healthz` as public.
+- [x] Document authenticated `/api/v1/admin/storage/backends*` routes.
+- [x] Add schemas for storage backends, backend config families, capabilities, probe results, capacity reports, refresh reports, and error envelopes.
+- [x] Add reusable Bearer authentication security scheme.
+
+## Phase 3: Contract Verification
+
+- [x] Add standard-library tests that parse the OpenAPI document as JSON.
+- [x] Verify all implemented storage admin routes are present with the expected HTTP methods.
+- [x] Verify admin routes require Bearer authentication while `/healthz` remains public.
+- [x] Verify core schemas and error codes are represented.
+
+## Phase 4: Validation
+
+- [x] Run `gofmt`.
+- [x] Run `git diff --check`.
+- [x] Run `go vet ./services/api/...`.
+- [x] Run `go test ./services/api/...`.
+- [x] Run `go test -race ./services/api/...`.
+
+## Future Implementation Tasks
+
+- [ ] Generate client/server code from the OpenAPI contract when dependencies are available.
+- [ ] Add request/response golden tests against the OpenAPI schemas.
+- [ ] Publish rendered API documentation in the website app once the web project exists.
+- [ ] Add OpenAPI security examples for token rotation and future role-based authorization.
+
+## Completion Notes
+
+This phase documents and tests the current API surface. It does not introduce code generation because the current environment blocks external dependency downloads.

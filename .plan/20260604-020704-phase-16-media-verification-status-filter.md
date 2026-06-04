@@ -1,21 +1,31 @@
-# 阶段 16：校验状态过滤
+# Phase 16: Media Verification Status Filter (v0.16.0)
 
-## 需求快照
+## Requirement Snapshot
 
-支持按 verified、failed、unknown 查询最新校验状态。
+- Add server-side media object listing by latest verification state so administrators can quickly find verified, failed, and never-verified assets.
+- Preserve the existing metadata-only model: filtering must not read media bytes and must rely only on persisted `lastVerification` state.
+- Keep the HTTP API strict by requiring exactly one list filter at a time.
 
-## 任务清单
+## Task Checklist
 
-- [x] 明确本阶段目标和非目标。
-- [x] 完成对应代码、接口或文档更新。
-- [x] 补充或更新必要测试。
-- [x] 记录阶段成果，便于后续回顾。
+- [x] Extend `MediaObjectRepository` with a verification-status listing method.
+- [x] Implement status filtering for the in-memory media object repository.
+- [x] Implement status filtering for the file-backed media object repository.
+- [x] Add service-level validation for allowed filter states: `verified`, `failed`, and `unknown`.
+- [x] Extend `GET /api/v1/admin/media/objects` with the `verificationStatus` query parameter while preserving single-filter semantics.
+- [x] Update the OpenAPI contract to document the new query parameter and version.
+- [x] Update README, requirements, and architecture docs with the v0.16.0 behavior.
+- [x] Add storage and HTTP handler tests for successful and invalid verification-status filtering.
+- [x] Run formatting, static checks, test suites, and diff checks.
 
-## 非目标
+## Non-Goals
 
-- 不在本阶段引入未规划的大范围重构。
-- 不改变已经确认的 0.x 技术方向。
+- No full-text search, SQL persistence, or asynchronous verification queue in this phase.
+- No object-byte reads are performed by the list endpoint.
+- No deletion or lifecycle mutation is introduced.
 
-## 后续候选
+## Follow-Up Candidates
 
-- 在后续阶段继续补齐持久化、检索、导入、审计和管理端体验。
+- Add a paginated/sorted list API before large-library imports.
+- Introduce aggregate verification counters for dashboard cards.
+- Add a background re-verification scheduler once persistent job storage exists.

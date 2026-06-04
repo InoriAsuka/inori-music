@@ -1,21 +1,30 @@
-# 阶段 19：生命周期管理
+# Phase 19: Media Object Lifecycle Administration (v0.19.0)
 
-## 需求快照
+## Requirement Snapshot
 
-增加生命周期元数据更新，deleted 作为终态且不删除真实字节。
+- Allow administrators to update media object lifecycle metadata after registration.
+- Lifecycle updates must be metadata-only and must not delete, move, or rewrite media bytes.
+- Preserve integrity history such as `lastVerification` when lifecycle state changes.
 
-## 任务清单
+## Task Checklist
 
-- [x] 明确本阶段目标和非目标。
-- [x] 完成对应代码、接口或文档更新。
-- [x] 补充或更新必要测试。
-- [x] 记录阶段成果，便于后续回顾。
+- [x] Add service-level media object lifecycle state mutation with validation.
+- [x] Keep `deleted` as a terminal metadata state that cannot move back to non-deleted states.
+- [x] Preserve existing media object metadata and latest verification state while updating `lifecycleState` and `updatedAt`.
+- [x] Add authenticated `POST /api/v1/admin/media/objects/{id}/lifecycle`.
+- [x] Update OpenAPI with the lifecycle request schema and route.
+- [x] Update README, requirements, and architecture documentation for v0.19.0.
+- [x] Add domain and HTTP tests for valid lifecycle updates, invalid states, deleted-state conflicts, and authentication.
+- [x] Run formatting, static checks, JSON contract parsing, unit tests, race tests, and diff checks.
 
-## 非目标
+## Non-Goals
 
-- 不在本阶段引入未规划的大范围重构。
-- 不改变已经确认的 0.x 技术方向。
+- No physical deletion or movement of media bytes.
+- No bulk lifecycle update endpoint in this phase.
+- No library ownership or user-facing moderation workflow yet.
 
-## 后续候选
+## Follow-Up Candidates
 
-- 在后续阶段继续补齐持久化、检索、导入、审计和管理端体验。
+- Add bulk lifecycle updates after import job tracking exists.
+- Add audit events for lifecycle transitions.
+- Add background cleanup policies for deleted metadata after retention settings are designed.

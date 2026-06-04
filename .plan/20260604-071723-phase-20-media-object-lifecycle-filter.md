@@ -1,21 +1,29 @@
-# 阶段 20：生命周期过滤
+# Phase 20: Media Object Lifecycle Filter (v0.20.0)
 
-## 需求快照
+## Requirement Snapshot
 
-支持按 lifecycleState 过滤媒体对象列表。
+- Allow administrators to list media object metadata by lifecycle state after lifecycle administration is available.
+- Preserve the single-filter list rule while adding `lifecycleState` as a first-class metadata filter.
+- Keep the operation metadata-only and compatible with existing pagination.
 
-## 任务清单
+## Task Checklist
 
-- [x] 明确本阶段目标和非目标。
-- [x] 完成对应代码、接口或文档更新。
-- [x] 补充或更新必要测试。
-- [x] 记录阶段成果，便于后续回顾。
+- [x] Extend the media object list filter with `lifecycleState`.
+- [x] Add repository support for listing media objects by lifecycle state in stable order.
+- [x] Add service-level lifecycle filter validation for `staged`, `active`, `archived`, and `deleted`.
+- [x] Extend `GET /api/v1/admin/media/objects` with the `lifecycleState` query parameter and existing pagination.
+- [x] Update OpenAPI, requirements, README, and architecture docs for v0.20.0.
+- [x] Add domain and HTTP tests for lifecycle filtering and invalid lifecycle filters.
+- [x] Run formatting, static checks, JSON contract parsing, unit tests, race tests, and diff checks.
 
-## 非目标
+## Non-Goals
 
-- 不在本阶段引入未规划的大范围重构。
-- 不改变已经确认的 0.x 技术方向。
+- No bulk lifecycle changes in this phase.
+- No physical media deletion or cleanup policy.
+- No multi-filter query composition until PostgreSQL-backed indexes are designed.
 
-## 后续候选
+## Follow-Up Candidates
 
-- 在后续阶段继续补齐持久化、检索、导入、审计和管理端体验。
+- Add bulk lifecycle state update endpoints for import/admin workflows.
+- Add audit events for lifecycle transitions.
+- Add SQL-backed lifecycle indexes when persistence moves to PostgreSQL.

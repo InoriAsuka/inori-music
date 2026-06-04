@@ -1,21 +1,29 @@
-# 阶段 21：资产类型过滤
+# Phase 21: Media Object Asset Kind Filter (v0.21.0)
 
-## 需求快照
+## Requirement Snapshot
 
-支持按 assetKind 过滤媒体对象列表。
+- Allow administrators to list media object metadata by asset kind after lifecycle and statistics support are available.
+- Preserve the single-filter list rule while adding `assetKind` as a first-class metadata filter.
+- Keep filtering metadata-only and compatible with existing pagination.
 
-## 任务清单
+## Task Checklist
 
-- [x] 明确本阶段目标和非目标。
-- [x] 完成对应代码、接口或文档更新。
-- [x] 补充或更新必要测试。
-- [x] 记录阶段成果，便于后续回顾。
+- [x] Extend the media object list filter with `assetKind`.
+- [x] Add repository support for listing media objects by asset kind in stable order.
+- [x] Add service-level asset-kind filter validation for supported media asset kinds.
+- [x] Extend `GET /api/v1/admin/media/objects` with the `assetKind` query parameter and existing pagination.
+- [x] Update OpenAPI, requirements, README, and architecture docs for v0.21.0.
+- [x] Add domain and HTTP tests for asset-kind filtering and invalid asset-kind filters.
+- [x] Run formatting, static checks, JSON contract parsing, unit tests, race tests, and diff checks.
 
-## 非目标
+## Non-Goals
 
-- 不在本阶段引入未规划的大范围重构。
-- 不改变已经确认的 0.x 技术方向。
+- No multi-filter query composition in this phase.
+- No user library, album, or track domain models yet.
+- No PostgreSQL indexing until database persistence is introduced.
 
-## 后续候选
+## Follow-Up Candidates
 
-- 在后续阶段继续补齐持久化、检索、导入、审计和管理端体验。
+- Add metadata import jobs that register media objects by asset kind.
+- Add SQL-backed indexes for asset-kind queries when persistence moves to PostgreSQL.
+- Add admin UI filters generated from the OpenAPI contract.

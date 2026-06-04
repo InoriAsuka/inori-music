@@ -1,21 +1,50 @@
-# 阶段 6：S3 兼容对象探测
+# Plan: Phase 6 S3-Compatible Object Probes
 
-## 需求快照
+## Requirement Version
 
-为 S3 兼容后端增加受控对象写读删探测与环境变量凭据解析。
+v0.6.0
 
-## 任务清单
+## Goals
 
-- [x] 明确本阶段目标和非目标。
-- [x] 完成对应代码、接口或文档更新。
-- [x] 补充或更新必要测试。
-- [x] 记录阶段成果，便于后续回顾。
+- Add real S3-compatible object probes for cloud and object-storage deployments.
+- Keep probe behavior safe by operating only on a short-lived application-owned object key.
+- Resolve credentials through configured secret reference names without logging or returning secret values.
+- Test S3 probe behavior with a local fake S3-compatible HTTP server.
 
-## 非目标
+## Phase 1: Requirement Update
 
-- 不在本阶段引入未规划的大范围重构。
-- 不改变已经确认的 0.x 技术方向。
+- [x] Append `v0.6.0` to `requirement.md`.
+- [x] Create this phase plan under `.plan/`.
+- [x] Bump `VERSION` and README baseline to `0.6.0`.
 
-## 后续候选
+## Phase 2: S3 Probe Domain
 
-- 在后续阶段继续补齐持久化、检索、导入、审计和管理端体验。
+- [x] Add standard-library S3-compatible probe client with AWS Signature Version 4 signing. Network access blocked adding AWS SDK dependencies, so no third-party dependency was introduced.
+- [x] Add a composite prober that tries filesystem probes first and then S3-compatible probes.
+- [x] Add S3-compatible probe support for `s3` backends.
+- [x] Add S3-compatible probe support for distributed backends with `adapter: s3-compatible`.
+- [x] Resolve access and secret keys from environment variable names declared in backend config.
+- [x] Put, full-read, range-read, and delete a short-lived probe object.
+- [x] Ensure best-effort cleanup after object creation.
+
+## Phase 3: Verification
+
+- [x] Add fake S3-compatible HTTP server tests for put, full-read, range-read, and delete behavior.
+- [x] Add tests for missing credentials and distributed S3-compatible probe routing.
+- [x] Run `gofmt`.
+- [x] Run `git diff --check`.
+- [x] Run `go vet ./services/api/...`.
+- [x] Run `go test ./services/api/...`.
+- [x] Run `go test -race ./services/api/...`.
+
+## Future Implementation Tasks
+
+- [x] Add scheduled probe refresh and filesystem capacity reporting.
+- [ ] Add PostgreSQL persistence for latest health state and probe history.
+- [ ] Add probe timeouts and retry policy configuration.
+- [ ] Add object-storage provider compatibility notes for MinIO, R2, B2, Ceph RGW, Garage, and SeaweedFS.
+- [ ] Add dedicated distributed adapter probes beyond S3-compatible and mounted-filesystem adapters.
+
+## Completion Notes
+
+This phase validates conservative S3-compatible object semantics through a standard-library HTTP client with AWS Signature Version 4 signing against configurable endpoints. It does not claim support for provider-specific lifecycle, versioning, object lock, or event-notification features.

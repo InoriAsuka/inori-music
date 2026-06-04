@@ -1,17 +1,58 @@
-# ADR-0001：服务端管理的多后端媒体存储
+# ADR-0001: Server-Managed Multi-Backend Media Storage
 
-## 状态
+## Status
 
-已接受。
+Accepted
 
-## 背景
+## Date
 
-音乐系统需要支持本地自托管、NAS、对象存储和分布式存储。客户端不应直接决定媒体存储位置，也不应把大型媒体字节写入关系型数据库。
+2026-06-02
 
-## 决策
+## Context
 
-由服务端统一管理存储后端配置、验证、健康状态、容量信息和默认后端选择。媒体对象只保存引用元数据，真实字节位于配置的存储后端。
+Inori Music needs to support local development, personal self-hosting, NAS environments, cloud deployments, and distributed storage clusters. A single hard-coded object storage dependency would make the system harder to adopt across these environments.
 
-## 影响
+The system must support LocalSystem, NFS, SMB, S3-compatible object storage, and distributed storage backends while keeping playback, catalog, import, and synchronization logic independent from backend-specific details.
 
-该决策简化客户端实现，便于后续迁移、探测、审计和权限控制；同时要求服务端提供稳定的后端抽象和安全探测策略。
+## Decision
+
+The server backend will own media storage configuration and expose storage backends as administrative resources. Media assets will be stored through a storage abstraction with backend-specific adapters.
+
+The initial 0.x backend families are:
+
+- `local` for local filesystem storage.
+- `nfs` for NFS-mounted filesystem storage.
+- `smb` for SMB/CIFS-mounted filesystem storage.
+- `s3` for S3-compatible object storage.
+- `distributed` for Ceph, Garage, SeaweedFS, or equivalent systems through S3-compatible, mounted filesystem, or future dedicated adapters.
+
+Large audio files must not be stored directly in the relational database.
+
+## Consequences
+
+### Positive
+
+- The project can support local, NAS, cloud, and distributed deployments.
+- The default 0.x deployment can remain simple with local filesystem storage.
+- Production deployments can use S3-compatible or distributed storage without changing domain logic.
+- Storage migrations can be planned around backend IDs and media object metadata.
+
+### Negative
+
+- The server must maintain a capability model because not every backend supports presigned URLs, multipart uploads, lifecycle policies, or native object metadata.
+- Administrative validation workflows are required before a backend can become default.
+- Mounted filesystem backends require host-level mount reliability and operational documentation.
+
+## Alternatives Considered
+
+### S3-Compatible Only
+
+Rejected for 0.x because it increases adoption friction for local, NAS, and simple self-hosted deployments.
+
+### Local Filesystem Only
+
+Rejected as the long-term architecture because it does not naturally support multi-node production deployments.
+
+### Database BLOB Storage
+
+Rejected for large media because it would bloat the metadata database, make range playback awkward, and complicate backups and CDN integration.

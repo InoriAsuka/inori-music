@@ -1,21 +1,30 @@
-# 阶段 18：媒体对象元数据统计
+# Phase 18: Media Object Metadata Statistics (v0.18.0)
 
-## 需求快照
+## Requirement Snapshot
 
-增加只读元数据统计，供管理看板统计对象数量、大小和状态桶。
+- Provide metadata-only aggregate statistics for administrator dashboards and operational review.
+- Summaries must not read media bytes and must use only registered media object metadata and persisted `lastVerification` state.
+- Support both all-backend summaries and optional per-backend summaries.
 
-## 任务清单
+## Task Checklist
 
-- [x] 明确本阶段目标和非目标。
-- [x] 完成对应代码、接口或文档更新。
-- [x] 补充或更新必要测试。
-- [x] 记录阶段成果，便于后续回顾。
+- [x] Add a `MediaObjectStats` domain response with total object count, total size, backend, asset-kind, lifecycle, and verification-status buckets.
+- [x] Add repository support for listing all media object metadata in stable order.
+- [x] Implement service-level statistics aggregation without touching storage backends.
+- [x] Add authenticated `GET /api/v1/admin/media/objects/stats` with optional `backendId` filtering.
+- [x] Update OpenAPI with the stats path and schema.
+- [x] Update README, requirements, and architecture documentation for v0.18.0.
+- [x] Add domain and HTTP tests for global/per-backend statistics and authentication.
+- [x] Run formatting, static checks, JSON contract parsing, unit tests, race tests, and diff checks.
 
-## 非目标
+## Non-Goals
 
-- 不在本阶段引入未规划的大范围重构。
-- 不改变已经确认的 0.x 技术方向。
+- No time-series metrics, Prometheus exporter, or dashboard UI in this phase.
+- No media-byte verification or background re-verification is triggered by the stats endpoint.
+- No PostgreSQL aggregate query implementation until database persistence lands.
 
-## 后续候选
+## Follow-Up Candidates
 
-- 在后续阶段继续补齐持久化、检索、导入、审计和管理端体验。
+- Add dashboard-friendly failed/unknown verification counters to the future web admin UI.
+- Add aggregate import progress and library ownership dimensions after library models exist.
+- Move aggregation to indexed SQL queries when PostgreSQL persistence is introduced.

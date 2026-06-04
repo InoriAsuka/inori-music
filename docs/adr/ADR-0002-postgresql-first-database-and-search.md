@@ -1,17 +1,46 @@
-# ADR-0002：PostgreSQL 优先的数据库与搜索策略
+# ADR-0002: PostgreSQL-First Database and Search Direction
 
-## 状态
+## Status
 
-已接受。
+Accepted
 
-## 背景
+## Date
 
-系统需要可靠的服务端元数据存储、事务能力、索引能力和基础全文检索能力，同时客户端仍需要轻量本地缓存与离线队列。
+2026-06-02
 
-## 决策
+## Context
 
-服务端 0.x 以 PostgreSQL 作为主要元数据数据库，并优先使用 PostgreSQL 全文检索。客户端本地存储采用 SQLite。外部搜索引擎作为未来扩展，不是 0.x 的必选项。
+Inori Music requires structured metadata for tracks, artists, albums, playlists, user libraries, devices, storage objects, import jobs, and audit records. It also needs search capabilities for titles, artists, albums, aliases, tags, and lyrics.
 
-## 影响
+Supporting many server-side database engines in 0.x would increase migration, indexing, query, testing, and operational complexity before the core product has stabilized.
 
-该策略降低早期运维复杂度，并保留未来在规模、语言质量或模糊匹配需求增长时接入外部搜索服务的空间。
+## Decision
+
+The 0.x server-side primary database will be PostgreSQL-first. Client-side local persistence will use SQLite where offline playback queues, cache indexes, and local search are needed.
+
+Server-side search will begin with PostgreSQL full-text search, normalized fields, alias tables, ranking rules, and appropriate indexes. External search engines remain future options when search scale or quality requirements exceed PostgreSQL capabilities.
+
+## Consequences
+
+### Positive
+
+- PostgreSQL supports relational modeling, transactions, JSONB metadata, indexes, and built-in full-text search.
+- SQLite is well suited for client-local offline state and cache indexes.
+- The project avoids a large 0.x database compatibility matrix.
+- Search can start simple while preserving an explicit `SearchService` boundary for future providers.
+
+### Negative
+
+- Deployments that require MySQL or MariaDB are not first-class 0.x targets.
+- Advanced multilingual search, typo tolerance, and large-scale lyrics search may require a future external engine.
+- Repository and migration code should still be structured carefully to avoid unnecessary domain coupling.
+
+## Future Triggers
+
+Consider an external search provider when one or more of these become product requirements:
+
+- Strong Chinese, Japanese, or Korean search quality beyond PostgreSQL defaults.
+- Typo tolerance and high-quality search-as-you-type.
+- Large-scale lyrics indexing.
+- Search latency consistently exceeds product targets.
+- Search load begins to affect the primary database.

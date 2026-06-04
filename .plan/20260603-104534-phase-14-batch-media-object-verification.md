@@ -1,21 +1,50 @@
-# 阶段 14：批量媒体对象校验
+# Plan: Phase 14 Batch Media Object Verification
 
-## 需求快照
+## Requirement Version
 
-增加按后端或内容哈希批量校验，并在单项失败后继续执行。
+v0.14.0
 
-## 任务清单
+## Goals
 
-- [x] 明确本阶段目标和非目标。
-- [x] 完成对应代码、接口或文档更新。
-- [x] 补充或更新必要测试。
-- [x] 记录阶段成果，便于后续回顾。
+- Add batch media object integrity verification for filtered object sets.
+- Support `backendId` and `contentHash` filters without introducing broad unbounded scans.
+- Continue verification after individual media object failures.
+- Expose per-object outcomes through the authenticated admin HTTP API and OpenAPI contract.
 
-## 非目标
+## Phase 1: Requirement Update
 
-- 不在本阶段引入未规划的大范围重构。
-- 不改变已经确认的 0.x 技术方向。
+- [x] Append `v0.14.0` to `requirement.md`.
+- [x] Create this phase plan under `.plan/`.
+- [x] Bump `VERSION` and README baseline to `0.14.0`.
 
-## 后续候选
+## Phase 2: Domain Implementation
 
-- 在后续阶段继续补齐持久化、检索、导入、审计和管理端体验。
+- [x] Add media object verification report type.
+- [x] Add service methods for verification by backend ID and content hash.
+- [x] Continue after per-object failures and include failure messages in report results.
+
+## Phase 3: HTTP and Contract
+
+- [x] Add `POST /api/v1/admin/media/objects/verify?backendId=...`.
+- [x] Add `POST /api/v1/admin/media/objects/verify?contentHash=...`.
+- [x] Update OpenAPI paths, schemas, route coverage tests, and docs.
+- [x] Add handler tests for success, mixed failures, filter validation, and authentication.
+
+## Phase 4: Validation
+
+- [x] Run `gofmt`.
+- [x] Run `git diff --check`.
+- [x] Run `go vet ./services/api/...`.
+- [x] Run `go test ./services/api/...`.
+- [x] Run `go test -race ./services/api/...`.
+
+## Future Implementation Tasks
+
+- [ ] Add pagination/cursors for large verification sets.
+- [ ] Add background verification jobs and resumable repair reports.
+- [ ] Persist latest verification status per media object.
+- [ ] Add S3-compatible batch verification after single-object S3 verification exists.
+
+## Completion Notes
+
+This phase runs synchronous metadata-filtered verification only. It does not upload, delete, move, repair, or mutate media files.

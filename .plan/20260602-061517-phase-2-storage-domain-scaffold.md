@@ -1,21 +1,54 @@
-# 阶段 2：存储领域脚手架
+# Plan: Phase 2 Storage Domain Scaffold
 
-## 需求快照
+## Requirement Version
 
-建立 Go API 与存储领域模型，提供验证、能力推导、默认后端与内存仓储。
+v0.2.0
 
-## 任务清单
+## Goals
 
-- [x] 明确本阶段目标和非目标。
-- [x] 完成对应代码、接口或文档更新。
-- [x] 补充或更新必要测试。
-- [x] 记录阶段成果，便于后续回顾。
+- Create the first Go API service scaffold under `services/api`.
+- Implement the storage administration domain model for server-managed backend configuration.
+- Add validation and capability inference for LocalSystem, NFS, SMB, S3-compatible, and distributed backend families.
+- Add unit tests so the storage domain can evolve safely before database migrations and HTTP APIs are added.
 
-## 非目标
+## Phase 1: Requirement Update
 
-- 不在本阶段引入未规划的大范围重构。
-- 不改变已经确认的 0.x 技术方向。
+- [x] Append `v0.2.0` to `requirement.md`.
+- [x] Create this phase plan under `.plan/`.
+- [x] Keep `.plan/` version tracked for implementation history.
 
-## 后续候选
+## Phase 2: Service Scaffold
 
-- 在后续阶段继续补齐持久化、检索、导入、审计和管理端体验。
+- [x] Create `services/api/go.mod`.
+- [x] Create a minimal server entry point under `services/api/cmd/server`.
+- [x] Keep the initial scaffold dependency-free and standard-library only.
+
+## Phase 3: Storage Domain Implementation
+
+- [x] Define storage backend families and strongly typed backend configuration.
+- [x] Define capability and health status models.
+- [x] Define media object references that point to backend IDs and object keys.
+- [x] Implement backend validation and capability inference.
+- [x] Implement an in-memory repository for early domain tests.
+- [x] Implement a service for registration, listing, disabling, and default backend selection.
+
+## Phase 4: Verification
+
+- [x] Add unit tests for backend validation.
+- [x] Add unit tests for default backend selection and disabling behavior.
+- [x] Run `gofmt`.
+- [x] Run `go test ./...`.
+
+## Future Implementation Tasks
+
+- [ ] Add PostgreSQL migrations for storage backends and media objects.
+- [ ] Add encrypted configuration persistence.
+- [x] Add HTTP admin endpoints.
+- [x] Add OpenAPI contracts.
+- [x] Add real filesystem probe checks for local, NFS, and SMB mount paths.
+- [x] Add S3-compatible probe checks with temporary test objects.
+- [x] Add scheduled health checks and capacity metadata refresh. On-demand probes were added in phase 5 and scheduled refresh in phase 7.
+
+## Completion Notes
+
+This phase turns the phase-1 storage architecture into executable domain code while intentionally postponing database persistence, network probes, and HTTP handlers.
