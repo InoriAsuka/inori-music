@@ -216,6 +216,55 @@ func TestMediaObjectServiceRejectsInvalidPagination(t *testing.T) {
 	}
 }
 
+func TestMediaObjectServiceBuildsMetadataStats(t *testing.T) {
+	ctx := context.Background()
+	repo := NewMemoryMediaObjectRepository()
+	verified := validMediaObject()
+	verified.ID = "verified"
+	verified.BackendID = "local-main"
+	verified.ObjectKey = "a.flac"
+	verified.SizeBytes = 10
+	verified.LastVerification = &MediaObjectVerificationResult{MediaObjectID: verified.ID, BackendID: verified.BackendID, ObjectKey: verified.ObjectKey, Status: "verified"}
+	failed := validMediaObject()
+	failed.ID = "failed"
+	failed.BackendID = "archive"
+	failed.ObjectKey = "b.flac"
+	failed.SizeBytes = 20
+	failed.AssetKind = string(AssetKindBackup)
+	failed.LifecycleState = string(LifecycleStateArchived)
+	failed.LastVerification = &MediaObjectVerificationResult{MediaObjectID: failed.ID, BackendID: failed.BackendID, ObjectKey: failed.ObjectKey, Status: "failed"}
+	unknown := validMediaObject()
+	unknown.ID = "unknown"
+	unknown.BackendID = "local-main"
+	unknown.ObjectKey = "c.flac"
+	unknown.SizeBytes = 30
+	for _, object := range []MediaObject{verified, failed, unknown} {
+		if err := repo.SaveMediaObject(ctx, object); err != nil {
+			t.Fatalf("SaveMediaObject() error = %v", err)
+		}
+	}
+	service := NewMediaObjectService(NewMemoryRepository(), repo)
+
+	stats, err := service.GetMediaObjectStats(ctx, "")
+	if err != nil {
+		t.Fatalf("GetMediaObjectStats() error = %v", err)
+	}
+	if stats.TotalObjects != 3 || stats.TotalSizeBytes != 60 || stats.ByVerificationStatus["verified"] != 1 || stats.ByVerificationStatus["failed"] != 1 || stats.ByVerificationStatus["unknown"] != 1 {
+		t.Fatalf("stats = %+v, want total and verification buckets", stats)
+	}
+	if stats.ByBackendID["local-main"] != 2 || stats.ByAssetKind[string(AssetKindBackup)] != 1 || stats.ByLifecycleState[string(LifecycleStateArchived)] != 1 {
+		t.Fatalf("stats buckets = %+v/%+v/%+v, want backend, asset kind, lifecycle counts", stats.ByBackendID, stats.ByAssetKind, stats.ByLifecycleState)
+	}
+
+	filtered, err := service.GetMediaObjectStats(ctx, "local-main")
+	if err != nil {
+		t.Fatalf("GetMediaObjectStats(filtered) error = %v", err)
+	}
+	if filtered.BackendID != "local-main" || filtered.TotalObjects != 2 || filtered.TotalSizeBytes != 40 || filtered.ByVerificationStatus["failed"] != 0 {
+		t.Fatalf("filtered stats = %+v, want local-main only", filtered)
+	}
+}
+
 func TestMediaObjectServiceRejectsDuplicateObjectID(t *testing.T) {
 	ctx := context.Background()
 	backendRepo := NewMemoryRepository()

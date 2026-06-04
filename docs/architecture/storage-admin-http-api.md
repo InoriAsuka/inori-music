@@ -32,6 +32,8 @@ The versioned OpenAPI 3.1 contract lives at [`packages/api-contract/openapi/stor
 | `GET` | `/api/v1/admin/storage/backends/{id}/capacity` | Read and record current capacity where supported. |
 | `GET` | `/api/v1/admin/media/objects?backendId=...` | List media object metadata stored on a backend. |
 | `GET` | `/api/v1/admin/media/objects?contentHash=...` | List media object metadata by content hash. |
+| `GET` | `/api/v1/admin/media/objects?verificationStatus=...` | List media object metadata by latest verification state. |
+| `GET` | `/api/v1/admin/media/objects/stats` | Read metadata-only aggregate media object statistics. |
 | `POST` | `/api/v1/admin/media/objects` | Register media object metadata for an enabled backend. |
 | `GET` | `/api/v1/admin/media/objects/{id}` | Read one media object metadata record by ID. |
 | `POST` | `/api/v1/admin/media/objects/verify?backendId=...` | Batch-verify media object size and `sha256` hash by backend. |

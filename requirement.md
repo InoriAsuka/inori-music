@@ -96,6 +96,14 @@ The 0.x server-side search should begin with PostgreSQL full-text search, normal
 
 ## Requirement History
 
+### v0.18.0 - 2026-06-04
+
+- Required authenticated media-object metadata statistics for admin dashboards.
+- Required statistics to be metadata-only and never read media bytes or trigger verification.
+- Required global and optional `backendId`-scoped summaries.
+- Required statistics to include total object count, total size, backend, asset-kind, lifecycle, and latest verification-status buckets.
+- Required domain, HTTP, OpenAPI, and authentication tests for the stats endpoint.
+
 ### v0.17.0 - 2026-06-04
 
 - Required media-object list responses to be bounded with `limit` and `offset` query parameters.

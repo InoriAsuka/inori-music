@@ -229,6 +229,17 @@ func TestMediaObjectRoutesRegisterLookupAndFilter(t *testing.T) {
 	assertAPIError(t, performRequest(t, handler, http.MethodGet, "/api/v1/admin/media/objects?backendId=local-main&verificationStatus=unknown", ""), http.StatusBadRequest, "invalid_media_object")
 	assertAPIError(t, performRequest(t, handler, http.MethodGet, "/api/v1/admin/media/objects?verificationStatus=stale", ""), http.StatusBadRequest, "invalid_media_object")
 	assertAPIError(t, performRequest(t, handler, http.MethodGet, "/api/v1/admin/media/objects?backendId=local-main&limit=0", ""), http.StatusBadRequest, "invalid_media_object")
+
+	stats := performRequest(t, handler, http.MethodGet, "/api/v1/admin/media/objects/stats?backendId=local-main", "")
+	if stats.Code != http.StatusOK {
+		t.Fatalf("stats status = %d body = %s", stats.Code, stats.Body.String())
+	}
+	var statsBody storage.MediaObjectStats
+	decodeResponse(t, stats, &statsBody)
+	if statsBody.BackendID != "local-main" || statsBody.TotalObjects != 3 || statsBody.TotalSizeBytes != 3702 || statsBody.ByVerificationStatus["unknown"] != 3 {
+		t.Fatalf("stats = %+v, want backend totals and unknown verification count", statsBody)
+	}
+	assertAPIError(t, performRequestWithoutAuth(t, handler, http.MethodGet, "/api/v1/admin/media/objects/stats", ""), http.StatusUnauthorized, "unauthorized")
 }
 
 func TestMediaObjectRouteRejectsInvalidInput(t *testing.T) {

@@ -55,3 +55,8 @@ Media-object list requests can filter by `verificationStatus=verified|failed|unk
 ## List Pagination
 
 Media-object list endpoints are bounded with offset pagination. Requests may pass `limit` and `offset` alongside exactly one metadata filter; omitted `limit` defaults to 100 and values above 500 are rejected. Responses include `pagination.limit`, `pagination.offset`, `pagination.total`, and `pagination.hasMore` so admin clients can review large metadata sets without requesting unbounded payloads.
+
+
+## Metadata Statistics
+
+The admin API exposes metadata-only object statistics for all media objects or a single `backendId`. The summary counts total objects, total referenced bytes, backend IDs, asset kinds, lifecycle states, and latest verification states from persisted metadata only; it never opens media files or probes storage backends.

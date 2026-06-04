@@ -574,6 +574,60 @@
             "type": "boolean"
           }
         }
+      },
+      "MediaObjectStats": {
+        "type": "object",
+        "required": [
+          "totalObjects",
+          "totalSizeBytes",
+          "byBackendId",
+          "byAssetKind",
+          "byLifecycleState",
+          "byVerificationStatus"
+        ],
+        "properties": {
+          "backendId": {
+            "type": "string",
+            "description": "Backend filter used to calculate this stats response, omitted for all backends."
+          },
+          "totalObjects": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "totalSizeBytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "byBackendId": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "byAssetKind": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "byLifecycleState": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "byVerificationStatus": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "Counts by latest verification state. Includes verified, failed, and unknown buckets."
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -609,7 +663,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "0.17.0"
+    "version": "0.18.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -1595,6 +1649,61 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/media/objects/stats": {
+      "get": {
+        "summary": "Get media object metadata statistics.",
+        "description": "Returns metadata-only media object counts for all backends or one backend without reading media bytes.",
+        "parameters": [
+          {
+            "name": "backendId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Optional backend ID used to limit statistics to one storage backend."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Media object statistics",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaObjectStats"
                 }
               }
             }

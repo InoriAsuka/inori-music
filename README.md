@@ -4,7 +4,7 @@
 
 ## Version
 
-Current architecture baseline version: `0.17.0`.
+Current architecture baseline version: `0.18.0`.
 
 ## 0.x Architecture Direction
 
@@ -92,6 +92,10 @@ The sixteenth phase adds media-object listing by `verificationStatus=verified|fa
 ## Phase 17: Media Object List Pagination
 
 The seventeenth phase bounds media-object list responses with `limit` and `offset` query parameters and returns pagination metadata (`limit`, `offset`, `total`, `hasMore`) for deterministic admin review workflows.
+
+## Phase 18: Media Object Metadata Statistics
+
+The eighteenth phase adds authenticated metadata-only statistics at `GET /api/v1/admin/media/objects/stats`, including total object count, total size, backend, asset-kind, lifecycle, and verification-status buckets for all backends or one `backendId`.
 
 ## Run the API Scaffold
 

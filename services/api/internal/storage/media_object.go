@@ -63,10 +63,22 @@ type PaginationMetadata struct {
 	HasMore bool `json:"hasMore"`
 }
 
+// MediaObjectStats summarizes metadata-only counts for admin dashboards.
+type MediaObjectStats struct {
+	BackendID            string         `json:"backendId,omitempty"`
+	TotalObjects         int            `json:"totalObjects"`
+	TotalSizeBytes       int64          `json:"totalSizeBytes"`
+	ByBackendID          map[string]int `json:"byBackendId"`
+	ByAssetKind          map[string]int `json:"byAssetKind"`
+	ByLifecycleState     map[string]int `json:"byLifecycleState"`
+	ByVerificationStatus map[string]int `json:"byVerificationStatus"`
+}
+
 // MediaObjectRepository stores metadata references for binary assets.
 type MediaObjectRepository interface {
 	SaveMediaObject(ctx context.Context, object MediaObject) error
 	GetMediaObject(ctx context.Context, id string) (MediaObject, error)
+	ListAllMediaObjects(ctx context.Context) ([]MediaObject, error)
 	ListMediaObjectsByBackend(ctx context.Context, backendID string) ([]MediaObject, error)
 	ListMediaObjectsByContentHash(ctx context.Context, contentHash string) ([]MediaObject, error)
 	ListMediaObjectsByVerificationStatus(ctx context.Context, status string) ([]MediaObject, error)
@@ -100,6 +112,16 @@ func (repo *MemoryMediaObjectRepository) GetMediaObject(_ context.Context, id st
 		return MediaObject{}, fmt.Errorf("%w: media object %s", ErrNotFound, id)
 	}
 	return object, nil
+}
+
+func (repo *MemoryMediaObjectRepository) ListAllMediaObjects(_ context.Context) ([]MediaObject, error) {
+	repo.mu.RLock()
+	defer repo.mu.RUnlock()
+	objects := make([]MediaObject, 0, len(repo.objects))
+	for _, object := range repo.objects {
+		objects = append(objects, object)
+	}
+	return sortedMediaObjects(objects), nil
 }
 
 func (repo *MemoryMediaObjectRepository) ListMediaObjectsByBackend(_ context.Context, backendID string) ([]MediaObject, error) {
@@ -214,6 +236,23 @@ func (service *MediaObjectService) ListMediaObjects(ctx context.Context, filter 
 		return MediaObjectListPage{}, err
 	}
 	return paginateMediaObjects(objects, normalized.Limit, normalized.Offset), nil
+}
+
+func (service *MediaObjectService) GetMediaObjectStats(ctx context.Context, backendID string) (MediaObjectStats, error) {
+	backendID = strings.TrimSpace(backendID)
+	var (
+		objects []MediaObject
+		err     error
+	)
+	if backendID != "" {
+		objects, err = service.mediaRepository.ListMediaObjectsByBackend(ctx, backendID)
+	} else {
+		objects, err = service.mediaRepository.ListAllMediaObjects(ctx)
+	}
+	if err != nil {
+		return MediaObjectStats{}, err
+	}
+	return summarizeMediaObjects(backendID, objects), nil
 }
 
 func (service *MediaObjectService) VerifyMediaObject(ctx context.Context, id string) (MediaObjectVerificationResult, error) {
@@ -340,6 +379,25 @@ func normalizeMediaObjectVerificationStatus(status string) (string, error) {
 	default:
 		return "", fmt.Errorf("%w: verificationStatus must be one of verified, failed, or unknown", ErrInvalidMediaObject)
 	}
+}
+
+func summarizeMediaObjects(backendID string, objects []MediaObject) MediaObjectStats {
+	stats := MediaObjectStats{
+		BackendID:            backendID,
+		ByBackendID:          make(map[string]int),
+		ByAssetKind:          make(map[string]int),
+		ByLifecycleState:     make(map[string]int),
+		ByVerificationStatus: map[string]int{"verified": 0, "failed": 0, "unknown": 0},
+	}
+	for _, object := range objects {
+		stats.TotalObjects++
+		stats.TotalSizeBytes += object.SizeBytes
+		stats.ByBackendID[object.BackendID]++
+		stats.ByAssetKind[object.AssetKind]++
+		stats.ByLifecycleState[object.LifecycleState]++
+		stats.ByVerificationStatus[mediaObjectVerificationStatus(object)]++
+	}
+	return stats
 }
 
 func paginateMediaObjects(objects []MediaObject, limit int, offset int) MediaObjectListPage {

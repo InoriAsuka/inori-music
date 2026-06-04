@@ -66,6 +66,21 @@ func (repo *FileMediaObjectRepository) GetMediaObject(ctx context.Context, id st
 	return object, nil
 }
 
+func (repo *FileMediaObjectRepository) ListAllMediaObjects(ctx context.Context) ([]MediaObject, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
+	repo.mu.RLock()
+	defer repo.mu.RUnlock()
+
+	objects := make([]MediaObject, 0, len(repo.objects))
+	for _, object := range repo.objects {
+		objects = append(objects, object)
+	}
+	return sortedMediaObjects(objects), nil
+}
+
 func (repo *FileMediaObjectRepository) ListMediaObjectsByBackend(ctx context.Context, backendID string) ([]MediaObject, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
