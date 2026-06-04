@@ -35,6 +35,34 @@ const (
 	LifecycleStateDeleted  LifecycleState = "deleted"
 )
 
+const (
+	DefaultMediaObjectListLimit = 100
+	MaxMediaObjectListLimit     = 500
+)
+
+// MediaObjectListFilter describes a metadata-only media object list query.
+type MediaObjectListFilter struct {
+	BackendID          string
+	ContentHash        string
+	VerificationStatus string
+	Limit              int
+	Offset             int
+}
+
+// MediaObjectListPage contains a bounded list response and pagination metadata.
+type MediaObjectListPage struct {
+	Objects    []MediaObject      `json:"objects"`
+	Pagination PaginationMetadata `json:"pagination"`
+}
+
+// PaginationMetadata describes offset pagination for admin list responses.
+type PaginationMetadata struct {
+	Limit   int  `json:"limit"`
+	Offset  int  `json:"offset"`
+	Total   int  `json:"total"`
+	HasMore bool `json:"hasMore"`
+}
+
 // MediaObjectRepository stores metadata references for binary assets.
 type MediaObjectRepository interface {
 	SaveMediaObject(ctx context.Context, object MediaObject) error
@@ -168,6 +196,26 @@ func (service *MediaObjectService) ListMediaObjectsByVerificationStatus(ctx cont
 	return service.mediaRepository.ListMediaObjectsByVerificationStatus(ctx, normalized)
 }
 
+func (service *MediaObjectService) ListMediaObjects(ctx context.Context, filter MediaObjectListFilter) (MediaObjectListPage, error) {
+	normalized, err := normalizeMediaObjectListFilter(filter)
+	if err != nil {
+		return MediaObjectListPage{}, err
+	}
+
+	var objects []MediaObject
+	if normalized.BackendID != "" {
+		objects, err = service.mediaRepository.ListMediaObjectsByBackend(ctx, normalized.BackendID)
+	} else if normalized.ContentHash != "" {
+		objects, err = service.mediaRepository.ListMediaObjectsByContentHash(ctx, normalized.ContentHash)
+	} else {
+		objects, err = service.mediaRepository.ListMediaObjectsByVerificationStatus(ctx, normalized.VerificationStatus)
+	}
+	if err != nil {
+		return MediaObjectListPage{}, err
+	}
+	return paginateMediaObjects(objects, normalized.Limit, normalized.Offset), nil
+}
+
 func (service *MediaObjectService) VerifyMediaObject(ctx context.Context, id string) (MediaObjectVerificationResult, error) {
 	object, err := service.mediaRepository.GetMediaObject(ctx, id)
 	if err != nil {
@@ -252,6 +300,38 @@ func (service *MediaObjectService) recordMediaObjectVerification(ctx context.Con
 	return service.mediaRepository.SaveMediaObject(ctx, object)
 }
 
+func normalizeMediaObjectListFilter(filter MediaObjectListFilter) (MediaObjectListFilter, error) {
+	filter.BackendID = strings.TrimSpace(filter.BackendID)
+	filter.ContentHash = strings.TrimSpace(filter.ContentHash)
+	filter.VerificationStatus = strings.TrimSpace(filter.VerificationStatus)
+	filterCount := 0
+	for _, value := range []string{filter.BackendID, filter.ContentHash, filter.VerificationStatus} {
+		if value != "" {
+			filterCount++
+		}
+	}
+	if filterCount != 1 {
+		return MediaObjectListFilter{}, fmt.Errorf("%w: exactly one of backendId, contentHash, or verificationStatus is required", ErrInvalidMediaObject)
+	}
+	if filter.VerificationStatus != "" {
+		normalized, err := normalizeMediaObjectVerificationStatus(filter.VerificationStatus)
+		if err != nil {
+			return MediaObjectListFilter{}, err
+		}
+		filter.VerificationStatus = normalized
+	}
+	if filter.Limit == 0 {
+		filter.Limit = DefaultMediaObjectListLimit
+	}
+	if filter.Limit < 0 || filter.Limit > MaxMediaObjectListLimit {
+		return MediaObjectListFilter{}, fmt.Errorf("%w: limit must be between 1 and %d", ErrInvalidMediaObject, MaxMediaObjectListLimit)
+	}
+	if filter.Offset < 0 {
+		return MediaObjectListFilter{}, fmt.Errorf("%w: offset must be non-negative", ErrInvalidMediaObject)
+	}
+	return filter, nil
+}
+
 func normalizeMediaObjectVerificationStatus(status string) (string, error) {
 	normalized := strings.ToLower(strings.TrimSpace(status))
 	switch normalized {
@@ -259,6 +339,28 @@ func normalizeMediaObjectVerificationStatus(status string) (string, error) {
 		return normalized, nil
 	default:
 		return "", fmt.Errorf("%w: verificationStatus must be one of verified, failed, or unknown", ErrInvalidMediaObject)
+	}
+}
+
+func paginateMediaObjects(objects []MediaObject, limit int, offset int) MediaObjectListPage {
+	total := len(objects)
+	if offset > total {
+		offset = total
+	}
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+	pageObjects := make([]MediaObject, end-offset)
+	copy(pageObjects, objects[offset:end])
+	return MediaObjectListPage{
+		Objects: pageObjects,
+		Pagination: PaginationMetadata{
+			Limit:   limit,
+			Offset:  offset,
+			Total:   total,
+			HasMore: end < total,
+		},
 	}
 }
 

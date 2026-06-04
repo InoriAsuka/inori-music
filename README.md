@@ -4,7 +4,7 @@
 
 ## Version
 
-Current architecture baseline version: `0.16.0`.
+Current architecture baseline version: `0.17.0`.
 
 ## 0.x Architecture Direction
 
@@ -88,6 +88,10 @@ The fifteenth phase persists each media object's latest verification result afte
 ## Phase 16: Media Verification Status Filter
 
 The sixteenth phase adds media-object listing by `verificationStatus=verified|failed|unknown`. The endpoint uses persisted `lastVerification` metadata only, enabling administrators to find failed or never-verified assets without reading media bytes.
+
+## Phase 17: Media Object List Pagination
+
+The seventeenth phase bounds media-object list responses with `limit` and `offset` query parameters and returns pagination metadata (`limit`, `offset`, `total`, `hasMore`) for deterministic admin review workflows.
 
 ## Run the API Scaffold
 

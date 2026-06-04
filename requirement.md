@@ -96,6 +96,14 @@ The 0.x server-side search should begin with PostgreSQL full-text search, normal
 
 ## Requirement History
 
+### v0.17.0 - 2026-06-04
+
+- Required media-object list responses to be bounded with `limit` and `offset` query parameters.
+- Required default media-object list limit of 100 and maximum limit of 500.
+- Required list responses to include `pagination.limit`, `pagination.offset`, `pagination.total`, and `pagination.hasMore`.
+- Required pagination to preserve the v0.16.0 single-filter rule for `backendId`, `contentHash`, and `verificationStatus`.
+- Required domain, HTTP, OpenAPI, and validation tests for valid and invalid pagination inputs.
+
 ### v0.16.0 - 2026-06-04
 
 - Required `GET /api/v1/admin/media/objects` to support exactly one of `backendId`, `contentHash`, or `verificationStatus`.

@@ -50,3 +50,8 @@ The first implementation uses an in-memory repository for domain tests. Phase 12
 ## Verification Status Listing
 
 Media-object list requests can filter by `verificationStatus=verified|failed|unknown`. The filter reads only persisted `lastVerification` metadata: `verified` and `failed` match the latest recorded result, while `unknown` returns objects that have not been verified yet. The list endpoint still accepts exactly one filter per request to avoid ambiguous admin workflows.
+
+
+## List Pagination
+
+Media-object list endpoints are bounded with offset pagination. Requests may pass `limit` and `offset` alongside exactly one metadata filter; omitted `limit` defaults to 100 and values above 500 are rejected. Responses include `pagination.limit`, `pagination.offset`, `pagination.total`, and `pagination.hasMore` so admin clients can review large metadata sets without requesting unbounded payloads.

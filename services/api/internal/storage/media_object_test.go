@@ -176,6 +176,46 @@ func TestMediaObjectServiceRejectsInvalidVerificationStatusFilter(t *testing.T) 
 	}
 }
 
+func TestMediaObjectServiceListsPaginatedObjects(t *testing.T) {
+	ctx := context.Background()
+	repo := NewMemoryMediaObjectRepository()
+	for _, object := range []MediaObject{
+		{ID: "3", BackendID: "local-main", ObjectKey: "c.flac", ContentHash: "sha256:same", MIMEType: "audio/flac", AssetKind: string(AssetKindOriginalAudio), LifecycleState: string(LifecycleStateActive)},
+		{ID: "1", BackendID: "local-main", ObjectKey: "a.flac", ContentHash: "sha256:same", MIMEType: "audio/flac", AssetKind: string(AssetKindOriginalAudio), LifecycleState: string(LifecycleStateActive)},
+		{ID: "2", BackendID: "local-main", ObjectKey: "b.flac", ContentHash: "sha256:same", MIMEType: "audio/flac", AssetKind: string(AssetKindOriginalAudio), LifecycleState: string(LifecycleStateActive)},
+	} {
+		if err := repo.SaveMediaObject(ctx, object); err != nil {
+			t.Fatalf("SaveMediaObject() error = %v", err)
+		}
+	}
+	service := NewMediaObjectService(NewMemoryRepository(), repo)
+
+	page, err := service.ListMediaObjects(ctx, MediaObjectListFilter{BackendID: "local-main", Limit: 2, Offset: 1})
+	if err != nil {
+		t.Fatalf("ListMediaObjects() error = %v", err)
+	}
+	if len(page.Objects) != 2 || page.Objects[0].ID != "2" || page.Objects[1].ID != "3" {
+		t.Fatalf("page objects = %+v, want second and third object", page.Objects)
+	}
+	if page.Pagination.Limit != 2 || page.Pagination.Offset != 1 || page.Pagination.Total != 3 || page.Pagination.HasMore {
+		t.Fatalf("pagination = %+v, want limit/offset/total and no hasMore", page.Pagination)
+	}
+}
+
+func TestMediaObjectServiceRejectsInvalidPagination(t *testing.T) {
+	service := NewMediaObjectService(NewMemoryRepository(), NewMemoryMediaObjectRepository())
+	for _, filter := range []MediaObjectListFilter{
+		{BackendID: "local-main", Limit: -1},
+		{BackendID: "local-main", Limit: MaxMediaObjectListLimit + 1},
+		{BackendID: "local-main", Offset: -1},
+		{BackendID: "local-main", ContentHash: "sha256:same"},
+	} {
+		if _, err := service.ListMediaObjects(context.Background(), filter); !errors.Is(err, ErrInvalidMediaObject) {
+			t.Fatalf("ListMediaObjects(%+v) error = %v, want ErrInvalidMediaObject", filter, err)
+		}
+	}
+}
+
 func TestMediaObjectServiceRejectsDuplicateObjectID(t *testing.T) {
 	ctx := context.Background()
 	backendRepo := NewMemoryRepository()

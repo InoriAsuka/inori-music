@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"inori-music/services/api/internal/storage"
@@ -338,35 +339,42 @@ func (handler *Handler) listMediaObjects(w http.ResponseWriter, r *http.Request)
 		writeAPIError(w, http.StatusServiceUnavailable, "media_registry_not_configured", "media object registry is not configured")
 		return
 	}
-	backendID := strings.TrimSpace(r.URL.Query().Get("backendId"))
-	contentHash := strings.TrimSpace(r.URL.Query().Get("contentHash"))
-	verificationStatus := strings.TrimSpace(r.URL.Query().Get("verificationStatus"))
-	filterCount := 0
-	for _, filter := range []string{backendID, contentHash, verificationStatus} {
-		if filter != "" {
-			filterCount++
-		}
-	}
-	if filterCount != 1 {
-		writeError(w, fmt.Errorf("%w: exactly one of backendId, contentHash, or verificationStatus is required", storage.ErrInvalidMediaObject))
-		return
-	}
-	var (
-		objects []storage.MediaObject
-		err     error
-	)
-	if backendID != "" {
-		objects, err = handler.mediaObjects.ListMediaObjectsByBackend(r.Context(), backendID)
-	} else if contentHash != "" {
-		objects, err = handler.mediaObjects.ListMediaObjectsByContentHash(r.Context(), contentHash)
-	} else {
-		objects, err = handler.mediaObjects.ListMediaObjectsByVerificationStatus(r.Context(), verificationStatus)
-	}
+	limit, err := parseMediaObjectListInt(r.URL.Query().Get("limit"), "limit", storage.DefaultMediaObjectListLimit)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"objects": objects})
+	offset, err := parseMediaObjectListInt(r.URL.Query().Get("offset"), "offset", 0)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	page, err := handler.mediaObjects.ListMediaObjects(r.Context(), storage.MediaObjectListFilter{
+		BackendID:          r.URL.Query().Get("backendId"),
+		ContentHash:        r.URL.Query().Get("contentHash"),
+		VerificationStatus: r.URL.Query().Get("verificationStatus"),
+		Limit:              limit,
+		Offset:             offset,
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, page)
+}
+
+func parseMediaObjectListInt(raw string, name string, defaultValue int) (int, error) {
+	if strings.TrimSpace(raw) == "" {
+		return defaultValue, nil
+	}
+	value, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil {
+		return 0, fmt.Errorf("%w: %s must be an integer", storage.ErrInvalidMediaObject, name)
+	}
+	if name == "limit" && value < 1 {
+		return 0, fmt.Errorf("%w: limit must be positive", storage.ErrInvalidMediaObject)
+	}
+	return value, nil
 }
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, target any) error {
