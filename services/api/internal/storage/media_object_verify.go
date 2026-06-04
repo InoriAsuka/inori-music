@@ -18,6 +18,12 @@ var (
 	ErrMediaObjectVerificationFailed      = errors.New("media object verification failed")
 )
 
+// MediaObjectVerificationReport records batch read-only integrity verification outcomes.
+type MediaObjectVerificationReport struct {
+	CheckedAt time.Time                       `json:"checkedAt"`
+	Results   []MediaObjectVerificationResult `json:"results"`
+}
+
 // MediaObjectVerificationResult records a read-only integrity verification outcome.
 type MediaObjectVerificationResult struct {
 	MediaObjectID string    `json:"mediaObjectId"`

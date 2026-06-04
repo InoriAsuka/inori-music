@@ -295,6 +295,56 @@ func TestMediaObjectVerificationRouteErrors(t *testing.T) {
 	assertAPIError(t, performRequest(t, handler, http.MethodPost, "/api/v1/admin/media/objects/missing/verify", ""), http.StatusNotFound, "not_found")
 }
 
+func TestMediaObjectBatchVerificationRoute(t *testing.T) {
+	handler := newTestHandler()
+	root := t.TempDir()
+	goodContent := []byte("good")
+	if err := os.WriteFile(filepath.Join(root, "good.flac"), goodContent, 0o600); err != nil {
+		t.Fatalf("WriteFile(good) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "bad.flac"), []byte("actual"), 0o600); err != nil {
+		t.Fatalf("WriteFile(bad) error = %v", err)
+	}
+	backend := `{"id":"local-main","type":"local","displayName":"Local Media","enabled":true,"config":{"local":{"rootPath":"` + root + `"}}}`
+	if response := performRequest(t, handler, http.MethodPost, "/api/v1/admin/storage/backends", backend); response.Code != http.StatusCreated {
+		t.Fatalf("backend register status = %d body = %s", response.Code, response.Body.String())
+	}
+	goodSum := sha256.Sum256(goodContent)
+	objects := []string{
+		`{"id":"good","backendId":"local-main","objectKey":"good.flac","contentHash":"sha256:` + hex.EncodeToString(goodSum[:]) + `","sizeBytes":` + strconv.Itoa(len(goodContent)) + `,"mimeType":"audio/flac","assetKind":"original_audio","lifecycleState":"active"}`,
+		`{"id":"bad","backendId":"local-main","objectKey":"bad.flac","contentHash":"sha256:0000","sizeBytes":6,"mimeType":"audio/flac","assetKind":"original_audio","lifecycleState":"active"}`,
+	}
+	for _, object := range objects {
+		if response := performRequest(t, handler, http.MethodPost, "/api/v1/admin/media/objects", object); response.Code != http.StatusCreated {
+			t.Fatalf("media register status = %d body = %s", response.Code, response.Body.String())
+		}
+	}
+
+	response := performRequest(t, handler, http.MethodPost, "/api/v1/admin/media/objects/verify?backendId=local-main", "")
+	if response.Code != http.StatusOK {
+		t.Fatalf("batch verify status = %d body = %s", response.Code, response.Body.String())
+	}
+	var report storage.MediaObjectVerificationReport
+	decodeResponse(t, response, &report)
+	if len(report.Results) != 2 || report.CheckedAt.IsZero() {
+		t.Fatalf("batch report = %+v, want two results", report)
+	}
+	statuses := map[string]string{}
+	for _, result := range report.Results {
+		statuses[result.MediaObjectID] = result.Status
+	}
+	if statuses["good"] != "verified" || statuses["bad"] != "failed" {
+		t.Fatalf("statuses = %#v, want mixed verification outcomes", statuses)
+	}
+}
+
+func TestMediaObjectBatchVerificationRouteRejectsInvalidFiltersAndRequiresAuth(t *testing.T) {
+	handler := newTestHandler()
+	assertAPIError(t, performRequest(t, handler, http.MethodPost, "/api/v1/admin/media/objects/verify", ""), http.StatusBadRequest, "invalid_media_object")
+	assertAPIError(t, performRequest(t, handler, http.MethodPost, "/api/v1/admin/media/objects/verify?backendId=a&contentHash=b", ""), http.StatusBadRequest, "invalid_media_object")
+	assertAPIError(t, performRequestWithoutAuth(t, handler, http.MethodPost, "/api/v1/admin/media/objects/verify?backendId=a", ""), http.StatusUnauthorized, "unauthorized")
+}
+
 func TestStorageBackendErrors(t *testing.T) {
 	handler := newTestHandler()
 	valid := `{"id":"local-main","type":"local","displayName":"Local Media","enabled":true,"config":{"local":{"rootPath":"/srv/inori/media"}}}`

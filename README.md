@@ -4,7 +4,7 @@
 
 ## Version
 
-Current architecture baseline version: `0.13.0`.
+Current architecture baseline version: `0.14.0`.
 
 ## 0.x Architecture Direction
 
@@ -76,6 +76,10 @@ The twelfth phase adds optional file-backed media object metadata persistence. S
 ## Phase 13: Media Object Integrity Verification
 
 The thirteenth phase adds authenticated read-only integrity verification for registered media object references. Filesystem-backed objects can be checked for existence, regular-file shape, byte size, and `sha256` content hash without modifying media bytes.
+
+## Phase 14: Batch Media Object Verification
+
+The fourteenth phase adds authenticated batch verification by `backendId` or `contentHash` filters. Batch verification returns per-object outcomes and continues after individual object failures so operators can audit media groups without stopping at the first mismatch.
 
 ## Run the API Scaffold
 

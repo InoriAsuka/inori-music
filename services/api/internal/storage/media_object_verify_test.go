@@ -132,3 +132,86 @@ func newVerificationService(t *testing.T, root string, expectedContent []byte) *
 	}
 	return NewMediaObjectService(backendRepo, mediaRepo)
 }
+
+func TestMediaObjectServiceBatchVerificationContinuesAfterFailures(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	goodContent := []byte("good")
+	goodPath := filepath.Join(root, "good.flac")
+	badPath := filepath.Join(root, "bad.flac")
+	if err := os.WriteFile(goodPath, goodContent, 0o600); err != nil {
+		t.Fatalf("WriteFile(good) error = %v", err)
+	}
+	if err := os.WriteFile(badPath, []byte("actual"), 0o600); err != nil {
+		t.Fatalf("WriteFile(bad) error = %v", err)
+	}
+	backendRepo := NewMemoryRepository()
+	if err := backendRepo.Save(ctx, StorageBackend{ID: "local-main", Type: BackendTypeLocal, Enabled: true, Config: BackendConfig{Local: &LocalConfig{RootPath: root}}}); err != nil {
+		t.Fatalf("Save(backend) error = %v", err)
+	}
+	mediaRepo := NewMemoryMediaObjectRepository()
+	goodSum := sha256.Sum256(goodContent)
+	good := validMediaObject()
+	good.ID = "good"
+	good.ObjectKey = "good.flac"
+	good.ContentHash = "sha256:" + hex.EncodeToString(goodSum[:])
+	good.SizeBytes = int64(len(goodContent))
+	bad := validMediaObject()
+	bad.ID = "bad"
+	bad.ObjectKey = "bad.flac"
+	bad.ContentHash = "sha256:0000"
+	bad.SizeBytes = 6
+	for _, object := range []MediaObject{bad, good} {
+		if err := mediaRepo.SaveMediaObject(ctx, object); err != nil {
+			t.Fatalf("SaveMediaObject(%s) error = %v", object.ID, err)
+		}
+	}
+	service := NewMediaObjectService(backendRepo, mediaRepo)
+
+	report, err := service.VerifyMediaObjectsByBackend(ctx, "local-main")
+	if err != nil {
+		t.Fatalf("VerifyMediaObjectsByBackend() error = %v", err)
+	}
+	if len(report.Results) != 2 || report.CheckedAt.IsZero() {
+		t.Fatalf("VerifyMediaObjectsByBackend() = %+v, want two checked results", report)
+	}
+	statuses := map[string]string{}
+	for _, result := range report.Results {
+		statuses[result.MediaObjectID] = result.Status
+	}
+	if statuses["good"] != "verified" || statuses["bad"] != "failed" {
+		t.Fatalf("statuses = %#v, want good verified and bad failed", statuses)
+	}
+}
+
+func TestMediaObjectServiceBatchVerificationByContentHash(t *testing.T) {
+	ctx := context.Background()
+	root := t.TempDir()
+	content := []byte("same")
+	objectPath := filepath.Join(root, "same.flac")
+	if err := os.WriteFile(objectPath, content, 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	backendRepo := NewMemoryRepository()
+	if err := backendRepo.Save(ctx, StorageBackend{ID: "local-main", Type: BackendTypeLocal, Enabled: true, Config: BackendConfig{Local: &LocalConfig{RootPath: root}}}); err != nil {
+		t.Fatalf("Save(backend) error = %v", err)
+	}
+	mediaRepo := NewMemoryMediaObjectRepository()
+	sum := sha256.Sum256(content)
+	object := validMediaObject()
+	object.ObjectKey = "same.flac"
+	object.ContentHash = "sha256:" + hex.EncodeToString(sum[:])
+	object.SizeBytes = int64(len(content))
+	if err := mediaRepo.SaveMediaObject(ctx, object); err != nil {
+		t.Fatalf("SaveMediaObject() error = %v", err)
+	}
+	service := NewMediaObjectService(backendRepo, mediaRepo)
+
+	report, err := service.VerifyMediaObjectsByContentHash(ctx, object.ContentHash)
+	if err != nil {
+		t.Fatalf("VerifyMediaObjectsByContentHash() error = %v", err)
+	}
+	if len(report.Results) != 1 || report.Results[0].Status != "verified" {
+		t.Fatalf("VerifyMediaObjectsByContentHash() = %+v, want one verified result", report)
+	}
+}

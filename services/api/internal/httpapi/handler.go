@@ -107,6 +107,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/storage/backends/{id}/capacity", handler.requireAdminAuth(handler.getStorageBackendCapacity))
 	mux.HandleFunc("GET /api/v1/admin/media/objects", handler.requireAdminAuth(handler.listMediaObjects))
 	mux.HandleFunc("POST /api/v1/admin/media/objects", handler.requireAdminAuth(handler.registerMediaObject))
+	mux.HandleFunc("POST /api/v1/admin/media/objects/verify", handler.requireAdminAuth(handler.verifyMediaObjects))
 	mux.HandleFunc("GET /api/v1/admin/media/objects/{id}", handler.requireAdminAuth(handler.getMediaObject))
 	mux.HandleFunc("POST /api/v1/admin/media/objects/{id}/verify", handler.requireAdminAuth(handler.verifyMediaObject))
 	mux.HandleFunc("/healthz", handler.methodNotAllowed)
@@ -290,6 +291,33 @@ func (handler *Handler) getMediaObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, object)
+}
+
+func (handler *Handler) verifyMediaObjects(w http.ResponseWriter, r *http.Request) {
+	if handler.mediaObjects == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "media_registry_not_configured", "media object registry is not configured")
+		return
+	}
+	backendID := strings.TrimSpace(r.URL.Query().Get("backendId"))
+	contentHash := strings.TrimSpace(r.URL.Query().Get("contentHash"))
+	if (backendID == "" && contentHash == "") || (backendID != "" && contentHash != "") {
+		writeError(w, fmt.Errorf("%w: exactly one of backendId or contentHash is required", storage.ErrInvalidMediaObject))
+		return
+	}
+	var (
+		report storage.MediaObjectVerificationReport
+		err    error
+	)
+	if backendID != "" {
+		report, err = handler.mediaObjects.VerifyMediaObjectsByBackend(r.Context(), backendID)
+	} else {
+		report, err = handler.mediaObjects.VerifyMediaObjectsByContentHash(r.Context(), contentHash)
+	}
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
 }
 
 func (handler *Handler) verifyMediaObject(w http.ResponseWriter, r *http.Request) {

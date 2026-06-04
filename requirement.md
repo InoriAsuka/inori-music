@@ -32,6 +32,8 @@ The phase-12 development scope adds optional durable file-backed persistence for
 
 The phase-13 development scope adds media object integrity verification for metadata references, beginning with read-only filesystem verification for LocalSystem, NFS, SMB, and mounted-filesystem distributed backends.
 
+The phase-14 development scope adds batch media object integrity verification by backend ID or content hash so administrators and import workflows can validate groups of metadata references while continuing after individual object failures.
+
 ## Storage Requirements
 
 ### Media Storage Scope
@@ -91,6 +93,14 @@ The server-side primary database for 0.x should be PostgreSQL-first. The client-
 The 0.x server-side search should begin with PostgreSQL full-text search, normalized fields, aliases, and ranking rules. External search engines are optional future integrations when scale, language quality, or typo-tolerance requirements exceed PostgreSQL capabilities.
 
 ## Requirement History
+
+### v0.14.0 - 2026-06-03
+
+- Required authenticated batch media object verification by `backendId` or `contentHash` filters.
+- Required batch verification to continue after individual object failures and return per-object outcomes.
+- Required batch verification to use the same read-only verification semantics as single-object verification.
+- Required the HTTP API and OpenAPI contract to document the batch verification route, response schema, and filter rules.
+- Required tests for successful mixed batch results, filter validation, unsupported object outcomes, and route authentication.
 
 ### v0.13.0 - 2026-06-03
 

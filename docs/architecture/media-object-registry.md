@@ -39,7 +39,7 @@ Phase 11 exposes authenticated administrator endpoints for metadata-only workflo
 - `GET /api/v1/admin/media/objects?backendId=...` lists references by backend.
 - `GET /api/v1/admin/media/objects?contentHash=...` lists references by content hash for future deduplication workflows.
 
-`POST /api/v1/admin/media/objects/{id}/verify` performs read-only integrity verification for filesystem-backed objects by checking file existence, regular-file shape, byte size, and `sha256` content hash.
+`POST /api/v1/admin/media/objects/{id}/verify` performs read-only integrity verification for one filesystem-backed object by checking file existence, regular-file shape, byte size, and `sha256` content hash. `POST /api/v1/admin/media/objects/verify?backendId=...` and `?contentHash=...` run the same checks for filtered object groups and continue after individual object failures.
 
 These endpoints still do not upload, stream, delete, move, or repair media bytes.
 

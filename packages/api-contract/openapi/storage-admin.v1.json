@@ -524,6 +524,26 @@
             "type": "string"
           }
         }
+      },
+      "MediaObjectVerificationReport": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "checkedAt",
+          "results"
+        ],
+        "properties": {
+          "checkedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MediaObjectVerificationResult"
+            }
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -559,7 +579,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "0.13.0"
+    "version": "0.14.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -1460,6 +1480,80 @@
           "$ref": "#/components/parameters/MediaObjectId"
         }
       ]
+    },
+    "/api/v1/admin/media/objects/verify": {
+      "post": {
+        "summary": "Batch verify media object metadata references by backend ID or content hash.",
+        "parameters": [
+          {
+            "name": "backendId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Verify media objects stored on this backend. Mutually exclusive with contentHash."
+          },
+          {
+            "name": "contentHash",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Verify media objects with this content hash. Mutually exclusive with backendId."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Batch verification report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaObjectVerificationReport"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
     }
   },
   "servers": [

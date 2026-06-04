@@ -151,12 +151,48 @@ func (service *MediaObjectService) VerifyMediaObject(ctx context.Context, id str
 	if err != nil {
 		return MediaObjectVerificationResult{}, err
 	}
+	return service.verifyMediaObject(ctx, object)
+}
+
+func (service *MediaObjectService) VerifyMediaObjectsByBackend(ctx context.Context, backendID string) (MediaObjectVerificationReport, error) {
+	objects, err := service.mediaRepository.ListMediaObjectsByBackend(ctx, strings.TrimSpace(backendID))
+	if err != nil {
+		return MediaObjectVerificationReport{}, err
+	}
+	return service.verifyMediaObjects(ctx, objects), nil
+}
+
+func (service *MediaObjectService) VerifyMediaObjectsByContentHash(ctx context.Context, contentHash string) (MediaObjectVerificationReport, error) {
+	objects, err := service.mediaRepository.ListMediaObjectsByContentHash(ctx, strings.TrimSpace(contentHash))
+	if err != nil {
+		return MediaObjectVerificationReport{}, err
+	}
+	return service.verifyMediaObjects(ctx, objects), nil
+}
+
+func (service *MediaObjectService) verifyMediaObjects(ctx context.Context, objects []MediaObject) MediaObjectVerificationReport {
+	checkedAt := service.now().UTC()
+	report := MediaObjectVerificationReport{CheckedAt: checkedAt, Results: make([]MediaObjectVerificationResult, 0, len(objects))}
+	for _, object := range objects {
+		result, err := service.verifyMediaObject(ctx, object)
+		if result.VerifiedAt.IsZero() {
+			result.VerifiedAt = checkedAt
+		}
+		if err != nil && result.Message == "" {
+			result.Message = err.Error()
+		}
+		report.Results = append(report.Results, result)
+	}
+	return report
+}
+
+func (service *MediaObjectService) verifyMediaObject(ctx context.Context, object MediaObject) (MediaObjectVerificationResult, error) {
 	backend, err := service.backendRepository.Get(ctx, object.BackendID)
 	if err != nil {
-		return MediaObjectVerificationResult{}, err
+		return MediaObjectVerificationResult{MediaObjectID: object.ID, BackendID: object.BackendID, ObjectKey: object.ObjectKey, Status: "failed", VerifiedAt: service.now().UTC(), Message: err.Error()}, err
 	}
 	if !backend.Enabled {
-		return MediaObjectVerificationResult{MediaObjectID: object.ID, BackendID: object.BackendID, ObjectKey: object.ObjectKey, Status: "failed"}, fmt.Errorf("%w: backend %s", ErrBackendDisabled, object.BackendID)
+		return MediaObjectVerificationResult{MediaObjectID: object.ID, BackendID: object.BackendID, ObjectKey: object.ObjectKey, Status: "failed", VerifiedAt: service.now().UTC()}, fmt.Errorf("%w: backend %s", ErrBackendDisabled, object.BackendID)
 	}
 	result, err := service.verifier.Verify(ctx, backend, object)
 	result.VerifiedAt = service.now().UTC()
