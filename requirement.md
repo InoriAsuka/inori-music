@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.26.0`
+`0.27.0`
 
 ## Product Goal
 
@@ -31,6 +31,7 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Media object list APIs must support deterministic sort controls before pagination so admin clients can build predictable tables.
 - Media object administration must expose metadata-only duplicate content-hash detection for deduplication planning without reading media bytes.
 - Media object administration must support metadata-only bulk lifecycle updates scoped by exactly one safe selection filter.
+- Bulk lifecycle updates must support dry-run previews that do not persist metadata changes.
 
 ## Requirement History
 
@@ -162,4 +163,9 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 ### v0.26.0 - 2026-06-05
 
 - Add metadata-only bulk media object lifecycle updates selected by exactly one filter, preserving terminal deleted semantics and never deleting media bytes.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.27.0 - 2026-06-05
+
+- Add dry-run previews for metadata-only bulk media object lifecycle updates, reporting would-update outcomes without persisting changes.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

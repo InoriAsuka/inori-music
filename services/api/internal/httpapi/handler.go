@@ -76,6 +76,7 @@ type mediaObjectSelectionRequest struct {
 type mediaObjectBulkLifecycleRequest struct {
 	Filter         mediaObjectSelectionRequest `json:"filter"`
 	LifecycleState string                      `json:"lifecycleState"`
+	DryRun         bool                        `json:"dryRun"`
 }
 
 func (request storageBackendRequest) backend() storage.StorageBackend {
@@ -354,7 +355,7 @@ func (handler *Handler) setMediaObjectsLifecycle(w http.ResponseWriter, r *http.
 		writeError(w, err)
 		return
 	}
-	report, err := handler.mediaObjects.SetMediaObjectLifecycleStateByFilter(r.Context(), request.Filter.filter(), request.LifecycleState)
+	report, err := handler.mediaObjects.SetMediaObjectLifecycleStateByFilterWithOptions(r.Context(), request.Filter.filter(), request.LifecycleState, storage.MediaObjectLifecycleUpdateOptions{DryRun: request.DryRun})
 	if err != nil {
 		writeError(w, err)
 		return

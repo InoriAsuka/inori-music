@@ -4,7 +4,7 @@ A centralized music platform targeting Web, Android, iOS, and desktop clients wh
 
 ## Version
 
-Current architecture baseline version: `0.26.0`.
+Current architecture baseline version: `0.27.0`.
 
 ## Documentation Policy
 
@@ -124,6 +124,10 @@ Add a metadata-only duplicate content-hash report for admin deduplication and st
 ### Phase 26: Bulk Media Object Lifecycle Updates
 
 Add metadata-only bulk lifecycle updates by exactly one media-object selection filter.
+
+### Phase 27: Bulk Lifecycle Dry Runs
+
+Add dry-run previews for bulk lifecycle updates so administrators can inspect matches before persisting metadata changes.
 
 ## Run the API Scaffold
 

@@ -14,7 +14,7 @@ List endpoints use `limit` and `offset` pagination and require exactly one filte
 
 ## Verification and Lifecycle
 
-Integrity verification is read-only and currently focuses on filesystem-backed size and `sha256` checks. Lifecycle updates change only `lifecycleState` and `updatedAt`, preserving storage references and latest verification results. Single-object and bulk lifecycle updates are metadata-only; bulk updates require exactly one selection filter. `deleted` is terminal metadata and does not delete bytes from storage.
+Integrity verification is read-only and currently focuses on filesystem-backed size and `sha256` checks. Lifecycle updates change only `lifecycleState` and `updatedAt`, preserving storage references and latest verification results. Single-object and bulk lifecycle updates are metadata-only; bulk updates require exactly one selection filter and can run in dry-run mode to preview matched objects without persisting changes. `deleted` is terminal metadata and does not delete bytes from storage.
 
 ## Statistics and Duplicate Detection
 

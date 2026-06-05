@@ -121,14 +121,21 @@ type MediaObjectDuplicateGroup struct {
 	Objects        []MediaObject `json:"objects"`
 }
 
+// MediaObjectLifecycleUpdateOptions controls metadata-only bulk lifecycle behavior.
+type MediaObjectLifecycleUpdateOptions struct {
+	DryRun bool
+}
+
 // MediaObjectLifecycleUpdateReport summarizes a metadata-only bulk lifecycle update.
 type MediaObjectLifecycleUpdateReport struct {
-	LifecycleState string                             `json:"lifecycleState"`
-	MatchedObjects int                                `json:"matchedObjects"`
-	UpdatedObjects int                                `json:"updatedObjects"`
-	FailedObjects  int                                `json:"failedObjects"`
-	UpdatedAt      time.Time                          `json:"updatedAt"`
-	Results        []MediaObjectLifecycleUpdateResult `json:"results"`
+	LifecycleState     string                             `json:"lifecycleState"`
+	DryRun             bool                               `json:"dryRun"`
+	MatchedObjects     int                                `json:"matchedObjects"`
+	UpdatedObjects     int                                `json:"updatedObjects"`
+	WouldUpdateObjects int                                `json:"wouldUpdateObjects"`
+	FailedObjects      int                                `json:"failedObjects"`
+	UpdatedAt          time.Time                          `json:"updatedAt"`
+	Results            []MediaObjectLifecycleUpdateResult `json:"results"`
 }
 
 // MediaObjectLifecycleUpdateResult captures the update outcome for one media object.
@@ -354,6 +361,10 @@ func (service *MediaObjectService) ListMediaObjectsByAssetKind(ctx context.Conte
 }
 
 func (service *MediaObjectService) SetMediaObjectLifecycleStateByFilter(ctx context.Context, filter MediaObjectSelectionFilter, state string) (MediaObjectLifecycleUpdateReport, error) {
+	return service.SetMediaObjectLifecycleStateByFilterWithOptions(ctx, filter, state, MediaObjectLifecycleUpdateOptions{})
+}
+
+func (service *MediaObjectService) SetMediaObjectLifecycleStateByFilterWithOptions(ctx context.Context, filter MediaObjectSelectionFilter, state string, options MediaObjectLifecycleUpdateOptions) (MediaObjectLifecycleUpdateReport, error) {
 	normalizedFilter, err := normalizeMediaObjectSelectionFilter(filter)
 	if err != nil {
 		return MediaObjectLifecycleUpdateReport{}, err
@@ -367,7 +378,7 @@ func (service *MediaObjectService) SetMediaObjectLifecycleStateByFilter(ctx cont
 		return MediaObjectLifecycleUpdateReport{}, err
 	}
 	updatedAt := service.now().UTC()
-	report := MediaObjectLifecycleUpdateReport{LifecycleState: normalizedState, MatchedObjects: len(objects), UpdatedAt: updatedAt, Results: make([]MediaObjectLifecycleUpdateResult, 0, len(objects))}
+	report := MediaObjectLifecycleUpdateReport{LifecycleState: normalizedState, DryRun: options.DryRun, MatchedObjects: len(objects), UpdatedAt: updatedAt, Results: make([]MediaObjectLifecycleUpdateResult, 0, len(objects))}
 	for _, object := range objects {
 		result := MediaObjectLifecycleUpdateResult{MediaObjectID: object.ID, PreviousLifecycleState: object.LifecycleState, LifecycleState: normalizedState}
 		if LifecycleState(object.LifecycleState) == LifecycleStateDeleted && LifecycleState(normalizedState) != LifecycleStateDeleted {
@@ -379,6 +390,14 @@ func (service *MediaObjectService) SetMediaObjectLifecycleStateByFilter(ctx cont
 		}
 		object.LifecycleState = normalizedState
 		object.UpdatedAt = updatedAt
+		if options.DryRun {
+			updatedObject := object
+			result.Status = "would_update"
+			result.Object = &updatedObject
+			report.WouldUpdateObjects++
+			report.Results = append(report.Results, result)
+			continue
+		}
 		if err := service.mediaRepository.SaveMediaObject(ctx, object); err != nil {
 			result.Status = "failed"
 			result.Message = err.Error()

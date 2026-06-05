@@ -312,6 +312,19 @@ func TestMediaObjectBulkLifecycleRoute(t *testing.T) {
 		}
 	}
 
+	dryRunRequest := `{"filter":{"assetKind":"original_audio"},"lifecycleState":"archived","dryRun":true}`
+	dryRunResponse := performRequest(t, handler, http.MethodPost, "/api/v1/admin/media/objects/lifecycle", dryRunRequest)
+	if dryRunResponse.Code != http.StatusOK {
+		t.Fatalf("dry-run bulk lifecycle status = %d body = %s", dryRunResponse.Code, dryRunResponse.Body.String())
+	}
+	var dryRunReport storage.MediaObjectLifecycleUpdateReport
+	decodeResponse(t, dryRunResponse, &dryRunReport)
+	if !dryRunReport.DryRun || dryRunReport.WouldUpdateObjects != 2 || dryRunReport.UpdatedObjects != 0 {
+		t.Fatalf("dry-run report = %+v, want two would-update objects", dryRunReport)
+	}
+	active := performRequest(t, handler, http.MethodGet, "/api/v1/admin/media/objects?lifecycleState=active", "")
+	assertMediaObjectListLength(t, active, 3)
+
 	request := `{"filter":{"assetKind":"original_audio"},"lifecycleState":"archived"}`
 	response := performRequest(t, handler, http.MethodPost, "/api/v1/admin/media/objects/lifecycle", request)
 	if response.Code != http.StatusOK {

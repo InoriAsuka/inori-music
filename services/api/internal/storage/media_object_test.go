@@ -381,7 +381,22 @@ func TestMediaObjectServiceBulkUpdatesLifecycleState(t *testing.T) {
 	}
 	service := NewMediaObjectService(NewMemoryRepository(), repo)
 
-	report, err := service.SetMediaObjectLifecycleStateByFilter(ctx, MediaObjectSelectionFilter{AssetKind: string(AssetKindOriginalAudio)}, string(LifecycleStateArchived))
+	report, err := service.SetMediaObjectLifecycleStateByFilterWithOptions(ctx, MediaObjectSelectionFilter{AssetKind: string(AssetKindOriginalAudio)}, string(LifecycleStateArchived), MediaObjectLifecycleUpdateOptions{DryRun: true})
+	if err != nil {
+		t.Fatalf("SetMediaObjectLifecycleStateByFilterWithOptions(dry run) error = %v", err)
+	}
+	if !report.DryRun || report.MatchedObjects != 2 || report.WouldUpdateObjects != 2 || report.UpdatedObjects != 0 || report.Results[0].Status != "would_update" {
+		t.Fatalf("dry-run report = %+v, want two would_update results", report)
+	}
+	active, err := repo.GetMediaObject(ctx, "active-a")
+	if err != nil {
+		t.Fatalf("GetMediaObject(active-a) error = %v", err)
+	}
+	if active.LifecycleState != string(LifecycleStateActive) {
+		t.Fatalf("dry-run object = %+v, want lifecycle unchanged", active)
+	}
+
+	report, err = service.SetMediaObjectLifecycleStateByFilter(ctx, MediaObjectSelectionFilter{AssetKind: string(AssetKindOriginalAudio)}, string(LifecycleStateArchived))
 	if err != nil {
 		t.Fatalf("SetMediaObjectLifecycleStateByFilter() error = %v", err)
 	}

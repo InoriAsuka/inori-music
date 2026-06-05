@@ -777,6 +777,11 @@
               "archived",
               "deleted"
             ]
+          },
+          "dryRun": {
+            "type": "boolean",
+            "default": false,
+            "description": "When true, calculate matching objects and per-object outcomes without persisting lifecycle changes."
           }
         }
       },
@@ -814,6 +819,7 @@
             "type": "string",
             "enum": [
               "updated",
+              "would_update",
               "failed"
             ]
           },
@@ -829,8 +835,10 @@
         "type": "object",
         "required": [
           "lifecycleState",
+          "dryRun",
           "matchedObjects",
           "updatedObjects",
+          "wouldUpdateObjects",
           "failedObjects",
           "updatedAt",
           "results"
@@ -866,6 +874,13 @@
             "items": {
               "$ref": "#/components/schemas/MediaObjectLifecycleUpdateResult"
             }
+          },
+          "dryRun": {
+            "type": "boolean"
+          },
+          "wouldUpdateObjects": {
+            "type": "integer",
+            "minimum": 0
           }
         }
       }
@@ -903,7 +918,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "0.26.0"
+    "version": "0.27.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -2209,7 +2224,7 @@
     "/api/v1/admin/media/objects/lifecycle": {
       "post": {
         "summary": "Bulk update media object lifecycle metadata.",
-        "description": "Updates only media object lifecycle metadata selected by exactly one metadata filter. Does not delete media bytes or mutate storage backends.",
+        "description": "Updates only media object lifecycle metadata selected by exactly one metadata filter. Set dryRun to true to preview matched objects and outcomes without persisting changes. Does not delete media bytes or mutate storage backends.",
         "requestBody": {
           "required": true,
           "content": {
