@@ -4,7 +4,7 @@ A centralized music platform targeting Web, Android, iOS, and desktop clients wh
 
 ## Version
 
-Current architecture baseline version: `0.29.0`.
+Current architecture baseline version: `0.30.0`.
 
 ## Documentation Policy
 
@@ -137,6 +137,10 @@ Persist the latest committed media-object lifecycle change source and transition
 
 Expose a read-only per-object metadata timeline derived from registration, latest verification, and latest lifecycle transition metadata.
 
+### Phase 30: CI Release and Container Automation
+
+Add GitHub Actions workflows for Go API validation, tagged GitHub releases, and multi-architecture Docker image publishing.
+
 ## Run the API Scaffold
 
 ```bash
@@ -150,6 +154,7 @@ The server listens on `127.0.0.1:8080` by default. Admin endpoints require `Auth
 - [`requirement.md`](requirement.md): versioned requirements and history.
 - [`.plan/`](.plan/): phase plans and completed task checklists.
 - [`docs/architecture/`](docs/architecture/): architecture notes.
+- [`docs/operations/release-and-container.md`](docs/operations/release-and-container.md): GitHub Actions release and container publishing notes.
 - [`docs/adr/`](docs/adr/): architecture decision records.
 - [`packages/api-contract/openapi/storage-admin.v1.json`](packages/api-contract/openapi/storage-admin.v1.json): OpenAPI 3.1 admin API contract.
 
