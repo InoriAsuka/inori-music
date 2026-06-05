@@ -12,8 +12,9 @@ func TestStorageAdminOpenAPIContractCoversRoutes(t *testing.T) {
 	document := loadOpenAPIContract(t)
 	paths := document["paths"].(map[string]any)
 	expected := map[string][]string{
-		"/healthz":                                     {"get"},
-		"/api/v1/admin/storage/backends":               {"get", "post"},
+		"/healthz":                       {"get"},
+		"/versionz":                      {"get"},
+		"/api/v1/admin/storage/backends": {"get", "post"},
 		"/api/v1/admin/storage/backends/validate":      {"post"},
 		"/api/v1/admin/storage/backends/refresh":       {"post"},
 		"/api/v1/admin/storage/backends/{id}/default":  {"post"},
@@ -130,9 +131,13 @@ func TestStorageAdminOpenAPIContractSecurity(t *testing.T) {
 	if security, ok := health["security"].([]any); !ok || len(security) != 0 {
 		t.Fatalf("/healthz security = %#v, want public empty security", health["security"])
 	}
+	version := operation(t, paths, "/versionz", "get")
+	if security, ok := version["security"].([]any); !ok || len(security) != 0 {
+		t.Fatalf("/versionz security = %#v, want public empty security", version["security"])
+	}
 
 	for path, item := range paths {
-		if path == "/healthz" {
+		if path == "/healthz" || path == "/versionz" {
 			continue
 		}
 		pathItem := item.(map[string]any)
@@ -163,7 +168,7 @@ func TestStorageAdminOpenAPIContractSchemasAndErrors(t *testing.T) {
 	document := loadOpenAPIContract(t)
 	components := document["components"].(map[string]any)
 	schemas := components["schemas"].(map[string]any)
-	for _, name := range []string{"StorageBackend", "StorageBackendRequest", "BackendConfig", "LocalConfig", "NFSConfig", "SMBConfig", "S3Config", "DistributedConfig", "CapabilitySet", "ProbeResult", "CapacityReport", "RefreshReport", "RefreshResult", "MediaObject", "MediaObjectRequest", "MediaObjectLifecycleRequest", "MediaObjectLifecycleChange", "MediaObjectTimeline", "MediaObjectTimelineEvent", "MediaObjectSelectionFilter", "MediaObjectBulkLifecycleRequest", "MediaObjectLifecycleUpdateReport", "MediaObjectLifecycleUpdateResult", "MediaObjectStats", "MediaObjectDuplicateReport", "MediaObjectDuplicateGroup", "MediaObjectVerificationResult", "MediaObjectVerificationReport", "PaginationMetadata", "ErrorEnvelope"} {
+	for _, name := range []string{"StorageBackend", "StorageBackendRequest", "BackendConfig", "LocalConfig", "NFSConfig", "SMBConfig", "S3Config", "DistributedConfig", "CapabilitySet", "ProbeResult", "CapacityReport", "RefreshReport", "RefreshResult", "ServiceInfo", "MediaObject", "MediaObjectRequest", "MediaObjectLifecycleRequest", "MediaObjectLifecycleChange", "MediaObjectTimeline", "MediaObjectTimelineEvent", "MediaObjectSelectionFilter", "MediaObjectBulkLifecycleRequest", "MediaObjectLifecycleUpdateReport", "MediaObjectLifecycleUpdateResult", "MediaObjectStats", "MediaObjectDuplicateReport", "MediaObjectDuplicateGroup", "MediaObjectVerificationResult", "MediaObjectVerificationReport", "PaginationMetadata", "ErrorEnvelope"} {
 		if _, ok := schemas[name].(map[string]any); !ok {
 			t.Fatalf("schema %q is missing", name)
 		}

@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.30.0`
+`0.31.0`
 
 ## Product Goal
 
@@ -17,6 +17,7 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - PostgreSQL full-text search first for 0.x, with external search engines left as future extensions.
 - Media storage must support local filesystems, NFS, SMB, S3-compatible object storage, and distributed storage adapters.
 - Repository automation must validate builds and tests, publish tagged release binaries, and publish Docker images for deployable API artifacts.
+- Runtime API artifacts must expose non-sensitive build metadata for deployment diagnostics.
 
 ## Storage Requirements
 
@@ -187,4 +188,10 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 
 - Add GitHub Actions automation for Go API validation, semantic tag releases, and multi-architecture Docker image publishing.
 - Add a production-oriented API Dockerfile and release/container operations documentation.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.31.0 - 2026-06-05
+
+- Add a public `/versionz` endpoint exposing API name, version, commit, and build time.
+- Inject version metadata into release binaries and Docker images through build flags and Docker build arguments.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

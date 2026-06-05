@@ -49,7 +49,8 @@ jobs:
         run: |
           mkdir -p dist
           output="inori-api-${GOOS}-${GOARCH}${{ matrix.ext }}"
-          go build -trimpath -ldflags="-s -w" -o "dist/${output}" ./services/api/cmd/server
+          build_time="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          go build -trimpath -ldflags="-s -w -X main.version=${GITHUB_REF_NAME} -X main.commit=${GITHUB_SHA} -X main.buildTime=${build_time}" -o "dist/${output}" ./services/api/cmd/server
           (cd dist && sha256sum "${output}" > "${output}.sha256")
 
       - name: Upload artifact

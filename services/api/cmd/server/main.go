@@ -13,6 +13,12 @@ import (
 	"inori-music/services/api/internal/storage"
 )
 
+var (
+	version   = "dev"
+	commit    = "unknown"
+	buildTime = "unknown"
+)
+
 func main() {
 	address := os.Getenv("INORI_HTTP_ADDR")
 	if address == "" {
@@ -48,8 +54,13 @@ func main() {
 	}
 
 	server := &http.Server{
-		Addr:              address,
-		Handler:           httpapi.NewHandler(storageService, httpapi.WithAdminToken(adminToken), httpapi.WithMediaObjectService(mediaObjectService)).Routes(),
+		Addr: address,
+		Handler: httpapi.NewHandler(
+			storageService,
+			httpapi.WithAdminToken(adminToken),
+			httpapi.WithMediaObjectService(mediaObjectService),
+			httpapi.WithServiceInfo(httpapi.ServiceInfo{Name: "inori-api", Version: version, Commit: commit, BuildTime: buildTime}),
+		).Routes(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	go func() {

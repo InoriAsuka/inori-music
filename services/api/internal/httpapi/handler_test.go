@@ -27,6 +27,24 @@ func TestHealthIsPublic(t *testing.T) {
 	}
 }
 
+func TestVersionIsPublic(t *testing.T) {
+	handler := newTestHandler()
+	response := performRequestWithoutAuth(t, handler, http.MethodGet, "/versionz", "")
+	if response.Code != http.StatusOK {
+		t.Fatalf("GET /versionz status = %d, want %d", response.Code, http.StatusOK)
+	}
+	assertJSONField(t, response, "name", "inori-api")
+	assertJSONField(t, response, "version", "test-version")
+	assertJSONField(t, response, "commit", "test-commit")
+	assertJSONField(t, response, "buildTime", "2026-06-05T12:30:00Z")
+
+	defaultResponse := performRequestWithoutAuth(t, newUnauthenticatedTestHandler(), http.MethodGet, "/versionz", "")
+	if defaultResponse.Code != http.StatusOK {
+		t.Fatalf("default GET /versionz status = %d, want %d", defaultResponse.Code, http.StatusOK)
+	}
+	assertJSONField(t, defaultResponse, "version", "dev")
+}
+
 func TestAdminAuth(t *testing.T) {
 	handler := newTestHandler()
 	tests := []struct {
@@ -549,6 +567,7 @@ func newTestHandler() http.Handler {
 		storage.NewService(repository),
 		WithAdminToken(testAdminToken),
 		WithMediaObjectService(storage.NewMediaObjectService(repository, storage.NewMemoryMediaObjectRepository())),
+		WithServiceInfo(ServiceInfo{Name: "inori-api", Version: "test-version", Commit: "test-commit", BuildTime: "2026-06-05T12:30:00Z"}),
 	).Routes()
 }
 

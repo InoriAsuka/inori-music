@@ -4,7 +4,7 @@ A centralized music platform targeting Web, Android, iOS, and desktop clients wh
 
 ## Version
 
-Current architecture baseline version: `0.30.0`.
+Current architecture baseline version: `0.31.0`.
 
 ## Documentation Policy
 
@@ -140,6 +140,10 @@ Expose a read-only per-object metadata timeline derived from registration, lates
 ### Phase 30: CI Release and Container Automation
 
 Add GitHub Actions workflows for Go API validation, tagged GitHub releases, and multi-architecture Docker image publishing.
+
+### Phase 31: Runtime Version Metadata
+
+Expose public build metadata via `/versionz` and inject semantic version, commit, and build time into release binaries and Docker images.
 
 ## Run the API Scaffold
 

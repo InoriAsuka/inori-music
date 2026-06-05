@@ -16,6 +16,14 @@ import (
 
 const maxRequestBodyBytes = 1 << 20
 
+// ServiceInfo describes build metadata exposed by public diagnostic endpoints.
+type ServiceInfo struct {
+	Name      string `json:"name"`
+	Version   string `json:"version"`
+	Commit    string `json:"commit"`
+	BuildTime string `json:"buildTime"`
+}
+
 // HandlerOption configures the HTTP API handler.
 type HandlerOption func(*Handler)
 
@@ -33,11 +41,19 @@ func WithMediaObjectService(mediaObjects *storage.MediaObjectService) HandlerOpt
 	}
 }
 
+// WithServiceInfo configures build metadata returned by public diagnostic endpoints.
+func WithServiceInfo(info ServiceInfo) HandlerOption {
+	return func(handler *Handler) {
+		handler.info = normalizeServiceInfo(info)
+	}
+}
+
 // Handler serves versioned administrative HTTP endpoints.
 type Handler struct {
 	storage      *storage.Service
 	mediaObjects *storage.MediaObjectService
 	adminToken   string
+	info         ServiceInfo
 }
 
 type storageBackendRequest struct {
@@ -114,8 +130,33 @@ func (request mediaObjectSelectionRequest) filter() storage.MediaObjectSelection
 	}
 }
 
+func defaultServiceInfo() ServiceInfo {
+	return ServiceInfo{Name: "inori-api", Version: "dev", Commit: "unknown", BuildTime: "unknown"}
+}
+
+func normalizeServiceInfo(info ServiceInfo) ServiceInfo {
+	info.Name = strings.TrimSpace(info.Name)
+	info.Version = strings.TrimSpace(info.Version)
+	info.Commit = strings.TrimSpace(info.Commit)
+	info.BuildTime = strings.TrimSpace(info.BuildTime)
+	defaults := defaultServiceInfo()
+	if info.Name == "" {
+		info.Name = defaults.Name
+	}
+	if info.Version == "" {
+		info.Version = defaults.Version
+	}
+	if info.Commit == "" {
+		info.Commit = defaults.Commit
+	}
+	if info.BuildTime == "" {
+		info.BuildTime = defaults.BuildTime
+	}
+	return info
+}
+
 func NewHandler(storageService *storage.Service, options ...HandlerOption) *Handler {
-	handler := &Handler{storage: storageService}
+	handler := &Handler{storage: storageService, info: defaultServiceInfo()}
 	for _, option := range options {
 		option(handler)
 	}
@@ -125,6 +166,7 @@ func NewHandler(storageService *storage.Service, options ...HandlerOption) *Hand
 func (handler *Handler) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", handler.health)
+	mux.HandleFunc("GET /versionz", handler.version)
 	mux.HandleFunc("GET /api/v1/admin/storage/backends", handler.requireAdminAuth(handler.listStorageBackends))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends", handler.requireAdminAuth(handler.registerStorageBackend))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends/validate", handler.requireAdminAuth(handler.validateStorageBackend))
@@ -145,6 +187,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/admin/media/objects/{id}/lifecycle", handler.requireAdminAuth(handler.setMediaObjectLifecycle))
 	mux.HandleFunc("POST /api/v1/admin/media/objects/{id}/verify", handler.requireAdminAuth(handler.verifyMediaObject))
 	mux.HandleFunc("/healthz", handler.methodNotAllowed)
+	mux.HandleFunc("/versionz", handler.methodNotAllowed)
 	mux.HandleFunc("/api/v1/admin/storage/backends", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/storage/backends/validate", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/storage/backends/refresh", handler.requireAdminAuth(handler.methodNotAllowed))
@@ -165,6 +208,10 @@ func (handler *Handler) Routes() http.Handler {
 
 func (handler *Handler) health(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (handler *Handler) version(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, handler.info)
 }
 
 func (handler *Handler) methodNotAllowed(w http.ResponseWriter, _ *http.Request) {

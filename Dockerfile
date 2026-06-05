@@ -6,7 +6,10 @@ COPY go.work ./
 COPY services/api/go.mod ./services/api/go.mod
 RUN go work sync
 COPY services/api ./services/api
-RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o /out/inori-api ./services/api/cmd/server
+ARG VERSION=dev
+ARG COMMIT=unknown
+ARG BUILD_TIME=unknown
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.buildTime=${BUILD_TIME}" -o /out/inori-api ./services/api/cmd/server
 
 FROM alpine:3.22
 RUN addgroup -S inori && adduser -S -G inori inori && apk add --no-cache ca-certificates
