@@ -261,6 +261,40 @@ func TestMediaObjectRoutesRegisterLookupAndFilter(t *testing.T) {
 	assertAPIError(t, performRequestWithoutAuth(t, handler, http.MethodGet, "/api/v1/admin/media/objects/stats", ""), http.StatusUnauthorized, "unauthorized")
 }
 
+func TestMediaObjectDuplicateRoute(t *testing.T) {
+	handler := newTestHandler()
+	backend := `{"id":"local-main","type":"local","displayName":"Local Media","enabled":true,"config":{"local":{"rootPath":"/srv/inori/media"}}}`
+	if response := performRequest(t, handler, http.MethodPost, "/api/v1/admin/storage/backends", backend); response.Code != http.StatusCreated {
+		t.Fatalf("backend register status = %d body = %s", response.Code, response.Body.String())
+	}
+	objects := []string{
+		`{"id":"media-a","backendId":"local-main","objectKey":"albums/a.flac","contentHash":"sha256:dup","sizeBytes":100,"mimeType":"audio/flac","assetKind":"original_audio","lifecycleState":"active"}`,
+		`{"id":"media-b","backendId":"local-main","objectKey":"albums/b.flac","contentHash":"sha256:dup","sizeBytes":200,"mimeType":"audio/flac","assetKind":"original_audio","lifecycleState":"active"}`,
+		`{"id":"media-c","backendId":"local-main","objectKey":"albums/c.flac","contentHash":"sha256:unique","sizeBytes":300,"mimeType":"audio/flac","assetKind":"original_audio","lifecycleState":"active"}`,
+	}
+	for _, object := range objects {
+		if response := performRequest(t, handler, http.MethodPost, "/api/v1/admin/media/objects", object); response.Code != http.StatusCreated {
+			t.Fatalf("media register status = %d body = %s", response.Code, response.Body.String())
+		}
+	}
+
+	response := performRequest(t, handler, http.MethodGet, "/api/v1/admin/media/objects/duplicates?backendId=local-main", "")
+	if response.Code != http.StatusOK {
+		t.Fatalf("duplicates status = %d body = %s", response.Code, response.Body.String())
+	}
+	var report storage.MediaObjectDuplicateReport
+	decodeResponse(t, response, &report)
+	if report.BackendID != "local-main" || report.MinCopies != 2 || report.TotalGroups != 1 || report.TotalObjects != 2 || report.TotalSizeBytes != 300 {
+		t.Fatalf("duplicate report = %+v, want one duplicate group", report)
+	}
+	if len(report.Groups) != 1 || report.Groups[0].ContentHash != "sha256:dup" || len(report.Groups[0].Objects) != 2 {
+		t.Fatalf("duplicate groups = %+v, want sha256:dup with two objects", report.Groups)
+	}
+
+	assertAPIError(t, performRequest(t, handler, http.MethodGet, "/api/v1/admin/media/objects/duplicates?minCopies=1", ""), http.StatusBadRequest, "invalid_media_object")
+	assertAPIError(t, performRequestWithoutAuth(t, handler, http.MethodGet, "/api/v1/admin/media/objects/duplicates", ""), http.StatusUnauthorized, "unauthorized")
+}
+
 func TestMediaObjectRouteRejectsInvalidInput(t *testing.T) {
 	handler := newTestHandler()
 	backend := `{"id":"local-main","type":"local","displayName":"Local Media","enabled":true,"config":{"local":{"rootPath":"/srv/inori/media"}}}`

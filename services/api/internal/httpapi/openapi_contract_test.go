@@ -23,6 +23,7 @@ func TestStorageAdminOpenAPIContractCoversRoutes(t *testing.T) {
 		"/api/v1/admin/storage/backends/{id}/capacity": {"get"},
 		"/api/v1/admin/media/objects":                  {"get", "post"},
 		"/api/v1/admin/media/objects/stats":            {"get"},
+		"/api/v1/admin/media/objects/duplicates":       {"get"},
 		"/api/v1/admin/media/objects/{id}":             {"get"},
 		"/api/v1/admin/media/objects/{id}/lifecycle":   {"post"},
 		"/api/v1/admin/media/objects/verify":           {"post"},
@@ -100,6 +101,25 @@ func TestStorageAdminOpenAPIContractMediaObjectListQueryParameters(t *testing.T)
 	}
 }
 
+func TestStorageAdminOpenAPIContractMediaObjectDuplicateParameters(t *testing.T) {
+	document := loadOpenAPIContract(t)
+	paths := document["paths"].(map[string]any)
+	duplicateOperation := operation(t, paths, "/api/v1/admin/media/objects/duplicates", "get")
+	parameters := duplicateOperation["parameters"].([]any)
+	seen := make(map[string]map[string]any)
+	for _, parameter := range parameters {
+		item := parameter.(map[string]any)
+		seen[item["name"].(string)] = item
+	}
+	if _, ok := seen["backendId"]; !ok {
+		t.Fatal("duplicates backendId query parameter is missing")
+	}
+	minCopiesSchema := seen["minCopies"]["schema"].(map[string]any)
+	if minCopiesSchema["minimum"] != float64(2) || minCopiesSchema["default"] != float64(2) {
+		t.Fatalf("minCopies schema = %#v, want minimum/default 2", minCopiesSchema)
+	}
+}
+
 func TestStorageAdminOpenAPIContractSecurity(t *testing.T) {
 	document := loadOpenAPIContract(t)
 	paths := document["paths"].(map[string]any)
@@ -141,7 +161,7 @@ func TestStorageAdminOpenAPIContractSchemasAndErrors(t *testing.T) {
 	document := loadOpenAPIContract(t)
 	components := document["components"].(map[string]any)
 	schemas := components["schemas"].(map[string]any)
-	for _, name := range []string{"StorageBackend", "StorageBackendRequest", "BackendConfig", "LocalConfig", "NFSConfig", "SMBConfig", "S3Config", "DistributedConfig", "CapabilitySet", "ProbeResult", "CapacityReport", "RefreshReport", "RefreshResult", "MediaObject", "MediaObjectRequest", "MediaObjectLifecycleRequest", "MediaObjectStats", "MediaObjectVerificationResult", "MediaObjectVerificationReport", "PaginationMetadata", "ErrorEnvelope"} {
+	for _, name := range []string{"StorageBackend", "StorageBackendRequest", "BackendConfig", "LocalConfig", "NFSConfig", "SMBConfig", "S3Config", "DistributedConfig", "CapabilitySet", "ProbeResult", "CapacityReport", "RefreshReport", "RefreshResult", "MediaObject", "MediaObjectRequest", "MediaObjectLifecycleRequest", "MediaObjectStats", "MediaObjectDuplicateReport", "MediaObjectDuplicateGroup", "MediaObjectVerificationResult", "MediaObjectVerificationReport", "PaginationMetadata", "ErrorEnvelope"} {
 		if _, ok := schemas[name].(map[string]any); !ok {
 			t.Fatalf("schema %q is missing", name)
 		}

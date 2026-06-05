@@ -647,6 +647,73 @@
           }
         },
         "additionalProperties": false
+      },
+      "MediaObjectDuplicateGroup": {
+        "type": "object",
+        "required": [
+          "contentHash",
+          "count",
+          "totalSizeBytes",
+          "objects"
+        ],
+        "properties": {
+          "contentHash": {
+            "type": "string",
+            "description": "Content hash shared by every object in the group."
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 2
+          },
+          "totalSizeBytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "objects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MediaObject"
+            }
+          }
+        }
+      },
+      "MediaObjectDuplicateReport": {
+        "type": "object",
+        "required": [
+          "minCopies",
+          "totalGroups",
+          "totalObjects",
+          "totalSizeBytes",
+          "groups"
+        ],
+        "properties": {
+          "backendId": {
+            "type": "string",
+            "description": "Backend filter used to calculate this duplicate report, omitted for all backends."
+          },
+          "minCopies": {
+            "type": "integer",
+            "minimum": 2
+          },
+          "totalGroups": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "totalObjects": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "totalSizeBytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MediaObjectDuplicateGroup"
+            }
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -682,7 +749,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "0.24.0"
+    "version": "0.25.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -1882,6 +1949,82 @@
             }
           },
           "409": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/media/objects/duplicates": {
+      "get": {
+        "summary": "Find duplicate media objects by content hash.",
+        "description": "Returns metadata-only groups of media objects that share the same content hash, optionally limited to one backend. Does not read media bytes.",
+        "parameters": [
+          {
+            "name": "backendId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Optional backend ID used to limit duplicate detection to one storage backend."
+          },
+          {
+            "name": "minCopies",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 2,
+              "default": 2
+            },
+            "description": "Minimum number of objects required for a duplicate group. Defaults to 2."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Media object duplicate report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaObjectDuplicateReport"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
             "description": "Error",
             "content": {
               "application/json": {

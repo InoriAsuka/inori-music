@@ -16,6 +16,6 @@ List endpoints use `limit` and `offset` pagination and require exactly one filte
 
 Integrity verification is read-only and currently focuses on filesystem-backed size and `sha256` checks. Lifecycle updates change only `lifecycleState` and `updatedAt`, preserving storage references and latest verification results. `deleted` is terminal metadata and does not delete bytes from storage.
 
-## Statistics
+## Statistics and Duplicate Detection
 
-The statistics endpoint calculates object counts, total referenced bytes, backend distribution, asset kind, lifecycle state, and latest verification state from metadata only. It does not open media files or trigger probes.
+The statistics endpoint calculates object counts, total referenced bytes, backend distribution, asset kind, lifecycle state, and latest verification state from metadata only. It does not open media files or trigger probes. The duplicate report groups objects that share the same content hash, optionally scoped to one backend, so administrators can plan deduplication or cleanup without reading media bytes.

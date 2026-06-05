@@ -18,6 +18,7 @@ The HTTP API exposes authenticated admin endpoints for managing storage backends
 - `GET /api/v1/admin/media/objects`: list media objects by exactly one metadata filter with sorting and pagination.
 - `POST /api/v1/admin/media/objects`: register media object metadata.
 - `GET /api/v1/admin/media/objects/stats`: read metadata-only statistics.
+- `GET /api/v1/admin/media/objects/duplicates`: find metadata-only duplicate content-hash groups.
 - `POST /api/v1/admin/media/objects/{id}/lifecycle`: update lifecycle metadata.
 - `POST /api/v1/admin/media/objects/{id}/verify`: verify one media object in read-only mode.
 - `POST /api/v1/admin/media/objects/verify`: batch-verify by backend or content hash.

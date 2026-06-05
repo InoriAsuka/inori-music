@@ -4,7 +4,7 @@ A centralized music platform targeting Web, Android, iOS, and desktop clients wh
 
 ## Version
 
-Current architecture baseline version: `0.24.0`.
+Current architecture baseline version: `0.25.0`.
 
 ## Documentation Policy
 
@@ -116,6 +116,10 @@ Restore Markdown documentation to English as the repository documentation policy
 ### Phase 24: Media Object List Sorting
 
 Support deterministic media object list sorting by backend/object key, created time, updated time, size, object key, or ID before pagination.
+
+### Phase 25: Media Object Duplicate Detection
+
+Add a metadata-only duplicate content-hash report for admin deduplication and storage cleanup planning.
 
 ## Run the API Scaffold
 

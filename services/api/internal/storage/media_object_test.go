@@ -250,6 +250,48 @@ func TestMediaObjectServiceRejectsInvalidPagination(t *testing.T) {
 	}
 }
 
+func TestMediaObjectServiceFindsDuplicateContentHashes(t *testing.T) {
+	ctx := context.Background()
+	repo := NewMemoryMediaObjectRepository()
+	objects := []MediaObject{
+		{ID: "a", BackendID: "local-main", ObjectKey: "a.flac", ContentHash: "sha256:dup-a", SizeBytes: 10, MIMEType: "audio/flac", AssetKind: string(AssetKindOriginalAudio), LifecycleState: string(LifecycleStateActive)},
+		{ID: "b", BackendID: "local-main", ObjectKey: "b.flac", ContentHash: "sha256:dup-a", SizeBytes: 11, MIMEType: "audio/flac", AssetKind: string(AssetKindOriginalAudio), LifecycleState: string(LifecycleStateActive)},
+		{ID: "c", BackendID: "local-main", ObjectKey: "c.flac", ContentHash: "sha256:dup-b", SizeBytes: 12, MIMEType: "audio/flac", AssetKind: string(AssetKindOriginalAudio), LifecycleState: string(LifecycleStateActive)},
+		{ID: "d", BackendID: "local-main", ObjectKey: "d.flac", ContentHash: "sha256:dup-b", SizeBytes: 13, MIMEType: "audio/flac", AssetKind: string(AssetKindArtwork), LifecycleState: string(LifecycleStateActive)},
+		{ID: "e", BackendID: "local-main", ObjectKey: "e.flac", ContentHash: "sha256:dup-b", SizeBytes: 14, MIMEType: "audio/flac", AssetKind: string(AssetKindArtwork), LifecycleState: string(LifecycleStateActive)},
+		{ID: "other", BackendID: "archive", ObjectKey: "other.flac", ContentHash: "sha256:dup-b", SizeBytes: 99, MIMEType: "audio/flac", AssetKind: string(AssetKindOriginalAudio), LifecycleState: string(LifecycleStateActive)},
+	}
+	for _, object := range objects {
+		if err := repo.SaveMediaObject(ctx, object); err != nil {
+			t.Fatalf("SaveMediaObject() error = %v", err)
+		}
+	}
+	service := NewMediaObjectService(NewMemoryRepository(), repo)
+
+	report, err := service.GetMediaObjectDuplicates(ctx, "local-main", 2)
+	if err != nil {
+		t.Fatalf("GetMediaObjectDuplicates() error = %v", err)
+	}
+	if report.BackendID != "local-main" || report.MinCopies != 2 || report.TotalGroups != 2 || report.TotalObjects != 5 || report.TotalSizeBytes != 60 {
+		t.Fatalf("report = %+v, want local duplicate totals", report)
+	}
+	if len(report.Groups) != 2 || report.Groups[0].ContentHash != "sha256:dup-b" || report.Groups[0].Count != 3 || report.Groups[1].ContentHash != "sha256:dup-a" {
+		t.Fatalf("groups = %+v, want count-desc duplicate groups", report.Groups)
+	}
+
+	report, err = service.GetMediaObjectDuplicates(ctx, "local-main", 3)
+	if err != nil {
+		t.Fatalf("GetMediaObjectDuplicates(min 3) error = %v", err)
+	}
+	if report.TotalGroups != 1 || report.Groups[0].ContentHash != "sha256:dup-b" {
+		t.Fatalf("groups = %+v, want only groups with at least three copies", report.Groups)
+	}
+
+	if _, err := service.GetMediaObjectDuplicates(ctx, "", 1); !errors.Is(err, ErrInvalidMediaObject) {
+		t.Fatalf("GetMediaObjectDuplicates(min 1) error = %v, want ErrInvalidMediaObject", err)
+	}
+}
+
 func TestMediaObjectServiceBuildsMetadataStats(t *testing.T) {
 	ctx := context.Background()
 	repo := NewMemoryMediaObjectRepository()

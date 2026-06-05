@@ -94,6 +94,24 @@ type MediaObjectStats struct {
 	ByVerificationStatus map[string]int `json:"byVerificationStatus"`
 }
 
+// MediaObjectDuplicateReport describes metadata-only duplicate content-hash groups.
+type MediaObjectDuplicateReport struct {
+	BackendID      string                      `json:"backendId,omitempty"`
+	MinCopies      int                         `json:"minCopies"`
+	TotalGroups    int                         `json:"totalGroups"`
+	TotalObjects   int                         `json:"totalObjects"`
+	TotalSizeBytes int64                       `json:"totalSizeBytes"`
+	Groups         []MediaObjectDuplicateGroup `json:"groups"`
+}
+
+// MediaObjectDuplicateGroup contains media objects sharing the same content hash.
+type MediaObjectDuplicateGroup struct {
+	ContentHash    string        `json:"contentHash"`
+	Count          int           `json:"count"`
+	TotalSizeBytes int64         `json:"totalSizeBytes"`
+	Objects        []MediaObject `json:"objects"`
+}
+
 // MediaObjectRepository stores metadata references for binary assets.
 type MediaObjectRepository interface {
 	SaveMediaObject(ctx context.Context, object MediaObject) error
@@ -333,19 +351,33 @@ func (service *MediaObjectService) ListMediaObjects(ctx context.Context, filter 
 
 func (service *MediaObjectService) GetMediaObjectStats(ctx context.Context, backendID string) (MediaObjectStats, error) {
 	backendID = strings.TrimSpace(backendID)
-	var (
-		objects []MediaObject
-		err     error
-	)
-	if backendID != "" {
-		objects, err = service.mediaRepository.ListMediaObjectsByBackend(ctx, backendID)
-	} else {
-		objects, err = service.mediaRepository.ListAllMediaObjects(ctx)
-	}
+	objects, err := service.mediaObjectsForOptionalBackend(ctx, backendID)
 	if err != nil {
 		return MediaObjectStats{}, err
 	}
 	return summarizeMediaObjects(backendID, objects), nil
+}
+
+func (service *MediaObjectService) GetMediaObjectDuplicates(ctx context.Context, backendID string, minCopies int) (MediaObjectDuplicateReport, error) {
+	backendID = strings.TrimSpace(backendID)
+	if minCopies == 0 {
+		minCopies = 2
+	}
+	if minCopies < 2 {
+		return MediaObjectDuplicateReport{}, fmt.Errorf("%w: minCopies must be at least 2", ErrInvalidMediaObject)
+	}
+	objects, err := service.mediaObjectsForOptionalBackend(ctx, backendID)
+	if err != nil {
+		return MediaObjectDuplicateReport{}, err
+	}
+	return summarizeMediaObjectDuplicates(backendID, minCopies, objects), nil
+}
+
+func (service *MediaObjectService) mediaObjectsForOptionalBackend(ctx context.Context, backendID string) ([]MediaObject, error) {
+	if backendID != "" {
+		return service.mediaRepository.ListMediaObjectsByBackend(ctx, backendID)
+	}
+	return service.mediaRepository.ListAllMediaObjects(ctx)
 }
 
 func (service *MediaObjectService) VerifyMediaObject(ctx context.Context, id string) (MediaObjectVerificationResult, error) {
@@ -544,6 +576,35 @@ func normalizeMediaObjectVerificationStatus(status string) (string, error) {
 	default:
 		return "", fmt.Errorf("%w: verificationStatus must be one of verified, failed, or unknown", ErrInvalidMediaObject)
 	}
+}
+
+func summarizeMediaObjectDuplicates(backendID string, minCopies int, objects []MediaObject) MediaObjectDuplicateReport {
+	groupsByHash := make(map[string][]MediaObject)
+	for _, object := range objects {
+		groupsByHash[object.ContentHash] = append(groupsByHash[object.ContentHash], object)
+	}
+	report := MediaObjectDuplicateReport{BackendID: backendID, MinCopies: minCopies, Groups: make([]MediaObjectDuplicateGroup, 0)}
+	for contentHash, groupObjects := range groupsByHash {
+		if len(groupObjects) < minCopies {
+			continue
+		}
+		sortMediaObjectsForList(groupObjects, DefaultMediaObjectSortBy, DefaultMediaObjectSortOrder)
+		group := MediaObjectDuplicateGroup{ContentHash: contentHash, Count: len(groupObjects), Objects: groupObjects}
+		for _, object := range groupObjects {
+			group.TotalSizeBytes += object.SizeBytes
+		}
+		report.TotalGroups++
+		report.TotalObjects += group.Count
+		report.TotalSizeBytes += group.TotalSizeBytes
+		report.Groups = append(report.Groups, group)
+	}
+	sort.Slice(report.Groups, func(i, j int) bool {
+		if report.Groups[i].Count == report.Groups[j].Count {
+			return report.Groups[i].ContentHash < report.Groups[j].ContentHash
+		}
+		return report.Groups[i].Count > report.Groups[j].Count
+	})
+	return report
 }
 
 func summarizeMediaObjects(backendID string, objects []MediaObject) MediaObjectStats {

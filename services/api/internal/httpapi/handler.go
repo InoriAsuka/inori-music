@@ -113,6 +113,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/media/objects", handler.requireAdminAuth(handler.listMediaObjects))
 	mux.HandleFunc("POST /api/v1/admin/media/objects", handler.requireAdminAuth(handler.registerMediaObject))
 	mux.HandleFunc("GET /api/v1/admin/media/objects/stats", handler.requireAdminAuth(handler.getMediaObjectStats))
+	mux.HandleFunc("GET /api/v1/admin/media/objects/duplicates", handler.requireAdminAuth(handler.getMediaObjectDuplicates))
 	mux.HandleFunc("POST /api/v1/admin/media/objects/verify", handler.requireAdminAuth(handler.verifyMediaObjects))
 	mux.HandleFunc("GET /api/v1/admin/media/objects/{id}", handler.requireAdminAuth(handler.getMediaObject))
 	mux.HandleFunc("POST /api/v1/admin/media/objects/{id}/lifecycle", handler.requireAdminAuth(handler.setMediaObjectLifecycle))
@@ -270,6 +271,24 @@ func (handler *Handler) getStorageBackendHealth(w http.ResponseWriter, r *http.R
 	writeJSON(w, http.StatusOK, result)
 }
 
+func (handler *Handler) getMediaObjectDuplicates(w http.ResponseWriter, r *http.Request) {
+	if handler.mediaObjects == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "media_registry_not_configured", "media object registry is not configured")
+		return
+	}
+	minCopies, err := parseMediaObjectMinCopies(r.URL.Query().Get("minCopies"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	report, err := handler.mediaObjects.GetMediaObjectDuplicates(r.Context(), r.URL.Query().Get("backendId"), minCopies)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
+}
+
 func (handler *Handler) registerMediaObject(w http.ResponseWriter, r *http.Request) {
 	if handler.mediaObjects == nil {
 		writeAPIError(w, http.StatusServiceUnavailable, "media_registry_not_configured", "media object registry is not configured")
@@ -403,6 +422,20 @@ func (handler *Handler) listMediaObjects(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	writeJSON(w, http.StatusOK, page)
+}
+
+func parseMediaObjectMinCopies(raw string) (int, error) {
+	if strings.TrimSpace(raw) == "" {
+		return 2, nil
+	}
+	value, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil {
+		return 0, fmt.Errorf("%w: minCopies must be an integer", storage.ErrInvalidMediaObject)
+	}
+	if value < 2 {
+		return 0, fmt.Errorf("%w: minCopies must be at least 2", storage.ErrInvalidMediaObject)
+	}
+	return value, nil
 }
 
 func parseMediaObjectListInt(raw string, name string, defaultValue int) (int, error) {
