@@ -295,6 +295,40 @@ func TestMediaObjectDuplicateRoute(t *testing.T) {
 	assertAPIError(t, performRequestWithoutAuth(t, handler, http.MethodGet, "/api/v1/admin/media/objects/duplicates", ""), http.StatusUnauthorized, "unauthorized")
 }
 
+func TestMediaObjectBulkLifecycleRoute(t *testing.T) {
+	handler := newTestHandler()
+	backend := `{"id":"local-main","type":"local","displayName":"Local Media","enabled":true,"config":{"local":{"rootPath":"/srv/inori/media"}}}`
+	if response := performRequest(t, handler, http.MethodPost, "/api/v1/admin/storage/backends", backend); response.Code != http.StatusCreated {
+		t.Fatalf("backend register status = %d body = %s", response.Code, response.Body.String())
+	}
+	objects := []string{
+		`{"id":"bulk-a","backendId":"local-main","objectKey":"bulk/a.flac","contentHash":"sha256:bulk-a","sizeBytes":100,"mimeType":"audio/flac","assetKind":"original_audio","lifecycleState":"active"}`,
+		`{"id":"bulk-b","backendId":"local-main","objectKey":"bulk/b.flac","contentHash":"sha256:bulk-b","sizeBytes":200,"mimeType":"audio/flac","assetKind":"original_audio","lifecycleState":"active"}`,
+		`{"id":"bulk-art","backendId":"local-main","objectKey":"bulk/art.jpg","contentHash":"sha256:bulk-art","sizeBytes":50,"mimeType":"image/jpeg","assetKind":"artwork","lifecycleState":"active"}`,
+	}
+	for _, object := range objects {
+		if response := performRequest(t, handler, http.MethodPost, "/api/v1/admin/media/objects", object); response.Code != http.StatusCreated {
+			t.Fatalf("media register status = %d body = %s", response.Code, response.Body.String())
+		}
+	}
+
+	request := `{"filter":{"assetKind":"original_audio"},"lifecycleState":"archived"}`
+	response := performRequest(t, handler, http.MethodPost, "/api/v1/admin/media/objects/lifecycle", request)
+	if response.Code != http.StatusOK {
+		t.Fatalf("bulk lifecycle status = %d body = %s", response.Code, response.Body.String())
+	}
+	var report storage.MediaObjectLifecycleUpdateReport
+	decodeResponse(t, response, &report)
+	if report.MatchedObjects != 2 || report.UpdatedObjects != 2 || report.FailedObjects != 0 || report.LifecycleState != "archived" {
+		t.Fatalf("report = %+v, want two archived objects", report)
+	}
+	archived := performRequest(t, handler, http.MethodGet, "/api/v1/admin/media/objects?lifecycleState=archived", "")
+	assertMediaObjectListLength(t, archived, 2)
+
+	assertAPIError(t, performRequest(t, handler, http.MethodPost, "/api/v1/admin/media/objects/lifecycle", `{"filter":{},"lifecycleState":"archived"}`), http.StatusBadRequest, "invalid_media_object")
+	assertAPIError(t, performRequestWithoutAuth(t, handler, http.MethodPost, "/api/v1/admin/media/objects/lifecycle", request), http.StatusUnauthorized, "unauthorized")
+}
+
 func TestMediaObjectRouteRejectsInvalidInput(t *testing.T) {
 	handler := newTestHandler()
 	backend := `{"id":"local-main","type":"local","displayName":"Local Media","enabled":true,"config":{"local":{"rootPath":"/srv/inori/media"}}}`

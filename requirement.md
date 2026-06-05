@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.25.0`
+`0.26.0`
 
 ## Product Goal
 
@@ -30,6 +30,7 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - README, requirements, ADRs, and architecture notes must stay aligned with the current version baseline.
 - Media object list APIs must support deterministic sort controls before pagination so admin clients can build predictable tables.
 - Media object administration must expose metadata-only duplicate content-hash detection for deduplication planning without reading media bytes.
+- Media object administration must support metadata-only bulk lifecycle updates scoped by exactly one safe selection filter.
 
 ## Requirement History
 
@@ -156,4 +157,9 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 ### v0.25.0 - 2026-06-04
 
 - Add metadata-only media object duplicate detection by content hash, with optional backend scoping and configurable minimum copy counts.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.26.0 - 2026-06-05
+
+- Add metadata-only bulk media object lifecycle updates selected by exactly one filter, preserving terminal deleted semantics and never deleting media bytes.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

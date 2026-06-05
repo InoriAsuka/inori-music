@@ -714,6 +714,160 @@
             }
           }
         }
+      },
+      "MediaObjectSelectionFilter": {
+        "type": "object",
+        "properties": {
+          "backendId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "contentHash": {
+            "type": "string",
+            "minLength": 1
+          },
+          "verificationStatus": {
+            "type": "string",
+            "enum": [
+              "verified",
+              "failed",
+              "unknown"
+            ]
+          },
+          "lifecycleState": {
+            "type": "string",
+            "enum": [
+              "staged",
+              "active",
+              "archived",
+              "deleted"
+            ]
+          },
+          "assetKind": {
+            "type": "string",
+            "enum": [
+              "original_audio",
+              "transcoded_audio",
+              "artwork",
+              "lyrics",
+              "waveform",
+              "analysis",
+              "import_package",
+              "backup"
+            ]
+          }
+        },
+        "description": "Selects media objects by exactly one metadata filter."
+      },
+      "MediaObjectBulkLifecycleRequest": {
+        "type": "object",
+        "required": [
+          "filter",
+          "lifecycleState"
+        ],
+        "properties": {
+          "filter": {
+            "$ref": "#/components/schemas/MediaObjectSelectionFilter"
+          },
+          "lifecycleState": {
+            "type": "string",
+            "enum": [
+              "staged",
+              "active",
+              "archived",
+              "deleted"
+            ]
+          }
+        }
+      },
+      "MediaObjectLifecycleUpdateResult": {
+        "type": "object",
+        "required": [
+          "mediaObjectId",
+          "previousLifecycleState",
+          "lifecycleState",
+          "status"
+        ],
+        "properties": {
+          "mediaObjectId": {
+            "type": "string"
+          },
+          "previousLifecycleState": {
+            "type": "string",
+            "enum": [
+              "staged",
+              "active",
+              "archived",
+              "deleted"
+            ]
+          },
+          "lifecycleState": {
+            "type": "string",
+            "enum": [
+              "staged",
+              "active",
+              "archived",
+              "deleted"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "updated",
+              "failed"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "object": {
+            "$ref": "#/components/schemas/MediaObject"
+          }
+        }
+      },
+      "MediaObjectLifecycleUpdateReport": {
+        "type": "object",
+        "required": [
+          "lifecycleState",
+          "matchedObjects",
+          "updatedObjects",
+          "failedObjects",
+          "updatedAt",
+          "results"
+        ],
+        "properties": {
+          "lifecycleState": {
+            "type": "string",
+            "enum": [
+              "staged",
+              "active",
+              "archived",
+              "deleted"
+            ]
+          },
+          "matchedObjects": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "updatedObjects": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "failedObjects": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MediaObjectLifecycleUpdateResult"
+            }
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -749,7 +903,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "0.25.0"
+    "version": "0.26.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -2010,6 +2164,69 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/MediaObjectDuplicateReport"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/media/objects/lifecycle": {
+      "post": {
+        "summary": "Bulk update media object lifecycle metadata.",
+        "description": "Updates only media object lifecycle metadata selected by exactly one metadata filter. Does not delete media bytes or mutate storage backends.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MediaObjectBulkLifecycleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Lifecycle update report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaObjectLifecycleUpdateReport"
                 }
               }
             }

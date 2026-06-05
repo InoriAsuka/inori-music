@@ -367,6 +367,53 @@ func TestMediaObjectServiceUpdatesLifecycleState(t *testing.T) {
 	}
 }
 
+func TestMediaObjectServiceBulkUpdatesLifecycleState(t *testing.T) {
+	ctx := context.Background()
+	repo := NewMemoryMediaObjectRepository()
+	for _, object := range []MediaObject{
+		{ID: "active-a", BackendID: "local-main", ObjectKey: "a.flac", ContentHash: "sha256:a", MIMEType: "audio/flac", AssetKind: string(AssetKindOriginalAudio), LifecycleState: string(LifecycleStateActive)},
+		{ID: "active-b", BackendID: "local-main", ObjectKey: "b.flac", ContentHash: "sha256:b", MIMEType: "audio/flac", AssetKind: string(AssetKindOriginalAudio), LifecycleState: string(LifecycleStateActive)},
+		{ID: "deleted", BackendID: "local-main", ObjectKey: "deleted.flac", ContentHash: "sha256:deleted", MIMEType: "audio/flac", AssetKind: string(AssetKindArtwork), LifecycleState: string(LifecycleStateDeleted)},
+	} {
+		if err := repo.SaveMediaObject(ctx, object); err != nil {
+			t.Fatalf("SaveMediaObject() error = %v", err)
+		}
+	}
+	service := NewMediaObjectService(NewMemoryRepository(), repo)
+
+	report, err := service.SetMediaObjectLifecycleStateByFilter(ctx, MediaObjectSelectionFilter{AssetKind: string(AssetKindOriginalAudio)}, string(LifecycleStateArchived))
+	if err != nil {
+		t.Fatalf("SetMediaObjectLifecycleStateByFilter() error = %v", err)
+	}
+	if report.MatchedObjects != 2 || report.UpdatedObjects != 2 || report.FailedObjects != 0 || report.LifecycleState != string(LifecycleStateArchived) {
+		t.Fatalf("report = %+v, want two archived updates", report)
+	}
+	for _, id := range []string{"active-a", "active-b"} {
+		object, err := repo.GetMediaObject(ctx, id)
+		if err != nil {
+			t.Fatalf("GetMediaObject(%s) error = %v", id, err)
+		}
+		if object.LifecycleState != string(LifecycleStateArchived) || object.UpdatedAt.IsZero() {
+			t.Fatalf("object = %+v, want archived with updated timestamp", object)
+		}
+	}
+
+	report, err = service.SetMediaObjectLifecycleStateByFilter(ctx, MediaObjectSelectionFilter{BackendID: "local-main"}, string(LifecycleStateActive))
+	if err != nil {
+		t.Fatalf("SetMediaObjectLifecycleStateByFilter(active) error = %v", err)
+	}
+	if report.MatchedObjects != 3 || report.UpdatedObjects != 2 || report.FailedObjects != 1 {
+		t.Fatalf("report = %+v, want deleted object failure", report)
+	}
+	if report.Results[2].Status != "failed" {
+		t.Fatalf("results = %+v, want deleted transition failure", report.Results)
+	}
+
+	if _, err := service.SetMediaObjectLifecycleStateByFilter(ctx, MediaObjectSelectionFilter{}, string(LifecycleStateArchived)); !errors.Is(err, ErrInvalidMediaObject) {
+		t.Fatalf("SetMediaObjectLifecycleStateByFilter(empty filter) error = %v, want ErrInvalidMediaObject", err)
+	}
+}
+
 func TestMediaObjectServiceRejectsInvalidLifecycleTransitions(t *testing.T) {
 	ctx := context.Background()
 	repo := NewMemoryMediaObjectRepository()

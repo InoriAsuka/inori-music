@@ -65,6 +65,19 @@ type mediaObjectLifecycleRequest struct {
 	LifecycleState string `json:"lifecycleState"`
 }
 
+type mediaObjectSelectionRequest struct {
+	BackendID          string `json:"backendId,omitempty"`
+	ContentHash        string `json:"contentHash,omitempty"`
+	VerificationStatus string `json:"verificationStatus,omitempty"`
+	LifecycleState     string `json:"lifecycleState,omitempty"`
+	AssetKind          string `json:"assetKind,omitempty"`
+}
+
+type mediaObjectBulkLifecycleRequest struct {
+	Filter         mediaObjectSelectionRequest `json:"filter"`
+	LifecycleState string                      `json:"lifecycleState"`
+}
+
 func (request storageBackendRequest) backend() storage.StorageBackend {
 	return storage.StorageBackend{
 		ID:          request.ID,
@@ -87,6 +100,16 @@ func (request mediaObjectRequest) object() storage.MediaObject {
 		MIMEType:       request.MIMEType,
 		AssetKind:      request.AssetKind,
 		LifecycleState: request.LifecycleState,
+	}
+}
+
+func (request mediaObjectSelectionRequest) filter() storage.MediaObjectSelectionFilter {
+	return storage.MediaObjectSelectionFilter{
+		BackendID:          request.BackendID,
+		ContentHash:        request.ContentHash,
+		VerificationStatus: request.VerificationStatus,
+		LifecycleState:     request.LifecycleState,
+		AssetKind:          request.AssetKind,
 	}
 }
 
@@ -114,6 +137,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/admin/media/objects", handler.requireAdminAuth(handler.registerMediaObject))
 	mux.HandleFunc("GET /api/v1/admin/media/objects/stats", handler.requireAdminAuth(handler.getMediaObjectStats))
 	mux.HandleFunc("GET /api/v1/admin/media/objects/duplicates", handler.requireAdminAuth(handler.getMediaObjectDuplicates))
+	mux.HandleFunc("POST /api/v1/admin/media/objects/lifecycle", handler.requireAdminAuth(handler.setMediaObjectsLifecycle))
 	mux.HandleFunc("POST /api/v1/admin/media/objects/verify", handler.requireAdminAuth(handler.verifyMediaObjects))
 	mux.HandleFunc("GET /api/v1/admin/media/objects/{id}", handler.requireAdminAuth(handler.getMediaObject))
 	mux.HandleFunc("POST /api/v1/admin/media/objects/{id}/lifecycle", handler.requireAdminAuth(handler.setMediaObjectLifecycle))
@@ -318,6 +342,24 @@ func (handler *Handler) getMediaObjectStats(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	writeJSON(w, http.StatusOK, stats)
+}
+
+func (handler *Handler) setMediaObjectsLifecycle(w http.ResponseWriter, r *http.Request) {
+	if handler.mediaObjects == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "media_registry_not_configured", "media object registry is not configured")
+		return
+	}
+	var request mediaObjectBulkLifecycleRequest
+	if err := decodeJSONWithSentinel(w, r, &request, storage.ErrInvalidMediaObject); err != nil {
+		writeError(w, err)
+		return
+	}
+	report, err := handler.mediaObjects.SetMediaObjectLifecycleStateByFilter(r.Context(), request.Filter.filter(), request.LifecycleState)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
 }
 
 func (handler *Handler) setMediaObjectLifecycle(w http.ResponseWriter, r *http.Request) {
