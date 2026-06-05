@@ -19,3 +19,8 @@ Integrity verification is read-only and currently focuses on filesystem-backed s
 ## Statistics and Duplicate Detection
 
 The statistics endpoint calculates object counts, total referenced bytes, backend distribution, asset kind, lifecycle state, and latest verification state from metadata only. It does not open media files or trigger probes. The duplicate report groups objects that share the same content hash, optionally scoped to one backend, so administrators can plan deduplication or cleanup without reading media bytes.
+
+
+## Metadata Timeline
+
+The media object timeline endpoint derives a compact chronological view from the currently retained metadata: creation time, latest verification result, and latest committed lifecycle transition. It is read-only and does not scan storage. Full append-only audit history is reserved for a later PostgreSQL-backed audit phase.

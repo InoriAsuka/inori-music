@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.28.0`
+`0.29.0`
 
 ## Product Goal
 
@@ -22,6 +22,7 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Do not store large audio, image, or derived media files in the relational database.
 - Store object IDs, backend IDs, object keys, hashes, lifecycle state, asset kind, verification state, and references as metadata.
 - Probes and verification must use server-owned temporary objects or read-only checks to avoid damaging user media.
+- Admin APIs must expose a read-only per-object metadata timeline derived from retained registration, latest verification, and latest lifecycle transition state.
 
 ## Documentation Requirements
 
@@ -174,4 +175,9 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 ### v0.28.0 - 2026-06-05
 
 - Persist latest committed media object lifecycle change metadata, including previous state, new state, change time, and single/bulk source.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.29.0 - 2026-06-05
+
+- Add a read-only media object metadata timeline endpoint for registration, latest verification, and latest lifecycle transition summaries.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

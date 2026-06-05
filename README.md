@@ -4,7 +4,7 @@ A centralized music platform targeting Web, Android, iOS, and desktop clients wh
 
 ## Version
 
-Current architecture baseline version: `0.28.0`.
+Current architecture baseline version: `0.29.0`.
 
 ## Documentation Policy
 
@@ -132,6 +132,10 @@ Add dry-run previews for bulk lifecycle updates so administrators can inspect ma
 ### Phase 28: Latest Lifecycle Change Metadata
 
 Persist the latest committed media-object lifecycle change source and transition metadata for audit preparation.
+
+### Phase 29: Media Object Metadata Timeline
+
+Expose a read-only per-object metadata timeline derived from registration, latest verification, and latest lifecycle transition metadata.
 
 ## Run the API Scaffold
 

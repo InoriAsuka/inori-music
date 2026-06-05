@@ -553,6 +553,37 @@ func TestMediaObjectServiceRejectsDuplicateObjectID(t *testing.T) {
 	}
 }
 
+func TestMediaObjectServiceBuildsMetadataTimeline(t *testing.T) {
+	ctx := context.Background()
+	repo := NewMemoryMediaObjectRepository()
+	createdAt := time.Date(2026, 6, 5, 8, 0, 0, 0, time.UTC)
+	lifecycleAt := createdAt.Add(2 * time.Hour)
+	verifiedAt := createdAt.Add(1 * time.Hour)
+	object := validMediaObject()
+	object.CreatedAt = createdAt
+	object.UpdatedAt = lifecycleAt
+	object.LastLifecycleChange = &MediaObjectLifecycleChange{PreviousLifecycleState: string(LifecycleStateActive), LifecycleState: string(LifecycleStateArchived), ChangedAt: lifecycleAt, Source: "bulk"}
+	object.LastVerification = &MediaObjectVerificationResult{MediaObjectID: object.ID, BackendID: object.BackendID, ObjectKey: object.ObjectKey, VerifiedAt: verifiedAt, Status: "verified", Message: "hash matched"}
+	if err := repo.SaveMediaObject(ctx, object); err != nil {
+		t.Fatalf("SaveMediaObject() error = %v", err)
+	}
+	service := NewMediaObjectService(NewMemoryRepository(), repo)
+
+	timeline, err := service.GetMediaObjectTimeline(ctx, object.ID)
+	if err != nil {
+		t.Fatalf("GetMediaObjectTimeline() error = %v", err)
+	}
+	if timeline.MediaObjectID != object.ID || len(timeline.Events) != 3 {
+		t.Fatalf("timeline = %+v, want three events for object", timeline)
+	}
+	if timeline.Events[0].Type != "created" || timeline.Events[1].Type != "verification" || timeline.Events[2].Type != "lifecycle_changed" {
+		t.Fatalf("timeline events = %+v, want chronological metadata events", timeline.Events)
+	}
+	if timeline.Events[1].Status != "verified" || timeline.Events[2].Source != "bulk" || timeline.Events[2].LifecycleState != string(LifecycleStateArchived) {
+		t.Fatalf("timeline events = %+v, want verification and lifecycle details", timeline.Events)
+	}
+}
+
 func validMediaObject() MediaObject {
 	return MediaObject{
 		ID:             "media-original-1",

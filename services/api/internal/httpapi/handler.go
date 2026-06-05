@@ -141,6 +141,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/admin/media/objects/lifecycle", handler.requireAdminAuth(handler.setMediaObjectsLifecycle))
 	mux.HandleFunc("POST /api/v1/admin/media/objects/verify", handler.requireAdminAuth(handler.verifyMediaObjects))
 	mux.HandleFunc("GET /api/v1/admin/media/objects/{id}", handler.requireAdminAuth(handler.getMediaObject))
+	mux.HandleFunc("GET /api/v1/admin/media/objects/{id}/timeline", handler.requireAdminAuth(handler.getMediaObjectTimeline))
 	mux.HandleFunc("POST /api/v1/admin/media/objects/{id}/lifecycle", handler.requireAdminAuth(handler.setMediaObjectLifecycle))
 	mux.HandleFunc("POST /api/v1/admin/media/objects/{id}/verify", handler.requireAdminAuth(handler.verifyMediaObject))
 	mux.HandleFunc("/healthz", handler.methodNotAllowed)
@@ -154,6 +155,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("/api/v1/admin/storage/backends/{id}/capacity", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/media/objects", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/media/objects/{id}", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/media/objects/{id}/timeline", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/media/objects/{id}/lifecycle", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/media/objects/{id}/verify", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/", handler.requireAdminAuth(handler.notFound))
@@ -392,6 +394,19 @@ func (handler *Handler) getMediaObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, object)
+}
+
+func (handler *Handler) getMediaObjectTimeline(w http.ResponseWriter, r *http.Request) {
+	if handler.mediaObjects == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "media_registry_not_configured", "media object registry is not configured")
+		return
+	}
+	timeline, err := handler.mediaObjects.GetMediaObjectTimeline(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, timeline)
 }
 
 func (handler *Handler) verifyMediaObjects(w http.ResponseWriter, r *http.Request) {

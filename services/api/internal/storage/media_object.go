@@ -126,6 +126,23 @@ type MediaObjectLifecycleUpdateOptions struct {
 	DryRun bool
 }
 
+// MediaObjectTimelineEvent captures a server-known metadata event for one media object.
+type MediaObjectTimelineEvent struct {
+	Type                   string    `json:"type"`
+	At                     time.Time `json:"at"`
+	Status                 string    `json:"status,omitempty"`
+	LifecycleState         string    `json:"lifecycleState,omitempty"`
+	PreviousLifecycleState string    `json:"previousLifecycleState,omitempty"`
+	Source                 string    `json:"source,omitempty"`
+	Message                string    `json:"message,omitempty"`
+}
+
+// MediaObjectTimeline summarizes the currently retained metadata history for one media object.
+type MediaObjectTimeline struct {
+	MediaObjectID string                     `json:"mediaObjectId"`
+	Events        []MediaObjectTimelineEvent `json:"events"`
+}
+
 // MediaObjectLifecycleChange captures the latest committed lifecycle metadata change.
 type MediaObjectLifecycleChange struct {
 	PreviousLifecycleState string    `json:"previousLifecycleState"`
@@ -310,6 +327,45 @@ func (service *MediaObjectService) RegisterMediaObject(ctx context.Context, obje
 
 func (service *MediaObjectService) GetMediaObject(ctx context.Context, id string) (MediaObject, error) {
 	return service.mediaRepository.GetMediaObject(ctx, id)
+}
+
+func (service *MediaObjectService) GetMediaObjectTimeline(ctx context.Context, id string) (MediaObjectTimeline, error) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return MediaObjectTimeline{}, fmt.Errorf("%w: id is required", ErrInvalidMediaObject)
+	}
+	object, err := service.mediaRepository.GetMediaObject(ctx, id)
+	if err != nil {
+		return MediaObjectTimeline{}, err
+	}
+	timeline := MediaObjectTimeline{MediaObjectID: object.ID}
+	if !object.CreatedAt.IsZero() {
+		timeline.Events = append(timeline.Events, MediaObjectTimelineEvent{Type: "created", At: object.CreatedAt.UTC(), LifecycleState: object.LifecycleState})
+	}
+	if object.LastLifecycleChange != nil {
+		timeline.Events = append(timeline.Events, MediaObjectTimelineEvent{
+			Type:                   "lifecycle_changed",
+			At:                     object.LastLifecycleChange.ChangedAt.UTC(),
+			PreviousLifecycleState: object.LastLifecycleChange.PreviousLifecycleState,
+			LifecycleState:         object.LastLifecycleChange.LifecycleState,
+			Source:                 object.LastLifecycleChange.Source,
+		})
+	}
+	if object.LastVerification != nil {
+		timeline.Events = append(timeline.Events, MediaObjectTimelineEvent{
+			Type:    "verification",
+			At:      object.LastVerification.VerifiedAt.UTC(),
+			Status:  object.LastVerification.Status,
+			Message: object.LastVerification.Message,
+		})
+	}
+	sort.SliceStable(timeline.Events, func(i, j int) bool {
+		if timeline.Events[i].At.Equal(timeline.Events[j].At) {
+			return timeline.Events[i].Type < timeline.Events[j].Type
+		}
+		return timeline.Events[i].At.Before(timeline.Events[j].At)
+	})
+	return timeline, nil
 }
 
 func (service *MediaObjectService) SetMediaObjectLifecycleState(ctx context.Context, id string, state string) (MediaObject, error) {

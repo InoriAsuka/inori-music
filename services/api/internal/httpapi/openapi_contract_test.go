@@ -26,6 +26,7 @@ func TestStorageAdminOpenAPIContractCoversRoutes(t *testing.T) {
 		"/api/v1/admin/media/objects/duplicates":       {"get"},
 		"/api/v1/admin/media/objects/lifecycle":        {"post"},
 		"/api/v1/admin/media/objects/{id}":             {"get"},
+		"/api/v1/admin/media/objects/{id}/timeline":    {"get"},
 		"/api/v1/admin/media/objects/{id}/lifecycle":   {"post"},
 		"/api/v1/admin/media/objects/verify":           {"post"},
 		"/api/v1/admin/media/objects/{id}/verify":      {"post"},
@@ -162,7 +163,7 @@ func TestStorageAdminOpenAPIContractSchemasAndErrors(t *testing.T) {
 	document := loadOpenAPIContract(t)
 	components := document["components"].(map[string]any)
 	schemas := components["schemas"].(map[string]any)
-	for _, name := range []string{"StorageBackend", "StorageBackendRequest", "BackendConfig", "LocalConfig", "NFSConfig", "SMBConfig", "S3Config", "DistributedConfig", "CapabilitySet", "ProbeResult", "CapacityReport", "RefreshReport", "RefreshResult", "MediaObject", "MediaObjectRequest", "MediaObjectLifecycleRequest", "MediaObjectLifecycleChange", "MediaObjectSelectionFilter", "MediaObjectBulkLifecycleRequest", "MediaObjectLifecycleUpdateReport", "MediaObjectLifecycleUpdateResult", "MediaObjectStats", "MediaObjectDuplicateReport", "MediaObjectDuplicateGroup", "MediaObjectVerificationResult", "MediaObjectVerificationReport", "PaginationMetadata", "ErrorEnvelope"} {
+	for _, name := range []string{"StorageBackend", "StorageBackendRequest", "BackendConfig", "LocalConfig", "NFSConfig", "SMBConfig", "S3Config", "DistributedConfig", "CapabilitySet", "ProbeResult", "CapacityReport", "RefreshReport", "RefreshResult", "MediaObject", "MediaObjectRequest", "MediaObjectLifecycleRequest", "MediaObjectLifecycleChange", "MediaObjectTimeline", "MediaObjectTimelineEvent", "MediaObjectSelectionFilter", "MediaObjectBulkLifecycleRequest", "MediaObjectLifecycleUpdateReport", "MediaObjectLifecycleUpdateResult", "MediaObjectStats", "MediaObjectDuplicateReport", "MediaObjectDuplicateGroup", "MediaObjectVerificationResult", "MediaObjectVerificationReport", "PaginationMetadata", "ErrorEnvelope"} {
 		if _, ok := schemas[name].(map[string]any); !ok {
 			t.Fatalf("schema %q is missing", name)
 		}

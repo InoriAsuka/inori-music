@@ -927,6 +927,82 @@
             "description": "Committed lifecycle update source."
           }
         }
+      },
+      "MediaObjectTimelineEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "at"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "created",
+              "lifecycle_changed",
+              "verification"
+            ]
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "verified",
+              "failed"
+            ]
+          },
+          "lifecycleState": {
+            "type": "string",
+            "enum": [
+              "staged",
+              "active",
+              "archived",
+              "deleted"
+            ]
+          },
+          "previousLifecycleState": {
+            "type": "string",
+            "enum": [
+              "staged",
+              "active",
+              "archived",
+              "deleted"
+            ]
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "single",
+              "bulk"
+            ]
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "MediaObjectTimeline": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "mediaObjectId",
+          "events"
+        ],
+        "properties": {
+          "mediaObjectId": {
+            "type": "string"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MediaObjectTimelineEvent"
+            }
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -962,7 +1038,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "0.28.0"
+    "version": "0.29.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -2327,6 +2403,63 @@
           }
         ]
       }
+    },
+    "/api/v1/admin/media/objects/{id}/timeline": {
+      "get": {
+        "summary": "Get the retained metadata timeline for a media object.",
+        "responses": {
+          "200": {
+            "description": "Media object timeline",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaObjectTimeline"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/MediaObjectId"
+        }
+      ]
     }
   },
   "servers": [

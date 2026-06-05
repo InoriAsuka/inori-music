@@ -342,6 +342,37 @@ func TestMediaObjectBulkLifecycleRoute(t *testing.T) {
 	assertAPIError(t, performRequestWithoutAuth(t, handler, http.MethodPost, "/api/v1/admin/media/objects/lifecycle", request), http.StatusUnauthorized, "unauthorized")
 }
 
+func TestMediaObjectTimelineRoute(t *testing.T) {
+	handler := newTestHandler()
+	backend := `{"id":"local-main","type":"local","displayName":"Local Media","enabled":true,"config":{"local":{"rootPath":"/srv/inori/media"}}}`
+	if response := performRequest(t, handler, http.MethodPost, "/api/v1/admin/storage/backends", backend); response.Code != http.StatusCreated {
+		t.Fatalf("backend register status = %d body = %s", response.Code, response.Body.String())
+	}
+	object := `{"id":"timeline-media","backendId":"local-main","objectKey":"timeline/track.flac","contentHash":"sha256:timeline","sizeBytes":100,"mimeType":"audio/flac","assetKind":"original_audio","lifecycleState":"active"}`
+	if response := performRequest(t, handler, http.MethodPost, "/api/v1/admin/media/objects", object); response.Code != http.StatusCreated {
+		t.Fatalf("media register status = %d body = %s", response.Code, response.Body.String())
+	}
+	if response := performRequest(t, handler, http.MethodPost, "/api/v1/admin/media/objects/timeline-media/lifecycle", `{"lifecycleState":"archived"}`); response.Code != http.StatusOK {
+		t.Fatalf("lifecycle status = %d body = %s", response.Code, response.Body.String())
+	}
+
+	response := performRequest(t, handler, http.MethodGet, "/api/v1/admin/media/objects/timeline-media/timeline", "")
+	if response.Code != http.StatusOK {
+		t.Fatalf("timeline status = %d body = %s", response.Code, response.Body.String())
+	}
+	var timeline storage.MediaObjectTimeline
+	decodeResponse(t, response, &timeline)
+	if timeline.MediaObjectID != "timeline-media" || len(timeline.Events) != 2 {
+		t.Fatalf("timeline = %+v, want created and lifecycle events", timeline)
+	}
+	if timeline.Events[0].Type != "created" || timeline.Events[1].Type != "lifecycle_changed" || timeline.Events[1].Source != "single" || timeline.Events[1].LifecycleState != "archived" {
+		t.Fatalf("timeline events = %+v, want lifecycle summary", timeline.Events)
+	}
+
+	assertAPIError(t, performRequest(t, handler, http.MethodGet, "/api/v1/admin/media/objects/missing/timeline", ""), http.StatusNotFound, "not_found")
+	assertAPIError(t, performRequestWithoutAuth(t, handler, http.MethodGet, "/api/v1/admin/media/objects/timeline-media/timeline", ""), http.StatusUnauthorized, "unauthorized")
+}
+
 func TestMediaObjectRouteRejectsInvalidInput(t *testing.T) {
 	handler := newTestHandler()
 	backend := `{"id":"local-main","type":"local","displayName":"Local Media","enabled":true,"config":{"local":{"rootPath":"/srv/inori/media"}}}`
