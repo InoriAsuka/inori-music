@@ -96,15 +96,16 @@ type DistributedConfig struct {
 
 // MediaObject references a stored binary asset without embedding large media in the database.
 type MediaObject struct {
-	ID               string                         `json:"id"`
-	BackendID        string                         `json:"backendId"`
-	ObjectKey        string                         `json:"objectKey"`
-	ContentHash      string                         `json:"contentHash"`
-	SizeBytes        int64                          `json:"sizeBytes"`
-	MIMEType         string                         `json:"mimeType"`
-	AssetKind        string                         `json:"assetKind"`
-	LifecycleState   string                         `json:"lifecycleState"`
-	LastVerification *MediaObjectVerificationResult `json:"lastVerification,omitempty"`
-	CreatedAt        time.Time                      `json:"createdAt"`
-	UpdatedAt        time.Time                      `json:"updatedAt"`
+	ID                  string                         `json:"id"`
+	BackendID           string                         `json:"backendId"`
+	ObjectKey           string                         `json:"objectKey"`
+	ContentHash         string                         `json:"contentHash"`
+	SizeBytes           int64                          `json:"sizeBytes"`
+	MIMEType            string                         `json:"mimeType"`
+	AssetKind           string                         `json:"assetKind"`
+	LifecycleState      string                         `json:"lifecycleState"`
+	LastVerification    *MediaObjectVerificationResult `json:"lastVerification,omitempty"`
+	LastLifecycleChange *MediaObjectLifecycleChange    `json:"lastLifecycleChange,omitempty"`
+	CreatedAt           time.Time                      `json:"createdAt"`
+	UpdatedAt           time.Time                      `json:"updatedAt"`
 }

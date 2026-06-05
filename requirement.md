@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.27.0`
+`0.28.0`
 
 ## Product Goal
 
@@ -32,6 +32,7 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Media object administration must expose metadata-only duplicate content-hash detection for deduplication planning without reading media bytes.
 - Media object administration must support metadata-only bulk lifecycle updates scoped by exactly one safe selection filter.
 - Bulk lifecycle updates must support dry-run previews that do not persist metadata changes.
+- Committed lifecycle updates must record latest transition metadata for audit preparation.
 
 ## Requirement History
 
@@ -168,4 +169,9 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 ### v0.27.0 - 2026-06-05
 
 - Add dry-run previews for metadata-only bulk media object lifecycle updates, reporting would-update outcomes without persisting changes.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.28.0 - 2026-06-05
+
+- Persist latest committed media object lifecycle change metadata, including previous state, new state, change time, and single/bulk source.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

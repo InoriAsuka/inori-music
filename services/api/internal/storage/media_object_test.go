@@ -365,6 +365,9 @@ func TestMediaObjectServiceUpdatesLifecycleState(t *testing.T) {
 	if updated.LifecycleState != string(LifecycleStateArchived) || updated.LastVerification == nil || updated.LastVerification.Status != "verified" || !updated.UpdatedAt.After(registered.UpdatedAt) {
 		t.Fatalf("updated object = %+v, want archived object preserving verification and updated timestamp", updated)
 	}
+	if updated.LastLifecycleChange == nil || updated.LastLifecycleChange.PreviousLifecycleState != string(LifecycleStateActive) || updated.LastLifecycleChange.LifecycleState != string(LifecycleStateArchived) || updated.LastLifecycleChange.Source != "single" {
+		t.Fatalf("last lifecycle change = %+v, want single active->archived change", updated.LastLifecycleChange)
+	}
 }
 
 func TestMediaObjectServiceBulkUpdatesLifecycleState(t *testing.T) {
@@ -410,6 +413,9 @@ func TestMediaObjectServiceBulkUpdatesLifecycleState(t *testing.T) {
 		}
 		if object.LifecycleState != string(LifecycleStateArchived) || object.UpdatedAt.IsZero() {
 			t.Fatalf("object = %+v, want archived with updated timestamp", object)
+		}
+		if object.LastLifecycleChange == nil || object.LastLifecycleChange.Source != "bulk" || object.LastLifecycleChange.PreviousLifecycleState != string(LifecycleStateActive) {
+			t.Fatalf("last lifecycle change = %+v, want bulk active transition", object.LastLifecycleChange)
 		}
 	}
 

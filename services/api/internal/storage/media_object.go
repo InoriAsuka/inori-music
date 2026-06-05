@@ -126,6 +126,14 @@ type MediaObjectLifecycleUpdateOptions struct {
 	DryRun bool
 }
 
+// MediaObjectLifecycleChange captures the latest committed lifecycle metadata change.
+type MediaObjectLifecycleChange struct {
+	PreviousLifecycleState string    `json:"previousLifecycleState"`
+	LifecycleState         string    `json:"lifecycleState"`
+	ChangedAt              time.Time `json:"changedAt"`
+	Source                 string    `json:"source"`
+}
+
 // MediaObjectLifecycleUpdateReport summarizes a metadata-only bulk lifecycle update.
 type MediaObjectLifecycleUpdateReport struct {
 	LifecycleState     string                             `json:"lifecycleState"`
@@ -320,8 +328,11 @@ func (service *MediaObjectService) SetMediaObjectLifecycleState(ctx context.Cont
 	if LifecycleState(object.LifecycleState) == LifecycleStateDeleted && LifecycleState(state) != LifecycleStateDeleted {
 		return MediaObject{}, fmt.Errorf("%w: deleted media object %s cannot leave deleted lifecycle state", ErrConflict, id)
 	}
+	previousState := object.LifecycleState
+	changedAt := service.now().UTC()
 	object.LifecycleState = state
-	object.UpdatedAt = service.now().UTC()
+	object.UpdatedAt = changedAt
+	object.LastLifecycleChange = &MediaObjectLifecycleChange{PreviousLifecycleState: previousState, LifecycleState: state, ChangedAt: changedAt, Source: "single"}
 	if err := service.mediaRepository.SaveMediaObject(ctx, object); err != nil {
 		return MediaObject{}, err
 	}
@@ -398,6 +409,7 @@ func (service *MediaObjectService) SetMediaObjectLifecycleStateByFilterWithOptio
 			report.Results = append(report.Results, result)
 			continue
 		}
+		object.LastLifecycleChange = &MediaObjectLifecycleChange{PreviousLifecycleState: result.PreviousLifecycleState, LifecycleState: normalizedState, ChangedAt: updatedAt, Source: "bulk"}
 		if err := service.mediaRepository.SaveMediaObject(ctx, object); err != nil {
 			result.Status = "failed"
 			result.Message = err.Error()

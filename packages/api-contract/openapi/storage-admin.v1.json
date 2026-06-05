@@ -477,6 +477,9 @@
               },
               "lastVerification": {
                 "$ref": "#/components/schemas/MediaObjectVerificationResult"
+              },
+              "lastLifecycleChange": {
+                "$ref": "#/components/schemas/MediaObjectLifecycleChange"
               }
             }
           }
@@ -883,6 +886,47 @@
             "minimum": 0
           }
         }
+      },
+      "MediaObjectLifecycleChange": {
+        "type": "object",
+        "required": [
+          "previousLifecycleState",
+          "lifecycleState",
+          "changedAt",
+          "source"
+        ],
+        "properties": {
+          "previousLifecycleState": {
+            "type": "string",
+            "enum": [
+              "staged",
+              "active",
+              "archived",
+              "deleted"
+            ]
+          },
+          "lifecycleState": {
+            "type": "string",
+            "enum": [
+              "staged",
+              "active",
+              "archived",
+              "deleted"
+            ]
+          },
+          "changedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "single",
+              "bulk"
+            ],
+            "description": "Committed lifecycle update source."
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -918,7 +962,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "0.27.0"
+    "version": "0.28.0"
   },
   "openapi": "3.1.0",
   "paths": {
