@@ -185,10 +185,15 @@ func (repo *FileMediaObjectRepository) load() error {
 	if document.Version != mediaObjectFileRepositorySchemaVersion {
 		return fmt.Errorf("%w: unsupported media object repository schema version %d", ErrInvalidMediaObject, document.Version)
 	}
+	seen := make(map[string]struct{}, len(document.Objects))
 	for _, object := range document.Objects {
-		if strings.TrimSpace(object.ID) == "" {
-			return fmt.Errorf("%w: persisted media object id is required", ErrInvalidMediaObject)
+		if err := ValidateMediaObject(&object); err != nil {
+			return fmt.Errorf("validate persisted media object %q: %w", object.ID, err)
 		}
+		if _, ok := seen[object.ID]; ok {
+			return fmt.Errorf("%w: duplicate persisted media object id %q", ErrInvalidMediaObject, object.ID)
+		}
+		seen[object.ID] = struct{}{}
 		repo.objects[object.ID] = object
 	}
 	return nil

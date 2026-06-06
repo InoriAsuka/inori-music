@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -99,6 +100,52 @@ func TestFileMediaObjectRepositoryRejectsUnsupportedSchemaVersion(t *testing.T) 
 		t.Fatalf("WriteFile() error = %v", err)
 	}
 	_, err := NewFileMediaObjectRepository(path)
+	if !errors.Is(err, ErrInvalidMediaObject) {
+		t.Fatalf("NewFileMediaObjectRepository() error = %v, want ErrInvalidMediaObject", err)
+	}
+}
+
+func TestFileMediaObjectRepositoryRejectsDuplicateObjectIDs(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "media-objects.json")
+	first := validMediaObject()
+	first.ID = " media-original-1 "
+	second := validMediaObject()
+	second.ID = "media-original-1"
+	document := mediaObjectFileRepositoryDocument{
+		Version: mediaObjectFileRepositorySchemaVersion,
+		Objects: []MediaObject{first, second},
+	}
+	content, err := json.Marshal(document)
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+	if err := os.WriteFile(path, content, 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	_, err = NewFileMediaObjectRepository(path)
+	if !errors.Is(err, ErrInvalidMediaObject) {
+		t.Fatalf("NewFileMediaObjectRepository() error = %v, want ErrInvalidMediaObject", err)
+	}
+}
+
+func TestFileMediaObjectRepositoryRejectsInvalidPersistedObjectMetadata(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "media-objects.json")
+	object := validMediaObject()
+	object.ContentHash = "not-a-content-hash"
+	document := mediaObjectFileRepositoryDocument{
+		Version: mediaObjectFileRepositorySchemaVersion,
+		Objects: []MediaObject{object},
+	}
+	content, err := json.Marshal(document)
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+	if err := os.WriteFile(path, content, 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	_, err = NewFileMediaObjectRepository(path)
 	if !errors.Is(err, ErrInvalidMediaObject) {
 		t.Fatalf("NewFileMediaObjectRepository() error = %v, want ErrInvalidMediaObject", err)
 	}

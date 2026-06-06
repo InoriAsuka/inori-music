@@ -111,10 +111,15 @@ func (repo *FileRepository) load() error {
 	if document.Version != fileRepositorySchemaVersion {
 		return fmt.Errorf("%w: unsupported repository schema version %d", ErrInvalidBackend, document.Version)
 	}
+	seen := make(map[string]struct{}, len(document.Backends))
 	for _, backend := range document.Backends {
-		if backend.ID == "" {
-			return fmt.Errorf("%w: persisted backend id is required", ErrInvalidBackend)
+		if err := ValidateBackend(&backend); err != nil {
+			return fmt.Errorf("validate persisted backend %q: %w", backend.ID, err)
 		}
+		if _, ok := seen[backend.ID]; ok {
+			return fmt.Errorf("%w: duplicate persisted backend id %q", ErrInvalidBackend, backend.ID)
+		}
+		seen[backend.ID] = struct{}{}
 		repo.backends[backend.ID] = backend
 	}
 	return nil
