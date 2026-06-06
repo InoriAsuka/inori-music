@@ -154,6 +154,9 @@ func (repo *FileRepository) persistLocked() error {
 	if err := os.Rename(tempPath, repo.path); err != nil {
 		return fmt.Errorf("replace storage repository %q: %w", repo.path, err)
 	}
+	if err := syncDirectory(filepath.Dir(repo.path)); err != nil {
+		return fmt.Errorf("sync storage repository directory: %w", err)
+	}
 	cleanup = false
 	return nil
 }
