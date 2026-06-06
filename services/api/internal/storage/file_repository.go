@@ -51,6 +51,31 @@ func (repo *FileRepository) Save(ctx context.Context, backend StorageBackend) er
 	return repo.persistLocked()
 }
 
+func (repo *FileRepository) SaveWithExclusiveDefault(ctx context.Context, backend StorageBackend) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	if backend.ID == "" {
+		return fmt.Errorf("%w: id is required", ErrInvalidBackend)
+	}
+
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+
+	previous := cloneBackends(repo.backends)
+	backend.IsDefault = true
+	for id, existing := range repo.backends {
+		existing.IsDefault = false
+		repo.backends[id] = existing
+	}
+	repo.backends[backend.ID] = backend
+	if err := repo.persistLocked(); err != nil {
+		repo.backends = previous
+		return err
+	}
+	return nil
+}
+
 func (repo *FileRepository) Get(ctx context.Context, id string) (StorageBackend, error) {
 	if err := ctx.Err(); err != nil {
 		return StorageBackend{}, err
@@ -159,8 +184,19 @@ func (repo *FileRepository) persistLocked() error {
 	if err := os.Rename(tempPath, repo.path); err != nil {
 		return fmt.Errorf("replace storage repository %q: %w", repo.path, err)
 	}
+	if err := syncDirectory(filepath.Dir(repo.path)); err != nil {
+		return fmt.Errorf("sync storage repository directory: %w", err)
+	}
 	cleanup = false
 	return nil
+}
+
+func cloneBackends(backends map[string]StorageBackend) map[string]StorageBackend {
+	cloned := make(map[string]StorageBackend, len(backends))
+	for id, backend := range backends {
+		cloned[id] = backend
+	}
+	return cloned
 }
 
 func sortedBackends(backends map[string]StorageBackend) []StorageBackend {
