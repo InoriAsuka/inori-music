@@ -112,3 +112,42 @@ func TestFileRepositoryRejectsEmptyBackendID(t *testing.T) {
 		t.Fatalf("Save(empty id) error = %v, want ErrInvalidBackend", err)
 	}
 }
+
+func TestFileRepositorySaveWithExclusiveDefaultPersistsSingleRewrite(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "storage-backends.json")
+	repo, err := NewFileRepository(path)
+	if err != nil {
+		t.Fatalf("NewFileRepository() error = %v", err)
+	}
+	oldDefault := StorageBackend{ID: "local-main", Type: BackendTypeLocal, Enabled: true, IsDefault: true, Priority: 1}
+	newDefault := StorageBackend{ID: "s3-prod", Type: BackendTypeS3, Enabled: true, Priority: 2}
+	if err := repo.Save(ctx, oldDefault); err != nil {
+		t.Fatalf("Save(local-main) error = %v", err)
+	}
+	if err := repo.Save(ctx, newDefault); err != nil {
+		t.Fatalf("Save(s3-prod) error = %v", err)
+	}
+
+	if err := repo.SaveWithExclusiveDefault(ctx, newDefault); err != nil {
+		t.Fatalf("SaveWithExclusiveDefault() error = %v", err)
+	}
+
+	reopened, err := NewFileRepository(path)
+	if err != nil {
+		t.Fatalf("NewFileRepository(reopen) error = %v", err)
+	}
+	backends, err := reopened.List(ctx)
+	if err != nil {
+		t.Fatalf("List() error = %v", err)
+	}
+	defaults := make([]string, 0)
+	for _, backend := range backends {
+		if backend.IsDefault {
+			defaults = append(defaults, backend.ID)
+		}
+	}
+	if len(defaults) != 1 || defaults[0] != "s3-prod" {
+		t.Fatalf("defaults = %v, want [s3-prod]", defaults)
+	}
+}
