@@ -131,13 +131,17 @@ func TestStorageAdminOpenAPIContractSecurity(t *testing.T) {
 	if security, ok := health["security"].([]any); !ok || len(security) != 0 {
 		t.Fatalf("/healthz security = %#v, want public empty security", health["security"])
 	}
+	ready := operation(t, paths, "/readyz", "get")
+	if security, ok := ready["security"].([]any); !ok || len(security) != 0 {
+		t.Fatalf("/readyz security = %#v, want public empty security", ready["security"])
+	}
 	version := operation(t, paths, "/versionz", "get")
 	if security, ok := version["security"].([]any); !ok || len(security) != 0 {
 		t.Fatalf("/versionz security = %#v, want public empty security", version["security"])
 	}
 
 	for path, item := range paths {
-		if path == "/healthz" || path == "/versionz" {
+		if path == "/healthz" || path == "/readyz" || path == "/versionz" {
 			continue
 		}
 		pathItem := item.(map[string]any)
@@ -168,7 +172,7 @@ func TestStorageAdminOpenAPIContractSchemasAndErrors(t *testing.T) {
 	document := loadOpenAPIContract(t)
 	components := document["components"].(map[string]any)
 	schemas := components["schemas"].(map[string]any)
-	for _, name := range []string{"StorageBackend", "StorageBackendRequest", "BackendConfig", "LocalConfig", "NFSConfig", "SMBConfig", "S3Config", "DistributedConfig", "CapabilitySet", "ProbeResult", "CapacityReport", "RefreshReport", "RefreshResult", "ServiceInfo", "MediaObject", "MediaObjectRequest", "MediaObjectLifecycleRequest", "MediaObjectLifecycleChange", "MediaObjectTimeline", "MediaObjectTimelineEvent", "MediaObjectSelectionFilter", "MediaObjectBulkLifecycleRequest", "MediaObjectLifecycleUpdateReport", "MediaObjectLifecycleUpdateResult", "MediaObjectStats", "MediaObjectDuplicateReport", "MediaObjectDuplicateGroup", "MediaObjectVerificationResult", "MediaObjectVerificationReport", "PaginationMetadata", "ErrorEnvelope"} {
+	for _, name := range []string{"StorageBackend", "StorageBackendRequest", "BackendConfig", "LocalConfig", "NFSConfig", "SMBConfig", "S3Config", "DistributedConfig", "CapabilitySet", "ProbeResult", "CapacityReport", "RefreshReport", "RefreshResult", "ServiceInfo", "ReadinessCheck", "ReadinessReport", "MediaObject", "MediaObjectRequest", "MediaObjectLifecycleRequest", "MediaObjectLifecycleChange", "MediaObjectTimeline", "MediaObjectTimelineEvent", "MediaObjectSelectionFilter", "MediaObjectBulkLifecycleRequest", "MediaObjectLifecycleUpdateReport", "MediaObjectLifecycleUpdateResult", "MediaObjectStats", "MediaObjectDuplicateReport", "MediaObjectDuplicateGroup", "MediaObjectVerificationResult", "MediaObjectVerificationReport", "PaginationMetadata", "ErrorEnvelope"} {
 		if _, ok := schemas[name].(map[string]any); !ok {
 			t.Fatalf("schema %q is missing", name)
 		}

@@ -45,6 +45,37 @@ func TestVersionIsPublic(t *testing.T) {
 	assertJSONField(t, defaultResponse, "version", "dev")
 }
 
+func TestReadinessIsPublic(t *testing.T) {
+	ready := performRequestWithoutAuth(t, newTestHandler(), http.MethodGet, "/readyz", "")
+	if ready.Code != http.StatusOK {
+		t.Fatalf("GET /readyz status = %d, want %d body = %s", ready.Code, http.StatusOK, ready.Body.String())
+	}
+	var readyReport ReadinessReport
+	decodeResponse(t, ready, &readyReport)
+	if !readyReport.Ready || len(readyReport.Checks) != 3 {
+		t.Fatalf("ready report = %+v, want ready report with three checks", readyReport)
+	}
+
+	unready := performRequestWithoutAuth(t, newUnauthenticatedTestHandler(), http.MethodGet, "/readyz", "")
+	if unready.Code != http.StatusServiceUnavailable {
+		t.Fatalf("unready GET /readyz status = %d, want %d body = %s", unready.Code, http.StatusServiceUnavailable, unready.Body.String())
+	}
+	var unreadyReport ReadinessReport
+	decodeResponse(t, unready, &unreadyReport)
+	if unreadyReport.Ready || len(unreadyReport.Checks) != 3 {
+		t.Fatalf("unready report = %+v, want not ready report with three checks", unreadyReport)
+	}
+	failed := make(map[string]bool)
+	for _, check := range unreadyReport.Checks {
+		if check.Status == "failed" {
+			failed[check.Name] = true
+		}
+	}
+	if !failed["media_registry"] || !failed["admin_auth"] {
+		t.Fatalf("failed checks = %+v, want media_registry and admin_auth failures", failed)
+	}
+}
+
 func TestAdminAuth(t *testing.T) {
 	handler := newTestHandler()
 	tests := []struct {

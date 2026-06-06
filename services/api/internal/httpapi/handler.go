@@ -24,6 +24,19 @@ type ServiceInfo struct {
 	BuildTime string `json:"buildTime"`
 }
 
+// ReadinessCheck describes one public startup readiness check.
+type ReadinessCheck struct {
+	Name    string `json:"name"`
+	Status  string `json:"status"`
+	Message string `json:"message,omitempty"`
+}
+
+// ReadinessReport describes whether the API process is ready for admin traffic.
+type ReadinessReport struct {
+	Ready  bool             `json:"ready"`
+	Checks []ReadinessCheck `json:"checks"`
+}
+
 // HandlerOption configures the HTTP API handler.
 type HandlerOption func(*Handler)
 
@@ -155,6 +168,29 @@ func normalizeServiceInfo(info ServiceInfo) ServiceInfo {
 	return info
 }
 
+func (handler *Handler) readinessReport() ReadinessReport {
+	checks := []ReadinessCheck{
+		readinessCheck("storage_service", handler.storage != nil, "storage service is configured", "storage service is not configured"),
+		readinessCheck("media_registry", handler.mediaObjects != nil, "media object registry is configured", "media object registry is not configured"),
+		readinessCheck("admin_auth", handler.adminToken != "", "admin bearer token is configured", "admin bearer token is not configured"),
+	}
+	report := ReadinessReport{Ready: true, Checks: checks}
+	for _, check := range checks {
+		if check.Status != "ok" {
+			report.Ready = false
+			break
+		}
+	}
+	return report
+}
+
+func readinessCheck(name string, ok bool, okMessage string, failureMessage string) ReadinessCheck {
+	if ok {
+		return ReadinessCheck{Name: name, Status: "ok", Message: okMessage}
+	}
+	return ReadinessCheck{Name: name, Status: "failed", Message: failureMessage}
+}
+
 func NewHandler(storageService *storage.Service, options ...HandlerOption) *Handler {
 	handler := &Handler{storage: storageService, info: defaultServiceInfo()}
 	for _, option := range options {
@@ -166,6 +202,7 @@ func NewHandler(storageService *storage.Service, options ...HandlerOption) *Hand
 func (handler *Handler) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", handler.health)
+	mux.HandleFunc("GET /readyz", handler.readiness)
 	mux.HandleFunc("GET /versionz", handler.version)
 	mux.HandleFunc("GET /api/v1/admin/storage/backends", handler.requireAdminAuth(handler.listStorageBackends))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends", handler.requireAdminAuth(handler.registerStorageBackend))
@@ -187,6 +224,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/admin/media/objects/{id}/lifecycle", handler.requireAdminAuth(handler.setMediaObjectLifecycle))
 	mux.HandleFunc("POST /api/v1/admin/media/objects/{id}/verify", handler.requireAdminAuth(handler.verifyMediaObject))
 	mux.HandleFunc("/healthz", handler.methodNotAllowed)
+	mux.HandleFunc("/readyz", handler.methodNotAllowed)
 	mux.HandleFunc("/versionz", handler.methodNotAllowed)
 	mux.HandleFunc("/api/v1/admin/storage/backends", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/storage/backends/validate", handler.requireAdminAuth(handler.methodNotAllowed))
@@ -208,6 +246,15 @@ func (handler *Handler) Routes() http.Handler {
 
 func (handler *Handler) health(w http.ResponseWriter, _ *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (handler *Handler) readiness(w http.ResponseWriter, _ *http.Request) {
+	report := handler.readinessReport()
+	status := http.StatusOK
+	if !report.Ready {
+		status = http.StatusServiceUnavailable
+	}
+	writeJSON(w, status, report)
 }
 
 func (handler *Handler) version(w http.ResponseWriter, _ *http.Request) {

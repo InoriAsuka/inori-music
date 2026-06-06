@@ -1027,6 +1027,48 @@
             "type": "string"
           }
         }
+      },
+      "ReadinessCheck": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "status"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "failed"
+            ]
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "ReadinessReport": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ready",
+          "checks"
+        ],
+        "properties": {
+          "ready": {
+            "type": "boolean"
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadinessCheck"
+            }
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -1062,7 +1104,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "0.31.0"
+    "version": "0.32.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -2496,6 +2538,34 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ServiceInfo"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/readyz": {
+      "get": {
+        "summary": "Get public readiness status for this API process.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "The API is ready for admin traffic.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessReport"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The API is not ready for admin traffic.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessReport"
                 }
               }
             }

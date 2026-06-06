@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.31.0`
+`0.32.0`
 
 ## Product Goal
 
@@ -18,6 +18,7 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Media storage must support local filesystems, NFS, SMB, S3-compatible object storage, and distributed storage adapters.
 - Repository automation must validate builds and tests, publish tagged release binaries, and publish Docker images for deployable API artifacts.
 - Runtime API artifacts must expose non-sensitive build metadata for deployment diagnostics.
+- Runtime API artifacts must expose public readiness diagnostics for storage, media registry, and admin-auth configuration.
 
 ## Storage Requirements
 
@@ -194,4 +195,10 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 
 - Add a public `/versionz` endpoint exposing API name, version, commit, and build time.
 - Inject version metadata into release binaries and Docker images through build flags and Docker build arguments.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.32.0 - 2026-06-05
+
+- Add a public `/readyz` endpoint with storage service, media registry, and admin authentication readiness checks.
+- Add a Docker liveness healthcheck that uses `/healthz` for container runtime monitoring.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

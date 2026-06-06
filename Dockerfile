@@ -22,4 +22,5 @@ ENV INORI_HTTP_ADDR=0.0.0.0:8080 \
     INORI_MEDIA_OBJECT_REPOSITORY_FILE=/data/media-objects.json
 EXPOSE 8080
 VOLUME ["/data"]
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 CMD wget -qO- http://127.0.0.1:8080/healthz >/dev/null || exit 1
 ENTRYPOINT ["/usr/local/bin/inori-api"]
