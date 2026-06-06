@@ -1,0 +1,798 @@
+package httpapi
+
+import (
+	"crypto/sha256"
+	"crypto/subtle"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"sort"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"inori-music/services/api/internal/storage"
+)
+
+const maxRequestBodyBytes = 1 << 20
+
+// ServiceInfo describes build metadata exposed by public diagnostic endpoints.
+type ServiceInfo struct {
+	Name      string `json:"name"`
+	Version   string `json:"version"`
+	Commit    string `json:"commit"`
+	BuildTime string `json:"buildTime"`
+}
+
+// ReadinessCheck describes one public startup readiness check.
+type ReadinessCheck struct {
+	Name    string `json:"name"`
+	Status  string `json:"status"`
+	Message string `json:"message,omitempty"`
+}
+
+// ReadinessReport describes whether the API process is ready for admin traffic.
+type ReadinessReport struct {
+	Ready  bool             `json:"ready"`
+	Checks []ReadinessCheck `json:"checks"`
+}
+
+type requestMetricKey struct {
+	Method string
+	Path   string
+	Status int
+}
+
+type requestMetricValue struct {
+	Count           uint64
+	DurationSeconds float64
+}
+
+type requestMetricSnapshot struct {
+	Key             requestMetricKey
+	Count           uint64
+	DurationSeconds float64
+}
+
+// HandlerOption configures the HTTP API handler.
+type HandlerOption func(*Handler)
+
+// WithAdminToken enables Bearer Token authentication for administrator routes.
+func WithAdminToken(token string) HandlerOption {
+	return func(handler *Handler) {
+		handler.adminToken = strings.TrimSpace(token)
+	}
+}
+
+// WithMediaObjectService enables media object registry routes.
+func WithMediaObjectService(mediaObjects *storage.MediaObjectService) HandlerOption {
+	return func(handler *Handler) {
+		handler.mediaObjects = mediaObjects
+	}
+}
+
+// WithServiceInfo configures build metadata returned by public diagnostic endpoints.
+func WithServiceInfo(info ServiceInfo) HandlerOption {
+	return func(handler *Handler) {
+		handler.info = normalizeServiceInfo(info)
+	}
+}
+
+// Handler serves versioned administrative HTTP endpoints.
+type Handler struct {
+	storage        *storage.Service
+	mediaObjects   *storage.MediaObjectService
+	adminToken     string
+	info           ServiceInfo
+	metricsMu      sync.Mutex
+	requestMetrics map[requestMetricKey]requestMetricValue
+}
+
+type storageBackendRequest struct {
+	ID          string                `json:"id"`
+	Type        storage.BackendType   `json:"type"`
+	DisplayName string                `json:"displayName"`
+	Enabled     bool                  `json:"enabled"`
+	IsDefault   bool                  `json:"isDefault"`
+	Priority    int                   `json:"priority"`
+	Config      storage.BackendConfig `json:"config"`
+}
+
+type mediaObjectRequest struct {
+	ID             string `json:"id"`
+	BackendID      string `json:"backendId"`
+	ObjectKey      string `json:"objectKey"`
+	ContentHash    string `json:"contentHash"`
+	SizeBytes      int64  `json:"sizeBytes"`
+	MIMEType       string `json:"mimeType"`
+	AssetKind      string `json:"assetKind"`
+	LifecycleState string `json:"lifecycleState"`
+}
+
+type mediaObjectLifecycleRequest struct {
+	LifecycleState string `json:"lifecycleState"`
+}
+
+type mediaObjectSelectionRequest struct {
+	BackendID          string `json:"backendId,omitempty"`
+	ContentHash        string `json:"contentHash,omitempty"`
+	VerificationStatus string `json:"verificationStatus,omitempty"`
+	LifecycleState     string `json:"lifecycleState,omitempty"`
+	AssetKind          string `json:"assetKind,omitempty"`
+}
+
+type mediaObjectBulkLifecycleRequest struct {
+	Filter         mediaObjectSelectionRequest `json:"filter"`
+	LifecycleState string                      `json:"lifecycleState"`
+	DryRun         bool                        `json:"dryRun"`
+}
+
+func (request storageBackendRequest) backend() storage.StorageBackend {
+	return storage.StorageBackend{
+		ID:          request.ID,
+		Type:        request.Type,
+		DisplayName: request.DisplayName,
+		Enabled:     request.Enabled,
+		IsDefault:   request.IsDefault,
+		Priority:    request.Priority,
+		Config:      request.Config,
+	}
+}
+
+func (request mediaObjectRequest) object() storage.MediaObject {
+	return storage.MediaObject{
+		ID:             request.ID,
+		BackendID:      request.BackendID,
+		ObjectKey:      request.ObjectKey,
+		ContentHash:    request.ContentHash,
+		SizeBytes:      request.SizeBytes,
+		MIMEType:       request.MIMEType,
+		AssetKind:      request.AssetKind,
+		LifecycleState: request.LifecycleState,
+	}
+}
+
+func (request mediaObjectSelectionRequest) filter() storage.MediaObjectSelectionFilter {
+	return storage.MediaObjectSelectionFilter{
+		BackendID:          request.BackendID,
+		ContentHash:        request.ContentHash,
+		VerificationStatus: request.VerificationStatus,
+		LifecycleState:     request.LifecycleState,
+		AssetKind:          request.AssetKind,
+	}
+}
+
+func defaultServiceInfo() ServiceInfo {
+	return ServiceInfo{Name: "inori-api", Version: "dev", Commit: "unknown", BuildTime: "unknown"}
+}
+
+func normalizeServiceInfo(info ServiceInfo) ServiceInfo {
+	info.Name = strings.TrimSpace(info.Name)
+	info.Version = strings.TrimSpace(info.Version)
+	info.Commit = strings.TrimSpace(info.Commit)
+	info.BuildTime = strings.TrimSpace(info.BuildTime)
+	defaults := defaultServiceInfo()
+	if info.Name == "" {
+		info.Name = defaults.Name
+	}
+	if info.Version == "" {
+		info.Version = defaults.Version
+	}
+	if info.Commit == "" {
+		info.Commit = defaults.Commit
+	}
+	if info.BuildTime == "" {
+		info.BuildTime = defaults.BuildTime
+	}
+	return info
+}
+
+func (handler *Handler) readinessReport() ReadinessReport {
+	checks := []ReadinessCheck{
+		readinessCheck("storage_service", handler.storage != nil, "storage service is configured", "storage service is not configured"),
+		readinessCheck("media_registry", handler.mediaObjects != nil, "media object registry is configured", "media object registry is not configured"),
+		readinessCheck("admin_auth", handler.adminToken != "", "admin bearer token is configured", "admin bearer token is not configured"),
+	}
+	report := ReadinessReport{Ready: true, Checks: checks}
+	for _, check := range checks {
+		if check.Status != "ok" {
+			report.Ready = false
+			break
+		}
+	}
+	return report
+}
+
+func readinessCheck(name string, ok bool, okMessage string, failureMessage string) ReadinessCheck {
+	if ok {
+		return ReadinessCheck{Name: name, Status: "ok", Message: okMessage}
+	}
+	return ReadinessCheck{Name: name, Status: "failed", Message: failureMessage}
+}
+
+func NewHandler(storageService *storage.Service, options ...HandlerOption) *Handler {
+	handler := &Handler{storage: storageService, info: defaultServiceInfo(), requestMetrics: make(map[requestMetricKey]requestMetricValue)}
+	for _, option := range options {
+		option(handler)
+	}
+	return handler
+}
+
+func (handler *Handler) Routes() http.Handler {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /healthz", handler.health)
+	mux.HandleFunc("GET /metrics", handler.metrics)
+	mux.HandleFunc("GET /readyz", handler.readiness)
+	mux.HandleFunc("GET /versionz", handler.version)
+	mux.HandleFunc("GET /api/v1/admin/storage/backends", handler.requireAdminAuth(handler.listStorageBackends))
+	mux.HandleFunc("POST /api/v1/admin/storage/backends", handler.requireAdminAuth(handler.registerStorageBackend))
+	mux.HandleFunc("POST /api/v1/admin/storage/backends/validate", handler.requireAdminAuth(handler.validateStorageBackend))
+	mux.HandleFunc("POST /api/v1/admin/storage/backends/refresh", handler.requireAdminAuth(handler.refreshStorageBackends))
+	mux.HandleFunc("POST /api/v1/admin/storage/backends/{id}/default", handler.requireAdminAuth(handler.setDefaultStorageBackend))
+	mux.HandleFunc("POST /api/v1/admin/storage/backends/{id}/disable", handler.requireAdminAuth(handler.disableStorageBackend))
+	mux.HandleFunc("POST /api/v1/admin/storage/backends/{id}/probe", handler.requireAdminAuth(handler.probeStorageBackend))
+	mux.HandleFunc("GET /api/v1/admin/storage/backends/{id}/health", handler.requireAdminAuth(handler.getStorageBackendHealth))
+	mux.HandleFunc("GET /api/v1/admin/storage/backends/{id}/capacity", handler.requireAdminAuth(handler.getStorageBackendCapacity))
+	mux.HandleFunc("GET /api/v1/admin/media/objects", handler.requireAdminAuth(handler.listMediaObjects))
+	mux.HandleFunc("POST /api/v1/admin/media/objects", handler.requireAdminAuth(handler.registerMediaObject))
+	mux.HandleFunc("GET /api/v1/admin/media/objects/stats", handler.requireAdminAuth(handler.getMediaObjectStats))
+	mux.HandleFunc("GET /api/v1/admin/media/objects/duplicates", handler.requireAdminAuth(handler.getMediaObjectDuplicates))
+	mux.HandleFunc("POST /api/v1/admin/media/objects/lifecycle", handler.requireAdminAuth(handler.setMediaObjectsLifecycle))
+	mux.HandleFunc("POST /api/v1/admin/media/objects/verify", handler.requireAdminAuth(handler.verifyMediaObjects))
+	mux.HandleFunc("GET /api/v1/admin/media/objects/{id}", handler.requireAdminAuth(handler.getMediaObject))
+	mux.HandleFunc("GET /api/v1/admin/media/objects/{id}/timeline", handler.requireAdminAuth(handler.getMediaObjectTimeline))
+	mux.HandleFunc("POST /api/v1/admin/media/objects/{id}/lifecycle", handler.requireAdminAuth(handler.setMediaObjectLifecycle))
+	mux.HandleFunc("POST /api/v1/admin/media/objects/{id}/verify", handler.requireAdminAuth(handler.verifyMediaObject))
+	mux.HandleFunc("/healthz", handler.methodNotAllowed)
+	mux.HandleFunc("/metrics", handler.methodNotAllowed)
+	mux.HandleFunc("/readyz", handler.methodNotAllowed)
+	mux.HandleFunc("/versionz", handler.methodNotAllowed)
+	mux.HandleFunc("/api/v1/admin/storage/backends", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/storage/backends/validate", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/storage/backends/refresh", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/storage/backends/{id}/default", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/storage/backends/{id}/disable", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/storage/backends/{id}/probe", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/storage/backends/{id}/health", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/storage/backends/{id}/capacity", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/media/objects", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/media/objects/{id}", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/media/objects/{id}/timeline", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/media/objects/{id}/lifecycle", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/media/objects/{id}/verify", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/", handler.requireAdminAuth(handler.notFound))
+	mux.HandleFunc("/", handler.notFound)
+	return handler.instrument(mux)
+}
+
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+	wrote  bool
+}
+
+func (recorder *statusRecorder) WriteHeader(status int) {
+	if recorder.wrote {
+		return
+	}
+	recorder.status = status
+	recorder.wrote = true
+	recorder.ResponseWriter.WriteHeader(status)
+}
+
+func (recorder *statusRecorder) Write(data []byte) (int, error) {
+	if !recorder.wrote {
+		recorder.WriteHeader(http.StatusOK)
+	}
+	return recorder.ResponseWriter.Write(data)
+}
+
+func (handler *Handler) instrument(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		started := time.Now()
+		recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+		next.ServeHTTP(recorder, r)
+		path := r.Pattern
+		if path == "" {
+			path = "unmatched"
+		}
+		handler.recordRequestMetric(r.Method, path, recorder.status, time.Since(started).Seconds())
+	})
+}
+
+func (handler *Handler) recordRequestMetric(method string, path string, status int, durationSeconds float64) {
+	key := requestMetricKey{Method: method, Path: path, Status: status}
+	handler.metricsMu.Lock()
+	defer handler.metricsMu.Unlock()
+	value := handler.requestMetrics[key]
+	value.Count++
+	value.DurationSeconds += durationSeconds
+	handler.requestMetrics[key] = value
+}
+
+func (handler *Handler) requestMetricSnapshots() []requestMetricSnapshot {
+	handler.metricsMu.Lock()
+	defer handler.metricsMu.Unlock()
+	snapshots := make([]requestMetricSnapshot, 0, len(handler.requestMetrics))
+	for key, value := range handler.requestMetrics {
+		snapshots = append(snapshots, requestMetricSnapshot{Key: key, Count: value.Count, DurationSeconds: value.DurationSeconds})
+	}
+	sort.Slice(snapshots, func(i, j int) bool {
+		if snapshots[i].Key.Path != snapshots[j].Key.Path {
+			return snapshots[i].Key.Path < snapshots[j].Key.Path
+		}
+		if snapshots[i].Key.Method != snapshots[j].Key.Method {
+			return snapshots[i].Key.Method < snapshots[j].Key.Method
+		}
+		return snapshots[i].Key.Status < snapshots[j].Key.Status
+	})
+	return snapshots
+}
+
+func (handler *Handler) health(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (handler *Handler) readiness(w http.ResponseWriter, _ *http.Request) {
+	report := handler.readinessReport()
+	status := http.StatusOK
+	if !report.Ready {
+		status = http.StatusServiceUnavailable
+	}
+	writeJSON(w, status, report)
+}
+
+func (handler *Handler) metrics(w http.ResponseWriter, _ *http.Request) {
+	report := handler.readinessReport()
+	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintln(w, "# HELP inori_api_ready Whether the API process is ready for admin traffic.")
+	fmt.Fprintln(w, "# TYPE inori_api_ready gauge")
+	fmt.Fprintf(w, "inori_api_ready %d\n", prometheusBool(report.Ready))
+	fmt.Fprintln(w, "# HELP inori_api_readiness_check Readiness status per public startup check.")
+	fmt.Fprintln(w, "# TYPE inori_api_readiness_check gauge")
+	for _, check := range report.Checks {
+		fmt.Fprintf(w, "inori_api_readiness_check{check=\"%s\"} %d\n", prometheusLabelValue(check.Name), prometheusBool(check.Status == "ok"))
+	}
+	fmt.Fprintln(w, "# HELP inori_api_info Build metadata for the running API process.")
+	fmt.Fprintln(w, "# TYPE inori_api_info gauge")
+	fmt.Fprintf(w, "inori_api_info{name=\"%s\",version=\"%s\",commit=\"%s\",build_time=\"%s\"} 1\n", prometheusLabelValue(handler.info.Name), prometheusLabelValue(handler.info.Version), prometheusLabelValue(handler.info.Commit), prometheusLabelValue(handler.info.BuildTime))
+	fmt.Fprintln(w, "# HELP inori_api_http_requests_total Total HTTP requests handled by method, route pattern, and status.")
+	fmt.Fprintln(w, "# TYPE inori_api_http_requests_total counter")
+	fmt.Fprintln(w, "# HELP inori_api_http_request_duration_seconds_sum Cumulative HTTP request duration in seconds by method, route pattern, and status.")
+	fmt.Fprintln(w, "# TYPE inori_api_http_request_duration_seconds_sum counter")
+	for _, metric := range handler.requestMetricSnapshots() {
+		method := prometheusLabelValue(metric.Key.Method)
+		path := prometheusLabelValue(metric.Key.Path)
+		status := prometheusLabelValue(strconv.Itoa(metric.Key.Status))
+		fmt.Fprintf(w, "inori_api_http_requests_total{method=\"%s\",path=\"%s\",status=\"%s\"} %d\n", method, path, status, metric.Count)
+		fmt.Fprintf(w, "inori_api_http_request_duration_seconds_sum{method=\"%s\",path=\"%s\",status=\"%s\"} %.6f\n", method, path, status, metric.DurationSeconds)
+	}
+}
+
+func prometheusBool(value bool) int {
+	if value {
+		return 1
+	}
+	return 0
+}
+
+func prometheusLabelValue(value string) string {
+	return strings.NewReplacer("\\", "\\\\", "\n", "\\n", "\"", "\\\"").Replace(value)
+}
+
+func (handler *Handler) version(w http.ResponseWriter, _ *http.Request) {
+	writeJSON(w, http.StatusOK, handler.info)
+}
+
+func (handler *Handler) methodNotAllowed(w http.ResponseWriter, _ *http.Request) {
+	writeAPIError(w, http.StatusMethodNotAllowed, "method_not_allowed", "method not allowed")
+}
+
+func (handler *Handler) notFound(w http.ResponseWriter, _ *http.Request) {
+	writeAPIError(w, http.StatusNotFound, "not_found", "resource not found")
+}
+
+func (handler *Handler) requireAdminAuth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if handler.adminToken == "" {
+			writeAPIError(w, http.StatusServiceUnavailable, "admin_auth_not_configured", "administrator token is not configured")
+			return
+		}
+
+		token, ok := bearerToken(r.Header.Get("Authorization"))
+		if !ok || !constantTimeTokenEqual(token, handler.adminToken) {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="inori-admin"`)
+			writeAPIError(w, http.StatusUnauthorized, "unauthorized", "valid administrator bearer token is required")
+			return
+		}
+
+		next(w, r)
+	}
+}
+
+func bearerToken(header string) (string, bool) {
+	parts := strings.Fields(header)
+	if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") || parts[1] == "" {
+		return "", false
+	}
+	return parts[1], true
+}
+
+func constantTimeTokenEqual(candidate string, expected string) bool {
+	candidateHash := sha256.Sum256([]byte(candidate))
+	expectedHash := sha256.Sum256([]byte(expected))
+	return subtle.ConstantTimeCompare(candidateHash[:], expectedHash[:]) == 1
+}
+
+func (handler *Handler) listStorageBackends(w http.ResponseWriter, r *http.Request) {
+	backends, err := handler.storage.ListBackends(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"backends": backends})
+}
+
+func (handler *Handler) registerStorageBackend(w http.ResponseWriter, r *http.Request) {
+	var request storageBackendRequest
+	if err := decodeJSON(w, r, &request); err != nil {
+		writeError(w, err)
+		return
+	}
+	registered, err := handler.storage.RegisterBackend(r.Context(), request.backend())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, registered)
+}
+
+func (handler *Handler) refreshStorageBackends(w http.ResponseWriter, r *http.Request) {
+	report, err := handler.storage.RefreshEnabledBackends(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
+}
+
+func (handler *Handler) validateStorageBackend(w http.ResponseWriter, r *http.Request) {
+	var request storageBackendRequest
+	if err := decodeJSON(w, r, &request); err != nil {
+		writeError(w, err)
+		return
+	}
+	validated, err := handler.storage.ValidateBackend(request.backend())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, validated)
+}
+
+func (handler *Handler) setDefaultStorageBackend(w http.ResponseWriter, r *http.Request) {
+	backend, err := handler.storage.SetDefaultBackend(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, backend)
+}
+
+func (handler *Handler) disableStorageBackend(w http.ResponseWriter, r *http.Request) {
+	backend, err := handler.storage.DisableBackend(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, backend)
+}
+
+func (handler *Handler) probeStorageBackend(w http.ResponseWriter, r *http.Request) {
+	result, err := handler.storage.ProbeBackend(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (handler *Handler) getStorageBackendCapacity(w http.ResponseWriter, r *http.Request) {
+	report, err := handler.storage.GetBackendCapacity(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
+}
+
+func (handler *Handler) getStorageBackendHealth(w http.ResponseWriter, r *http.Request) {
+	result, err := handler.storage.GetBackendHealth(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (handler *Handler) getMediaObjectDuplicates(w http.ResponseWriter, r *http.Request) {
+	if handler.mediaObjects == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "media_registry_not_configured", "media object registry is not configured")
+		return
+	}
+	minCopies, err := parseMediaObjectMinCopies(r.URL.Query().Get("minCopies"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	report, err := handler.mediaObjects.GetMediaObjectDuplicates(r.Context(), r.URL.Query().Get("backendId"), minCopies)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
+}
+
+func (handler *Handler) registerMediaObject(w http.ResponseWriter, r *http.Request) {
+	if handler.mediaObjects == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "media_registry_not_configured", "media object registry is not configured")
+		return
+	}
+	var request mediaObjectRequest
+	if err := decodeJSONWithSentinel(w, r, &request, storage.ErrInvalidMediaObject); err != nil {
+		writeError(w, err)
+		return
+	}
+	registered, err := handler.mediaObjects.RegisterMediaObject(r.Context(), request.object())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, registered)
+}
+
+func (handler *Handler) getMediaObjectStats(w http.ResponseWriter, r *http.Request) {
+	if handler.mediaObjects == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "media_registry_not_configured", "media object registry is not configured")
+		return
+	}
+	stats, err := handler.mediaObjects.GetMediaObjectStats(r.Context(), r.URL.Query().Get("backendId"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, stats)
+}
+
+func (handler *Handler) setMediaObjectsLifecycle(w http.ResponseWriter, r *http.Request) {
+	if handler.mediaObjects == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "media_registry_not_configured", "media object registry is not configured")
+		return
+	}
+	var request mediaObjectBulkLifecycleRequest
+	if err := decodeJSONWithSentinel(w, r, &request, storage.ErrInvalidMediaObject); err != nil {
+		writeError(w, err)
+		return
+	}
+	report, err := handler.mediaObjects.SetMediaObjectLifecycleStateByFilterWithOptions(r.Context(), request.Filter.filter(), request.LifecycleState, storage.MediaObjectLifecycleUpdateOptions{DryRun: request.DryRun})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
+}
+
+func (handler *Handler) setMediaObjectLifecycle(w http.ResponseWriter, r *http.Request) {
+	if handler.mediaObjects == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "media_registry_not_configured", "media object registry is not configured")
+		return
+	}
+	var request mediaObjectLifecycleRequest
+	if err := decodeJSONWithSentinel(w, r, &request, storage.ErrInvalidMediaObject); err != nil {
+		writeError(w, err)
+		return
+	}
+	object, err := handler.mediaObjects.SetMediaObjectLifecycleState(r.Context(), r.PathValue("id"), request.LifecycleState)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, object)
+}
+
+func (handler *Handler) getMediaObject(w http.ResponseWriter, r *http.Request) {
+	if handler.mediaObjects == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "media_registry_not_configured", "media object registry is not configured")
+		return
+	}
+	object, err := handler.mediaObjects.GetMediaObject(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, object)
+}
+
+func (handler *Handler) getMediaObjectTimeline(w http.ResponseWriter, r *http.Request) {
+	if handler.mediaObjects == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "media_registry_not_configured", "media object registry is not configured")
+		return
+	}
+	timeline, err := handler.mediaObjects.GetMediaObjectTimeline(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, timeline)
+}
+
+func (handler *Handler) verifyMediaObjects(w http.ResponseWriter, r *http.Request) {
+	if handler.mediaObjects == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "media_registry_not_configured", "media object registry is not configured")
+		return
+	}
+	backendID := strings.TrimSpace(r.URL.Query().Get("backendId"))
+	contentHash := strings.TrimSpace(r.URL.Query().Get("contentHash"))
+	if (backendID == "" && contentHash == "") || (backendID != "" && contentHash != "") {
+		writeError(w, fmt.Errorf("%w: exactly one of backendId or contentHash is required", storage.ErrInvalidMediaObject))
+		return
+	}
+	var (
+		report storage.MediaObjectVerificationReport
+		err    error
+	)
+	if backendID != "" {
+		report, err = handler.mediaObjects.VerifyMediaObjectsByBackend(r.Context(), backendID)
+	} else {
+		report, err = handler.mediaObjects.VerifyMediaObjectsByContentHash(r.Context(), contentHash)
+	}
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
+}
+
+func (handler *Handler) verifyMediaObject(w http.ResponseWriter, r *http.Request) {
+	if handler.mediaObjects == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "media_registry_not_configured", "media object registry is not configured")
+		return
+	}
+	result, err := handler.mediaObjects.VerifyMediaObject(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (handler *Handler) listMediaObjects(w http.ResponseWriter, r *http.Request) {
+	if handler.mediaObjects == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "media_registry_not_configured", "media object registry is not configured")
+		return
+	}
+	limit, err := parseMediaObjectListInt(r.URL.Query().Get("limit"), "limit", storage.DefaultMediaObjectListLimit)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	offset, err := parseMediaObjectListInt(r.URL.Query().Get("offset"), "offset", 0)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	page, err := handler.mediaObjects.ListMediaObjects(r.Context(), storage.MediaObjectListFilter{
+		BackendID:          r.URL.Query().Get("backendId"),
+		ContentHash:        r.URL.Query().Get("contentHash"),
+		VerificationStatus: r.URL.Query().Get("verificationStatus"),
+		LifecycleState:     r.URL.Query().Get("lifecycleState"),
+		AssetKind:          r.URL.Query().Get("assetKind"),
+		SortBy:             r.URL.Query().Get("sortBy"),
+		SortOrder:          r.URL.Query().Get("sortOrder"),
+		Limit:              limit,
+		Offset:             offset,
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, page)
+}
+
+func parseMediaObjectMinCopies(raw string) (int, error) {
+	if strings.TrimSpace(raw) == "" {
+		return 2, nil
+	}
+	value, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil {
+		return 0, fmt.Errorf("%w: minCopies must be an integer", storage.ErrInvalidMediaObject)
+	}
+	if value < 2 {
+		return 0, fmt.Errorf("%w: minCopies must be at least 2", storage.ErrInvalidMediaObject)
+	}
+	return value, nil
+}
+
+func parseMediaObjectListInt(raw string, name string, defaultValue int) (int, error) {
+	if strings.TrimSpace(raw) == "" {
+		return defaultValue, nil
+	}
+	value, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil {
+		return 0, fmt.Errorf("%w: %s must be an integer", storage.ErrInvalidMediaObject, name)
+	}
+	if name == "limit" && value < 1 {
+		return 0, fmt.Errorf("%w: limit must be positive", storage.ErrInvalidMediaObject)
+	}
+	return value, nil
+}
+
+func decodeJSON(w http.ResponseWriter, r *http.Request, target any) error {
+	return decodeJSONWithSentinel(w, r, target, storage.ErrInvalidBackend)
+}
+
+func decodeJSONWithSentinel(w http.ResponseWriter, r *http.Request, target any, sentinel error) error {
+	contentType := strings.ToLower(strings.TrimSpace(strings.Split(r.Header.Get("Content-Type"), ";")[0]))
+	if contentType != "application/json" {
+		return fmt.Errorf("%w: Content-Type must be application/json", sentinel)
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodyBytes)
+	decoder := json.NewDecoder(r.Body)
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return fmt.Errorf("%w: request body: %v", sentinel, err)
+	}
+	if err := decoder.Decode(&struct{}{}); err != io.EOF {
+		return fmt.Errorf("%w: request body must contain one JSON value", sentinel)
+	}
+	return nil
+}
+
+func writeError(w http.ResponseWriter, err error) {
+	status := http.StatusInternalServerError
+	code := "internal_error"
+	switch {
+	case errors.Is(err, storage.ErrInvalidMediaObject):
+		status = http.StatusBadRequest
+		code = "invalid_media_object"
+	case errors.Is(err, storage.ErrInvalidBackend):
+		status = http.StatusBadRequest
+		code = "invalid_backend"
+	case errors.Is(err, storage.ErrNotFound):
+		status = http.StatusNotFound
+		code = "not_found"
+	case errors.Is(err, storage.ErrConflict), errors.Is(err, storage.ErrBackendDisabled):
+		status = http.StatusConflict
+		code = "conflict"
+	case errors.Is(err, storage.ErrMediaObjectVerificationUnsupported):
+		status = http.StatusUnprocessableEntity
+		code = "media_object_verification_unsupported"
+	case errors.Is(err, storage.ErrMediaObjectVerificationFailed):
+		status = http.StatusUnprocessableEntity
+		code = "media_object_verification_failed"
+	case errors.Is(err, storage.ErrProbeUnsupported):
+		status = http.StatusUnprocessableEntity
+		code = "probe_unsupported"
+	case errors.Is(err, storage.ErrProbeFailed):
+		status = http.StatusUnprocessableEntity
+		code = "probe_failed"
+	case errors.Is(err, storage.ErrCapacityUnsupported):
+		status = http.StatusUnprocessableEntity
+		code = "capacity_unsupported"
+	}
+	writeAPIError(w, status, code, strings.TrimSpace(err.Error()))
+}
+
+func writeAPIError(w http.ResponseWriter, status int, code string, message string) {
+	writeJSON(w, status, map[string]any{"error": map[string]string{"code": code, "message": message}})
+}
+
+func writeJSON(w http.ResponseWriter, status int, value any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	_ = json.NewEncoder(w).Encode(value)
+}
