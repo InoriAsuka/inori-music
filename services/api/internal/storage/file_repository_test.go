@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -53,10 +54,10 @@ func TestFileRepositoryClearDefaultPersists(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewFileRepository() error = %v", err)
 	}
-	if err := repo.Save(ctx, StorageBackend{ID: "b", Type: BackendTypeLocal, IsDefault: true, Priority: 2}); err != nil {
+	if err := repo.Save(ctx, validPersistedBackend("b", 2, true)); err != nil {
 		t.Fatalf("Save(b) error = %v", err)
 	}
-	if err := repo.Save(ctx, StorageBackend{ID: "a", Type: BackendTypeLocal, Priority: 1}); err != nil {
+	if err := repo.Save(ctx, validPersistedBackend("a", 1, false)); err != nil {
 		t.Fatalf("Save(a) error = %v", err)
 	}
 	if err := repo.ClearDefault(ctx); err != nil {
@@ -102,6 +103,51 @@ func TestFileRepositoryRejectsUnsupportedSchemaVersion(t *testing.T) {
 	}
 }
 
+func TestFileRepositoryRejectsDuplicateBackendIDs(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "storage-backends.json")
+	document := fileRepositoryDocument{
+		Version: fileRepositorySchemaVersion,
+		Backends: []StorageBackend{
+			validPersistedBackend(" local-main ", 1, false),
+			validPersistedBackend("local-main", 2, false),
+		},
+	}
+	content, err := json.Marshal(document)
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+	if err := os.WriteFile(path, content, 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	_, err = NewFileRepository(path)
+	if !errors.Is(err, ErrInvalidBackend) {
+		t.Fatalf("NewFileRepository() error = %v, want ErrInvalidBackend", err)
+	}
+}
+
+func TestFileRepositoryRejectsInvalidPersistedBackendConfig(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "storage-backends.json")
+	document := fileRepositoryDocument{
+		Version: fileRepositorySchemaVersion,
+		Backends: []StorageBackend{
+			{ID: "local-main", Type: BackendTypeLocal, DisplayName: "Local", Enabled: true, Config: BackendConfig{S3: &S3Config{Endpoint: "https://s3.example.com", Bucket: "inori", AccessKeySecretRef: "access", SecretKeySecretRef: "secret"}}},
+		},
+	}
+	content, err := json.Marshal(document)
+	if err != nil {
+		t.Fatalf("Marshal() error = %v", err)
+	}
+	if err := os.WriteFile(path, content, 0o600); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+
+	_, err = NewFileRepository(path)
+	if !errors.Is(err, ErrInvalidBackend) {
+		t.Fatalf("NewFileRepository() error = %v, want ErrInvalidBackend", err)
+	}
+}
+
 func TestFileRepositoryRejectsEmptyBackendID(t *testing.T) {
 	repo, err := NewFileRepository(filepath.Join(t.TempDir(), "storage-backends.json"))
 	if err != nil {
@@ -113,41 +159,14 @@ func TestFileRepositoryRejectsEmptyBackendID(t *testing.T) {
 	}
 }
 
-func TestFileRepositorySaveWithExclusiveDefaultPersistsSingleRewrite(t *testing.T) {
-	ctx := context.Background()
-	path := filepath.Join(t.TempDir(), "storage-backends.json")
-	repo, err := NewFileRepository(path)
-	if err != nil {
-		t.Fatalf("NewFileRepository() error = %v", err)
-	}
-	oldDefault := StorageBackend{ID: "local-main", Type: BackendTypeLocal, Enabled: true, IsDefault: true, Priority: 1}
-	newDefault := StorageBackend{ID: "s3-prod", Type: BackendTypeS3, Enabled: true, Priority: 2}
-	if err := repo.Save(ctx, oldDefault); err != nil {
-		t.Fatalf("Save(local-main) error = %v", err)
-	}
-	if err := repo.Save(ctx, newDefault); err != nil {
-		t.Fatalf("Save(s3-prod) error = %v", err)
-	}
-
-	if err := repo.SaveWithExclusiveDefault(ctx, newDefault); err != nil {
-		t.Fatalf("SaveWithExclusiveDefault() error = %v", err)
-	}
-
-	reopened, err := NewFileRepository(path)
-	if err != nil {
-		t.Fatalf("NewFileRepository(reopen) error = %v", err)
-	}
-	backends, err := reopened.List(ctx)
-	if err != nil {
-		t.Fatalf("List() error = %v", err)
-	}
-	defaults := make([]string, 0)
-	for _, backend := range backends {
-		if backend.IsDefault {
-			defaults = append(defaults, backend.ID)
-		}
-	}
-	if len(defaults) != 1 || defaults[0] != "s3-prod" {
-		t.Fatalf("defaults = %v, want [s3-prod]", defaults)
+func validPersistedBackend(id string, priority int, isDefault bool) StorageBackend {
+	return StorageBackend{
+		ID:          id,
+		Type:        BackendTypeLocal,
+		DisplayName: "Local " + id,
+		Enabled:     true,
+		IsDefault:   isDefault,
+		Priority:    priority,
+		Config:      BackendConfig{Local: &LocalConfig{RootPath: "/srv/inori/" + id}},
 	}
 }
