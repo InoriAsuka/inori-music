@@ -11,6 +11,7 @@ The HTTP API exposes authenticated admin endpoints for managing storage backends
 ## Main Endpoints
 
 - `GET /healthz`: process health.
+- `GET /metrics`: public Prometheus-compatible readiness and build metadata gauges.
 - `GET /readyz`: public readiness diagnostics for storage service, media registry, and admin-auth configuration.
 - `GET /versionz`: public non-sensitive build metadata.
 - `GET/POST /api/v1/admin/storage/backends`: list or register storage backends.

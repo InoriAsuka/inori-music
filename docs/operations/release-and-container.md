@@ -12,7 +12,7 @@ The repository uses GitHub Actions to validate the Go API, publish tagged releas
 
 ## Container Defaults
 
-The Docker image listens on `0.0.0.0:8080`, stores bootstrap JSON repositories under `/data`, exposes port `8080`, and requires `INORI_ADMIN_TOKEN` at runtime for admin endpoints. Mount `/data` if the deployment uses the JSON repositories before PostgreSQL persistence is introduced. Release binaries and container images inject non-sensitive version metadata, which is available from the public `/versionz` endpoint. Container liveness uses `/healthz`; deployment readiness checks can call `/readyz` to confirm storage service, media registry, and admin authentication configuration.
+The Docker image listens on `0.0.0.0:8080`, stores bootstrap JSON repositories under `/data`, exposes port `8080`, and requires `INORI_ADMIN_TOKEN` at runtime for admin endpoints. Mount `/data` if the deployment uses the JSON repositories before PostgreSQL persistence is introduced. Release binaries and container images inject non-sensitive version metadata, which is available from the public `/versionz` endpoint. Container liveness uses `/healthz`; deployment readiness checks can call `/readyz` to confirm storage service, media registry, and admin authentication configuration. Monitoring systems can scrape `/metrics` for non-sensitive readiness gauges and API build metadata.
 
 ## Release Process
 

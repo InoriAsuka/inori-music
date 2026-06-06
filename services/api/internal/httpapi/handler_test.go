@@ -76,6 +76,33 @@ func TestReadinessIsPublic(t *testing.T) {
 	}
 }
 
+func TestMetricsIsPublic(t *testing.T) {
+	response := performRequestWithoutAuth(t, newTestHandler(), http.MethodGet, "/metrics", "")
+	if response.Code != http.StatusOK {
+		t.Fatalf("GET /metrics status = %d, want %d body = %s", response.Code, http.StatusOK, response.Body.String())
+	}
+	contentType := response.Header().Get("Content-Type")
+	if !strings.HasPrefix(contentType, "text/plain") {
+		t.Fatalf("Content-Type = %q, want text/plain", contentType)
+	}
+	body := response.Body.String()
+	for _, want := range []string{
+		"# HELP inori_api_ready",
+		"inori_api_ready 1",
+		`inori_api_readiness_check{check="storage_service"} 1`,
+		`inori_api_info{name="inori-api",version="test-version",commit="test-commit",build_time="2026-06-05T12:30:00Z"} 1`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("metrics body missing %q: %s", want, body)
+		}
+	}
+
+	unready := performRequestWithoutAuth(t, newUnauthenticatedTestHandler(), http.MethodGet, "/metrics", "")
+	if unready.Code != http.StatusOK || !strings.Contains(unready.Body.String(), "inori_api_ready 0") {
+		t.Fatalf("unready metrics status/body = %d %s, want ready gauge 0", unready.Code, unready.Body.String())
+	}
+}
+
 func TestAdminAuth(t *testing.T) {
 	handler := newTestHandler()
 	tests := []struct {

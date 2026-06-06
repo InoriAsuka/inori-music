@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.32.0`
+`0.33.0`
 
 ## Product Goal
 
@@ -19,6 +19,7 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Repository automation must validate builds and tests, publish tagged release binaries, and publish Docker images for deployable API artifacts.
 - Runtime API artifacts must expose non-sensitive build metadata for deployment diagnostics.
 - Runtime API artifacts must expose public readiness diagnostics for storage, media registry, and admin-auth configuration.
+- Runtime API artifacts must expose non-sensitive Prometheus-compatible metrics for deployment monitoring.
 
 ## Storage Requirements
 
@@ -201,4 +202,10 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 
 - Add a public `/readyz` endpoint with storage service, media registry, and admin authentication readiness checks.
 - Add a Docker liveness healthcheck that uses `/healthz` for container runtime monitoring.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.33.0 - 2026-06-06
+
+- Add a public `/metrics` endpoint using Prometheus text exposition for readiness gauges and API build information.
+- Keep metrics non-sensitive and aligned with `/readyz` readiness checks and `/versionz` build metadata.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

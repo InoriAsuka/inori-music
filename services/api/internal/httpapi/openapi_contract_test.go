@@ -13,6 +13,8 @@ func TestStorageAdminOpenAPIContractCoversRoutes(t *testing.T) {
 	paths := document["paths"].(map[string]any)
 	expected := map[string][]string{
 		"/healthz":                       {"get"},
+		"/metrics":                       {"get"},
+		"/readyz":                        {"get"},
 		"/versionz":                      {"get"},
 		"/api/v1/admin/storage/backends": {"get", "post"},
 		"/api/v1/admin/storage/backends/validate":      {"post"},
@@ -131,6 +133,10 @@ func TestStorageAdminOpenAPIContractSecurity(t *testing.T) {
 	if security, ok := health["security"].([]any); !ok || len(security) != 0 {
 		t.Fatalf("/healthz security = %#v, want public empty security", health["security"])
 	}
+	metrics := operation(t, paths, "/metrics", "get")
+	if security, ok := metrics["security"].([]any); !ok || len(security) != 0 {
+		t.Fatalf("/metrics security = %#v, want public empty security", metrics["security"])
+	}
 	ready := operation(t, paths, "/readyz", "get")
 	if security, ok := ready["security"].([]any); !ok || len(security) != 0 {
 		t.Fatalf("/readyz security = %#v, want public empty security", ready["security"])
@@ -141,7 +147,7 @@ func TestStorageAdminOpenAPIContractSecurity(t *testing.T) {
 	}
 
 	for path, item := range paths {
-		if path == "/healthz" || path == "/readyz" || path == "/versionz" {
+		if path == "/healthz" || path == "/metrics" || path == "/readyz" || path == "/versionz" {
 			continue
 		}
 		pathItem := item.(map[string]any)

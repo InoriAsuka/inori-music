@@ -202,6 +202,7 @@ func NewHandler(storageService *storage.Service, options ...HandlerOption) *Hand
 func (handler *Handler) Routes() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", handler.health)
+	mux.HandleFunc("GET /metrics", handler.metrics)
 	mux.HandleFunc("GET /readyz", handler.readiness)
 	mux.HandleFunc("GET /versionz", handler.version)
 	mux.HandleFunc("GET /api/v1/admin/storage/backends", handler.requireAdminAuth(handler.listStorageBackends))
@@ -224,6 +225,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/admin/media/objects/{id}/lifecycle", handler.requireAdminAuth(handler.setMediaObjectLifecycle))
 	mux.HandleFunc("POST /api/v1/admin/media/objects/{id}/verify", handler.requireAdminAuth(handler.verifyMediaObject))
 	mux.HandleFunc("/healthz", handler.methodNotAllowed)
+	mux.HandleFunc("/metrics", handler.methodNotAllowed)
 	mux.HandleFunc("/readyz", handler.methodNotAllowed)
 	mux.HandleFunc("/versionz", handler.methodNotAllowed)
 	mux.HandleFunc("/api/v1/admin/storage/backends", handler.requireAdminAuth(handler.methodNotAllowed))
@@ -255,6 +257,34 @@ func (handler *Handler) readiness(w http.ResponseWriter, _ *http.Request) {
 		status = http.StatusServiceUnavailable
 	}
 	writeJSON(w, status, report)
+}
+
+func (handler *Handler) metrics(w http.ResponseWriter, _ *http.Request) {
+	report := handler.readinessReport()
+	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintln(w, "# HELP inori_api_ready Whether the API process is ready for admin traffic.")
+	fmt.Fprintln(w, "# TYPE inori_api_ready gauge")
+	fmt.Fprintf(w, "inori_api_ready %d\n", prometheusBool(report.Ready))
+	fmt.Fprintln(w, "# HELP inori_api_readiness_check Readiness status per public startup check.")
+	fmt.Fprintln(w, "# TYPE inori_api_readiness_check gauge")
+	for _, check := range report.Checks {
+		fmt.Fprintf(w, "inori_api_readiness_check{check=\"%s\"} %d\n", prometheusLabelValue(check.Name), prometheusBool(check.Status == "ok"))
+	}
+	fmt.Fprintln(w, "# HELP inori_api_info Build metadata for the running API process.")
+	fmt.Fprintln(w, "# TYPE inori_api_info gauge")
+	fmt.Fprintf(w, "inori_api_info{name=\"%s\",version=\"%s\",commit=\"%s\",build_time=\"%s\"} 1\n", prometheusLabelValue(handler.info.Name), prometheusLabelValue(handler.info.Version), prometheusLabelValue(handler.info.Commit), prometheusLabelValue(handler.info.BuildTime))
+}
+
+func prometheusBool(value bool) int {
+	if value {
+		return 1
+	}
+	return 0
+}
+
+func prometheusLabelValue(value string) string {
+	return strings.NewReplacer("\\", "\\\\", "\n", "\\n", "\"", "\\\"").Replace(value)
 }
 
 func (handler *Handler) version(w http.ResponseWriter, _ *http.Request) {
