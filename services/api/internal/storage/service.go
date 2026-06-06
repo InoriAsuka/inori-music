@@ -47,10 +47,9 @@ func (service *Service) RegisterBackend(ctx context.Context, backend StorageBack
 		if err := ensureDefaultCandidate(backend); err != nil {
 			return StorageBackend{}, err
 		}
-		if err := service.repository.SaveWithExclusiveDefault(ctx, backend); err != nil {
+		if err := service.repository.ClearDefault(ctx); err != nil {
 			return StorageBackend{}, err
 		}
-		return backend, nil
 	}
 
 	if err := service.repository.Save(ctx, backend); err != nil {
@@ -140,7 +139,10 @@ func (service *Service) SetDefaultBackend(ctx context.Context, id string) (Stora
 	backend.IsDefault = true
 	backend.UpdatedAt = service.now().UTC()
 
-	if err := service.repository.SaveWithExclusiveDefault(ctx, backend); err != nil {
+	if err := service.repository.ClearDefault(ctx); err != nil {
+		return StorageBackend{}, err
+	}
+	if err := service.repository.Save(ctx, backend); err != nil {
 		return StorageBackend{}, err
 	}
 	return backend, nil

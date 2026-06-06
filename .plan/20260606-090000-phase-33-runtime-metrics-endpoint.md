@@ -18,4 +18,4 @@ Expose non-sensitive runtime metrics so deployment monitoring can scrape readine
 
 ## Notes
 
-The metrics endpoint intentionally avoids media object, backend secret, and credential details. It is designed for bootstrap deployment monitoring and can be expanded later with request counters and latency histograms.
+The metrics endpoint intentionally avoids media object, backend secret, and credential details. It is designed for bootstrap deployment monitoring and can be expanded later with latency histograms.

@@ -4,7 +4,7 @@ A centralized music platform targeting Web, Android, iOS, and desktop clients wh
 
 ## Version
 
-Current architecture baseline version: `0.33.0`.
+Current architecture baseline version: `0.34.0`.
 
 ## Documentation Policy
 
@@ -152,6 +152,10 @@ Expose public readiness diagnostics via `/readyz` and add a Docker liveness heal
 ### Phase 33: Runtime Metrics Endpoint
 
 Expose public Prometheus-compatible runtime metrics for readiness gauges and build information.
+
+### Phase 34: HTTP Request Metrics
+
+Add low-cardinality HTTP request counters and duration-sum metrics by method, route pattern, and status.
 
 ## Run the API Scaffold
 

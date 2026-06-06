@@ -8,8 +8,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"inori-music/services/api/internal/storage"
 )
@@ -35,6 +38,23 @@ type ReadinessCheck struct {
 type ReadinessReport struct {
 	Ready  bool             `json:"ready"`
 	Checks []ReadinessCheck `json:"checks"`
+}
+
+type requestMetricKey struct {
+	Method string
+	Path   string
+	Status int
+}
+
+type requestMetricValue struct {
+	Count           uint64
+	DurationSeconds float64
+}
+
+type requestMetricSnapshot struct {
+	Key             requestMetricKey
+	Count           uint64
+	DurationSeconds float64
 }
 
 // HandlerOption configures the HTTP API handler.
@@ -63,10 +83,12 @@ func WithServiceInfo(info ServiceInfo) HandlerOption {
 
 // Handler serves versioned administrative HTTP endpoints.
 type Handler struct {
-	storage      *storage.Service
-	mediaObjects *storage.MediaObjectService
-	adminToken   string
-	info         ServiceInfo
+	storage        *storage.Service
+	mediaObjects   *storage.MediaObjectService
+	adminToken     string
+	info           ServiceInfo
+	metricsMu      sync.Mutex
+	requestMetrics map[requestMetricKey]requestMetricValue
 }
 
 type storageBackendRequest struct {
@@ -192,7 +214,7 @@ func readinessCheck(name string, ok bool, okMessage string, failureMessage strin
 }
 
 func NewHandler(storageService *storage.Service, options ...HandlerOption) *Handler {
-	handler := &Handler{storage: storageService, info: defaultServiceInfo()}
+	handler := &Handler{storage: storageService, info: defaultServiceInfo(), requestMetrics: make(map[requestMetricKey]requestMetricValue)}
 	for _, option := range options {
 		option(handler)
 	}
@@ -243,7 +265,71 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("/api/v1/admin/media/objects/{id}/verify", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/", handler.requireAdminAuth(handler.notFound))
 	mux.HandleFunc("/", handler.notFound)
-	return mux
+	return handler.instrument(mux)
+}
+
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+	wrote  bool
+}
+
+func (recorder *statusRecorder) WriteHeader(status int) {
+	if recorder.wrote {
+		return
+	}
+	recorder.status = status
+	recorder.wrote = true
+	recorder.ResponseWriter.WriteHeader(status)
+}
+
+func (recorder *statusRecorder) Write(data []byte) (int, error) {
+	if !recorder.wrote {
+		recorder.WriteHeader(http.StatusOK)
+	}
+	return recorder.ResponseWriter.Write(data)
+}
+
+func (handler *Handler) instrument(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		started := time.Now()
+		recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+		next.ServeHTTP(recorder, r)
+		path := r.Pattern
+		if path == "" {
+			path = "unmatched"
+		}
+		handler.recordRequestMetric(r.Method, path, recorder.status, time.Since(started).Seconds())
+	})
+}
+
+func (handler *Handler) recordRequestMetric(method string, path string, status int, durationSeconds float64) {
+	key := requestMetricKey{Method: method, Path: path, Status: status}
+	handler.metricsMu.Lock()
+	defer handler.metricsMu.Unlock()
+	value := handler.requestMetrics[key]
+	value.Count++
+	value.DurationSeconds += durationSeconds
+	handler.requestMetrics[key] = value
+}
+
+func (handler *Handler) requestMetricSnapshots() []requestMetricSnapshot {
+	handler.metricsMu.Lock()
+	defer handler.metricsMu.Unlock()
+	snapshots := make([]requestMetricSnapshot, 0, len(handler.requestMetrics))
+	for key, value := range handler.requestMetrics {
+		snapshots = append(snapshots, requestMetricSnapshot{Key: key, Count: value.Count, DurationSeconds: value.DurationSeconds})
+	}
+	sort.Slice(snapshots, func(i, j int) bool {
+		if snapshots[i].Key.Path != snapshots[j].Key.Path {
+			return snapshots[i].Key.Path < snapshots[j].Key.Path
+		}
+		if snapshots[i].Key.Method != snapshots[j].Key.Method {
+			return snapshots[i].Key.Method < snapshots[j].Key.Method
+		}
+		return snapshots[i].Key.Status < snapshots[j].Key.Status
+	})
+	return snapshots
 }
 
 func (handler *Handler) health(w http.ResponseWriter, _ *http.Request) {
@@ -274,6 +360,17 @@ func (handler *Handler) metrics(w http.ResponseWriter, _ *http.Request) {
 	fmt.Fprintln(w, "# HELP inori_api_info Build metadata for the running API process.")
 	fmt.Fprintln(w, "# TYPE inori_api_info gauge")
 	fmt.Fprintf(w, "inori_api_info{name=\"%s\",version=\"%s\",commit=\"%s\",build_time=\"%s\"} 1\n", prometheusLabelValue(handler.info.Name), prometheusLabelValue(handler.info.Version), prometheusLabelValue(handler.info.Commit), prometheusLabelValue(handler.info.BuildTime))
+	fmt.Fprintln(w, "# HELP inori_api_http_requests_total Total HTTP requests handled by method, route pattern, and status.")
+	fmt.Fprintln(w, "# TYPE inori_api_http_requests_total counter")
+	fmt.Fprintln(w, "# HELP inori_api_http_request_duration_seconds_sum Cumulative HTTP request duration in seconds by method, route pattern, and status.")
+	fmt.Fprintln(w, "# TYPE inori_api_http_request_duration_seconds_sum counter")
+	for _, metric := range handler.requestMetricSnapshots() {
+		method := prometheusLabelValue(metric.Key.Method)
+		path := prometheusLabelValue(metric.Key.Path)
+		status := prometheusLabelValue(strconv.Itoa(metric.Key.Status))
+		fmt.Fprintf(w, "inori_api_http_requests_total{method=\"%s\",path=\"%s\",status=\"%s\"} %d\n", method, path, status, metric.Count)
+		fmt.Fprintf(w, "inori_api_http_request_duration_seconds_sum{method=\"%s\",path=\"%s\",status=\"%s\"} %.6f\n", method, path, status, metric.DurationSeconds)
+	}
 }
 
 func prometheusBool(value bool) int {

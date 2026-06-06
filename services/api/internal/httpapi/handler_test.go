@@ -77,7 +77,9 @@ func TestReadinessIsPublic(t *testing.T) {
 }
 
 func TestMetricsIsPublic(t *testing.T) {
-	response := performRequestWithoutAuth(t, newTestHandler(), http.MethodGet, "/metrics", "")
+	handler := newTestHandler()
+	performRequestWithoutAuth(t, handler, http.MethodGet, "/healthz", "")
+	response := performRequestWithoutAuth(t, handler, http.MethodGet, "/metrics", "")
 	if response.Code != http.StatusOK {
 		t.Fatalf("GET /metrics status = %d, want %d body = %s", response.Code, http.StatusOK, response.Body.String())
 	}
@@ -91,6 +93,8 @@ func TestMetricsIsPublic(t *testing.T) {
 		"inori_api_ready 1",
 		`inori_api_readiness_check{check="storage_service"} 1`,
 		`inori_api_info{name="inori-api",version="test-version",commit="test-commit",build_time="2026-06-05T12:30:00Z"} 1`,
+		`inori_api_http_requests_total{method="GET",path="GET /healthz",status="200"} 1`,
+		`inori_api_http_request_duration_seconds_sum{method="GET",path="GET /healthz",status="200"}`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("metrics body missing %q: %s", want, body)

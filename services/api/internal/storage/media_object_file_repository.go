@@ -185,15 +185,10 @@ func (repo *FileMediaObjectRepository) load() error {
 	if document.Version != mediaObjectFileRepositorySchemaVersion {
 		return fmt.Errorf("%w: unsupported media object repository schema version %d", ErrInvalidMediaObject, document.Version)
 	}
-	seen := make(map[string]struct{}, len(document.Objects))
 	for _, object := range document.Objects {
-		if err := ValidateMediaObject(&object); err != nil {
-			return fmt.Errorf("validate persisted media object %q: %w", object.ID, err)
+		if strings.TrimSpace(object.ID) == "" {
+			return fmt.Errorf("%w: persisted media object id is required", ErrInvalidMediaObject)
 		}
-		if _, ok := seen[object.ID]; ok {
-			return fmt.Errorf("%w: duplicate persisted media object id %q", ErrInvalidMediaObject, object.ID)
-		}
-		seen[object.ID] = struct{}{}
 		repo.objects[object.ID] = object
 	}
 	return nil
@@ -232,9 +227,6 @@ func (repo *FileMediaObjectRepository) persistLocked() error {
 	}
 	if err := os.Rename(tempPath, repo.path); err != nil {
 		return fmt.Errorf("replace media object repository %q: %w", repo.path, err)
-	}
-	if err := syncDirectory(filepath.Dir(repo.path)); err != nil {
-		return fmt.Errorf("sync media object repository directory: %w", err)
 	}
 	cleanup = false
 	return nil

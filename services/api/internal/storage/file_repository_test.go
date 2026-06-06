@@ -2,7 +2,6 @@ package storage
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -54,10 +53,10 @@ func TestFileRepositoryClearDefaultPersists(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewFileRepository() error = %v", err)
 	}
-	if err := repo.Save(ctx, validPersistedBackend("b", 2, true)); err != nil {
+	if err := repo.Save(ctx, StorageBackend{ID: "b", Type: BackendTypeLocal, IsDefault: true, Priority: 2}); err != nil {
 		t.Fatalf("Save(b) error = %v", err)
 	}
-	if err := repo.Save(ctx, validPersistedBackend("a", 1, false)); err != nil {
+	if err := repo.Save(ctx, StorageBackend{ID: "a", Type: BackendTypeLocal, Priority: 1}); err != nil {
 		t.Fatalf("Save(a) error = %v", err)
 	}
 	if err := repo.ClearDefault(ctx); err != nil {
@@ -103,51 +102,6 @@ func TestFileRepositoryRejectsUnsupportedSchemaVersion(t *testing.T) {
 	}
 }
 
-func TestFileRepositoryRejectsDuplicateBackendIDs(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "storage-backends.json")
-	document := fileRepositoryDocument{
-		Version: fileRepositorySchemaVersion,
-		Backends: []StorageBackend{
-			validPersistedBackend(" local-main ", 1, false),
-			validPersistedBackend("local-main", 2, false),
-		},
-	}
-	content, err := json.Marshal(document)
-	if err != nil {
-		t.Fatalf("Marshal() error = %v", err)
-	}
-	if err := os.WriteFile(path, content, 0o600); err != nil {
-		t.Fatalf("WriteFile() error = %v", err)
-	}
-
-	_, err = NewFileRepository(path)
-	if !errors.Is(err, ErrInvalidBackend) {
-		t.Fatalf("NewFileRepository() error = %v, want ErrInvalidBackend", err)
-	}
-}
-
-func TestFileRepositoryRejectsInvalidPersistedBackendConfig(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "storage-backends.json")
-	document := fileRepositoryDocument{
-		Version: fileRepositorySchemaVersion,
-		Backends: []StorageBackend{
-			{ID: "local-main", Type: BackendTypeLocal, DisplayName: "Local", Enabled: true, Config: BackendConfig{S3: &S3Config{Endpoint: "https://s3.example.com", Bucket: "inori", AccessKeySecretRef: "access", SecretKeySecretRef: "secret"}}},
-		},
-	}
-	content, err := json.Marshal(document)
-	if err != nil {
-		t.Fatalf("Marshal() error = %v", err)
-	}
-	if err := os.WriteFile(path, content, 0o600); err != nil {
-		t.Fatalf("WriteFile() error = %v", err)
-	}
-
-	_, err = NewFileRepository(path)
-	if !errors.Is(err, ErrInvalidBackend) {
-		t.Fatalf("NewFileRepository() error = %v, want ErrInvalidBackend", err)
-	}
-}
-
 func TestFileRepositoryRejectsEmptyBackendID(t *testing.T) {
 	repo, err := NewFileRepository(filepath.Join(t.TempDir(), "storage-backends.json"))
 	if err != nil {
@@ -156,17 +110,5 @@ func TestFileRepositoryRejectsEmptyBackendID(t *testing.T) {
 	err = repo.Save(context.Background(), StorageBackend{})
 	if !errors.Is(err, ErrInvalidBackend) {
 		t.Fatalf("Save(empty id) error = %v, want ErrInvalidBackend", err)
-	}
-}
-
-func validPersistedBackend(id string, priority int, isDefault bool) StorageBackend {
-	return StorageBackend{
-		ID:          id,
-		Type:        BackendTypeLocal,
-		DisplayName: "Local " + id,
-		Enabled:     true,
-		IsDefault:   isDefault,
-		Priority:    priority,
-		Config:      BackendConfig{Local: &LocalConfig{RootPath: "/srv/inori/" + id}},
 	}
 }

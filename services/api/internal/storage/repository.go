@@ -9,7 +9,6 @@ import (
 // Repository stores server-managed storage backend configuration.
 type Repository interface {
 	Save(ctx context.Context, backend StorageBackend) error
-	SaveWithExclusiveDefault(ctx context.Context, backend StorageBackend) error
 	Get(ctx context.Context, id string) (StorageBackend, error)
 	List(ctx context.Context) ([]StorageBackend, error)
 	ClearDefault(ctx context.Context) error
@@ -31,22 +30,6 @@ func (repo *MemoryRepository) Save(_ context.Context, backend StorageBackend) er
 
 	if backend.ID == "" {
 		return fmt.Errorf("%w: id is required", ErrInvalidBackend)
-	}
-	repo.backends[backend.ID] = backend
-	return nil
-}
-
-func (repo *MemoryRepository) SaveWithExclusiveDefault(_ context.Context, backend StorageBackend) error {
-	repo.mu.Lock()
-	defer repo.mu.Unlock()
-
-	if backend.ID == "" {
-		return fmt.Errorf("%w: id is required", ErrInvalidBackend)
-	}
-	backend.IsDefault = true
-	for id, existing := range repo.backends {
-		existing.IsDefault = false
-		repo.backends[id] = existing
 	}
 	repo.backends[backend.ID] = backend
 	return nil

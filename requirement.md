@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.33.0`
+`0.34.0`
 
 ## Product Goal
 
@@ -20,6 +20,7 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Runtime API artifacts must expose non-sensitive build metadata for deployment diagnostics.
 - Runtime API artifacts must expose public readiness diagnostics for storage, media registry, and admin-auth configuration.
 - Runtime API artifacts must expose non-sensitive Prometheus-compatible metrics for deployment monitoring.
+- Runtime HTTP metrics must avoid high-cardinality labels by using route patterns instead of raw URLs.
 
 ## Storage Requirements
 
@@ -208,4 +209,10 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 
 - Add a public `/metrics` endpoint using Prometheus text exposition for readiness gauges and API build information.
 - Keep metrics non-sensitive and aligned with `/readyz` readiness checks and `/versionz` build metadata.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.34.0 - 2026-06-06
+
+- Add low-cardinality HTTP request counters and cumulative duration metrics labeled by method, route pattern, and status.
+- Reuse the public `/metrics` endpoint while avoiding raw URL labels and secret-bearing request data.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
