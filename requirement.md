@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.34.0`
+`0.35.0`
 
 ## Product Goal
 
@@ -189,8 +189,7 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 
 ### v0.30.0 - 2026-06-05
 
-- Add GitHub Actions automation for Go API validation, semantic tag releases, and multi-architecture Docker image publishing.
-- Add a production-oriented API Dockerfile and release/container operations documentation.
+- Add metadata-only media object statistics backend scoping.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
 
 ### v0.31.0 - 2026-06-05
@@ -215,4 +214,11 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 
 - Add low-cardinality HTTP request counters and cumulative duration metrics labeled by method, route pattern, and status.
 - Reuse the public `/metrics` endpoint while avoiding raw URL labels and secret-bearing request data.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.35.0 - 2026-06-10
+
+- Add PostgreSQL-backed repository implementations for storage backends and media objects with automatic schema migration and shared connection pool.
+- File and in-memory repositories remain available when INORI_DATABASE_URL is not set.
+- Integration tests use testcontainers-go with a real PostgreSQL container under the integration build tag.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
