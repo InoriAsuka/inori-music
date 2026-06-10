@@ -234,10 +234,10 @@ func (service *MediaObjectService) GetMediaObject(ctx context.Context, id string
 
 func (service *MediaObjectService) SetMediaObjectLifecycleState(ctx context.Context, id string, state string) (MediaObject, error) {
 	id = strings.TrimSpace(id)
-	state, err := normalizeLifecycleState(state)
 	if id == "" {
 		return MediaObject{}, fmt.Errorf("%w: id is required", ErrInvalidMediaObject)
 	}
+	state, err := normalizeLifecycleState(state)
 	if err != nil {
 		return MediaObject{}, err
 	}

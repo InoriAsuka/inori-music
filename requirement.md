@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.23.0`
+`0.24.0`
 
 ## Product Goal
 
@@ -144,4 +144,11 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 ### v0.23.0 - 2026-06-04
 
 - Restore Markdown documentation to English as the repository documentation policy.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.24.0 - 2026-06-10
+
+- Add PostgreSQL-backed repository implementations for storage backends and media objects with automatic schema migration and shared connection pool.
+- File and in-memory repositories remain available when INORI_DATABASE_URL is not set.
+- Integration tests use testcontainers-go with a real PostgreSQL container under the integration build tag.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

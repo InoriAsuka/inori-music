@@ -45,10 +45,14 @@ func (provider *FilesystemCapacityProvider) Capacity(ctx context.Context, backen
 	}
 	total := stats.Blocks * uint64(stats.Bsize)
 	available := stats.Bavail * uint64(stats.Bsize)
+	used := uint64(0)
+	if total > available {
+		used = total - available
+	}
 	return CapacityReport{
 		BackendID:      backend.ID,
 		TotalBytes:     total,
 		AvailableBytes: available,
-		UsedBytes:      total - available,
+		UsedBytes:      used,
 	}, nil
 }

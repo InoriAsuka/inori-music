@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 	"time"
@@ -31,7 +32,7 @@ func TestStorageRefreshInterval(t *testing.T) {
 
 func TestStorageRepositoryDefaultsToMemory(t *testing.T) {
 	t.Setenv("INORI_STORAGE_REPOSITORY_FILE", "")
-	repo, err := storageRepository()
+	repo, err := storageRepository(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("storageRepository() error = %v", err)
 	}
@@ -43,7 +44,7 @@ func TestStorageRepositoryDefaultsToMemory(t *testing.T) {
 func TestStorageRepositoryUsesFileWhenConfigured(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "storage-backends.json")
 	t.Setenv("INORI_STORAGE_REPOSITORY_FILE", path)
-	repo, err := storageRepository()
+	repo, err := storageRepository(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("storageRepository() error = %v", err)
 	}
@@ -54,7 +55,7 @@ func TestStorageRepositoryUsesFileWhenConfigured(t *testing.T) {
 
 func TestMediaObjectRepositoryDefaultsToMemory(t *testing.T) {
 	t.Setenv("INORI_MEDIA_OBJECT_REPOSITORY_FILE", "")
-	repo, err := mediaObjectRepository()
+	repo, err := mediaObjectRepository(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("mediaObjectRepository() error = %v", err)
 	}
@@ -66,7 +67,7 @@ func TestMediaObjectRepositoryDefaultsToMemory(t *testing.T) {
 func TestMediaObjectRepositoryUsesFileWhenConfigured(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "media-objects.json")
 	t.Setenv("INORI_MEDIA_OBJECT_REPOSITORY_FILE", path)
-	repo, err := mediaObjectRepository()
+	repo, err := mediaObjectRepository(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("mediaObjectRepository() error = %v", err)
 	}
