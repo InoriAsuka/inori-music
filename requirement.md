@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.37.0`
+`0.38.0`
 
 ## Product Goal
 
@@ -239,4 +239,13 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Upgrade requireAdminAuth middleware: validate session token via auth.Service first, fall back to INORI_ADMIN_TOKEN bootstrap token.
 - Return 503 when neither auth service nor admin token is configured; return 401 on bad/missing credentials.
 - Add 8 HTTP-layer tests covering login, logout, session token access, and revoked token denial.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+
+### v0.38.0 - 2026-06-11
+
+- Add authenticated user management APIs for administrators: list users, create users, disable users, and delete users.
+- Restrict user management routes to session-authenticated admin users while preserving bootstrap-token fallback behavior.
+- Add HTTP-layer tests covering the full user management workflow, validation, conflicts, authorization, and missing auth service handling.
+- Extend the OpenAPI contract with auth login/logout and user management schemas and paths.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

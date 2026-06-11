@@ -771,31 +771,58 @@ type memAuthUserRepo struct {
 func newMemAuthUserRepo() *memAuthUserRepo { return &memAuthUserRepo{users: map[string]auth.User{}} }
 
 func (r *memAuthUserRepo) SaveUser(_ context.Context, u auth.User) error {
-	r.mu.Lock(); defer r.mu.Unlock(); r.users[u.ID] = u; return nil
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.users[u.ID] = u
+	return nil
 }
 func (r *memAuthUserRepo) GetUser(_ context.Context, id string) (auth.User, error) {
-	r.mu.RLock(); defer r.mu.RUnlock()
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	u, ok := r.users[id]
-	if !ok { return auth.User{}, fmt.Errorf("%w: %s", auth.ErrUserNotFound, id) }
+	if !ok {
+		return auth.User{}, fmt.Errorf("%w: %s", auth.ErrUserNotFound, id)
+	}
 	return u, nil
 }
 func (r *memAuthUserRepo) GetUserByUsername(_ context.Context, username string) (auth.User, error) {
-	r.mu.RLock(); defer r.mu.RUnlock()
-	for _, u := range r.users { if u.Username == username { return u, nil } }
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, u := range r.users {
+		if u.Username == username {
+			return u, nil
+		}
+	}
 	return auth.User{}, fmt.Errorf("%w: %s", auth.ErrUserNotFound, username)
 }
 func (r *memAuthUserRepo) ListUsers(_ context.Context) ([]auth.User, error) {
-	r.mu.RLock(); defer r.mu.RUnlock()
-	list := make([]auth.User, 0, len(r.users)); for _, u := range r.users { list = append(list, u) }; return list, nil
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	list := make([]auth.User, 0, len(r.users))
+	for _, u := range r.users {
+		list = append(list, u)
+	}
+	return list, nil
 }
 func (r *memAuthUserRepo) DeleteUser(_ context.Context, id string) error {
-	r.mu.Lock(); defer r.mu.Unlock()
-	if _, ok := r.users[id]; !ok { return fmt.Errorf("%w: %s", auth.ErrUserNotFound, id) }
-	delete(r.users, id); return nil
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.users[id]; !ok {
+		return fmt.Errorf("%w: %s", auth.ErrUserNotFound, id)
+	}
+	delete(r.users, id)
+	return nil
 }
 func (r *memAuthUserRepo) CountAdminUsers(_ context.Context) (int, error) {
-	r.mu.RLock(); defer r.mu.RUnlock()
-	n := 0; for _, u := range r.users { if u.Role == auth.RoleAdmin && u.Enabled { n++ } }; return n, nil
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	n := 0
+	for _, u := range r.users {
+		if u.Role == auth.RoleAdmin && u.Enabled {
+			n++
+		}
+	}
+	return n, nil
 }
 
 type memAuthSessionRepo struct {
@@ -807,20 +834,40 @@ func newMemAuthSessionRepo() *memAuthSessionRepo {
 	return &memAuthSessionRepo{sessions: map[string]auth.Session{}}
 }
 func (r *memAuthSessionRepo) SaveSession(_ context.Context, s auth.Session) error {
-	r.mu.Lock(); defer r.mu.Unlock(); r.sessions[s.TokenHash] = s; return nil
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.sessions[s.TokenHash] = s
+	return nil
 }
 func (r *memAuthSessionRepo) GetSession(_ context.Context, h string) (auth.Session, error) {
-	r.mu.RLock(); defer r.mu.RUnlock()
-	s, ok := r.sessions[h]; if !ok { return auth.Session{}, auth.ErrSessionNotFound }; return s, nil
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	s, ok := r.sessions[h]
+	if !ok {
+		return auth.Session{}, auth.ErrSessionNotFound
+	}
+	return s, nil
 }
 func (r *memAuthSessionRepo) RevokeSession(_ context.Context, h string, t time.Time) error {
-	r.mu.Lock(); defer r.mu.Unlock()
-	s, ok := r.sessions[h]; if !ok { return auth.ErrSessionNotFound }
-	s.RevokedAt = &t; r.sessions[h] = s; return nil
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	s, ok := r.sessions[h]
+	if !ok {
+		return auth.ErrSessionNotFound
+	}
+	s.RevokedAt = &t
+	r.sessions[h] = s
+	return nil
 }
 func (r *memAuthSessionRepo) DeleteExpiredSessions(_ context.Context, before time.Time) error {
-	r.mu.Lock(); defer r.mu.Unlock()
-	for k, s := range r.sessions { if s.ExpiresAt.Before(before) { delete(r.sessions, k) } }; return nil
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for k, s := range r.sessions {
+		if s.ExpiresAt.Before(before) {
+			delete(r.sessions, k)
+		}
+	}
+	return nil
 }
 
 func newAuthTestHandler() (http.Handler, *auth.Service) {
@@ -932,5 +979,112 @@ func TestRevokedSessionDeniesAccess(t *testing.T) {
 	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/admin/storage/backends", "", "Bearer "+token)
 	if resp.Code == http.StatusOK {
 		t.Fatal("expected denied access after logout, got 200")
+	}
+}
+
+func TestUserManagementWorkflow(t *testing.T) {
+	h, _ := newAuthTestHandler()
+	token := loginAdminToken(t, h)
+
+	listed := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/admin/users", "", "Bearer "+token)
+	if listed.Code != http.StatusOK {
+		t.Fatalf("list users status = %d, body = %s", listed.Code, listed.Body.String())
+	}
+	assertUserListLength(t, listed, 1)
+
+	created := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/users", `{"username":"viewer1","password":"viewerpass1","role":"viewer"}`, "Bearer "+token)
+	if created.Code != http.StatusCreated {
+		t.Fatalf("create user status = %d, body = %s", created.Code, created.Body.String())
+	}
+	var createdUser auth.UserView
+	decodeResponse(t, created, &createdUser)
+	if createdUser.ID == "" || createdUser.Username != "viewer1" || createdUser.Role != auth.RoleViewer || !createdUser.Enabled {
+		t.Fatalf("created user = %+v", createdUser)
+	}
+	if strings.Contains(created.Body.String(), "password") {
+		t.Fatalf("response leaked password material: %s", created.Body.String())
+	}
+
+	listed = performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/admin/users", "", "Bearer "+token)
+	assertUserListLength(t, listed, 2)
+
+	disabled := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/users/"+createdUser.ID+"/disable", "", "Bearer "+token)
+	if disabled.Code != http.StatusOK {
+		t.Fatalf("disable user status = %d, body = %s", disabled.Code, disabled.Body.String())
+	}
+	var disabledUser auth.UserView
+	decodeResponse(t, disabled, &disabledUser)
+	if disabledUser.Enabled {
+		t.Fatalf("disabled user still enabled: %+v", disabledUser)
+	}
+
+	deleted := performRequestWithAuthHeader(t, h, http.MethodDelete, "/api/v1/admin/users/"+createdUser.ID, "", "Bearer "+token)
+	if deleted.Code != http.StatusNoContent {
+		t.Fatalf("delete user status = %d, body = %s", deleted.Code, deleted.Body.String())
+	}
+	listed = performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/admin/users", "", "Bearer "+token)
+	assertUserListLength(t, listed, 1)
+}
+
+func TestUserManagementCreateValidation(t *testing.T) {
+	h, _ := newAuthTestHandler()
+	token := loginAdminToken(t, h)
+	resp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/users", `{"username":"bad-name","password":"viewerpass1","role":"viewer"}`, "Bearer "+token)
+	assertAPIError(t, resp, http.StatusBadRequest, "invalid_user")
+}
+
+func TestUserManagementCreateConflict(t *testing.T) {
+	h, _ := newAuthTestHandler()
+	token := loginAdminToken(t, h)
+	resp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/users", `{"username":"admin","password":"viewerpass1","role":"admin"}`, "Bearer "+token)
+	assertAPIError(t, resp, http.StatusConflict, "conflict")
+}
+
+func TestUserManagementRequiresAdminRole(t *testing.T) {
+	h, svc := newAuthTestHandler()
+	if _, err := svc.CreateUser(context.Background(), "viewer2", "viewerpass2", auth.RoleViewer); err != nil {
+		t.Fatal(err)
+	}
+	loginResp := performRequestWithoutAuth(t, h, http.MethodPost, "/api/v1/auth/login", `{"username":"viewer2","password":"viewerpass2"}`)
+	var loginResult map[string]any
+	decodeResponse(t, loginResp, &loginResult)
+	token := loginResult["token"].(string)
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/admin/users", "", "Bearer "+token)
+	assertAPIError(t, resp, http.StatusForbidden, "unauthorized")
+}
+
+func TestUserManagementNotConfigured(t *testing.T) {
+	repo := storage.NewMemoryRepository()
+	h := NewHandler(storage.NewService(repo), WithAdminToken(testAdminToken)).Routes()
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/users", "")
+	assertAPIError(t, resp, http.StatusServiceUnavailable, "auth_not_configured")
+}
+
+func loginAdminToken(t *testing.T, h http.Handler) string {
+	t.Helper()
+	loginResp := performRequestWithoutAuth(t, h, http.MethodPost, "/api/v1/auth/login", `{"username":"admin","password":"adminpass1"}`)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("login status = %d, body = %s", loginResp.Code, loginResp.Body.String())
+	}
+	var loginResult map[string]any
+	decodeResponse(t, loginResp, &loginResult)
+	token, ok := loginResult["token"].(string)
+	if !ok || token == "" {
+		t.Fatalf("missing token in login response: %+v", loginResult)
+	}
+	return token
+}
+
+func assertUserListLength(t *testing.T, response *httptest.ResponseRecorder, want int) {
+	t.Helper()
+	if response.Code != http.StatusOK {
+		t.Fatalf("list users status = %d, body = %s", response.Code, response.Body.String())
+	}
+	var body struct {
+		Users []auth.UserView `json:"users"`
+	}
+	decodeResponse(t, response, &body)
+	if len(body.Users) != want {
+		t.Fatalf("users length = %d, want %d, body = %+v", len(body.Users), want, body.Users)
 	}
 }

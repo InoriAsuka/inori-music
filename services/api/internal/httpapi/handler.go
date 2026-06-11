@@ -238,6 +238,10 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /versionz", handler.version)
 	mux.HandleFunc("POST /api/v1/auth/login", handler.login)
 	mux.HandleFunc("POST /api/v1/auth/logout", handler.logout)
+	mux.HandleFunc("GET /api/v1/admin/users", handler.requireAdminAuth(handler.listUsers))
+	mux.HandleFunc("POST /api/v1/admin/users", handler.requireAdminAuth(handler.createUser))
+	mux.HandleFunc("POST /api/v1/admin/users/{id}/disable", handler.requireAdminAuth(handler.disableUser))
+	mux.HandleFunc("DELETE /api/v1/admin/users/{id}", handler.requireAdminAuth(handler.deleteUser))
 	mux.HandleFunc("GET /api/v1/admin/storage/backends", handler.requireAdminAuth(handler.listStorageBackends))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends", handler.requireAdminAuth(handler.registerStorageBackend))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends/validate", handler.requireAdminAuth(handler.validateStorageBackend))
@@ -263,6 +267,9 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("/versionz", handler.methodNotAllowed)
 	mux.HandleFunc("/api/v1/auth/login", handler.methodNotAllowed)
 	mux.HandleFunc("/api/v1/auth/logout", handler.methodNotAllowed)
+	mux.HandleFunc("/api/v1/admin/users", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/users/{id}/disable", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/users/{id}", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/storage/backends", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/storage/backends/validate", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/storage/backends/refresh", handler.requireAdminAuth(handler.methodNotAllowed))
@@ -463,6 +470,72 @@ func (handler *Handler) logout(w http.ResponseWriter, r *http.Request) {
 			writeAPIError(w, http.StatusUnauthorized, "unauthorized", "token not found or already revoked")
 			return
 		}
+		writeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+type createUserRequest struct {
+	Username string    `json:"username"`
+	Password string    `json:"password"`
+	Role     auth.Role `json:"role"`
+}
+
+func (handler *Handler) requireAuthService(w http.ResponseWriter) bool {
+	if handler.authService == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "auth_not_configured", "authentication service is not configured")
+		return false
+	}
+	return true
+}
+
+func (handler *Handler) listUsers(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireAuthService(w) {
+		return
+	}
+	users, err := handler.authService.ListUsers(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"users": users})
+}
+
+func (handler *Handler) createUser(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireAuthService(w) {
+		return
+	}
+	var req createUserRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeError(w, err)
+		return
+	}
+	view, err := handler.authService.CreateUser(r.Context(), req.Username, req.Password, req.Role)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, view)
+}
+
+func (handler *Handler) disableUser(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireAuthService(w) {
+		return
+	}
+	view, err := handler.authService.DisableUser(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
+}
+
+func (handler *Handler) deleteUser(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireAuthService(w) {
+		return
+	}
+	if err := handler.authService.DeleteUser(r.Context(), r.PathValue("id")); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -855,6 +928,21 @@ func writeError(w http.ResponseWriter, err error) {
 	status := http.StatusInternalServerError
 	code := "internal_error"
 	switch {
+	case errors.Is(err, auth.ErrInvalidUser):
+		status = http.StatusBadRequest
+		code = "invalid_user"
+	case errors.Is(err, auth.ErrUserNotFound):
+		status = http.StatusNotFound
+		code = "not_found"
+	case errors.Is(err, auth.ErrUserConflict):
+		status = http.StatusConflict
+		code = "conflict"
+	case errors.Is(err, auth.ErrUserDisabled):
+		status = http.StatusForbidden
+		code = "user_disabled"
+	case errors.Is(err, auth.ErrBadCredentials):
+		status = http.StatusUnauthorized
+		code = "unauthorized"
 	case errors.Is(err, storage.ErrInvalidMediaObject):
 		status = http.StatusBadRequest
 		code = "invalid_media_object"
