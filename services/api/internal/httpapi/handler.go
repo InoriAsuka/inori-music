@@ -236,6 +236,8 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /metrics", handler.metrics)
 	mux.HandleFunc("GET /readyz", handler.readiness)
 	mux.HandleFunc("GET /versionz", handler.version)
+	mux.HandleFunc("POST /api/v1/auth/login", handler.login)
+	mux.HandleFunc("POST /api/v1/auth/logout", handler.logout)
 	mux.HandleFunc("GET /api/v1/admin/storage/backends", handler.requireAdminAuth(handler.listStorageBackends))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends", handler.requireAdminAuth(handler.registerStorageBackend))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends/validate", handler.requireAdminAuth(handler.validateStorageBackend))
@@ -259,6 +261,8 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("/metrics", handler.methodNotAllowed)
 	mux.HandleFunc("/readyz", handler.methodNotAllowed)
 	mux.HandleFunc("/versionz", handler.methodNotAllowed)
+	mux.HandleFunc("/api/v1/auth/login", handler.methodNotAllowed)
+	mux.HandleFunc("/api/v1/auth/logout", handler.methodNotAllowed)
 	mux.HandleFunc("/api/v1/admin/storage/backends", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/storage/backends/validate", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/storage/backends/refresh", handler.requireAdminAuth(handler.methodNotAllowed))
@@ -405,20 +409,106 @@ func (handler *Handler) notFound(w http.ResponseWriter, _ *http.Request) {
 	writeAPIError(w, http.StatusNotFound, "not_found", "resource not found")
 }
 
+type loginRequest struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+type loginResponse struct {
+	Token     string    `json:"token"`
+	ExpiresAt time.Time `json:"expiresAt"`
+	UserID    string    `json:"userId"`
+}
+
+func (handler *Handler) login(w http.ResponseWriter, r *http.Request) {
+	if handler.authService == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "auth_not_configured", "authentication service is not configured")
+		return
+	}
+	var req loginRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeError(w, err)
+		return
+	}
+	token, session, err := handler.authService.Login(r.Context(), req.Username, req.Password)
+	if err != nil {
+		switch {
+		case errors.Is(err, auth.ErrBadCredentials), errors.Is(err, auth.ErrUserDisabled):
+			writeAPIError(w, http.StatusUnauthorized, "unauthorized", "invalid credentials")
+		default:
+			writeError(w, err)
+		}
+		return
+	}
+	writeJSON(w, http.StatusOK, loginResponse{
+		Token:     token,
+		ExpiresAt: session.ExpiresAt,
+		UserID:    session.UserID,
+	})
+}
+
+func (handler *Handler) logout(w http.ResponseWriter, r *http.Request) {
+	if handler.authService == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "auth_not_configured", "authentication service is not configured")
+		return
+	}
+	token, ok := bearerToken(r.Header.Get("Authorization"))
+	if !ok {
+		w.Header().Set("WWW-Authenticate", `Bearer realm="inori-admin"`)
+		writeAPIError(w, http.StatusUnauthorized, "unauthorized", "valid bearer token is required")
+		return
+	}
+	if err := handler.authService.Logout(r.Context(), token); err != nil {
+		if errors.Is(err, auth.ErrSessionNotFound) {
+			writeAPIError(w, http.StatusUnauthorized, "unauthorized", "token not found or already revoked")
+			return
+		}
+		writeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (handler *Handler) requireAdminAuth(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if handler.adminToken == "" {
+		// Reject immediately when no authentication method is available.
+		if handler.authService == nil && handler.adminToken == "" {
 			writeAPIError(w, http.StatusServiceUnavailable, "admin_auth_not_configured", "administrator token is not configured")
 			return
 		}
 
 		token, ok := bearerToken(r.Header.Get("Authorization"))
-		if !ok || !constantTimeTokenEqual(token, handler.adminToken) {
+		if !ok {
 			w.Header().Set("WWW-Authenticate", `Bearer realm="inori-admin"`)
 			writeAPIError(w, http.StatusUnauthorized, "unauthorized", "valid administrator bearer token is required")
 			return
 		}
 
+		// Session token path: validate against auth service when available.
+		if handler.authService != nil {
+			user, err := handler.authService.ValidateToken(r.Context(), token)
+			if err == nil {
+				if user.Role != auth.RoleAdmin {
+					writeAPIError(w, http.StatusForbidden, "unauthorized", "administrator role required")
+					return
+				}
+				next(w, r)
+				return
+			}
+			// Fall through to static token check to allow bootstrap token.
+		}
+
+		// Static bootstrap token fallback.
+		if handler.adminToken == "" {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="inori-admin"`)
+			writeAPIError(w, http.StatusUnauthorized, "unauthorized", "valid administrator bearer token is required")
+			return
+		}
+		if !constantTimeTokenEqual(token, handler.adminToken) {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="inori-admin"`)
+			writeAPIError(w, http.StatusUnauthorized, "unauthorized", "valid administrator bearer token is required")
+			return
+		}
 		next(w, r)
 	}
 }

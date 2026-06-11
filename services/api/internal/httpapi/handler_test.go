@@ -1,17 +1,22 @@
 package httpapi
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
+	"inori-music/services/api/internal/auth"
 	"inori-music/services/api/internal/storage"
 )
 
@@ -753,5 +758,179 @@ func decodeResponse(t *testing.T, response *httptest.ResponseRecorder, target an
 	t.Helper()
 	if err := json.Unmarshal(response.Body.Bytes(), target); err != nil {
 		t.Fatalf("decode response: %v, body = %s", err, response.Body.String())
+	}
+}
+
+// ---- auth test helpers ----
+
+type memAuthUserRepo struct {
+	mu    sync.RWMutex
+	users map[string]auth.User
+}
+
+func newMemAuthUserRepo() *memAuthUserRepo { return &memAuthUserRepo{users: map[string]auth.User{}} }
+
+func (r *memAuthUserRepo) SaveUser(_ context.Context, u auth.User) error {
+	r.mu.Lock(); defer r.mu.Unlock(); r.users[u.ID] = u; return nil
+}
+func (r *memAuthUserRepo) GetUser(_ context.Context, id string) (auth.User, error) {
+	r.mu.RLock(); defer r.mu.RUnlock()
+	u, ok := r.users[id]
+	if !ok { return auth.User{}, fmt.Errorf("%w: %s", auth.ErrUserNotFound, id) }
+	return u, nil
+}
+func (r *memAuthUserRepo) GetUserByUsername(_ context.Context, username string) (auth.User, error) {
+	r.mu.RLock(); defer r.mu.RUnlock()
+	for _, u := range r.users { if u.Username == username { return u, nil } }
+	return auth.User{}, fmt.Errorf("%w: %s", auth.ErrUserNotFound, username)
+}
+func (r *memAuthUserRepo) ListUsers(_ context.Context) ([]auth.User, error) {
+	r.mu.RLock(); defer r.mu.RUnlock()
+	list := make([]auth.User, 0, len(r.users)); for _, u := range r.users { list = append(list, u) }; return list, nil
+}
+func (r *memAuthUserRepo) DeleteUser(_ context.Context, id string) error {
+	r.mu.Lock(); defer r.mu.Unlock()
+	if _, ok := r.users[id]; !ok { return fmt.Errorf("%w: %s", auth.ErrUserNotFound, id) }
+	delete(r.users, id); return nil
+}
+func (r *memAuthUserRepo) CountAdminUsers(_ context.Context) (int, error) {
+	r.mu.RLock(); defer r.mu.RUnlock()
+	n := 0; for _, u := range r.users { if u.Role == auth.RoleAdmin && u.Enabled { n++ } }; return n, nil
+}
+
+type memAuthSessionRepo struct {
+	mu       sync.RWMutex
+	sessions map[string]auth.Session
+}
+
+func newMemAuthSessionRepo() *memAuthSessionRepo {
+	return &memAuthSessionRepo{sessions: map[string]auth.Session{}}
+}
+func (r *memAuthSessionRepo) SaveSession(_ context.Context, s auth.Session) error {
+	r.mu.Lock(); defer r.mu.Unlock(); r.sessions[s.TokenHash] = s; return nil
+}
+func (r *memAuthSessionRepo) GetSession(_ context.Context, h string) (auth.Session, error) {
+	r.mu.RLock(); defer r.mu.RUnlock()
+	s, ok := r.sessions[h]; if !ok { return auth.Session{}, auth.ErrSessionNotFound }; return s, nil
+}
+func (r *memAuthSessionRepo) RevokeSession(_ context.Context, h string, t time.Time) error {
+	r.mu.Lock(); defer r.mu.Unlock()
+	s, ok := r.sessions[h]; if !ok { return auth.ErrSessionNotFound }
+	s.RevokedAt = &t; r.sessions[h] = s; return nil
+}
+func (r *memAuthSessionRepo) DeleteExpiredSessions(_ context.Context, before time.Time) error {
+	r.mu.Lock(); defer r.mu.Unlock()
+	for k, s := range r.sessions { if s.ExpiresAt.Before(before) { delete(r.sessions, k) } }; return nil
+}
+
+func newAuthTestHandler() (http.Handler, *auth.Service) {
+	repo := storage.NewMemoryRepository()
+	svc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
+	if _, err := svc.CreateUser(context.Background(), "admin", "adminpass1", auth.RoleAdmin); err != nil {
+		panic(err)
+	}
+	h := NewHandler(
+		storage.NewService(repo),
+		WithAuthService(svc),
+		WithServiceInfo(ServiceInfo{Name: "inori-api", Version: "test-version", Commit: "test-commit", BuildTime: "2026-06-05T12:30:00Z"}),
+	).Routes()
+	return h, svc
+}
+
+// ---- auth endpoint tests ----
+
+func TestLoginSuccess(t *testing.T) {
+	h, _ := newAuthTestHandler()
+	body := `{"username":"admin","password":"adminpass1"}`
+	resp := performRequestWithoutAuth(t, h, http.MethodPost, "/api/v1/auth/login", body)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("login status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	if err := json.Unmarshal(resp.Body.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if result["token"] == "" || result["token"] == nil {
+		t.Error("expected non-empty token in response")
+	}
+}
+
+func TestLoginBadCredentials(t *testing.T) {
+	h, _ := newAuthTestHandler()
+	body := `{"username":"admin","password":"wrongpass"}`
+	resp := performRequestWithoutAuth(t, h, http.MethodPost, "/api/v1/auth/login", body)
+	assertAPIError(t, resp, http.StatusUnauthorized, "unauthorized")
+}
+
+func TestLoginUnknownUser(t *testing.T) {
+	h, _ := newAuthTestHandler()
+	body := `{"username":"nobody","password":"adminpass1"}`
+	resp := performRequestWithoutAuth(t, h, http.MethodPost, "/api/v1/auth/login", body)
+	assertAPIError(t, resp, http.StatusUnauthorized, "unauthorized")
+}
+
+func TestLoginNotConfigured(t *testing.T) {
+	repo := storage.NewMemoryRepository()
+	h := NewHandler(storage.NewService(repo), WithAdminToken(testAdminToken)).Routes()
+	body := `{"username":"admin","password":"adminpass1"}`
+	resp := performRequestWithoutAuth(t, h, http.MethodPost, "/api/v1/auth/login", body)
+	assertAPIError(t, resp, http.StatusServiceUnavailable, "auth_not_configured")
+}
+
+func TestLogoutSuccess(t *testing.T) {
+	h, _ := newAuthTestHandler()
+	// Login first.
+	loginResp := performRequestWithoutAuth(t, h, http.MethodPost, "/api/v1/auth/login", `{"username":"admin","password":"adminpass1"}`)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("login status = %d", loginResp.Code)
+	}
+	var loginResult map[string]any
+	json.Unmarshal(loginResp.Body.Bytes(), &loginResult)
+	token := loginResult["token"].(string)
+
+	// Logout.
+	logoutResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/auth/logout", "", "Bearer "+token)
+	if logoutResp.Code != http.StatusNoContent {
+		t.Fatalf("logout status = %d, body = %s", logoutResp.Code, logoutResp.Body.String())
+	}
+}
+
+func TestLogoutInvalidToken(t *testing.T) {
+	h, _ := newAuthTestHandler()
+	resp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/auth/logout", "", "Bearer invalidtoken")
+	assertAPIError(t, resp, http.StatusUnauthorized, "unauthorized")
+}
+
+func TestSessionTokenGrantsAdminAccess(t *testing.T) {
+	h, _ := newAuthTestHandler()
+	loginResp := performRequestWithoutAuth(t, h, http.MethodPost, "/api/v1/auth/login", `{"username":"admin","password":"adminpass1"}`)
+	if loginResp.Code != http.StatusOK {
+		t.Fatalf("login status = %d", loginResp.Code)
+	}
+	var loginResult map[string]any
+	json.Unmarshal(loginResp.Body.Bytes(), &loginResult)
+	token := loginResult["token"].(string)
+
+	// Use session token to access an admin route.
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/admin/storage/backends", "", "Bearer "+token)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("admin route status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+}
+
+func TestRevokedSessionDeniesAccess(t *testing.T) {
+	h, _ := newAuthTestHandler()
+	loginResp := performRequestWithoutAuth(t, h, http.MethodPost, "/api/v1/auth/login", `{"username":"admin","password":"adminpass1"}`)
+	var loginResult map[string]any
+	json.Unmarshal(loginResp.Body.Bytes(), &loginResult)
+	token := loginResult["token"].(string)
+
+	// Logout (revoke).
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/auth/logout", "", "Bearer "+token)
+
+	// Revoked token should now be denied.
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/admin/storage/backends", "", "Bearer "+token)
+	if resp.Code == http.StatusOK {
+		t.Fatal("expected denied access after logout, got 200")
 	}
 }

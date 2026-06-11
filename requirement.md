@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.36.0`
+`0.37.0`
 
 ## Product Goal
 
@@ -231,4 +231,12 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add INORI_SESSION_TTL env var (default 24h) and INORI_INITIAL_ADMIN_USER/PASSWORD bootstrap env vars.
 - Add migrations 003_users and 004_sessions to shared PostgreSQL migration runner.
 - Add 13 unit tests covering all service paths, race-clean.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.37.0 - 2026-06-11
+
+- Add POST /api/v1/auth/login and POST /api/v1/auth/logout endpoints for session-based authentication.
+- Upgrade requireAdminAuth middleware: validate session token via auth.Service first, fall back to INORI_ADMIN_TOKEN bootstrap token.
+- Return 503 when neither auth service nor admin token is configured; return 401 on bad/missing credentials.
+- Add 8 HTTP-layer tests covering login, logout, session token access, and revoked token denial.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
