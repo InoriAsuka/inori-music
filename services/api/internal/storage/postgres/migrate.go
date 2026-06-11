@@ -68,4 +68,31 @@ CREATE INDEX IF NOT EXISTS media_objects_content_hash_idx ON media_objects (cont
 CREATE INDEX IF NOT EXISTS media_objects_lifecycle_state_idx ON media_objects (lifecycle_state);
 CREATE INDEX IF NOT EXISTS media_objects_asset_kind_idx ON media_objects (asset_kind);`,
 	},
+	{
+		name: "003_users",
+		sql: `
+CREATE TABLE IF NOT EXISTS users (
+    id            TEXT        NOT NULL PRIMARY KEY,
+    username      TEXT        NOT NULL,
+    password_hash TEXT        NOT NULL,
+    role          TEXT        NOT NULL DEFAULT 'viewer',
+    enabled       BOOLEAN     NOT NULL DEFAULT TRUE,
+    created_at    TIMESTAMPTZ NOT NULL,
+    updated_at    TIMESTAMPTZ NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS users_username_idx ON users (lower(username));`,
+	},
+	{
+		name: "004_sessions",
+		sql: `
+CREATE TABLE IF NOT EXISTS sessions (
+    token_hash TEXT        NOT NULL PRIMARY KEY,
+    user_id    TEXT        NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL,
+    revoked_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS sessions_user_id_idx  ON sessions (user_id);
+CREATE INDEX IF NOT EXISTS sessions_expires_at_idx ON sessions (expires_at);`,
+	},
 }

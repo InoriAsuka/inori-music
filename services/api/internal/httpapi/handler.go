@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"inori-music/services/api/internal/auth"
 	"inori-music/services/api/internal/storage"
 )
 
@@ -74,6 +75,13 @@ func WithMediaObjectService(mediaObjects *storage.MediaObjectService) HandlerOpt
 	}
 }
 
+// WithAuthService enables session-based authentication routes.
+func WithAuthService(authSvc *auth.Service) HandlerOption {
+	return func(handler *Handler) {
+		handler.authService = authSvc
+	}
+}
+
 // WithServiceInfo configures build metadata returned by public diagnostic endpoints.
 func WithServiceInfo(info ServiceInfo) HandlerOption {
 	return func(handler *Handler) {
@@ -85,6 +93,7 @@ func WithServiceInfo(info ServiceInfo) HandlerOption {
 type Handler struct {
 	storage        *storage.Service
 	mediaObjects   *storage.MediaObjectService
+	authService    *auth.Service
 	adminToken     string
 	info           ServiceInfo
 	metricsMu      sync.Mutex

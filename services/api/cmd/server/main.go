@@ -11,6 +11,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"inori-music/services/api/internal/auth"
+	authpg "inori-music/services/api/internal/auth/postgres"
 	"inori-music/services/api/internal/httpapi"
 	"inori-music/services/api/internal/storage"
 	pgstore "inori-music/services/api/internal/storage/postgres"
@@ -52,6 +54,23 @@ func main() {
 	}
 	mediaObjectService := storage.NewMediaObjectService(repository, mediaObjectRepository)
 
+	// Auth service — only available when PostgreSQL is configured.
+	var authService *auth.Service
+	if pool != nil {
+		authService = auth.NewService(
+			authpg.NewUserRepository(pool),
+			authpg.NewSessionRepository(pool),
+			auth.ServiceConfig{SessionTTL: sessionTTL()},
+		)
+		if err := authService.EnsureInitialAdmin(
+			ctx,
+			os.Getenv("INORI_INITIAL_ADMIN_USER"),
+			os.Getenv("INORI_INITIAL_ADMIN_PASSWORD"),
+		); err != nil {
+			log.Printf("initial admin setup: %v", err)
+		}
+	}
+
 	if interval := storageRefreshInterval(); interval > 0 {
 		log.Printf("storage refresh scheduler enabled with interval %s", interval)
 		scheduler := storage.NewRefreshScheduler(storageService, interval, func(report storage.RefreshReport, err error) {
@@ -64,14 +83,18 @@ func main() {
 		go scheduler.Run(ctx)
 	}
 
+	handlerOpts := []httpapi.HandlerOption{
+		httpapi.WithAdminToken(adminToken),
+		httpapi.WithMediaObjectService(mediaObjectService),
+		httpapi.WithServiceInfo(httpapi.ServiceInfo{Name: "inori-api", Version: version, Commit: commit, BuildTime: buildTime}),
+	}
+	if authService != nil {
+		handlerOpts = append(handlerOpts, httpapi.WithAuthService(authService))
+	}
+
 	server := &http.Server{
-		Addr: address,
-		Handler: httpapi.NewHandler(
-			storageService,
-			httpapi.WithAdminToken(adminToken),
-			httpapi.WithMediaObjectService(mediaObjectService),
-			httpapi.WithServiceInfo(httpapi.ServiceInfo{Name: "inori-api", Version: version, Commit: commit, BuildTime: buildTime}),
-		).Routes(),
+		Addr:              address,
+		Handler:           httpapi.NewHandler(storageService, handlerOpts...).Routes(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	go func() {
@@ -100,6 +123,19 @@ func storageRefreshInterval() time.Duration {
 		return 0
 	}
 	return interval
+}
+
+func sessionTTL() time.Duration {
+	value := os.Getenv("INORI_SESSION_TTL")
+	if value == "" {
+		return 24 * time.Hour
+	}
+	ttl, err := time.ParseDuration(value)
+	if err != nil || ttl <= 0 {
+		log.Printf("ignoring invalid INORI_SESSION_TTL %q, using 24h", value)
+		return 24 * time.Hour
+	}
+	return ttl
 }
 
 // openDatabasePool opens a pgxpool if INORI_DATABASE_URL is set, or returns nil.

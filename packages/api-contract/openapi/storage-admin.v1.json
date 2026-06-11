@@ -477,6 +477,9 @@
               },
               "lastVerification": {
                 "$ref": "#/components/schemas/MediaObjectVerificationResult"
+              },
+              "lastLifecycleChange": {
+                "$ref": "#/components/schemas/MediaObjectLifecycleChange"
               }
             }
           }
@@ -647,6 +650,425 @@
           }
         },
         "additionalProperties": false
+      },
+      "MediaObjectDuplicateGroup": {
+        "type": "object",
+        "required": [
+          "contentHash",
+          "count",
+          "totalSizeBytes",
+          "objects"
+        ],
+        "properties": {
+          "contentHash": {
+            "type": "string",
+            "description": "Content hash shared by every object in the group."
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 2
+          },
+          "totalSizeBytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "objects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MediaObject"
+            }
+          }
+        }
+      },
+      "MediaObjectDuplicateReport": {
+        "type": "object",
+        "required": [
+          "minCopies",
+          "totalGroups",
+          "totalObjects",
+          "totalSizeBytes",
+          "groups"
+        ],
+        "properties": {
+          "backendId": {
+            "type": "string",
+            "description": "Backend filter used to calculate this duplicate report, omitted for all backends."
+          },
+          "minCopies": {
+            "type": "integer",
+            "minimum": 2
+          },
+          "totalGroups": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "totalObjects": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "totalSizeBytes": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "groups": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MediaObjectDuplicateGroup"
+            }
+          }
+        }
+      },
+      "MediaObjectSelectionFilter": {
+        "type": "object",
+        "properties": {
+          "backendId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "contentHash": {
+            "type": "string",
+            "minLength": 1
+          },
+          "verificationStatus": {
+            "type": "string",
+            "enum": [
+              "verified",
+              "failed",
+              "unknown"
+            ]
+          },
+          "lifecycleState": {
+            "type": "string",
+            "enum": [
+              "staged",
+              "active",
+              "archived",
+              "deleted"
+            ]
+          },
+          "assetKind": {
+            "type": "string",
+            "enum": [
+              "original_audio",
+              "transcoded_audio",
+              "artwork",
+              "lyrics",
+              "waveform",
+              "analysis",
+              "import_package",
+              "backup"
+            ]
+          }
+        },
+        "description": "Selects media objects by exactly one metadata filter."
+      },
+      "MediaObjectBulkLifecycleRequest": {
+        "type": "object",
+        "required": [
+          "filter",
+          "lifecycleState"
+        ],
+        "properties": {
+          "filter": {
+            "$ref": "#/components/schemas/MediaObjectSelectionFilter"
+          },
+          "lifecycleState": {
+            "type": "string",
+            "enum": [
+              "staged",
+              "active",
+              "archived",
+              "deleted"
+            ]
+          },
+          "dryRun": {
+            "type": "boolean",
+            "default": false,
+            "description": "When true, calculate matching objects and per-object outcomes without persisting lifecycle changes."
+          }
+        }
+      },
+      "MediaObjectLifecycleUpdateResult": {
+        "type": "object",
+        "required": [
+          "mediaObjectId",
+          "previousLifecycleState",
+          "lifecycleState",
+          "status"
+        ],
+        "properties": {
+          "mediaObjectId": {
+            "type": "string"
+          },
+          "previousLifecycleState": {
+            "type": "string",
+            "enum": [
+              "staged",
+              "active",
+              "archived",
+              "deleted"
+            ]
+          },
+          "lifecycleState": {
+            "type": "string",
+            "enum": [
+              "staged",
+              "active",
+              "archived",
+              "deleted"
+            ]
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "updated",
+              "would_update",
+              "failed"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "object": {
+            "$ref": "#/components/schemas/MediaObject"
+          }
+        }
+      },
+      "MediaObjectLifecycleUpdateReport": {
+        "type": "object",
+        "required": [
+          "lifecycleState",
+          "dryRun",
+          "matchedObjects",
+          "updatedObjects",
+          "wouldUpdateObjects",
+          "failedObjects",
+          "updatedAt",
+          "results"
+        ],
+        "properties": {
+          "lifecycleState": {
+            "type": "string",
+            "enum": [
+              "staged",
+              "active",
+              "archived",
+              "deleted"
+            ]
+          },
+          "matchedObjects": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "updatedObjects": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "failedObjects": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MediaObjectLifecycleUpdateResult"
+            }
+          },
+          "dryRun": {
+            "type": "boolean"
+          },
+          "wouldUpdateObjects": {
+            "type": "integer",
+            "minimum": 0
+          }
+        }
+      },
+      "MediaObjectLifecycleChange": {
+        "type": "object",
+        "required": [
+          "previousLifecycleState",
+          "lifecycleState",
+          "changedAt",
+          "source"
+        ],
+        "properties": {
+          "previousLifecycleState": {
+            "type": "string",
+            "enum": [
+              "staged",
+              "active",
+              "archived",
+              "deleted"
+            ]
+          },
+          "lifecycleState": {
+            "type": "string",
+            "enum": [
+              "staged",
+              "active",
+              "archived",
+              "deleted"
+            ]
+          },
+          "changedAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "single",
+              "bulk"
+            ],
+            "description": "Committed lifecycle update source."
+          }
+        }
+      },
+      "MediaObjectTimelineEvent": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "at"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "enum": [
+              "created",
+              "lifecycle_changed",
+              "verification"
+            ]
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "verified",
+              "failed"
+            ]
+          },
+          "lifecycleState": {
+            "type": "string",
+            "enum": [
+              "staged",
+              "active",
+              "archived",
+              "deleted"
+            ]
+          },
+          "previousLifecycleState": {
+            "type": "string",
+            "enum": [
+              "staged",
+              "active",
+              "archived",
+              "deleted"
+            ]
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "single",
+              "bulk"
+            ]
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "MediaObjectTimeline": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "mediaObjectId",
+          "events"
+        ],
+        "properties": {
+          "mediaObjectId": {
+            "type": "string"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MediaObjectTimelineEvent"
+            }
+          }
+        }
+      },
+      "ServiceInfo": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "version",
+          "commit",
+          "buildTime"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "commit": {
+            "type": "string"
+          },
+          "buildTime": {
+            "type": "string"
+          }
+        }
+      },
+      "ReadinessCheck": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "name",
+          "status"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "failed"
+            ]
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "ReadinessReport": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "ready",
+          "checks"
+        ],
+        "properties": {
+          "ready": {
+            "type": "boolean"
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReadinessCheck"
+            }
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -1358,6 +1780,38 @@
             "description": "List media objects by registered asset kind. Mutually exclusive with backendId, contentHash, verificationStatus, and lifecycleState."
           },
           {
+            "name": "sortBy",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "backend_object_key",
+                "created_at",
+                "updated_at",
+                "size_bytes",
+                "object_key",
+                "id"
+              ],
+              "default": "backend_object_key"
+            },
+            "description": "Sort media object list results before pagination. Defaults to backend_object_key to preserve stable repository ordering."
+          },
+          {
+            "name": "sortOrder",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "asc"
+            },
+            "description": "Sort direction applied to sortBy before limit and offset are evaluated."
+          },
+          {
             "name": "limit",
             "in": "query",
             "required": false,
@@ -1875,6 +2329,266 @@
             "bearerAuth": []
           }
         ]
+      }
+    },
+    "/api/v1/admin/media/objects/duplicates": {
+      "get": {
+        "summary": "Find duplicate media objects by content hash.",
+        "description": "Returns metadata-only groups of media objects that share the same content hash, optionally limited to one backend. Does not read media bytes.",
+        "parameters": [
+          {
+            "name": "backendId",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "Optional backend ID used to limit duplicate detection to one storage backend."
+          },
+          {
+            "name": "minCopies",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 2,
+              "default": 2
+            },
+            "description": "Minimum number of objects required for a duplicate group. Defaults to 2."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Media object duplicate report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaObjectDuplicateReport"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/media/objects/lifecycle": {
+      "post": {
+        "summary": "Bulk update media object lifecycle metadata.",
+        "description": "Updates only media object lifecycle metadata selected by exactly one metadata filter. Set dryRun to true to preview matched objects and outcomes without persisting changes. Does not delete media bytes or mutate storage backends.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MediaObjectBulkLifecycleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Lifecycle update report",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaObjectLifecycleUpdateReport"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/api/v1/admin/media/objects/{id}/timeline": {
+      "get": {
+        "summary": "Get the retained metadata timeline for a media object.",
+        "responses": {
+          "200": {
+            "description": "Media object timeline",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MediaObjectTimeline"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/MediaObjectId"
+        }
+      ]
+    },
+    "/versionz": {
+      "get": {
+        "summary": "Get public build metadata for this API process.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Service build metadata",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServiceInfo"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/readyz": {
+      "get": {
+        "summary": "Get public readiness status for this API process.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "The API is ready for admin traffic.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessReport"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "The API is not ready for admin traffic.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReadinessReport"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "summary": "Get public Prometheus-compatible process metrics.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Prometheus text exposition metrics.",
+            "content": {
+              "text/plain; version=0.0.4": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
       }
     }
   },
