@@ -95,4 +95,46 @@ CREATE TABLE IF NOT EXISTS sessions (
 CREATE INDEX IF NOT EXISTS sessions_user_id_idx  ON sessions (user_id);
 CREATE INDEX IF NOT EXISTS sessions_expires_at_idx ON sessions (expires_at);`,
 	},
+	{
+		name: "005_catalog",
+		sql: `
+CREATE TABLE IF NOT EXISTS artists (
+    id         TEXT        NOT NULL PRIMARY KEY,
+    name       TEXT        NOT NULL,
+    sort_name  TEXT        NOT NULL DEFAULT '',
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS artists_sort_name_idx ON artists (lower(sort_name), lower(name), id);
+
+CREATE TABLE IF NOT EXISTS albums (
+    id           TEXT        NOT NULL PRIMARY KEY,
+    title        TEXT        NOT NULL,
+    sort_title   TEXT        NOT NULL DEFAULT '',
+    artist_id    TEXT        NOT NULL REFERENCES artists(id) ON DELETE RESTRICT,
+    release_year INTEGER     NOT NULL DEFAULT 0,
+    created_at   TIMESTAMPTZ NOT NULL,
+    updated_at   TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS albums_artist_id_idx ON albums (artist_id);
+CREATE INDEX IF NOT EXISTS albums_sort_title_idx ON albums (lower(sort_title), lower(title), id);
+
+CREATE TABLE IF NOT EXISTS tracks (
+    id              TEXT        NOT NULL PRIMARY KEY,
+    title           TEXT        NOT NULL,
+    sort_title      TEXT        NOT NULL DEFAULT '',
+    artist_id       TEXT        NOT NULL REFERENCES artists(id) ON DELETE RESTRICT,
+    album_id        TEXT        REFERENCES albums(id) ON DELETE SET NULL,
+    media_object_id TEXT        NOT NULL REFERENCES media_objects(id) ON DELETE RESTRICT,
+    track_number    INTEGER     NOT NULL DEFAULT 0,
+    disc_number     INTEGER     NOT NULL DEFAULT 0,
+    duration_ms     INTEGER     NOT NULL DEFAULT 0,
+    created_at      TIMESTAMPTZ NOT NULL,
+    updated_at      TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS tracks_artist_id_idx ON tracks (artist_id);
+CREATE INDEX IF NOT EXISTS tracks_album_id_idx ON tracks (album_id);
+CREATE INDEX IF NOT EXISTS tracks_media_object_id_idx ON tracks (media_object_id);
+CREATE INDEX IF NOT EXISTS tracks_sort_title_idx ON tracks (lower(sort_title), lower(title), id);`,
+	},
 }

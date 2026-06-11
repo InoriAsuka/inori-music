@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.38.0`
+`0.39.0`
 
 ## Product Goal
 
@@ -248,4 +248,14 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Restrict user management routes to session-authenticated admin users while preserving bootstrap-token fallback behavior.
 - Add HTTP-layer tests covering the full user management workflow, validation, conflicts, authorization, and missing auth service handling.
 - Extend the OpenAPI contract with auth login/logout and user management schemas and paths.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+
+### v0.39.0 - 2026-06-12
+
+- Add the music catalog domain foundation with Artist, Album, and Track metadata entities and repository interfaces.
+- Add catalog service validation for required names, artist ownership, album membership, media object references, and non-negative numeric metadata.
+- Add PostgreSQL-backed catalog repository implementations for artists, albums, and tracks.
+- Add migration 005_catalog to the shared PostgreSQL migration runner with catalog tables and lookup indexes.
+- Add race-clean catalog service tests and integration-build coverage for the PostgreSQL repository.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
