@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.35.0`
+`0.36.0`
 
 ## Product Goal
 
@@ -221,4 +221,14 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add PostgreSQL-backed repository implementations for storage backends and media objects with automatic schema migration and shared connection pool.
 - File and in-memory repositories remain available when INORI_DATABASE_URL is not set.
 - Integration tests use testcontainers-go with a real PostgreSQL container under the integration build tag.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.36.0 - 2026-06-11
+
+- Add user domain with PostgreSQL persistence: User and Session types, UserRepository and SessionRepository interfaces and PostgreSQL implementations.
+- Add bcrypt password hashing (cost=12) and SHA-256 session token storage; plaintext token returned once at login, never stored.
+- Add auth.Service: CreateUser, Login, Logout, ValidateToken, DisableUser, DeleteUser, EnsureInitialAdmin.
+- Add INORI_SESSION_TTL env var (default 24h) and INORI_INITIAL_ADMIN_USER/PASSWORD bootstrap env vars.
+- Add migrations 003_users and 004_sessions to shared PostgreSQL migration runner.
+- Add 13 unit tests covering all service paths, race-clean.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
