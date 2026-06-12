@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"inori-music/services/api/internal/auth"
+	"inori-music/services/api/internal/catalog"
 	"inori-music/services/api/internal/storage"
 )
 
@@ -82,6 +83,13 @@ func WithAuthService(authSvc *auth.Service) HandlerOption {
 	}
 }
 
+// WithCatalogService enables music catalog administration routes.
+func WithCatalogService(catalogSvc *catalog.Service) HandlerOption {
+	return func(handler *Handler) {
+		handler.catalogService = catalogSvc
+	}
+}
+
 // WithServiceInfo configures build metadata returned by public diagnostic endpoints.
 func WithServiceInfo(info ServiceInfo) HandlerOption {
 	return func(handler *Handler) {
@@ -94,6 +102,7 @@ type Handler struct {
 	storage        *storage.Service
 	mediaObjects   *storage.MediaObjectService
 	authService    *auth.Service
+	catalogService *catalog.Service
 	adminToken     string
 	info           ServiceInfo
 	metricsMu      sync.Mutex
@@ -242,6 +251,18 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/admin/users", handler.requireAdminAuth(handler.createUser))
 	mux.HandleFunc("POST /api/v1/admin/users/{id}/disable", handler.requireAdminAuth(handler.disableUser))
 	mux.HandleFunc("DELETE /api/v1/admin/users/{id}", handler.requireAdminAuth(handler.deleteUser))
+	mux.HandleFunc("GET /api/v1/admin/catalog/artists", handler.requireAdminAuth(handler.listArtists))
+	mux.HandleFunc("POST /api/v1/admin/catalog/artists", handler.requireAdminAuth(handler.createArtist))
+	mux.HandleFunc("GET /api/v1/admin/catalog/artists/{id}", handler.requireAdminAuth(handler.getArtist))
+	mux.HandleFunc("DELETE /api/v1/admin/catalog/artists/{id}", handler.requireAdminAuth(handler.deleteArtist))
+	mux.HandleFunc("GET /api/v1/admin/catalog/albums", handler.requireAdminAuth(handler.listAlbums))
+	mux.HandleFunc("POST /api/v1/admin/catalog/albums", handler.requireAdminAuth(handler.createAlbum))
+	mux.HandleFunc("GET /api/v1/admin/catalog/albums/{id}", handler.requireAdminAuth(handler.getAlbum))
+	mux.HandleFunc("DELETE /api/v1/admin/catalog/albums/{id}", handler.requireAdminAuth(handler.deleteAlbum))
+	mux.HandleFunc("GET /api/v1/admin/catalog/tracks", handler.requireAdminAuth(handler.listTracks))
+	mux.HandleFunc("POST /api/v1/admin/catalog/tracks", handler.requireAdminAuth(handler.createTrack))
+	mux.HandleFunc("GET /api/v1/admin/catalog/tracks/{id}", handler.requireAdminAuth(handler.getTrack))
+	mux.HandleFunc("DELETE /api/v1/admin/catalog/tracks/{id}", handler.requireAdminAuth(handler.deleteTrack))
 	mux.HandleFunc("GET /api/v1/admin/storage/backends", handler.requireAdminAuth(handler.listStorageBackends))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends", handler.requireAdminAuth(handler.registerStorageBackend))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends/validate", handler.requireAdminAuth(handler.validateStorageBackend))
@@ -270,6 +291,12 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("/api/v1/admin/users", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/users/{id}/disable", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/users/{id}", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/catalog/artists", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/catalog/artists/{id}", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/catalog/albums", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/catalog/albums/{id}", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/catalog/tracks", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/catalog/tracks/{id}", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/storage/backends", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/storage/backends/validate", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/storage/backends/refresh", handler.requireAdminAuth(handler.methodNotAllowed))
@@ -536,6 +563,224 @@ func (handler *Handler) deleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := handler.authService.DeleteUser(r.Context(), r.PathValue("id")); err != nil {
+		writeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// ---- catalog helpers ----
+
+func (handler *Handler) requireCatalogService(w http.ResponseWriter) bool {
+	if handler.catalogService == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "catalog_not_configured", "catalog service is not configured")
+		return false
+	}
+	return true
+}
+
+// ---- artist handlers ----
+
+type createArtistRequest struct {
+	Name     string `json:"name"`
+	SortName string `json:"sortName"`
+}
+
+func (handler *Handler) listArtists(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireCatalogService(w) {
+		return
+	}
+	artists, err := handler.catalogService.ListArtists(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"artists": artists})
+}
+
+func (handler *Handler) createArtist(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireCatalogService(w) {
+		return
+	}
+	var req createArtistRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeError(w, err)
+		return
+	}
+	artist, err := handler.catalogService.CreateArtist(r.Context(), req.Name, req.SortName)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, artist)
+}
+
+func (handler *Handler) getArtist(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireCatalogService(w) {
+		return
+	}
+	artist, err := handler.catalogService.GetArtist(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, artist)
+}
+
+func (handler *Handler) deleteArtist(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireCatalogService(w) {
+		return
+	}
+	if err := handler.catalogService.DeleteArtist(r.Context(), r.PathValue("id")); err != nil {
+		writeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// ---- album handlers ----
+
+type createAlbumRequest struct {
+	Title       string `json:"title"`
+	SortTitle   string `json:"sortTitle"`
+	ArtistID    string `json:"artistId"`
+	ReleaseYear int    `json:"releaseYear"`
+}
+
+func (handler *Handler) listAlbums(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireCatalogService(w) {
+		return
+	}
+	artistID := r.URL.Query().Get("artistId")
+	var (
+		albums []catalog.Album
+		err    error
+	)
+	if artistID != "" {
+		albums, err = handler.catalogService.ListAlbumsByArtist(r.Context(), artistID)
+	} else {
+		albums, err = handler.catalogService.ListAlbums(r.Context())
+	}
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"albums": albums})
+}
+
+func (handler *Handler) createAlbum(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireCatalogService(w) {
+		return
+	}
+	var req createAlbumRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeError(w, err)
+		return
+	}
+	album, err := handler.catalogService.CreateAlbum(r.Context(), req.Title, req.SortTitle, req.ArtistID, req.ReleaseYear)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, album)
+}
+
+func (handler *Handler) getAlbum(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireCatalogService(w) {
+		return
+	}
+	album, err := handler.catalogService.GetAlbum(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, album)
+}
+
+func (handler *Handler) deleteAlbum(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireCatalogService(w) {
+		return
+	}
+	if err := handler.catalogService.DeleteAlbum(r.Context(), r.PathValue("id")); err != nil {
+		writeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// ---- track handlers ----
+
+type createTrackRequest struct {
+	Title         string `json:"title"`
+	SortTitle     string `json:"sortTitle"`
+	ArtistID      string `json:"artistId"`
+	AlbumID       string `json:"albumId"`
+	MediaObjectID string `json:"mediaObjectId"`
+	TrackNumber   int    `json:"trackNumber"`
+	DiscNumber    int    `json:"discNumber"`
+	DurationMS    int    `json:"durationMs"`
+}
+
+func (handler *Handler) listTracks(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireCatalogService(w) {
+		return
+	}
+	q := r.URL.Query()
+	artistID := q.Get("artistId")
+	albumID := q.Get("albumId")
+	var (
+		tracks []catalog.Track
+		err    error
+	)
+	switch {
+	case albumID != "":
+		tracks, err = handler.catalogService.ListTracksByAlbum(r.Context(), albumID)
+	case artistID != "":
+		tracks, err = handler.catalogService.ListTracksByArtist(r.Context(), artistID)
+	default:
+		tracks, err = handler.catalogService.ListTracks(r.Context())
+	}
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"tracks": tracks})
+}
+
+func (handler *Handler) createTrack(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireCatalogService(w) {
+		return
+	}
+	var req createTrackRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeError(w, err)
+		return
+	}
+	track, err := handler.catalogService.CreateTrack(r.Context(), req.Title, req.SortTitle, req.ArtistID, req.AlbumID, req.MediaObjectID, req.TrackNumber, req.DiscNumber, req.DurationMS)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, track)
+}
+
+func (handler *Handler) getTrack(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireCatalogService(w) {
+		return
+	}
+	track, err := handler.catalogService.GetTrack(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, track)
+}
+
+func (handler *Handler) deleteTrack(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireCatalogService(w) {
+		return
+	}
+	if err := handler.catalogService.DeleteTrack(r.Context(), r.PathValue("id")); err != nil {
 		writeError(w, err)
 		return
 	}
@@ -943,6 +1188,15 @@ func writeError(w http.ResponseWriter, err error) {
 	case errors.Is(err, auth.ErrBadCredentials):
 		status = http.StatusUnauthorized
 		code = "unauthorized"
+	case errors.Is(err, catalog.ErrInvalidArtist), errors.Is(err, catalog.ErrInvalidAlbum), errors.Is(err, catalog.ErrInvalidTrack):
+		status = http.StatusBadRequest
+		code = "invalid_catalog_entity"
+	case errors.Is(err, catalog.ErrArtistNotFound), errors.Is(err, catalog.ErrAlbumNotFound), errors.Is(err, catalog.ErrTrackNotFound):
+		status = http.StatusNotFound
+		code = "not_found"
+	case errors.Is(err, catalog.ErrArtistConflict), errors.Is(err, catalog.ErrAlbumConflict), errors.Is(err, catalog.ErrTrackConflict):
+		status = http.StatusConflict
+		code = "conflict"
 	case errors.Is(err, storage.ErrInvalidMediaObject):
 		status = http.StatusBadRequest
 		code = "invalid_media_object"

@@ -33,6 +33,12 @@ func TestStorageAdminOpenAPIContractCoversRoutes(t *testing.T) {
 		"/api/v1/admin/media/objects/{id}/lifecycle":   {"post"},
 		"/api/v1/admin/media/objects/verify":           {"post"},
 		"/api/v1/admin/media/objects/{id}/verify":      {"post"},
+		"/api/v1/admin/catalog/artists":                {"get", "post"},
+		"/api/v1/admin/catalog/artists/{id}":           {"get", "delete"},
+		"/api/v1/admin/catalog/albums":                 {"get", "post"},
+		"/api/v1/admin/catalog/albums/{id}":            {"get", "delete"},
+		"/api/v1/admin/catalog/tracks":                 {"get", "post"},
+		"/api/v1/admin/catalog/tracks/{id}":            {"get", "delete"},
 	}
 
 	for path, methods := range expected {
@@ -53,13 +59,19 @@ func TestStorageAdminOpenAPIContractPathParameters(t *testing.T) {
 	paths := document["paths"].(map[string]any)
 	components := document["components"].(map[string]any)
 	parameters := components["parameters"].(map[string]any)
-	if _, ok := parameters["BackendId"].(map[string]any); !ok {
-		t.Fatal("OpenAPI BackendId path parameter is missing")
-	}
-	if _, ok := parameters["MediaObjectId"].(map[string]any); !ok {
-		t.Fatal("OpenAPI MediaObjectId path parameter is missing")
+	for _, want := range []string{"BackendId", "MediaObjectId", "UserId", "CatalogId"} {
+		if _, ok := parameters[want].(map[string]any); !ok {
+			t.Fatalf("OpenAPI %s path parameter is missing", want)
+		}
 	}
 
+	// All paths containing {id} must have exactly one $ref path-level parameter.
+	validRefs := map[string]bool{
+		"#/components/parameters/BackendId":     true,
+		"#/components/parameters/MediaObjectId": true,
+		"#/components/parameters/UserId":        true,
+		"#/components/parameters/CatalogId":     true,
+	}
 	for path, item := range paths {
 		if !strings.Contains(path, "{id}") {
 			continue
@@ -67,15 +79,11 @@ func TestStorageAdminOpenAPIContractPathParameters(t *testing.T) {
 		pathItem := item.(map[string]any)
 		refs, ok := pathItem["parameters"].([]any)
 		if !ok || len(refs) != 1 {
-			t.Fatalf("path %s parameters = %#v, want BackendId reference", path, pathItem["parameters"])
+			t.Fatalf("path %s parameters = %#v, want exactly one parameter ref", path, pathItem["parameters"])
 		}
-		want := "#/components/parameters/BackendId"
-		if strings.HasPrefix(path, "/api/v1/admin/media/objects/") {
-			want = "#/components/parameters/MediaObjectId"
-		}
-		ref := refs[0].(map[string]any)["$ref"]
-		if ref != want {
-			t.Fatalf("path %s parameter ref = %#v, want %s", path, ref, want)
+		ref, _ := refs[0].(map[string]any)["$ref"].(string)
+		if !validRefs[ref] {
+			t.Fatalf("path %s parameter ref = %q, want a known components/parameters ref", path, ref)
 		}
 	}
 }
@@ -148,6 +156,10 @@ func TestStorageAdminOpenAPIContractSecurity(t *testing.T) {
 
 	for path, item := range paths {
 		if path == "/healthz" || path == "/metrics" || path == "/readyz" || path == "/versionz" {
+			continue
+		}
+		// Login and logout are public endpoints (empty security, no bearerAuth required).
+		if path == "/api/v1/auth/login" || path == "/api/v1/auth/logout" {
 			continue
 		}
 		pathItem := item.(map[string]any)

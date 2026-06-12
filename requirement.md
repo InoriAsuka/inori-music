@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.39.0`
+`0.40.0`
 
 ## Product Goal
 
@@ -258,4 +258,14 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add PostgreSQL-backed catalog repository implementations for artists, albums, and tracks.
 - Add migration 005_catalog to the shared PostgreSQL migration runner with catalog tables and lookup indexes.
 - Add race-clean catalog service tests and integration-build coverage for the PostgreSQL repository.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+
+### v0.40.0 - 2026-06-12
+
+- Expose authenticated catalog administration endpoints for artists, albums, and tracks under `/api/v1/admin/catalog/`.
+- Add list, create, get, and delete operations for all three entity types with `artistId` and `albumId` filter parameters on list endpoints.
+- Add `MemoryRepository` to the catalog package for use in HTTP handler tests without external dependencies.
+- Update the OpenAPI contract with catalog paths, `UserId`, and `CatalogId` path parameter components.
+- Add 11 HTTP-layer catalog tests covering workflows, not-found errors, validation errors, and unconfigured service handling.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

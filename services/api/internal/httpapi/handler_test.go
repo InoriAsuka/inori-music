@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"inori-music/services/api/internal/auth"
+	"inori-music/services/api/internal/catalog"
 	"inori-music/services/api/internal/storage"
 )
 
@@ -1086,5 +1087,251 @@ func assertUserListLength(t *testing.T, response *httptest.ResponseRecorder, wan
 	decodeResponse(t, response, &body)
 	if len(body.Users) != want {
 		t.Fatalf("users length = %d, want %d, body = %+v", len(body.Users), want, body.Users)
+	}
+}
+
+// ---- catalog test helpers ----
+
+func newCatalogTestHandler() http.Handler {
+	repo := storage.NewMemoryRepository()
+	catalogRepo := catalog.NewMemoryRepository()
+	return NewHandler(
+		storage.NewService(repo),
+		WithAdminToken(testAdminToken),
+		WithCatalogService(catalog.NewService(catalogRepo)),
+		WithServiceInfo(ServiceInfo{Name: "inori-api", Version: "test-version", Commit: "test-commit", BuildTime: "2026-06-05T12:30:00Z"}),
+	).Routes()
+}
+
+// ---- artist tests ----
+
+func TestCatalogArtistWorkflow(t *testing.T) {
+	h := newCatalogTestHandler()
+
+	// list empty
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/artists", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("list artists status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	assertArtistListLength(t, resp, 0)
+
+	// create
+	resp = performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Hatsune Miku","sortName":"Miku Hatsune"}`)
+	if resp.Code != http.StatusCreated {
+		t.Fatalf("create artist status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var artist map[string]any
+	decodeResponse(t, resp, &artist)
+	id, _ := artist["id"].(string)
+	if id == "" {
+		t.Fatal("expected artist id in response")
+	}
+	if artist["name"] != "Hatsune Miku" {
+		t.Fatalf("artist name = %q, want %q", artist["name"], "Hatsune Miku")
+	}
+
+	// list now has 1
+	resp = performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/artists", "")
+	assertArtistListLength(t, resp, 1)
+
+	// get by id
+	resp = performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/artists/"+id, "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("get artist status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+
+	// delete
+	resp = performRequest(t, h, http.MethodDelete, "/api/v1/admin/catalog/artists/"+id, "")
+	if resp.Code != http.StatusNoContent {
+		t.Fatalf("delete artist status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+
+	// list empty again
+	resp = performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/artists", "")
+	assertArtistListLength(t, resp, 0)
+}
+
+func TestCatalogArtistNotFound(t *testing.T) {
+	h := newCatalogTestHandler()
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/artists/missing", "")
+	assertAPIError(t, resp, http.StatusNotFound, "not_found")
+}
+
+func TestCatalogArtistInvalid(t *testing.T) {
+	h := newCatalogTestHandler()
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":""}`)
+	assertAPIError(t, resp, http.StatusBadRequest, "invalid_catalog_entity")
+}
+
+func TestCatalogArtistNotConfigured(t *testing.T) {
+	h := newTestHandler()
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/artists", "")
+	assertAPIError(t, resp, http.StatusServiceUnavailable, "catalog_not_configured")
+}
+
+// ---- album tests ----
+
+func TestCatalogAlbumWorkflow(t *testing.T) {
+	h := newCatalogTestHandler()
+
+	// create artist first
+	aResp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Ryo"}`)
+	if aResp.Code != http.StatusCreated {
+		t.Fatalf("create artist status = %d", aResp.Code)
+	}
+	var aBody map[string]any
+	decodeResponse(t, aResp, &aBody)
+	artistID, _ := aBody["id"].(string)
+
+	// create album
+	albumBody := fmt.Sprintf(`{"title":"supercell","artistId":%q,"releaseYear":2009}`, artistID)
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/albums", albumBody)
+	if resp.Code != http.StatusCreated {
+		t.Fatalf("create album status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var album map[string]any
+	decodeResponse(t, resp, &album)
+	albumID, _ := album["id"].(string)
+	if albumID == "" {
+		t.Fatal("expected album id")
+	}
+
+	// list with artistId filter
+	resp = performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/albums?artistId="+artistID, "")
+	assertAlbumListLength(t, resp, 1)
+
+	// list all
+	resp = performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/albums", "")
+	assertAlbumListLength(t, resp, 1)
+
+	// get
+	resp = performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/albums/"+albumID, "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("get album status = %d", resp.Code)
+	}
+
+	// delete
+	resp = performRequest(t, h, http.MethodDelete, "/api/v1/admin/catalog/albums/"+albumID, "")
+	if resp.Code != http.StatusNoContent {
+		t.Fatalf("delete album status = %d", resp.Code)
+	}
+}
+
+func TestCatalogAlbumArtistMismatch(t *testing.T) {
+	h := newCatalogTestHandler()
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/albums", `{"title":"X","artistId":"missing"}`)
+	if resp.Code == http.StatusCreated {
+		t.Fatal("expected failure when artist does not exist")
+	}
+}
+
+// ---- track tests ----
+
+func TestCatalogTrackWorkflow(t *testing.T) {
+	h := newCatalogTestHandler()
+
+	// create artist
+	aResp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Miku"}`)
+	if aResp.Code != http.StatusCreated {
+		t.Fatalf("create artist status = %d", aResp.Code)
+	}
+	var aBody map[string]any
+	decodeResponse(t, aResp, &aBody)
+	artistID, _ := aBody["id"].(string)
+
+	// create album
+	alResp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/albums", fmt.Sprintf(`{"title":"Miku Best","artistId":%q}`, artistID))
+	if alResp.Code != http.StatusCreated {
+		t.Fatalf("create album status = %d", alResp.Code)
+	}
+	var alBody map[string]any
+	decodeResponse(t, alResp, &alBody)
+	albumID, _ := alBody["id"].(string)
+
+	// create track
+	trackBody := fmt.Sprintf(`{"title":"World Is Mine","artistId":%q,"albumId":%q,"mediaObjectId":"media-1","trackNumber":1,"durationMs":245000}`, artistID, albumID)
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks", trackBody)
+	if resp.Code != http.StatusCreated {
+		t.Fatalf("create track status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var track map[string]any
+	decodeResponse(t, resp, &track)
+	trackID, _ := track["id"].(string)
+	if trackID == "" {
+		t.Fatal("expected track id")
+	}
+
+	// list by album
+	resp = performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/tracks?albumId="+albumID, "")
+	assertTrackListLength(t, resp, 1)
+
+	// list by artist
+	resp = performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/tracks?artistId="+artistID, "")
+	assertTrackListLength(t, resp, 1)
+
+	// list all
+	resp = performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/tracks", "")
+	assertTrackListLength(t, resp, 1)
+
+	// get
+	resp = performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/tracks/"+trackID, "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("get track status = %d", resp.Code)
+	}
+
+	// delete
+	resp = performRequest(t, h, http.MethodDelete, "/api/v1/admin/catalog/tracks/"+trackID, "")
+	if resp.Code != http.StatusNoContent {
+		t.Fatalf("delete track status = %d", resp.Code)
+	}
+}
+
+func TestCatalogTrackInvalidMissingTitle(t *testing.T) {
+	h := newCatalogTestHandler()
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks", `{"title":"","artistId":"x","mediaObjectId":"m"}`)
+	assertAPIError(t, resp, http.StatusBadRequest, "invalid_catalog_entity")
+}
+
+// ---- catalog list assert helpers ----
+
+func assertArtistListLength(t *testing.T, resp *httptest.ResponseRecorder, want int) {
+	t.Helper()
+	if resp.Code != http.StatusOK {
+		t.Fatalf("list artists status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var body struct {
+		Artists []map[string]any `json:"artists"`
+	}
+	decodeResponse(t, resp, &body)
+	if len(body.Artists) != want {
+		t.Fatalf("artists length = %d, want %d", len(body.Artists), want)
+	}
+}
+
+func assertAlbumListLength(t *testing.T, resp *httptest.ResponseRecorder, want int) {
+	t.Helper()
+	if resp.Code != http.StatusOK {
+		t.Fatalf("list albums status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var body struct {
+		Albums []map[string]any `json:"albums"`
+	}
+	decodeResponse(t, resp, &body)
+	if len(body.Albums) != want {
+		t.Fatalf("albums length = %d, want %d", len(body.Albums), want)
+	}
+}
+
+func assertTrackListLength(t *testing.T, resp *httptest.ResponseRecorder, want int) {
+	t.Helper()
+	if resp.Code != http.StatusOK {
+		t.Fatalf("list tracks status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var body struct {
+		Tracks []map[string]any `json:"tracks"`
+	}
+	decodeResponse(t, resp, &body)
+	if len(body.Tracks) != want {
+		t.Fatalf("tracks length = %d, want %d", len(body.Tracks), want)
 	}
 }
