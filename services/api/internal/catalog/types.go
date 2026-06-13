@@ -56,6 +56,29 @@ type Track struct {
 	UpdatedAt     time.Time `json:"updatedAt"`
 }
 
+// SearchResultKind identifies which entity kind a search hit belongs to.
+type SearchResultKind string
+
+const (
+	SearchResultArtist SearchResultKind = "artist"
+	SearchResultAlbum  SearchResultKind = "album"
+	SearchResultTrack  SearchResultKind = "track"
+)
+
+// SearchResultItem is a single catalog entity returned from a full-text search.
+type SearchResultItem struct {
+	Kind   SearchResultKind `json:"kind"`
+	Artist *Artist          `json:"artist,omitempty"`
+	Album  *Album           `json:"album,omitempty"`
+	Track  *Track           `json:"track,omitempty"`
+}
+
+// CatalogSearchResult holds the ordered result set from a catalog full-text search.
+type CatalogSearchResult struct {
+	Query string             `json:"query"`
+	Items []SearchResultItem `json:"items"`
+}
+
 // Repository persists catalog metadata records.
 type Repository interface {
 	SaveArtist(ctx context.Context, artist Artist) error
@@ -75,6 +98,12 @@ type Repository interface {
 	ListTracksByAlbum(ctx context.Context, albumID string) ([]Track, error)
 	ListTracksByArtist(ctx context.Context, artistID string) ([]Track, error)
 	DeleteTrack(ctx context.Context, id string) error
+
+	// SearchCatalog performs a full-text search across artists, albums, and tracks.
+	// The query string is tokenised using the simple text-search dictionary.
+	// Implementations that do not support full-text search may fall back to
+	// case-insensitive substring matching.
+	SearchCatalog(ctx context.Context, query string) (CatalogSearchResult, error)
 }
 
 // MediaObjectInfo carries the subset of media object metadata that the catalog

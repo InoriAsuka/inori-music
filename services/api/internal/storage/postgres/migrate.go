@@ -137,4 +137,33 @@ CREATE INDEX IF NOT EXISTS tracks_album_id_idx ON tracks (album_id);
 CREATE INDEX IF NOT EXISTS tracks_media_object_id_idx ON tracks (media_object_id);
 CREATE INDEX IF NOT EXISTS tracks_sort_title_idx ON tracks (lower(sort_title), lower(title), id);`,
 	},
+	{
+		name: "006_catalog_fts",
+		sql: `
+-- Add tsvector columns for full-text search on catalog entities.
+ALTER TABLE artists
+    ADD COLUMN IF NOT EXISTS search_vector tsvector
+        GENERATED ALWAYS AS (
+            setweight(to_tsvector('simple', coalesce(name, '')), 'A') ||
+            setweight(to_tsvector('simple', coalesce(sort_name, '')), 'B')
+        ) STORED;
+
+ALTER TABLE albums
+    ADD COLUMN IF NOT EXISTS search_vector tsvector
+        GENERATED ALWAYS AS (
+            setweight(to_tsvector('simple', coalesce(title, '')), 'A') ||
+            setweight(to_tsvector('simple', coalesce(sort_title, '')), 'B')
+        ) STORED;
+
+ALTER TABLE tracks
+    ADD COLUMN IF NOT EXISTS search_vector tsvector
+        GENERATED ALWAYS AS (
+            setweight(to_tsvector('simple', coalesce(title, '')), 'A') ||
+            setweight(to_tsvector('simple', coalesce(sort_title, '')), 'B')
+        ) STORED;
+
+CREATE INDEX IF NOT EXISTS artists_search_vector_idx ON artists USING GIN (search_vector);
+CREATE INDEX IF NOT EXISTS albums_search_vector_idx  ON albums  USING GIN (search_vector);
+CREATE INDEX IF NOT EXISTS tracks_search_vector_idx  ON tracks  USING GIN (search_vector);`,
+	},
 }

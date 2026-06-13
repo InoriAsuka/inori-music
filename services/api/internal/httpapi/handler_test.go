@@ -1466,3 +1466,85 @@ func TestCatalogImportTrackWithArtistAndAlbum(t *testing.T) {
 		t.Fatalf("albumId = %q, want %q", track["albumId"], albumID)
 	}
 }
+
+// ---- catalog search HTTP tests ----
+
+func newSearchTestHandler(t *testing.T) http.Handler {
+	t.Helper()
+	catalogRepo := catalog.NewMemoryRepository()
+	catalogSvc := catalog.NewService(catalogRepo)
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAdminToken(testAdminToken),
+		WithCatalogService(catalogSvc),
+		WithServiceInfo(ServiceInfo{Name: "inori-api", Version: "test", Commit: "c", BuildTime: "t"}),
+	).Routes()
+	return h
+}
+
+func TestCatalogSearchMissingQuery(t *testing.T) {
+	h := newSearchTestHandler(t)
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/search", "")
+	assertAPIError(t, resp, http.StatusBadRequest, "missing_query")
+}
+
+func TestCatalogSearchEmptyQuery(t *testing.T) {
+	h := newSearchTestHandler(t)
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/search?q=+", "")
+	assertAPIError(t, resp, http.StatusBadRequest, "missing_query")
+}
+
+func TestCatalogSearchReturnsResults(t *testing.T) {
+	h := newSearchTestHandler(t)
+
+	// create artist
+	aResp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Hatsune Miku"}`)
+	if aResp.Code != http.StatusCreated {
+		t.Fatalf("create artist: %d %s", aResp.Code, aResp.Body.String())
+	}
+
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/search?q=miku", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("search status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	decodeResponse(t, resp, &result)
+	if result["query"] != "miku" {
+		t.Fatalf("query = %q, want miku", result["query"])
+	}
+	items, ok := result["items"].([]any)
+	if !ok || len(items) != 1 {
+		t.Fatalf("items = %v, want 1 result", result["items"])
+	}
+	item := items[0].(map[string]any)
+	if item["kind"] != "artist" {
+		t.Fatalf("kind = %q, want artist", item["kind"])
+	}
+}
+
+func TestCatalogSearchNoResults(t *testing.T) {
+	h := newSearchTestHandler(t)
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/search?q=notfound", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("search status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	decodeResponse(t, resp, &result)
+	items := result["items"]
+	// items may be nil (JSON null) or an empty array — both acceptable
+	if items != nil {
+		if arr, ok := items.([]any); ok && len(arr) != 0 {
+			t.Fatalf("items = %v, want empty", arr)
+		}
+	}
+}
+
+func TestCatalogSearchNoCatalogService(t *testing.T) {
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAdminToken(testAdminToken),
+		WithServiceInfo(ServiceInfo{Name: "inori-api", Version: "test", Commit: "c", BuildTime: "t"}),
+	).Routes()
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/search?q=miku", "")
+	assertAPIError(t, resp, http.StatusServiceUnavailable, "catalog_not_configured")
+}

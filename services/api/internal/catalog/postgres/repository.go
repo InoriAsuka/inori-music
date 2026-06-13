@@ -207,6 +207,84 @@ func (r *Repository) DeleteTrack(ctx context.Context, id string) error {
 	return nil
 }
 
+// SearchCatalog uses PostgreSQL full-text search (tsvector/GIN indexes from migration
+// 006_catalog_fts) to find artists, albums, and tracks matching the query.
+// Results are ordered: artists first (rank desc), then albums, then tracks.
+func (r *Repository) SearchCatalog(ctx context.Context, query string) (catalog.CatalogSearchResult, error) {
+	result := catalog.CatalogSearchResult{Query: query}
+
+	// Artists
+	artistRows, err := r.pool.Query(ctx, `
+		SELECT id, name, sort_name, created_at, updated_at
+		FROM artists
+		WHERE search_vector @@ plainto_tsquery('simple', $1)
+		ORDER BY ts_rank(search_vector, plainto_tsquery('simple', $1)) DESC, lower(sort_name), lower(name), id`,
+		query)
+	if err != nil {
+		return result, fmt.Errorf("search artists: %w", err)
+	}
+	defer artistRows.Close()
+	for artistRows.Next() {
+		a, err := scanArtist(artistRows)
+		if err != nil {
+			return result, err
+		}
+		ac := a
+		result.Items = append(result.Items, catalog.SearchResultItem{Kind: catalog.SearchResultArtist, Artist: &ac})
+	}
+	if err := artistRows.Err(); err != nil {
+		return result, err
+	}
+
+	// Albums
+	albumRows, err := r.pool.Query(ctx, `
+		SELECT id, title, sort_title, artist_id, release_year, created_at, updated_at
+		FROM albums
+		WHERE search_vector @@ plainto_tsquery('simple', $1)
+		ORDER BY ts_rank(search_vector, plainto_tsquery('simple', $1)) DESC, release_year, lower(sort_title), lower(title), id`,
+		query)
+	if err != nil {
+		return result, fmt.Errorf("search albums: %w", err)
+	}
+	defer albumRows.Close()
+	for albumRows.Next() {
+		a, err := scanAlbum(albumRows)
+		if err != nil {
+			return result, err
+		}
+		ac := a
+		result.Items = append(result.Items, catalog.SearchResultItem{Kind: catalog.SearchResultAlbum, Album: &ac})
+	}
+	if err := albumRows.Err(); err != nil {
+		return result, err
+	}
+
+	// Tracks
+	trackRows, err := r.pool.Query(ctx, `
+		SELECT id, title, sort_title, artist_id, COALESCE(album_id, ''), media_object_id, track_number, disc_number, duration_ms, created_at, updated_at
+		FROM tracks
+		WHERE search_vector @@ plainto_tsquery('simple', $1)
+		ORDER BY ts_rank(search_vector, plainto_tsquery('simple', $1)) DESC, lower(sort_title), lower(title), id`,
+		query)
+	if err != nil {
+		return result, fmt.Errorf("search tracks: %w", err)
+	}
+	defer trackRows.Close()
+	for trackRows.Next() {
+		t, err := scanTrack(trackRows)
+		if err != nil {
+			return result, err
+		}
+		tc := t
+		result.Items = append(result.Items, catalog.SearchResultItem{Kind: catalog.SearchResultTrack, Track: &tc})
+	}
+	if err := trackRows.Err(); err != nil {
+		return result, err
+	}
+
+	return result, nil
+}
+
 type scanner interface {
 	Scan(dest ...any) error
 }

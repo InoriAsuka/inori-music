@@ -111,3 +111,94 @@ func TestRepositorySaveListAndDeleteCatalog(t *testing.T) {
 		t.Fatalf("GetTrack err = %v, want ErrTrackNotFound", err)
 	}
 }
+
+func TestRepositorySearchCatalog(t *testing.T) {
+	pool := setupCatalogTestDB(t)
+	repo := catalogpg.NewRepository(pool)
+	ctx := context.Background()
+
+	now := time.Now().UTC()
+
+	// Seed data
+	if err := repo.SaveArtist(ctx, catalog.Artist{ID: "search-artist-1", Name: "Hatsune Miku", SortName: "Miku, Hatsune", CreatedAt: now, UpdatedAt: now}); err != nil {
+		t.Fatalf("SaveArtist: %v", err)
+	}
+	if err := repo.SaveAlbum(ctx, catalog.Album{ID: "search-album-1", Title: "Project DIVA Mega Mix", SortTitle: "Project DIVA Mega Mix", ArtistID: "search-artist-1", ReleaseYear: 2020, CreatedAt: now, UpdatedAt: now}); err != nil {
+		t.Fatalf("SaveAlbum: %v", err)
+	}
+	if _, err := pool.Exec(ctx,
+		`INSERT INTO media_objects (id, backend_id, object_key, content_hash, size_bytes, mime_type, asset_kind, lifecycle_state, created_at, updated_at)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
+		"search-media-1", "backend-1", "tracks/world-is-mine.flac", "sha256:search", 123, "audio/flac", "original_audio", "active", now, now,
+	); err != nil {
+		t.Fatalf("insert media object: %v", err)
+	}
+	if err := repo.SaveTrack(ctx, catalog.Track{
+		ID: "search-track-1", Title: "World Is Mine", SortTitle: "World Is Mine",
+		ArtistID: "search-artist-1", AlbumID: "search-album-1", MediaObjectID: "search-media-1",
+		TrackNumber: 1, DiscNumber: 1, DurationMS: 245000, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("SaveTrack: %v", err)
+	}
+
+	t.Run("match artist", func(t *testing.T) {
+		result, err := repo.SearchCatalog(ctx, "miku")
+		if err != nil {
+			t.Fatalf("SearchCatalog: %v", err)
+		}
+		if result.Query != "miku" {
+			t.Fatalf("Query = %q, want miku", result.Query)
+		}
+		artistHits := 0
+		for _, item := range result.Items {
+			if item.Kind == catalog.SearchResultArtist {
+				artistHits++
+			}
+		}
+		if artistHits != 1 {
+			t.Fatalf("artist hits = %d, want 1; items = %v", artistHits, result.Items)
+		}
+	})
+
+	t.Run("match album", func(t *testing.T) {
+		result, err := repo.SearchCatalog(ctx, "diva")
+		if err != nil {
+			t.Fatalf("SearchCatalog: %v", err)
+		}
+		albumHits := 0
+		for _, item := range result.Items {
+			if item.Kind == catalog.SearchResultAlbum {
+				albumHits++
+			}
+		}
+		if albumHits != 1 {
+			t.Fatalf("album hits = %d, want 1", albumHits)
+		}
+	})
+
+	t.Run("match track", func(t *testing.T) {
+		result, err := repo.SearchCatalog(ctx, "world")
+		if err != nil {
+			t.Fatalf("SearchCatalog: %v", err)
+		}
+		trackHits := 0
+		for _, item := range result.Items {
+			if item.Kind == catalog.SearchResultTrack {
+				trackHits++
+			}
+		}
+		if trackHits != 1 {
+			t.Fatalf("track hits = %d, want 1", trackHits)
+		}
+	})
+
+	t.Run("no results", func(t *testing.T) {
+		result, err := repo.SearchCatalog(ctx, "notfound")
+		if err != nil {
+			t.Fatalf("SearchCatalog: %v", err)
+		}
+		if len(result.Items) != 0 {
+			t.Fatalf("Items = %v, want empty", result.Items)
+		}
+	})
+}

@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.41.0`
+`0.42.0`
 
 ## Product Goal
 
@@ -283,3 +283,17 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add `ErrImportRejected` sentinel error mapped to HTTP 422.
 - Add 7 `ImportTrack` unit tests in the catalog package and 7 HTTP-layer tests.
 - Update OpenAPI contract with import route and `CatalogImportRequest` schema.
+
+
+### v0.42.0 - 2026-06-13
+
+- Add PostgreSQL full-text search over catalog metadata via `GET /api/v1/admin/catalog/search?q=`.
+- Add migration `006_catalog_fts` with generated `tsvector` columns (weighted `A`/`B` for name vs sort-name) and GIN indexes on `artists`, `albums`, and `tracks`.
+- Add `SearchCatalog(ctx, query)` to `catalog.Repository` interface and `catalog.Service`; empty query rejected with validation error.
+- Implement `SearchCatalog` on `catalogpg.Repository` using `plainto_tsquery('simple', ...)` with `ts_rank` ordering; results grouped artists → albums → tracks.
+- Add `MemoryRepository.SearchCatalog` with case-insensitive substring fallback for unit-test environments.
+- Add `CatalogSearchResult`, `SearchResultItem`, `SearchResultKind` types.
+- Add 5 `SearchCatalog` service unit tests and 4 HTTP-layer tests.
+- Add `TestRepositorySearchCatalog` integration test (build tag: integration).
+- Update OpenAPI contract with `/api/v1/admin/catalog/search` path, `CatalogSearchResult`, `SearchResultItem`, `SearchResultKind` schemas, and new error codes.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.

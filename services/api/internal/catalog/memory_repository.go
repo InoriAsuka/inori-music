@@ -3,6 +3,7 @@ package catalog
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 )
 
@@ -168,4 +169,32 @@ func (r *MemoryRepository) DeleteTrack(_ context.Context, id string) error {
 	}
 	delete(r.tracks, id)
 	return nil
+}
+
+// SearchCatalog is a case-insensitive substring fallback for environments that do not
+// have PostgreSQL full-text search available (e.g. unit tests).
+func (r *MemoryRepository) SearchCatalog(_ context.Context, query string) (CatalogSearchResult, error) {
+	q := strings.ToLower(query)
+	result := CatalogSearchResult{Query: query}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, a := range r.artists {
+		if strings.Contains(strings.ToLower(a.Name), q) || strings.Contains(strings.ToLower(a.SortName), q) {
+			ac := a
+			result.Items = append(result.Items, SearchResultItem{Kind: SearchResultArtist, Artist: &ac})
+		}
+	}
+	for _, a := range r.albums {
+		if strings.Contains(strings.ToLower(a.Title), q) || strings.Contains(strings.ToLower(a.SortTitle), q) {
+			ac := a
+			result.Items = append(result.Items, SearchResultItem{Kind: SearchResultAlbum, Album: &ac})
+		}
+	}
+	for _, t := range r.tracks {
+		if strings.Contains(strings.ToLower(t.Title), q) || strings.Contains(strings.ToLower(t.SortTitle), q) {
+			tc := t
+			result.Items = append(result.Items, SearchResultItem{Kind: SearchResultTrack, Track: &tc})
+		}
+	}
+	return result, nil
 }

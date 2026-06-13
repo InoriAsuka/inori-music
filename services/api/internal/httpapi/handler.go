@@ -293,6 +293,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/catalog/tracks/{id}", handler.requireAdminAuth(handler.getTrack))
 	mux.HandleFunc("DELETE /api/v1/admin/catalog/tracks/{id}", handler.requireAdminAuth(handler.deleteTrack))
 	mux.HandleFunc("POST /api/v1/admin/catalog/import", handler.requireAdminAuth(handler.importTrack))
+	mux.HandleFunc("GET /api/v1/admin/catalog/search", handler.requireAdminAuth(handler.searchCatalog))
 	mux.HandleFunc("GET /api/v1/admin/storage/backends", handler.requireAdminAuth(handler.listStorageBackends))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends", handler.requireAdminAuth(handler.registerStorageBackend))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends/validate", handler.requireAdminAuth(handler.validateStorageBackend))
@@ -647,6 +648,25 @@ func (handler *Handler) importTrack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, track)
+}
+
+// ---- search handler ----
+
+func (handler *Handler) searchCatalog(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireCatalogService(w) {
+		return
+	}
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if q == "" {
+		writeAPIError(w, http.StatusBadRequest, "missing_query", "query parameter 'q' is required")
+		return
+	}
+	result, err := handler.catalogService.SearchCatalog(r.Context(), q)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 // ---- artist handlers ----

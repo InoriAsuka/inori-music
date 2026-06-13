@@ -236,6 +236,16 @@ func (s *Service) ImportTrack(ctx context.Context, req ImportTrackRequest) (Trac
 	return track, nil
 }
 
+// SearchCatalog delegates a full-text catalog search to the underlying repository.
+// An empty query string is rejected with a validation error.
+func (s *Service) SearchCatalog(ctx context.Context, query string) (CatalogSearchResult, error) {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return CatalogSearchResult{}, fmt.Errorf("%w: query must not be empty", ErrInvalidTrack)
+	}
+	return s.repo.SearchCatalog(ctx, query)
+}
+
 func newID() (string, error) {
 	var b [8]byte
 	if _, err := rand.Read(b[:]); err != nil {

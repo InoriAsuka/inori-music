@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 
@@ -166,6 +167,32 @@ func (r *memRepo) DeleteTrack(_ context.Context, id string) error {
 	}
 	delete(r.tracks, id)
 	return nil
+}
+
+func (r *memRepo) SearchCatalog(_ context.Context, query string) (catalog.CatalogSearchResult, error) {
+	q := strings.ToLower(query)
+	result := catalog.CatalogSearchResult{Query: query}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	for _, a := range r.artists {
+		if strings.Contains(strings.ToLower(a.Name), q) {
+			ac := a
+			result.Items = append(result.Items, catalog.SearchResultItem{Kind: catalog.SearchResultArtist, Artist: &ac})
+		}
+	}
+	for _, a := range r.albums {
+		if strings.Contains(strings.ToLower(a.Title), q) {
+			ac := a
+			result.Items = append(result.Items, catalog.SearchResultItem{Kind: catalog.SearchResultAlbum, Album: &ac})
+		}
+	}
+	for _, t := range r.tracks {
+		if strings.Contains(strings.ToLower(t.Title), q) {
+			tc := t
+			result.Items = append(result.Items, catalog.SearchResultItem{Kind: catalog.SearchResultTrack, Track: &tc})
+		}
+	}
+	return result, nil
 }
 
 func TestServiceCreatesArtistAlbumAndTrack(t *testing.T) {
@@ -427,5 +454,106 @@ func TestImportTrackAlbumArtistInherited(t *testing.T) {
 	}
 	if track.ArtistID != artist.ID {
 		t.Fatalf("ArtistID = %q, want inherited %q", track.ArtistID, artist.ID)
+	}
+}
+
+// ---- SearchCatalog tests ----
+
+func TestSearchCatalogEmptyQueryRejected(t *testing.T) {
+	ctx := context.Background()
+	svc := catalog.NewService(newMemRepo())
+	_, err := svc.SearchCatalog(ctx, "  ")
+	if !errors.Is(err, catalog.ErrInvalidTrack) {
+		t.Fatalf("err = %v, want ErrInvalidTrack for empty query", err)
+	}
+}
+
+func TestSearchCatalogNoResults(t *testing.T) {
+	ctx := context.Background()
+	svc := catalog.NewService(newMemRepo())
+	result, err := svc.SearchCatalog(ctx, "notfound")
+	if err != nil {
+		t.Fatalf("SearchCatalog: %v", err)
+	}
+	if result.Query != "notfound" {
+		t.Fatalf("Query = %q, want notfound", result.Query)
+	}
+	if len(result.Items) != 0 {
+		t.Fatalf("Items = %v, want empty", result.Items)
+	}
+}
+
+func TestSearchCatalogMatchesArtist(t *testing.T) {
+	ctx := context.Background()
+	svc := catalog.NewService(newMemRepo())
+	if _, err := svc.CreateArtist(ctx, "Hatsune Miku", ""); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := svc.CreateArtist(ctx, "KAITO", ""); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := svc.SearchCatalog(ctx, "miku")
+	if err != nil {
+		t.Fatalf("SearchCatalog: %v", err)
+	}
+	if len(result.Items) != 1 {
+		t.Fatalf("Items count = %d, want 1", len(result.Items))
+	}
+	if result.Items[0].Kind != catalog.SearchResultArtist {
+		t.Fatalf("Kind = %q, want artist", result.Items[0].Kind)
+	}
+	if result.Items[0].Artist.Name != "Hatsune Miku" {
+		t.Fatalf("Artist.Name = %q", result.Items[0].Artist.Name)
+	}
+}
+
+func TestSearchCatalogMatchesAlbum(t *testing.T) {
+	ctx := context.Background()
+	svc := catalog.NewService(newMemRepo())
+	artist, _ := svc.CreateArtist(ctx, "Miku", "")
+	if _, err := svc.CreateAlbum(ctx, "Project DIVA", "", artist.ID, 2009); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := svc.SearchCatalog(ctx, "diva")
+	if err != nil {
+		t.Fatalf("SearchCatalog: %v", err)
+	}
+	if len(result.Items) != 1 || result.Items[0].Kind != catalog.SearchResultAlbum {
+		t.Fatalf("Items = %v, want 1 album", result.Items)
+	}
+}
+
+func TestSearchCatalogCrossEntityResults(t *testing.T) {
+	ctx := context.Background()
+	svc, reader := newImportSvc(t)
+	reader.add("media-s1", "original_audio", "active")
+
+	artist, _ := svc.CreateArtist(ctx, "Miku Artist", "")
+	album, _ := svc.CreateAlbum(ctx, "Miku Album", "", artist.ID, 2020)
+	_, _ = svc.ImportTrack(ctx, catalog.ImportTrackRequest{
+		MediaObjectID: "media-s1",
+		Title:         "Miku Song",
+		ArtistID:      artist.ID,
+		AlbumID:       album.ID,
+	})
+
+	result, err := svc.SearchCatalog(ctx, "miku")
+	if err != nil {
+		t.Fatalf("SearchCatalog: %v", err)
+	}
+	kinds := map[catalog.SearchResultKind]int{}
+	for _, item := range result.Items {
+		kinds[item.Kind]++
+	}
+	if kinds[catalog.SearchResultArtist] != 1 {
+		t.Errorf("artist hits = %d, want 1", kinds[catalog.SearchResultArtist])
+	}
+	if kinds[catalog.SearchResultAlbum] != 1 {
+		t.Errorf("album hits = %d, want 1", kinds[catalog.SearchResultAlbum])
+	}
+	if kinds[catalog.SearchResultTrack] != 1 {
+		t.Errorf("track hits = %d, want 1", kinds[catalog.SearchResultTrack])
 	}
 }

@@ -367,7 +367,11 @@
                   "media_object_verification_failed",
                   "auth_not_configured",
                   "invalid_user",
-                  "user_disabled"
+                  "user_disabled",
+                  "missing_query",
+                  "catalog_not_configured",
+                  "invalid_catalog_entity",
+                  "import_rejected"
                 ],
                 "type": "string"
               },
@@ -1366,6 +1370,56 @@
           "updatedAt"
         ],
         "type": "object"
+      },
+      "SearchResultKind": {
+        "type": "string",
+        "enum": [
+          "artist",
+          "album",
+          "track"
+        ],
+        "description": "The entity kind of a catalog search result item."
+      },
+      "SearchResultItem": {
+        "type": "object",
+        "required": [
+          "kind"
+        ],
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/SearchResultKind"
+          },
+          "artist": {
+            "$ref": "#/components/schemas/CatalogArtist"
+          },
+          "album": {
+            "$ref": "#/components/schemas/CatalogAlbum"
+          },
+          "track": {
+            "$ref": "#/components/schemas/CatalogTrack"
+          }
+        }
+      },
+      "CatalogSearchResult": {
+        "type": "object",
+        "required": [
+          "query",
+          "items"
+        ],
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "The search query string as submitted."
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SearchResultItem"
+            },
+            "nullable": true,
+            "description": "Ordered result items: artists first, then albums, then tracks."
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -1379,7 +1433,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "0.41.0"
+    "version": "0.42.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -3880,6 +3934,75 @@
         },
         "security": [],
         "summary": "Get public build metadata for this API process."
+      }
+    },
+    "/api/v1/admin/catalog/search": {
+      "get": {
+        "summary": "Search catalog",
+        "description": "Full-text search across artists, albums, and tracks. Returns ordered results with artist hits first, then albums, then tracks.",
+        "operationId": "searchCatalog",
+        "tags": [
+          "Catalog"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "description": "Search query string (tokenised using the simple text-search dictionary).",
+            "schema": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Search results",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogSearchResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or empty query parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Catalog service not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/APIError"
+                }
+              }
+            }
+          }
+        }
       }
     }
   },
