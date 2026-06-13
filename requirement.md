@@ -297,3 +297,14 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add `TestRepositorySearchCatalog` integration test (build tag: integration).
 - Update OpenAPI contract with `/api/v1/admin/catalog/search` path, `CatalogSearchResult`, `SearchResultItem`, `SearchResultKind` schemas, and new error codes.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+
+### v0.43.0 - 2026-06-13
+
+- Add read-only catalog browse endpoints for session-authenticated viewers and admins under `/api/v1/catalog/`: list/get artists, list/get albums (`?artistId=`), list/get tracks (`?albumId=`/`?artistId=`), and full-text search (`?q=`).
+- Add `requireViewerAuth` middleware that accepts any valid session token (admin or viewer role) but rejects the static bootstrap admin token; returns 503 when no auth service is configured, 401 for missing or invalid tokens.
+- Reuse existing `listArtists`, `getArtist`, `listAlbums`, `getAlbum`, `listTracks`, `getTrack`, and `searchCatalog` handlers without modification.
+- Fix missing 405 method-not-allowed fallback for `/api/v1/admin/catalog/search`.
+- Add `newViewerTestHandler` helper and 11 HTTP-layer tests covering viewer/admin session, 401 unauthorized, 503 for no-auth-service, not-found, missing query, seeded search, and 405 guards.
+- Update OpenAPI contract with 7 new viewer catalog paths; bump `info.version` to `0.43.0`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.

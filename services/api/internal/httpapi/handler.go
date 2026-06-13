@@ -294,6 +294,13 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/admin/catalog/tracks/{id}", handler.requireAdminAuth(handler.deleteTrack))
 	mux.HandleFunc("POST /api/v1/admin/catalog/import", handler.requireAdminAuth(handler.importTrack))
 	mux.HandleFunc("GET /api/v1/admin/catalog/search", handler.requireAdminAuth(handler.searchCatalog))
+	mux.HandleFunc("GET /api/v1/catalog/artists", handler.requireViewerAuth(handler.listArtists))
+	mux.HandleFunc("GET /api/v1/catalog/artists/{id}", handler.requireViewerAuth(handler.getArtist))
+	mux.HandleFunc("GET /api/v1/catalog/albums", handler.requireViewerAuth(handler.listAlbums))
+	mux.HandleFunc("GET /api/v1/catalog/albums/{id}", handler.requireViewerAuth(handler.getAlbum))
+	mux.HandleFunc("GET /api/v1/catalog/tracks", handler.requireViewerAuth(handler.listTracks))
+	mux.HandleFunc("GET /api/v1/catalog/tracks/{id}", handler.requireViewerAuth(handler.getTrack))
+	mux.HandleFunc("GET /api/v1/catalog/search", handler.requireViewerAuth(handler.searchCatalog))
 	mux.HandleFunc("GET /api/v1/admin/storage/backends", handler.requireAdminAuth(handler.listStorageBackends))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends", handler.requireAdminAuth(handler.registerStorageBackend))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends/validate", handler.requireAdminAuth(handler.validateStorageBackend))
@@ -329,6 +336,14 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("/api/v1/admin/catalog/tracks", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/catalog/tracks/{id}", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/catalog/import", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/catalog/search", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/catalog/artists", handler.requireViewerAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/catalog/artists/{id}", handler.requireViewerAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/catalog/albums", handler.requireViewerAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/catalog/albums/{id}", handler.requireViewerAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/catalog/tracks", handler.requireViewerAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/catalog/tracks/{id}", handler.requireViewerAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/catalog/search", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/storage/backends", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/storage/backends/validate", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/storage/backends/refresh", handler.requireAdminAuth(handler.methodNotAllowed))
@@ -342,6 +357,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("/api/v1/admin/media/objects/{id}/timeline", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/media/objects/{id}/lifecycle", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/media/objects/{id}/verify", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/catalog/", handler.requireViewerAuth(handler.notFound))
 	mux.HandleFunc("/api/v1/admin/", handler.requireAdminAuth(handler.notFound))
 	mux.HandleFunc("/", handler.notFound)
 	return handler.instrument(mux)
@@ -875,6 +891,31 @@ func (handler *Handler) deleteTrack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// requireViewerAuth allows any session-authenticated user (admin or viewer role).
+// The static bootstrap adminToken is intentionally NOT accepted here — catalog
+// browse requires a real session. Returns 503 when no auth service is configured,
+// 401 when no valid bearer token is supplied.
+func (handler *Handler) requireViewerAuth(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if handler.authService == nil {
+			writeAPIError(w, http.StatusServiceUnavailable, "auth_not_configured", "authentication service is not configured")
+			return
+		}
+		token, ok := bearerToken(r.Header.Get("Authorization"))
+		if !ok {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="inori"`)
+			writeAPIError(w, http.StatusUnauthorized, "unauthorized", "valid bearer token is required")
+			return
+		}
+		if _, err := handler.authService.ValidateToken(r.Context(), token); err != nil {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="inori"`)
+			writeAPIError(w, http.StatusUnauthorized, "unauthorized", "valid bearer token is required")
+			return
+		}
+		next(w, r)
+	}
 }
 
 func (handler *Handler) requireAdminAuth(next http.HandlerFunc) http.HandlerFunc {

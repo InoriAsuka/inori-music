@@ -1433,7 +1433,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "0.42.0"
+    "version": "0.43.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -4001,6 +4001,243 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/catalog/artists": {
+      "get": {
+        "summary": "List artists",
+        "operationId": "listCatalogArtists",
+        "tags": ["Catalog"],
+        "security": [{"bearerAuth": []}],
+        "responses": {
+          "200": {
+            "description": "List of artists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "artists": {
+                      "type": "array",
+                      "items": {"$ref": "#/components/schemas/CatalogArtist"}
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}
+          },
+          "503": {
+            "description": "Error",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}
+          }
+        }
+      }
+    },
+    "/api/v1/catalog/artists/{id}": {
+      "parameters": [{"$ref": "#/components/parameters/CatalogId"}],
+      "get": {
+        "summary": "Get artist",
+        "operationId": "getCatalogArtist",
+        "tags": ["Catalog"],
+        "security": [{"bearerAuth": []}],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CatalogArtist"}}}
+          },
+          "401": {
+            "description": "Error",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}
+          },
+          "404": {
+            "description": "Error",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}
+          },
+          "503": {
+            "description": "Error",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}
+          }
+        }
+      }
+    },
+    "/api/v1/catalog/albums": {
+      "get": {
+        "summary": "List albums",
+        "operationId": "listCatalogAlbums",
+        "tags": ["Catalog"],
+        "security": [{"bearerAuth": []}],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "artistId",
+            "schema": {"type": "string"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of albums",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "albums": {
+                      "type": "array",
+                      "items": {"$ref": "#/components/schemas/CatalogAlbum"}
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}
+          },
+          "503": {
+            "description": "Error",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}
+          }
+        }
+      }
+    },
+    "/api/v1/catalog/albums/{id}": {
+      "parameters": [{"$ref": "#/components/parameters/CatalogId"}],
+      "get": {
+        "summary": "Get album",
+        "operationId": "getCatalogAlbum",
+        "tags": ["Catalog"],
+        "security": [{"bearerAuth": []}],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CatalogAlbum"}}}
+          },
+          "401": {
+            "description": "Error",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}
+          },
+          "404": {
+            "description": "Error",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}
+          },
+          "503": {
+            "description": "Error",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}
+          }
+        }
+      }
+    },
+    "/api/v1/catalog/tracks": {
+      "get": {
+        "summary": "List tracks",
+        "operationId": "listCatalogTracks",
+        "tags": ["Catalog"],
+        "security": [{"bearerAuth": []}],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "albumId",
+            "schema": {"type": "string"}
+          },
+          {
+            "in": "query",
+            "name": "artistId",
+            "schema": {"type": "string"}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of tracks",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "tracks": {
+                      "type": "array",
+                      "items": {"$ref": "#/components/schemas/CatalogTrack"}
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}
+          },
+          "503": {
+            "description": "Error",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}
+          }
+        }
+      }
+    },
+    "/api/v1/catalog/tracks/{id}": {
+      "parameters": [{"$ref": "#/components/parameters/CatalogId"}],
+      "get": {
+        "summary": "Get track",
+        "operationId": "getCatalogTrack",
+        "tags": ["Catalog"],
+        "security": [{"bearerAuth": []}],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CatalogTrack"}}}
+          },
+          "401": {
+            "description": "Error",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}
+          },
+          "404": {
+            "description": "Error",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}
+          },
+          "503": {
+            "description": "Error",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}
+          }
+        }
+      }
+    },
+    "/api/v1/catalog/search": {
+      "get": {
+        "summary": "Search catalog",
+        "operationId": "listCatalogSearch",
+        "tags": ["Catalog"],
+        "security": [{"bearerAuth": []}],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": true,
+            "description": "Search query string.",
+            "schema": {"type": "string", "minLength": 1}
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Search results",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CatalogSearchResult"}}}
+          },
+          "400": {
+            "description": "Error",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}
+          },
+          "401": {
+            "description": "Error",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}
+          },
+          "503": {
+            "description": "Error",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}
           }
         }
       }

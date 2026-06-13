@@ -1548,3 +1548,131 @@ func TestCatalogSearchNoCatalogService(t *testing.T) {
 	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/search?q=miku", "")
 	assertAPIError(t, resp, http.StatusServiceUnavailable, "catalog_not_configured")
 }
+
+func TestAdminCatalogSearchMethodNotAllowed(t *testing.T) {
+	h := newSearchTestHandler(t)
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/search", "")
+	assertAPIError(t, resp, http.StatusMethodNotAllowed, "method_not_allowed")
+}
+
+// ---- viewer catalog browse HTTP tests ----
+
+// newViewerTestHandler returns a handler with auth service + catalog service
+// and two session tokens: one for a viewer user and one for an admin user.
+func newViewerTestHandler(t *testing.T) (http.Handler, string, string) {
+	t.Helper()
+	authSvc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
+	catalogRepo := catalog.NewMemoryRepository()
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAuthService(authSvc),
+		WithCatalogService(catalog.NewService(catalogRepo)),
+		WithServiceInfo(ServiceInfo{Name: "inori-api", Version: "test", Commit: "c", BuildTime: "t"}),
+	).Routes()
+	if _, err := authSvc.CreateUser(context.Background(), "alice", "viewerpass1", auth.RoleViewer); err != nil {
+		t.Fatalf("create viewer: %v", err)
+	}
+	viewerToken, _, err := authSvc.Login(context.Background(), "alice", "viewerpass1")
+	if err != nil {
+		t.Fatalf("viewer login: %v", err)
+	}
+	if _, err := authSvc.CreateUser(context.Background(), "bob", "adminpass2", auth.RoleAdmin); err != nil {
+		t.Fatalf("create admin: %v", err)
+	}
+	adminToken, _, err := authSvc.Login(context.Background(), "bob", "adminpass2")
+	if err != nil {
+		t.Fatalf("admin login: %v", err)
+	}
+	return h, viewerToken, adminToken
+}
+
+func TestCatalogViewerListArtists(t *testing.T) {
+	h, viewerToken, _ := newViewerTestHandler(t)
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/artists", "", "Bearer "+viewerToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("list artists status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	assertArtistListLength(t, resp, 0)
+}
+
+func TestCatalogViewerListArtistsAdminToken(t *testing.T) {
+	h, _, adminToken := newViewerTestHandler(t)
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/artists", "", "Bearer "+adminToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("admin session on viewer route status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	assertArtistListLength(t, resp, 0)
+}
+
+func TestCatalogViewerStaticBootstrapTokenRejected(t *testing.T) {
+	// Handler with static admin token but no auth service: viewer routes return 503.
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAdminToken(testAdminToken),
+		WithCatalogService(catalog.NewService(catalog.NewMemoryRepository())),
+		WithServiceInfo(ServiceInfo{Name: "inori-api", Version: "test", Commit: "c", BuildTime: "t"}),
+	).Routes()
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/catalog/artists", "")
+	assertAPIError(t, resp, http.StatusServiceUnavailable, "auth_not_configured")
+}
+
+func TestCatalogViewerUnauthorized(t *testing.T) {
+	h, _, _ := newViewerTestHandler(t)
+	resp := performRequestWithoutAuth(t, h, http.MethodGet, "/api/v1/catalog/artists", "")
+	assertAPIError(t, resp, http.StatusUnauthorized, "unauthorized")
+}
+
+func TestCatalogViewerGetArtistNotFound(t *testing.T) {
+	h, viewerToken, _ := newViewerTestHandler(t)
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/artists/missing", "", "Bearer "+viewerToken)
+	assertAPIError(t, resp, http.StatusNotFound, "not_found")
+}
+
+func TestCatalogViewerListAlbums(t *testing.T) {
+	h, viewerToken, _ := newViewerTestHandler(t)
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/albums", "", "Bearer "+viewerToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("list albums status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	assertAlbumListLength(t, resp, 0)
+}
+
+func TestCatalogViewerListTracks(t *testing.T) {
+	h, viewerToken, _ := newViewerTestHandler(t)
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/tracks", "", "Bearer "+viewerToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("list tracks status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	assertTrackListLength(t, resp, 0)
+}
+
+func TestCatalogViewerSearchMissingQuery(t *testing.T) {
+	h, viewerToken, _ := newViewerTestHandler(t)
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/search", "", "Bearer "+viewerToken)
+	assertAPIError(t, resp, http.StatusBadRequest, "missing_query")
+}
+
+func TestCatalogViewerSearchReturnsResults(t *testing.T) {
+	h, viewerToken, adminToken := newViewerTestHandler(t)
+	// seed via admin endpoint
+	aResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Hatsune Miku"}`, "Bearer "+adminToken)
+	if aResp.Code != http.StatusCreated {
+		t.Fatalf("create artist: %d %s", aResp.Code, aResp.Body.String())
+	}
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/search?q=miku", "", "Bearer "+viewerToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("search status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	decodeResponse(t, resp, &result)
+	items, ok := result["items"].([]any)
+	if !ok || len(items) != 1 {
+		t.Fatalf("items = %v, want 1 result", result["items"])
+	}
+}
+
+func TestCatalogViewerMethodNotAllowed(t *testing.T) {
+	h, viewerToken, _ := newViewerTestHandler(t)
+	resp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/catalog/artists", "", "Bearer "+viewerToken)
+	assertAPIError(t, resp, http.StatusMethodNotAllowed, "method_not_allowed")
+}
