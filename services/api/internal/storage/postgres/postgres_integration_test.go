@@ -67,16 +67,16 @@ func TestBackendRepository_SaveAndGet(t *testing.T) {
 	ctx := context.Background()
 
 	backend := storage.StorageBackend{
-		ID:          "test-local-1",
-		Type:        storage.BackendTypeLocal,
-		DisplayName: "Test Local",
-		Enabled:     true,
-		IsDefault:   false,
-		Priority:    10,
+		ID:           "test-local-1",
+		Type:         storage.BackendTypeLocal,
+		DisplayName:  "Test Local",
+		Enabled:      true,
+		IsDefault:    false,
+		Priority:     10,
 		HealthStatus: storage.HealthStatusUnknown,
-		Config:      storage.BackendConfig{Local: &storage.LocalConfig{RootPath: "/data/media"}},
-		CreatedAt:   time.Now().UTC().Truncate(time.Millisecond),
-		UpdatedAt:   time.Now().UTC().Truncate(time.Millisecond),
+		Config:       storage.BackendConfig{Local: &storage.LocalConfig{RootPath: "/data/media"}},
+		CreatedAt:    time.Now().UTC().Truncate(time.Millisecond),
+		UpdatedAt:    time.Now().UTC().Truncate(time.Millisecond),
 	}
 
 	if err := repo.Save(ctx, backend); err != nil {
@@ -268,7 +268,7 @@ func TestMediaObjectRepository_ListByVerificationStatus(t *testing.T) {
 		ContentHash: "sha256:v1", SizeBytes: 100, MIMEType: "audio/flac",
 		AssetKind: "original_audio", LifecycleState: "active",
 		LastVerification: &storage.MediaObjectVerificationResult{Status: "verified", VerifiedAt: verifiedAt},
-		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+		CreatedAt:        time.Now().UTC(), UpdatedAt: time.Now().UTC(),
 	}
 	unknown := storage.MediaObject{
 		ID: "v2", BackendID: "b1", ObjectKey: "audio/v2.flac",

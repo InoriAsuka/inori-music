@@ -261,3 +261,171 @@ func TestServiceDeletesRecords(t *testing.T) {
 		t.Fatalf("GetTrack err = %v, want ErrTrackNotFound", err)
 	}
 }
+
+// ---- ImportTrack tests ----
+
+type memMediaReader struct {
+	objects map[string]catalog.MediaObjectInfo
+}
+
+func newMemMediaReader() *memMediaReader {
+	return &memMediaReader{objects: map[string]catalog.MediaObjectInfo{}}
+}
+
+func (r *memMediaReader) add(id, assetKind, lifecycleState string) {
+	r.objects[id] = catalog.MediaObjectInfo{ID: id, AssetKind: assetKind, LifecycleState: lifecycleState}
+}
+
+func (r *memMediaReader) GetMediaObjectInfo(_ context.Context, id string) (catalog.MediaObjectInfo, error) {
+	info, ok := r.objects[id]
+	if !ok {
+		return catalog.MediaObjectInfo{}, fmt.Errorf("not found: %s", id)
+	}
+	return info, nil
+}
+
+func newImportSvc(t *testing.T) (*catalog.Service, *memMediaReader) {
+	t.Helper()
+	repo := catalog.NewMemoryRepository()
+	reader := newMemMediaReader()
+	svc := catalog.NewService(repo).WithMediaObjectReader(reader)
+	return svc, reader
+}
+
+func TestImportTrackSuccess(t *testing.T) {
+	ctx := context.Background()
+	svc, reader := newImportSvc(t)
+	reader.add("media-1", "original_audio", "active")
+
+	track, err := svc.ImportTrack(ctx, catalog.ImportTrackRequest{
+		MediaObjectID: "media-1",
+		Title:         "World Is Mine",
+		TrackNumber:   1,
+		DurationMS:    245000,
+	})
+	if err != nil {
+		t.Fatalf("ImportTrack: %v", err)
+	}
+	if track.ID == "" {
+		t.Fatal("expected non-empty track id")
+	}
+	if track.Title != "World Is Mine" {
+		t.Fatalf("Title = %q, want %q", track.Title, "World Is Mine")
+	}
+	if track.MediaObjectID != "media-1" {
+		t.Fatalf("MediaObjectID = %q, want media-1", track.MediaObjectID)
+	}
+	if track.DurationMS != 245000 {
+		t.Fatalf("DurationMS = %d, want 245000", track.DurationMS)
+	}
+}
+
+func TestImportTrackTitleFallback(t *testing.T) {
+	ctx := context.Background()
+	svc, reader := newImportSvc(t)
+	reader.add("media-2", "transcoded_audio", "active")
+
+	track, err := svc.ImportTrack(ctx, catalog.ImportTrackRequest{MediaObjectID: "media-2"})
+	if err != nil {
+		t.Fatalf("ImportTrack: %v", err)
+	}
+	if track.Title != "media-2" {
+		t.Fatalf("Title = %q, want %q (media object id fallback)", track.Title, "media-2")
+	}
+}
+
+func TestImportTrackWrongAssetKind(t *testing.T) {
+	ctx := context.Background()
+	svc, reader := newImportSvc(t)
+	reader.add("media-3", "artwork", "active")
+
+	_, err := svc.ImportTrack(ctx, catalog.ImportTrackRequest{MediaObjectID: "media-3"})
+	if !errors.Is(err, catalog.ErrImportRejected) {
+		t.Fatalf("err = %v, want ErrImportRejected", err)
+	}
+}
+
+func TestImportTrackNotActive(t *testing.T) {
+	ctx := context.Background()
+	svc, reader := newImportSvc(t)
+	reader.add("media-4", "original_audio", "staged")
+
+	_, err := svc.ImportTrack(ctx, catalog.ImportTrackRequest{MediaObjectID: "media-4"})
+	if !errors.Is(err, catalog.ErrImportRejected) {
+		t.Fatalf("err = %v, want ErrImportRejected", err)
+	}
+}
+
+func TestImportTrackNotFound(t *testing.T) {
+	ctx := context.Background()
+	svc, _ := newImportSvc(t)
+
+	_, err := svc.ImportTrack(ctx, catalog.ImportTrackRequest{MediaObjectID: "missing"})
+	if err == nil {
+		t.Fatal("expected error for missing media object")
+	}
+}
+
+func TestImportTrackNoReaderConfigured(t *testing.T) {
+	ctx := context.Background()
+	repo := catalog.NewMemoryRepository()
+	svc := catalog.NewService(repo) // no media reader
+
+	_, err := svc.ImportTrack(ctx, catalog.ImportTrackRequest{MediaObjectID: "media-1"})
+	if !errors.Is(err, catalog.ErrImportRejected) {
+		t.Fatalf("err = %v, want ErrImportRejected", err)
+	}
+}
+
+func TestImportTrackWithArtistAndAlbum(t *testing.T) {
+	ctx := context.Background()
+	svc, reader := newImportSvc(t)
+	reader.add("media-5", "original_audio", "active")
+
+	artist, err := svc.CreateArtist(ctx, "Miku", "")
+	if err != nil {
+		t.Fatalf("CreateArtist: %v", err)
+	}
+	album, err := svc.CreateAlbum(ctx, "supercell", "", artist.ID, 2009)
+	if err != nil {
+		t.Fatalf("CreateAlbum: %v", err)
+	}
+
+	track, err := svc.ImportTrack(ctx, catalog.ImportTrackRequest{
+		MediaObjectID: "media-5",
+		Title:         "World Is Mine",
+		ArtistID:      artist.ID,
+		AlbumID:       album.ID,
+		TrackNumber:   1,
+	})
+	if err != nil {
+		t.Fatalf("ImportTrack: %v", err)
+	}
+	if track.ArtistID != artist.ID {
+		t.Fatalf("ArtistID = %q, want %q", track.ArtistID, artist.ID)
+	}
+	if track.AlbumID != album.ID {
+		t.Fatalf("AlbumID = %q, want %q", track.AlbumID, album.ID)
+	}
+}
+
+func TestImportTrackAlbumArtistInherited(t *testing.T) {
+	ctx := context.Background()
+	svc, reader := newImportSvc(t)
+	reader.add("media-6", "original_audio", "active")
+
+	artist, _ := svc.CreateArtist(ctx, "Ryo", "")
+	album, _ := svc.CreateAlbum(ctx, "supercell", "", artist.ID, 0)
+
+	// no artistID supplied — should inherit from album
+	track, err := svc.ImportTrack(ctx, catalog.ImportTrackRequest{
+		MediaObjectID: "media-6",
+		AlbumID:       album.ID,
+	})
+	if err != nil {
+		t.Fatalf("ImportTrack: %v", err)
+	}
+	if track.ArtistID != artist.ID {
+		t.Fatalf("ArtistID = %q, want inherited %q", track.ArtistID, artist.ID)
+	}
+}

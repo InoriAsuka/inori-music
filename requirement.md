@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.40.0`
+`0.41.0`
 
 ## Product Goal
 
@@ -269,3 +269,17 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Update the OpenAPI contract with catalog paths, `UserId`, and `CatalogId` path parameter components.
 - Add 11 HTTP-layer catalog tests covering workflows, not-found errors, validation errors, and unconfigured service handling.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+
+### v0.41.0 - 2026-06-13
+
+- Add `POST /api/v1/admin/catalog/import` endpoint that converts a verified media object into a catalog track record.
+- Import validates that the media object exists, has `original_audio` or `transcoded_audio` asset kind, and is in `active` lifecycle state.
+- Track title falls back to the media object ID when not supplied.
+- Artist inherits from the album when only `albumId` is provided.
+- Add `MediaObjectReader` interface and `ImportTrackRequest` to the catalog package; `GetMediaObjectInfoForImport` helper on `MediaObjectService`.
+- Wire media object service → catalog service via `mediaObjectReaderAdapter` in the HTTP handler layer (no import cycle).
+- Add `WithMediaObjectReader` method to `catalog.Service`.
+- Add `ErrImportRejected` sentinel error mapped to HTTP 422.
+- Add 7 `ImportTrack` unit tests in the catalog package and 7 HTTP-layer tests.
+- Update OpenAPI contract with import route and `CatalogImportRequest` schema.

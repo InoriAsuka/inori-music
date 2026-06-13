@@ -16,6 +16,9 @@ var (
 	ErrInvalidTrack   = errors.New("invalid track")
 	ErrTrackNotFound  = errors.New("track not found")
 	ErrTrackConflict  = errors.New("track conflict")
+	// ErrImportRejected is returned when a media object cannot be imported as a track
+	// (e.g. wrong asset kind or lifecycle state).
+	ErrImportRejected = errors.New("import rejected")
 )
 
 // Artist represents a music library artist or performer.
@@ -72,4 +75,32 @@ type Repository interface {
 	ListTracksByAlbum(ctx context.Context, albumID string) ([]Track, error)
 	ListTracksByArtist(ctx context.Context, artistID string) ([]Track, error)
 	DeleteTrack(ctx context.Context, id string) error
+}
+
+// MediaObjectInfo carries the subset of media object metadata that the catalog
+// import workflow needs without importing the storage package.
+type MediaObjectInfo struct {
+	ID             string
+	AssetKind      string
+	LifecycleState string
+	MIMEType       string
+}
+
+// MediaObjectReader fetches a single media object's metadata by ID.
+// It is satisfied by *storage.MediaObjectService without introducing a hard
+// import cycle between the catalog and storage packages.
+type MediaObjectReader interface {
+	GetMediaObjectInfo(ctx context.Context, id string) (MediaObjectInfo, error)
+}
+
+// ImportTrackRequest carries caller-supplied metadata for the import workflow.
+type ImportTrackRequest struct {
+	MediaObjectID string
+	Title         string
+	SortTitle     string
+	ArtistID      string
+	AlbumID       string
+	TrackNumber   int
+	DiscNumber    int
+	DurationMS    int
 }

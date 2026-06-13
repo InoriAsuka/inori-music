@@ -7,13 +7,13 @@ import (
 )
 
 var (
-	ErrInvalidUser       = errors.New("invalid user")
-	ErrUserNotFound      = errors.New("user not found")
-	ErrUserConflict      = errors.New("user conflict")
-	ErrInvalidSession    = errors.New("invalid session")
-	ErrSessionNotFound   = errors.New("session not found")
-	ErrBadCredentials    = errors.New("bad credentials")
-	ErrUserDisabled      = errors.New("user disabled")
+	ErrInvalidUser     = errors.New("invalid user")
+	ErrUserNotFound    = errors.New("user not found")
+	ErrUserConflict    = errors.New("user conflict")
+	ErrInvalidSession  = errors.New("invalid session")
+	ErrSessionNotFound = errors.New("session not found")
+	ErrBadCredentials  = errors.New("bad credentials")
+	ErrUserDisabled    = errors.New("user disabled")
 )
 
 // Role represents the authorization level of a user account.
@@ -49,10 +49,10 @@ type UserView struct {
 // TokenHash is the SHA-256 hex digest of the plaintext token.
 // The plaintext token is never stored.
 type Session struct {
-	TokenHash string    `json:"-"`
-	UserID    string    `json:"userId"`
-	ExpiresAt time.Time `json:"expiresAt"`
-	CreatedAt time.Time `json:"createdAt"`
+	TokenHash string     `json:"-"`
+	UserID    string     `json:"userId"`
+	ExpiresAt time.Time  `json:"expiresAt"`
+	CreatedAt time.Time  `json:"createdAt"`
 	RevokedAt *time.Time `json:"revokedAt,omitempty"`
 }
 

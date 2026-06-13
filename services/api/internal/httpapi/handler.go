@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/json"
@@ -88,6 +89,33 @@ func WithCatalogService(catalogSvc *catalog.Service) HandlerOption {
 	return func(handler *Handler) {
 		handler.catalogService = catalogSvc
 	}
+}
+
+// withCatalogMediaReader wires the media object service into the catalog service
+// as a MediaObjectReader after both have been set via options. Called from Routes().
+func (handler *Handler) withCatalogMediaReader() {
+	if handler.catalogService != nil && handler.mediaObjects != nil {
+		handler.catalogService.WithMediaObjectReader(&mediaObjectReaderAdapter{svc: handler.mediaObjects})
+	}
+}
+
+// mediaObjectReaderAdapter bridges *storage.MediaObjectService to catalog.MediaObjectReader
+// without creating a direct import dependency between the catalog and storage packages.
+type mediaObjectReaderAdapter struct {
+	svc *storage.MediaObjectService
+}
+
+func (a *mediaObjectReaderAdapter) GetMediaObjectInfo(ctx context.Context, id string) (catalog.MediaObjectInfo, error) {
+	oid, assetKind, lifecycleState, mimeType, err := a.svc.GetMediaObjectInfoForImport(ctx, id)
+	if err != nil {
+		return catalog.MediaObjectInfo{}, err
+	}
+	return catalog.MediaObjectInfo{
+		ID:             oid,
+		AssetKind:      assetKind,
+		LifecycleState: lifecycleState,
+		MIMEType:       mimeType,
+	}, nil
 }
 
 // WithServiceInfo configures build metadata returned by public diagnostic endpoints.
@@ -240,6 +268,7 @@ func NewHandler(storageService *storage.Service, options ...HandlerOption) *Hand
 }
 
 func (handler *Handler) Routes() http.Handler {
+	handler.withCatalogMediaReader()
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /healthz", handler.health)
 	mux.HandleFunc("GET /metrics", handler.metrics)
@@ -263,6 +292,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/admin/catalog/tracks", handler.requireAdminAuth(handler.createTrack))
 	mux.HandleFunc("GET /api/v1/admin/catalog/tracks/{id}", handler.requireAdminAuth(handler.getTrack))
 	mux.HandleFunc("DELETE /api/v1/admin/catalog/tracks/{id}", handler.requireAdminAuth(handler.deleteTrack))
+	mux.HandleFunc("POST /api/v1/admin/catalog/import", handler.requireAdminAuth(handler.importTrack))
 	mux.HandleFunc("GET /api/v1/admin/storage/backends", handler.requireAdminAuth(handler.listStorageBackends))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends", handler.requireAdminAuth(handler.registerStorageBackend))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends/validate", handler.requireAdminAuth(handler.validateStorageBackend))
@@ -297,6 +327,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("/api/v1/admin/catalog/albums/{id}", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/catalog/tracks", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/catalog/tracks/{id}", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/catalog/import", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/storage/backends", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/storage/backends/validate", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/storage/backends/refresh", handler.requireAdminAuth(handler.methodNotAllowed))
@@ -577,6 +608,45 @@ func (handler *Handler) requireCatalogService(w http.ResponseWriter) bool {
 		return false
 	}
 	return true
+}
+
+// ---- import handler ----
+
+type importTrackRequest struct {
+	MediaObjectID string `json:"mediaObjectId"`
+	Title         string `json:"title"`
+	SortTitle     string `json:"sortTitle"`
+	ArtistID      string `json:"artistId"`
+	AlbumID       string `json:"albumId"`
+	TrackNumber   int    `json:"trackNumber"`
+	DiscNumber    int    `json:"discNumber"`
+	DurationMS    int    `json:"durationMs"`
+}
+
+func (handler *Handler) importTrack(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireCatalogService(w) {
+		return
+	}
+	var req importTrackRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeError(w, err)
+		return
+	}
+	track, err := handler.catalogService.ImportTrack(r.Context(), catalog.ImportTrackRequest{
+		MediaObjectID: req.MediaObjectID,
+		Title:         req.Title,
+		SortTitle:     req.SortTitle,
+		ArtistID:      req.ArtistID,
+		AlbumID:       req.AlbumID,
+		TrackNumber:   req.TrackNumber,
+		DiscNumber:    req.DiscNumber,
+		DurationMS:    req.DurationMS,
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, track)
 }
 
 // ---- artist handlers ----
@@ -1197,6 +1267,9 @@ func writeError(w http.ResponseWriter, err error) {
 	case errors.Is(err, catalog.ErrArtistConflict), errors.Is(err, catalog.ErrAlbumConflict), errors.Is(err, catalog.ErrTrackConflict):
 		status = http.StatusConflict
 		code = "conflict"
+	case errors.Is(err, catalog.ErrImportRejected):
+		status = http.StatusUnprocessableEntity
+		code = "import_rejected"
 	case errors.Is(err, storage.ErrInvalidMediaObject):
 		status = http.StatusBadRequest
 		code = "invalid_media_object"

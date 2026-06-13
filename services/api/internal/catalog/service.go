@@ -11,12 +11,20 @@ import (
 
 // Service coordinates music catalog metadata validation and persistence.
 type Service struct {
-	repo Repository
-	now  func() time.Time
+	repo        Repository
+	mediaReader MediaObjectReader // optional; required only for ImportTrack
+	now         func() time.Time
 }
 
 func NewService(repo Repository) *Service {
 	return &Service{repo: repo, now: time.Now}
+}
+
+// WithMediaObjectReader attaches a media object reader to the service so that
+// ImportTrack can validate media objects before creating track records.
+func (s *Service) WithMediaObjectReader(r MediaObjectReader) *Service {
+	s.mediaReader = r
+	return s
 }
 
 func (s *Service) CreateArtist(ctx context.Context, name, sortName string) (Artist, error) {
@@ -153,6 +161,79 @@ func (s *Service) GetTrack(ctx context.Context, id string) (Track, error) {
 
 func (s *Service) DeleteTrack(ctx context.Context, id string) error {
 	return s.repo.DeleteTrack(ctx, strings.TrimSpace(id))
+}
+
+// ImportTrack validates a media object and creates a Track record that references it.
+// The media object must exist, be of kind original_audio or transcoded_audio, and
+// have lifecycle state active. A title is derived from the request or falls back to
+// the media object ID when none is supplied.
+func (s *Service) ImportTrack(ctx context.Context, req ImportTrackRequest) (Track, error) {
+	if s.mediaReader == nil {
+		return Track{}, fmt.Errorf("%w: media object reader not configured", ErrImportRejected)
+	}
+	req.MediaObjectID = strings.TrimSpace(req.MediaObjectID)
+	if req.MediaObjectID == "" {
+		return Track{}, fmt.Errorf("%w: media_object_id is required", ErrImportRejected)
+	}
+	info, err := s.mediaReader.GetMediaObjectInfo(ctx, req.MediaObjectID)
+	if err != nil {
+		return Track{}, err
+	}
+	if info.AssetKind != "original_audio" && info.AssetKind != "transcoded_audio" {
+		return Track{}, fmt.Errorf("%w: media object asset_kind must be original_audio or transcoded_audio, got %q", ErrImportRejected, info.AssetKind)
+	}
+	if info.LifecycleState != "active" {
+		return Track{}, fmt.Errorf("%w: media object lifecycle_state must be active, got %q", ErrImportRejected, info.LifecycleState)
+	}
+	title := strings.TrimSpace(req.Title)
+	if title == "" {
+		title = req.MediaObjectID
+	}
+	sortTitle := strings.TrimSpace(req.SortTitle)
+	artistID := strings.TrimSpace(req.ArtistID)
+	if artistID != "" {
+		if _, err := s.repo.GetArtist(ctx, artistID); err != nil {
+			return Track{}, err
+		}
+	}
+	albumID := strings.TrimSpace(req.AlbumID)
+	if albumID != "" {
+		album, err := s.repo.GetAlbum(ctx, albumID)
+		if err != nil {
+			return Track{}, err
+		}
+		if artistID != "" && album.ArtistID != artistID {
+			return Track{}, fmt.Errorf("%w: album artist mismatch", ErrInvalidTrack)
+		}
+		if artistID == "" {
+			artistID = album.ArtistID
+		}
+	}
+	if req.TrackNumber < 0 || req.DiscNumber < 0 || req.DurationMS < 0 {
+		return Track{}, fmt.Errorf("%w: numeric fields must be non-negative", ErrInvalidTrack)
+	}
+	id, err := newID()
+	if err != nil {
+		return Track{}, fmt.Errorf("generate track id: %w", err)
+	}
+	now := s.now().UTC()
+	track := Track{
+		ID:            id,
+		Title:         title,
+		SortTitle:     sortTitle,
+		ArtistID:      artistID,
+		AlbumID:       albumID,
+		MediaObjectID: req.MediaObjectID,
+		TrackNumber:   req.TrackNumber,
+		DiscNumber:    req.DiscNumber,
+		DurationMS:    req.DurationMS,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+	if err := s.repo.SaveTrack(ctx, track); err != nil {
+		return Track{}, err
+	}
+	return track, nil
 }
 
 func newID() (string, error) {

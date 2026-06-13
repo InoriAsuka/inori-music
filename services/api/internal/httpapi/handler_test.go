@@ -1335,3 +1335,134 @@ func assertTrackListLength(t *testing.T, resp *httptest.ResponseRecorder, want i
 		t.Fatalf("tracks length = %d, want %d", len(body.Tracks), want)
 	}
 }
+
+// ---- catalog import HTTP tests ----
+
+func newImportTestHandlerWithMediaObject(t *testing.T, mediaObjID, assetKind, lifecycleState string) (http.Handler, string) {
+	t.Helper()
+	repo := storage.NewMemoryRepository()
+	mediaRepo := storage.NewMemoryMediaObjectRepository()
+	if mediaObjID != "" {
+		// pre-populate the in-memory media repository
+		obj := storage.MediaObject{
+			ID:             mediaObjID,
+			BackendID:      "backend-1",
+			ObjectKey:      "key/" + mediaObjID,
+			AssetKind:      assetKind,
+			LifecycleState: lifecycleState,
+		}
+		if err := mediaRepo.SaveMediaObject(context.Background(), obj); err != nil {
+			t.Fatalf("SaveMediaObject: %v", err)
+		}
+	}
+	catalogRepo := catalog.NewMemoryRepository()
+	catalogSvc := catalog.NewService(catalogRepo)
+	mediaSvc := storage.NewMediaObjectService(repo, mediaRepo)
+	h := NewHandler(
+		storage.NewService(repo),
+		WithAdminToken(testAdminToken),
+		WithCatalogService(catalogSvc),
+		WithMediaObjectService(mediaSvc),
+		WithServiceInfo(ServiceInfo{Name: "inori-api", Version: "test", Commit: "c", BuildTime: "t"}),
+	).Routes()
+	return h, mediaObjID
+}
+
+func TestCatalogImportTrackSuccess(t *testing.T) {
+	h, mediaID := newImportTestHandlerWithMediaObject(t, "media-import-1", "original_audio", "active")
+	body := fmt.Sprintf(`{"mediaObjectId":%q,"title":"World Is Mine","trackNumber":1,"durationMs":245000}`, mediaID)
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/import", body)
+	if resp.Code != http.StatusCreated {
+		t.Fatalf("import status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var track map[string]any
+	decodeResponse(t, resp, &track)
+	if track["id"] == "" || track["id"] == nil {
+		t.Fatal("expected track id")
+	}
+	if track["title"] != "World Is Mine" {
+		t.Fatalf("title = %q, want %q", track["title"], "World Is Mine")
+	}
+	if track["mediaObjectId"] != mediaID {
+		t.Fatalf("mediaObjectId = %q, want %q", track["mediaObjectId"], mediaID)
+	}
+}
+
+func TestCatalogImportTrackTitleFallback(t *testing.T) {
+	h, mediaID := newImportTestHandlerWithMediaObject(t, "media-import-2", "transcoded_audio", "active")
+	body := fmt.Sprintf(`{"mediaObjectId":%q}`, mediaID)
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/import", body)
+	if resp.Code != http.StatusCreated {
+		t.Fatalf("import status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var track map[string]any
+	decodeResponse(t, resp, &track)
+	if track["title"] != mediaID {
+		t.Fatalf("title = %q, want media object id fallback %q", track["title"], mediaID)
+	}
+}
+
+func TestCatalogImportTrackWrongAssetKind(t *testing.T) {
+	h, mediaID := newImportTestHandlerWithMediaObject(t, "media-import-3", "artwork", "active")
+	body := fmt.Sprintf(`{"mediaObjectId":%q}`, mediaID)
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/import", body)
+	assertAPIError(t, resp, http.StatusUnprocessableEntity, "import_rejected")
+}
+
+func TestCatalogImportTrackNotActive(t *testing.T) {
+	h, mediaID := newImportTestHandlerWithMediaObject(t, "media-import-4", "original_audio", "staged")
+	body := fmt.Sprintf(`{"mediaObjectId":%q}`, mediaID)
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/import", body)
+	assertAPIError(t, resp, http.StatusUnprocessableEntity, "import_rejected")
+}
+
+func TestCatalogImportTrackMediaNotFound(t *testing.T) {
+	h, _ := newImportTestHandlerWithMediaObject(t, "", "", "")
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/import", `{"mediaObjectId":"missing"}`)
+	if resp.Code == http.StatusCreated {
+		t.Fatal("expected failure for missing media object")
+	}
+}
+
+func TestCatalogImportTrackNoCatalogService(t *testing.T) {
+	h := newTestHandler()
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/import", `{"mediaObjectId":"x"}`)
+	assertAPIError(t, resp, http.StatusServiceUnavailable, "catalog_not_configured")
+}
+
+func TestCatalogImportTrackWithArtistAndAlbum(t *testing.T) {
+	h, mediaID := newImportTestHandlerWithMediaObject(t, "media-import-5", "original_audio", "active")
+
+	// create artist
+	aResp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Miku"}`)
+	if aResp.Code != http.StatusCreated {
+		t.Fatalf("create artist status = %d", aResp.Code)
+	}
+	var aBody map[string]any
+	decodeResponse(t, aResp, &aBody)
+	artistID := aBody["id"].(string)
+
+	// create album
+	alResp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/albums", fmt.Sprintf(`{"title":"supercell","artistId":%q}`, artistID))
+	if alResp.Code != http.StatusCreated {
+		t.Fatalf("create album status = %d", alResp.Code)
+	}
+	var alBody map[string]any
+	decodeResponse(t, alResp, &alBody)
+	albumID := alBody["id"].(string)
+
+	// import
+	body := fmt.Sprintf(`{"mediaObjectId":%q,"title":"World Is Mine","artistId":%q,"albumId":%q,"trackNumber":1}`, mediaID, artistID, albumID)
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/import", body)
+	if resp.Code != http.StatusCreated {
+		t.Fatalf("import status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var track map[string]any
+	decodeResponse(t, resp, &track)
+	if track["artistId"] != artistID {
+		t.Fatalf("artistId = %q, want %q", track["artistId"], artistID)
+	}
+	if track["albumId"] != albumID {
+		t.Fatalf("albumId = %q, want %q", track["albumId"], albumID)
+	}
+}
