@@ -293,6 +293,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/catalog/tracks/{id}", handler.requireAdminAuth(handler.getTrack))
 	mux.HandleFunc("DELETE /api/v1/admin/catalog/tracks/{id}", handler.requireAdminAuth(handler.deleteTrack))
 	mux.HandleFunc("POST /api/v1/admin/catalog/import", handler.requireAdminAuth(handler.importTrack))
+	mux.HandleFunc("POST /api/v1/admin/catalog/batch-import", handler.requireAdminAuth(handler.batchImportTracks))
 	mux.HandleFunc("GET /api/v1/admin/catalog/search", handler.requireAdminAuth(handler.searchCatalog))
 	mux.HandleFunc("GET /api/v1/catalog/artists", handler.requireViewerAuth(handler.listArtists))
 	mux.HandleFunc("GET /api/v1/catalog/artists/{id}", handler.requireViewerAuth(handler.getArtist))
@@ -336,6 +337,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("/api/v1/admin/catalog/tracks", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/catalog/tracks/{id}", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/catalog/import", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/catalog/batch-import", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/catalog/search", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/catalog/artists", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/catalog/artists/{id}", handler.requireViewerAuth(handler.methodNotAllowed))
@@ -664,6 +666,44 @@ func (handler *Handler) importTrack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusCreated, track)
+}
+
+// ---- batch import handler ----
+
+type batchImportRequest struct {
+	Items []importTrackRequest `json:"items"`
+}
+
+func (handler *Handler) batchImportTracks(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireCatalogService(w) {
+		return
+	}
+	var req batchImportRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeError(w, err)
+		return
+	}
+	items := make([]catalog.ImportTrackRequest, len(req.Items))
+	for i, it := range req.Items {
+		items[i] = catalog.ImportTrackRequest{
+			MediaObjectID: it.MediaObjectID,
+			Title:         it.Title,
+			SortTitle:     it.SortTitle,
+			ArtistID:      it.ArtistID,
+			AlbumID:       it.AlbumID,
+			TrackNumber:   it.TrackNumber,
+			DiscNumber:    it.DiscNumber,
+			DurationMS:    it.DurationMS,
+		}
+	}
+	result := handler.catalogService.BatchImportTracks(r.Context(), items)
+	status := http.StatusOK
+	if result.Failed > 0 && result.Imported > 0 {
+		status = http.StatusMultiStatus
+	} else if result.Failed > 0 && result.Imported == 0 {
+		status = http.StatusUnprocessableEntity
+	}
+	writeJSON(w, status, result)
 }
 
 // ---- search handler ----

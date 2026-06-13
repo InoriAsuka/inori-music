@@ -1676,3 +1676,78 @@ func TestCatalogViewerMethodNotAllowed(t *testing.T) {
 	resp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/catalog/artists", "", "Bearer "+viewerToken)
 	assertAPIError(t, resp, http.StatusMethodNotAllowed, "method_not_allowed")
 }
+
+// ---- batch import tests ----
+
+func TestCatalogBatchImportAllSuccess(t *testing.T) {
+	h, mediaID := newImportTestHandlerWithMediaObject(t, "bi-http-1", "original_audio", "active")
+	body := fmt.Sprintf(`{"items":[{"mediaObjectId":%q,"title":"Track One"},{"mediaObjectId":%q,"title":"Track Two"}]}`, mediaID, mediaID)
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/batch-import", body)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("batch-import status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	decodeResponse(t, resp, &result)
+	if result["total"].(float64) != 2 {
+		t.Fatalf("total = %v, want 2", result["total"])
+	}
+	if result["imported"].(float64) != 2 {
+		t.Fatalf("imported = %v, want 2", result["imported"])
+	}
+	if result["failed"].(float64) != 0 {
+		t.Fatalf("failed = %v, want 0", result["failed"])
+	}
+}
+
+func TestCatalogBatchImportPartialSuccess(t *testing.T) {
+	h, mediaID := newImportTestHandlerWithMediaObject(t, "bi-http-2", "original_audio", "active")
+	body := fmt.Sprintf(`{"items":[{"mediaObjectId":%q,"title":"Good"},{"mediaObjectId":"missing-xyz","title":"Bad"}]}`, mediaID)
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/batch-import", body)
+	if resp.Code != http.StatusMultiStatus {
+		t.Fatalf("batch-import status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	decodeResponse(t, resp, &result)
+	if result["imported"].(float64) != 1 || result["failed"].(float64) != 1 {
+		t.Fatalf("imported=%v failed=%v, want 1/1", result["imported"], result["failed"])
+	}
+}
+
+func TestCatalogBatchImportAllFail(t *testing.T) {
+	h, _ := newImportTestHandlerWithMediaObject(t, "", "", "")
+	body := `{"items":[{"mediaObjectId":"none-a"},{"mediaObjectId":"none-b"}]}`
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/batch-import", body)
+	if resp.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("all-fail status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	decodeResponse(t, resp, &result)
+	if result["failed"].(float64) != 2 {
+		t.Fatalf("failed = %v, want 2", result["failed"])
+	}
+}
+
+func TestCatalogBatchImportEmptyBatch(t *testing.T) {
+	h, _ := newImportTestHandlerWithMediaObject(t, "", "", "")
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/batch-import", `{"items":[]}`)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("empty batch status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	decodeResponse(t, resp, &result)
+	if result["total"].(float64) != 0 {
+		t.Fatalf("total = %v, want 0", result["total"])
+	}
+}
+
+func TestCatalogBatchImportNoCatalogService(t *testing.T) {
+	h := newTestHandler()
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/batch-import", `{"items":[]}`)
+	assertAPIError(t, resp, http.StatusServiceUnavailable, "catalog_not_configured")
+}
+
+func TestCatalogBatchImportMethodNotAllowed(t *testing.T) {
+	h, _ := newImportTestHandlerWithMediaObject(t, "", "", "")
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/batch-import", "")
+	assertAPIError(t, resp, http.StatusMethodNotAllowed, "method_not_allowed")
+}

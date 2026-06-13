@@ -40,6 +40,7 @@ func TestStorageAdminOpenAPIContractCoversRoutes(t *testing.T) {
 		"/api/v1/admin/catalog/tracks":                 {"get", "post"},
 		"/api/v1/admin/catalog/tracks/{id}":            {"get", "delete"},
 		"/api/v1/admin/catalog/import":                 {"post"},
+		"/api/v1/admin/catalog/batch-import":           {"post"},
 		"/api/v1/admin/catalog/search":                 {"get"},
 		"/api/v1/catalog/artists":                      {"get"},
 		"/api/v1/catalog/artists/{id}":                 {"get"},

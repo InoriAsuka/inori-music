@@ -133,3 +133,24 @@ type ImportTrackRequest struct {
 	DiscNumber    int
 	DurationMS    int
 }
+
+// BatchImportResultItem holds the outcome of a single import within a batch request.
+// Exactly one of Track or Error is set.
+type BatchImportResultItem struct {
+	Index         int    `json:"index"`
+	MediaObjectID string `json:"mediaObjectId"`
+	// Track is populated on success.
+	Track *Track `json:"track,omitempty"`
+	// Error is populated on failure.
+	Error string `json:"error,omitempty"`
+	// ErrorCode is a machine-readable error code populated on failure.
+	ErrorCode string `json:"errorCode,omitempty"`
+}
+
+// BatchImportResult is the aggregate result of a batch-import request.
+type BatchImportResult struct {
+	Total    int                     `json:"total"`
+	Imported int                     `json:"imported"`
+	Failed   int                     `json:"failed"`
+	Items    []BatchImportResultItem `json:"items"`
+}

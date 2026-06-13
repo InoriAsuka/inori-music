@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.42.0`
+`0.44.0`
 
 ## Product Goal
 
@@ -307,4 +307,17 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Fix missing 405 method-not-allowed fallback for `/api/v1/admin/catalog/search`.
 - Add `newViewerTestHandler` helper and 11 HTTP-layer tests covering viewer/admin session, 401 unauthorized, 503 for no-auth-service, not-found, missing query, seeded search, and 405 guards.
 - Update OpenAPI contract with 7 new viewer catalog paths; bump `info.version` to `0.43.0`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+
+### v0.44.0 - 2026-06-13
+
+- Add `POST /api/v1/admin/catalog/batch-import` endpoint that accepts a list of `CatalogImportRequest` items and processes each independently.
+- Return HTTP 200 on full success, HTTP 207 Multi-Status on partial success, HTTP 422 when all items fail.
+- Each result item carries `index`, `mediaObjectId`, the created `track` on success, or `error`/`errorCode` on failure.
+- Add `BatchImportTracks(ctx, items)` method to `catalog.Service`; individual item failures do not abort subsequent items.
+- Add `BatchImportResult`, `BatchImportResultItem` types to the catalog package.
+- Add 5 `BatchImportTracks` unit tests and 6 HTTP-layer tests covering full-success, partial-success, all-fail, empty batch, no-catalog-service, and 405 guard.
+- Update OpenAPI contract with `/api/v1/admin/catalog/batch-import` path and `CatalogBatchImportRequest`, `CatalogBatchImportResult`, `CatalogBatchImportResultItem` schemas; bump `info.version` to `0.44.0`.
+- Fix pre-existing flaky `TestMediaObjectServiceUpdatesLifecycleState` by injecting a stepping clock that guarantees distinct timestamps across `RegisterMediaObject` and `SetMediaObjectLifecycleState` calls.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

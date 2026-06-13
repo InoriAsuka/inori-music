@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -234,6 +235,47 @@ func (s *Service) ImportTrack(ctx context.Context, req ImportTrackRequest) (Trac
 		return Track{}, err
 	}
 	return track, nil
+}
+
+// BatchImportTracks imports each item in req independently. Failures do not abort
+// subsequent items. The returned BatchImportResult records both successes and
+// per-item error details so callers can present partial results to the user.
+func (s *Service) BatchImportTracks(ctx context.Context, items []ImportTrackRequest) BatchImportResult {
+	result := BatchImportResult{
+		Total: len(items),
+		Items: make([]BatchImportResultItem, 0, len(items)),
+	}
+	for i, req := range items {
+		mediaID := strings.TrimSpace(req.MediaObjectID)
+		track, err := s.ImportTrack(ctx, req)
+		if err != nil {
+			code := "import_rejected"
+			switch {
+			case errors.Is(err, ErrArtistNotFound):
+				code = "artist_not_found"
+			case errors.Is(err, ErrAlbumNotFound):
+				code = "album_not_found"
+			case errors.Is(err, ErrInvalidTrack):
+				code = "invalid_catalog_entity"
+			}
+			result.Failed++
+			result.Items = append(result.Items, BatchImportResultItem{
+				Index:         i,
+				MediaObjectID: mediaID,
+				Error:         err.Error(),
+				ErrorCode:     code,
+			})
+			continue
+		}
+		result.Imported++
+		t := track
+		result.Items = append(result.Items, BatchImportResultItem{
+			Index:         i,
+			MediaObjectID: mediaID,
+			Track:         &t,
+		})
+	}
+	return result
 }
 
 // SearchCatalog delegates a full-text catalog search to the underlying repository.

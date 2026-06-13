@@ -557,3 +557,117 @@ func TestSearchCatalogCrossEntityResults(t *testing.T) {
 		t.Errorf("track hits = %d, want 1", kinds[catalog.SearchResultTrack])
 	}
 }
+
+// ---- BatchImportTracks tests ----
+
+func TestBatchImportTracksAllSuccess(t *testing.T) {
+	ctx := context.Background()
+	svc, reader := newImportSvc(t)
+	reader.add("bi-1", "original_audio", "active")
+	reader.add("bi-2", "transcoded_audio", "active")
+
+	artist, _ := svc.CreateArtist(ctx, "Batch Artist", "")
+	result := svc.BatchImportTracks(ctx, []catalog.ImportTrackRequest{
+		{MediaObjectID: "bi-1", Title: "Track One", ArtistID: artist.ID},
+		{MediaObjectID: "bi-2", Title: "Track Two", ArtistID: artist.ID},
+	})
+
+	if result.Total != 2 || result.Imported != 2 || result.Failed != 0 {
+		t.Fatalf("Total=%d Imported=%d Failed=%d, want 2/2/0", result.Total, result.Imported, result.Failed)
+	}
+	for i, item := range result.Items {
+		if item.Track == nil {
+			t.Errorf("item[%d].Track is nil", i)
+		}
+		if item.Error != "" {
+			t.Errorf("item[%d].Error = %q, want empty", i, item.Error)
+		}
+		if item.Index != i {
+			t.Errorf("item[%d].Index = %d, want %d", i, item.Index, i)
+		}
+	}
+}
+
+func TestBatchImportTracksPartialFailure(t *testing.T) {
+	ctx := context.Background()
+	svc, reader := newImportSvc(t)
+	reader.add("bi-ok", "original_audio", "active")
+	// bi-bad has wrong asset kind
+
+	artist, _ := svc.CreateArtist(ctx, "Partial Artist", "")
+	result := svc.BatchImportTracks(ctx, []catalog.ImportTrackRequest{
+		{MediaObjectID: "bi-ok", Title: "Good Track", ArtistID: artist.ID},
+		{MediaObjectID: "bi-bad", Title: "Bad Track", ArtistID: artist.ID},
+		{MediaObjectID: "bi-ok", Title: "Good Again", ArtistID: artist.ID},
+	})
+
+	if result.Total != 3 {
+		t.Fatalf("Total = %d, want 3", result.Total)
+	}
+	// bi-bad is not found in reader → import_rejected
+	if result.Failed != 1 {
+		t.Fatalf("Failed = %d, want 1", result.Failed)
+	}
+	if result.Imported != 2 {
+		t.Fatalf("Imported = %d, want 2", result.Imported)
+	}
+	if result.Items[1].Error == "" {
+		t.Error("item[1].Error should be non-empty for missing media object")
+	}
+}
+
+func TestBatchImportTracksAllFail(t *testing.T) {
+	ctx := context.Background()
+	svc, _ := newImportSvc(t)
+	// No media objects registered; all should fail.
+	result := svc.BatchImportTracks(ctx, []catalog.ImportTrackRequest{
+		{MediaObjectID: "none-1"},
+		{MediaObjectID: "none-2"},
+	})
+	if result.Failed != 2 || result.Imported != 0 {
+		t.Fatalf("Failed=%d Imported=%d, want 2/0", result.Failed, result.Imported)
+	}
+	for _, item := range result.Items {
+		if item.ErrorCode == "" {
+			t.Error("ErrorCode should be set on failure")
+		}
+	}
+}
+
+func TestBatchImportTracksEmptyBatch(t *testing.T) {
+	ctx := context.Background()
+	svc, _ := newImportSvc(t)
+	result := svc.BatchImportTracks(ctx, nil)
+	if result.Total != 0 || result.Imported != 0 || result.Failed != 0 {
+		t.Fatalf("unexpected result for empty batch: %+v", result)
+	}
+	if len(result.Items) != 0 {
+		t.Fatalf("Items length = %d, want 0", len(result.Items))
+	}
+}
+
+func TestBatchImportTracksIndexPreserved(t *testing.T) {
+	ctx := context.Background()
+	svc, reader := newImportSvc(t)
+	reader.add("idx-1", "original_audio", "active")
+	reader.add("idx-3", "original_audio", "active")
+
+	artist, _ := svc.CreateArtist(ctx, "Index Artist", "")
+	result := svc.BatchImportTracks(ctx, []catalog.ImportTrackRequest{
+		{MediaObjectID: "idx-1", Title: "A", ArtistID: artist.ID},
+		{MediaObjectID: "idx-missing"},
+		{MediaObjectID: "idx-3", Title: "C", ArtistID: artist.ID},
+	})
+
+	if result.Total != 3 || result.Imported != 2 || result.Failed != 1 {
+		t.Fatalf("Total=%d Imported=%d Failed=%d, want 3/2/1", result.Total, result.Imported, result.Failed)
+	}
+	for i, item := range result.Items {
+		if item.Index != i {
+			t.Errorf("item[%d].Index = %d, want %d", i, item.Index, i)
+		}
+	}
+	if result.Items[1].ErrorCode == "" {
+		t.Error("middle item should have ErrorCode")
+	}
+}

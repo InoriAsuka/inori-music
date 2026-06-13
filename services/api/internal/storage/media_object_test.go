@@ -348,7 +348,15 @@ func TestMediaObjectServiceUpdatesLifecycleState(t *testing.T) {
 		t.Fatalf("Save(backend) error = %v", err)
 	}
 	repo := NewMemoryMediaObjectRepository()
+	// Use a stepping clock so RegisterMediaObject and SetMediaObjectLifecycleState
+	// are guaranteed to produce distinct timestamps.
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	tick := 0
 	service := NewMediaObjectService(backendRepo, repo)
+	service.now = func() time.Time {
+		tick++
+		return base.Add(time.Duration(tick) * time.Second)
+	}
 	registered, err := service.RegisterMediaObject(ctx, validMediaObject())
 	if err != nil {
 		t.Fatalf("RegisterMediaObject() error = %v", err)
