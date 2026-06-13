@@ -1751,3 +1751,146 @@ func TestCatalogBatchImportMethodNotAllowed(t *testing.T) {
 	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/batch-import", "")
 	assertAPIError(t, resp, http.StatusMethodNotAllowed, "method_not_allowed")
 }
+
+// ---------- Phase 45: PATCH catalog metadata HTTP tests ----------
+
+func TestCatalogPatchArtistUpdatesName(t *testing.T) {
+	h := newCatalogTestHandler()
+
+	// create
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Old Name"}`)
+	if resp.Code != http.StatusCreated {
+		t.Fatalf("create: %d %s", resp.Code, resp.Body)
+	}
+	var artist map[string]any
+	decodeResponse(t, resp, &artist)
+	id, _ := artist["id"].(string)
+
+	// patch
+	resp = performRequest(t, h, http.MethodPatch, "/api/v1/admin/catalog/artists/"+id, `{"name":"New Name","sortName":"Name, New"}`)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("patch: %d %s", resp.Code, resp.Body)
+	}
+	var updated map[string]any
+	decodeResponse(t, resp, &updated)
+	if updated["name"] != "New Name" {
+		t.Fatalf("name = %q, want %q", updated["name"], "New Name")
+	}
+	if updated["sortName"] != "Name, New" {
+		t.Fatalf("sortName = %q, want %q", updated["sortName"], "Name, New")
+	}
+	if updated["id"] != id {
+		t.Fatal("id must not change")
+	}
+}
+
+func TestCatalogPatchArtistNotFound(t *testing.T) {
+	h := newCatalogTestHandler()
+	resp := performRequest(t, h, http.MethodPatch, "/api/v1/admin/catalog/artists/nonexistent", `{"name":"X"}`)
+	assertAPIError(t, resp, http.StatusNotFound, "not_found")
+}
+
+func TestCatalogPatchArtistEmptyName(t *testing.T) {
+	h := newCatalogTestHandler()
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Valid"}`)
+	var artist map[string]any
+	decodeResponse(t, resp, &artist)
+	id, _ := artist["id"].(string)
+
+	resp = performRequest(t, h, http.MethodPatch, "/api/v1/admin/catalog/artists/"+id, `{"name":""}`)
+	assertAPIError(t, resp, http.StatusBadRequest, "invalid_catalog_entity")
+}
+
+func TestCatalogPatchAlbumUpdatesTitle(t *testing.T) {
+	h := newCatalogTestHandler()
+
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Artist"}`)
+	var artist map[string]any
+	decodeResponse(t, resp, &artist)
+	artistID, _ := artist["id"].(string)
+
+	resp = performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/albums",
+		fmt.Sprintf(`{"title":"Old Title","artistId":%q,"releaseYear":2000}`, artistID))
+	if resp.Code != http.StatusCreated {
+		t.Fatalf("create album: %d %s", resp.Code, resp.Body)
+	}
+	var album map[string]any
+	decodeResponse(t, resp, &album)
+	albumID, _ := album["id"].(string)
+
+	resp = performRequest(t, h, http.MethodPatch, "/api/v1/admin/catalog/albums/"+albumID,
+		`{"title":"New Title","releaseYear":2024}`)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("patch album: %d %s", resp.Code, resp.Body)
+	}
+	var updated map[string]any
+	decodeResponse(t, resp, &updated)
+	if updated["title"] != "New Title" {
+		t.Fatalf("title = %q, want %q", updated["title"], "New Title")
+	}
+	if updated["releaseYear"] != float64(2024) {
+		t.Fatalf("releaseYear = %v, want 2024", updated["releaseYear"])
+	}
+}
+
+func TestCatalogPatchAlbumNotFound(t *testing.T) {
+	h := newCatalogTestHandler()
+	resp := performRequest(t, h, http.MethodPatch, "/api/v1/admin/catalog/albums/nonexistent", `{"title":"X"}`)
+	assertAPIError(t, resp, http.StatusNotFound, "not_found")
+}
+
+func TestCatalogPatchTrackUpdatesFields(t *testing.T) {
+	h := newCatalogTestHandler()
+
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"A"}`)
+	var artist map[string]any
+	decodeResponse(t, resp, &artist)
+	artistID, _ := artist["id"].(string)
+
+	resp = performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/albums",
+		fmt.Sprintf(`{"title":"B","artistId":%q}`, artistID))
+	var album map[string]any
+	decodeResponse(t, resp, &album)
+	albumID, _ := album["id"].(string)
+
+	resp = performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"T","artistId":%q,"albumId":%q,"mediaObjectId":"mo99","trackNumber":1,"durationMs":60000}`, artistID, albumID))
+	if resp.Code != http.StatusCreated {
+		t.Fatalf("create track: %d %s", resp.Code, resp.Body)
+	}
+	var track map[string]any
+	decodeResponse(t, resp, &track)
+	trackID, _ := track["id"].(string)
+
+	resp = performRequest(t, h, http.MethodPatch, "/api/v1/admin/catalog/tracks/"+trackID,
+		`{"title":"Updated","trackNumber":2,"durationMs":90000}`)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("patch track: %d %s", resp.Code, resp.Body)
+	}
+	var updated map[string]any
+	decodeResponse(t, resp, &updated)
+	if updated["title"] != "Updated" {
+		t.Fatalf("title = %q, want %q", updated["title"], "Updated")
+	}
+	if updated["trackNumber"] != float64(2) {
+		t.Fatalf("trackNumber = %v, want 2", updated["trackNumber"])
+	}
+	if updated["durationMs"] != float64(90000) {
+		t.Fatalf("durationMs = %v, want 90000", updated["durationMs"])
+	}
+	if updated["mediaObjectId"] != "mo99" {
+		t.Fatalf("mediaObjectId changed unexpectedly to %q", updated["mediaObjectId"])
+	}
+}
+
+func TestCatalogPatchTrackNotFound(t *testing.T) {
+	h := newCatalogTestHandler()
+	resp := performRequest(t, h, http.MethodPatch, "/api/v1/admin/catalog/tracks/nonexistent", `{"title":"X"}`)
+	assertAPIError(t, resp, http.StatusNotFound, "not_found")
+}
+
+func TestCatalogPatchNoCatalogService(t *testing.T) {
+	h := newTestHandler()
+	resp := performRequest(t, h, http.MethodPatch, "/api/v1/admin/catalog/artists/x", `{"name":"X"}`)
+	assertAPIError(t, resp, http.StatusServiceUnavailable, "catalog_not_configured")
+}

@@ -283,14 +283,17 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/catalog/artists", handler.requireAdminAuth(handler.listArtists))
 	mux.HandleFunc("POST /api/v1/admin/catalog/artists", handler.requireAdminAuth(handler.createArtist))
 	mux.HandleFunc("GET /api/v1/admin/catalog/artists/{id}", handler.requireAdminAuth(handler.getArtist))
+	mux.HandleFunc("PATCH /api/v1/admin/catalog/artists/{id}", handler.requireAdminAuth(handler.patchArtist))
 	mux.HandleFunc("DELETE /api/v1/admin/catalog/artists/{id}", handler.requireAdminAuth(handler.deleteArtist))
 	mux.HandleFunc("GET /api/v1/admin/catalog/albums", handler.requireAdminAuth(handler.listAlbums))
 	mux.HandleFunc("POST /api/v1/admin/catalog/albums", handler.requireAdminAuth(handler.createAlbum))
 	mux.HandleFunc("GET /api/v1/admin/catalog/albums/{id}", handler.requireAdminAuth(handler.getAlbum))
+	mux.HandleFunc("PATCH /api/v1/admin/catalog/albums/{id}", handler.requireAdminAuth(handler.patchAlbum))
 	mux.HandleFunc("DELETE /api/v1/admin/catalog/albums/{id}", handler.requireAdminAuth(handler.deleteAlbum))
 	mux.HandleFunc("GET /api/v1/admin/catalog/tracks", handler.requireAdminAuth(handler.listTracks))
 	mux.HandleFunc("POST /api/v1/admin/catalog/tracks", handler.requireAdminAuth(handler.createTrack))
 	mux.HandleFunc("GET /api/v1/admin/catalog/tracks/{id}", handler.requireAdminAuth(handler.getTrack))
+	mux.HandleFunc("PATCH /api/v1/admin/catalog/tracks/{id}", handler.requireAdminAuth(handler.patchTrack))
 	mux.HandleFunc("DELETE /api/v1/admin/catalog/tracks/{id}", handler.requireAdminAuth(handler.deleteTrack))
 	mux.HandleFunc("POST /api/v1/admin/catalog/import", handler.requireAdminAuth(handler.importTrack))
 	mux.HandleFunc("POST /api/v1/admin/catalog/batch-import", handler.requireAdminAuth(handler.batchImportTracks))
@@ -784,6 +787,33 @@ func (handler *Handler) deleteArtist(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// patchArtistRequest carries the fields that may be changed via PATCH.
+// Pointer semantics: nil = leave unchanged, pointer-to-string = set new value.
+type patchArtistRequest struct {
+	Name     *string `json:"name"`
+	SortName *string `json:"sortName"`
+}
+
+func (handler *Handler) patchArtist(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireCatalogService(w) {
+		return
+	}
+	var req patchArtistRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeError(w, err)
+		return
+	}
+	artist, err := handler.catalogService.UpdateArtist(r.Context(), r.PathValue("id"), catalog.UpdateArtistRequest{
+		Name:     req.Name,
+		SortName: req.SortName,
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, artist)
+}
+
 // ---- album handlers ----
 
 type createAlbumRequest struct {
@@ -852,6 +882,36 @@ func (handler *Handler) deleteAlbum(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// patchAlbumRequest carries the fields that may be changed via PATCH.
+type patchAlbumRequest struct {
+	Title       *string `json:"title"`
+	SortTitle   *string `json:"sortTitle"`
+	ArtistID    *string `json:"artistId"`
+	ReleaseYear *int    `json:"releaseYear"`
+}
+
+func (handler *Handler) patchAlbum(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireCatalogService(w) {
+		return
+	}
+	var req patchAlbumRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeError(w, err)
+		return
+	}
+	album, err := handler.catalogService.UpdateAlbum(r.Context(), r.PathValue("id"), catalog.UpdateAlbumRequest{
+		Title:       req.Title,
+		SortTitle:   req.SortTitle,
+		ArtistID:    req.ArtistID,
+		ReleaseYear: req.ReleaseYear,
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, album)
 }
 
 // ---- track handlers ----
@@ -931,6 +991,42 @@ func (handler *Handler) deleteTrack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// patchTrackRequest carries the fields that may be changed via PATCH.
+type patchTrackRequest struct {
+	Title       *string `json:"title"`
+	SortTitle   *string `json:"sortTitle"`
+	ArtistID    *string `json:"artistId"`
+	AlbumID     *string `json:"albumId"`
+	TrackNumber *int    `json:"trackNumber"`
+	DiscNumber  *int    `json:"discNumber"`
+	DurationMS  *int    `json:"durationMs"`
+}
+
+func (handler *Handler) patchTrack(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireCatalogService(w) {
+		return
+	}
+	var req patchTrackRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeError(w, err)
+		return
+	}
+	track, err := handler.catalogService.UpdateTrack(r.Context(), r.PathValue("id"), catalog.UpdateTrackRequest{
+		Title:       req.Title,
+		SortTitle:   req.SortTitle,
+		ArtistID:    req.ArtistID,
+		AlbumID:     req.AlbumID,
+		TrackNumber: req.TrackNumber,
+		DiscNumber:  req.DiscNumber,
+		DurationMS:  req.DurationMS,
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, track)
 }
 
 // requireViewerAuth allows any session-authenticated user (admin or viewer role).

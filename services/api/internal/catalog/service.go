@@ -21,6 +21,13 @@ func NewService(repo Repository) *Service {
 	return &Service{repo: repo, now: time.Now}
 }
 
+// WithClock replaces the time source used by the service. Intended for tests
+// that need deterministic or advancing timestamps.
+func (s *Service) WithClock(fn func() time.Time) *Service {
+	s.now = fn
+	return s
+}
+
 // WithMediaObjectReader attaches a media object reader to the service so that
 // ImportTrack can validate media objects before creating track records.
 func (s *Service) WithMediaObjectReader(r MediaObjectReader) *Service {
@@ -56,6 +63,31 @@ func (s *Service) GetArtist(ctx context.Context, id string) (Artist, error) {
 
 func (s *Service) DeleteArtist(ctx context.Context, id string) error {
 	return s.repo.DeleteArtist(ctx, strings.TrimSpace(id))
+}
+
+// UpdateArtist applies a partial update to an existing artist.
+// Only non-nil fields in req are applied. Name may not be set to an empty string.
+func (s *Service) UpdateArtist(ctx context.Context, id string, req UpdateArtistRequest) (Artist, error) {
+	id = strings.TrimSpace(id)
+	artist, err := s.repo.GetArtist(ctx, id)
+	if err != nil {
+		return Artist{}, err
+	}
+	if req.Name != nil {
+		name := strings.TrimSpace(*req.Name)
+		if name == "" {
+			return Artist{}, fmt.Errorf("%w: name must not be empty", ErrInvalidArtist)
+		}
+		artist.Name = name
+	}
+	if req.SortName != nil {
+		artist.SortName = strings.TrimSpace(*req.SortName)
+	}
+	artist.UpdatedAt = s.now().UTC()
+	if err := s.repo.SaveArtist(ctx, artist); err != nil {
+		return Artist{}, err
+	}
+	return artist, nil
 }
 
 func (s *Service) CreateAlbum(ctx context.Context, title, sortTitle, artistID string, releaseYear int) (Album, error) {
@@ -100,6 +132,48 @@ func (s *Service) GetAlbum(ctx context.Context, id string) (Album, error) {
 
 func (s *Service) DeleteAlbum(ctx context.Context, id string) error {
 	return s.repo.DeleteAlbum(ctx, strings.TrimSpace(id))
+}
+
+// UpdateAlbum applies a partial update to an existing album.
+// Only non-nil fields in req are applied. Title and ArtistID may not be set to empty strings.
+// When ArtistID changes, the referenced artist must exist.
+func (s *Service) UpdateAlbum(ctx context.Context, id string, req UpdateAlbumRequest) (Album, error) {
+	id = strings.TrimSpace(id)
+	album, err := s.repo.GetAlbum(ctx, id)
+	if err != nil {
+		return Album{}, err
+	}
+	if req.Title != nil {
+		title := strings.TrimSpace(*req.Title)
+		if title == "" {
+			return Album{}, fmt.Errorf("%w: title must not be empty", ErrInvalidAlbum)
+		}
+		album.Title = title
+	}
+	if req.SortTitle != nil {
+		album.SortTitle = strings.TrimSpace(*req.SortTitle)
+	}
+	if req.ArtistID != nil {
+		artistID := strings.TrimSpace(*req.ArtistID)
+		if artistID == "" {
+			return Album{}, fmt.Errorf("%w: artist_id must not be empty", ErrInvalidAlbum)
+		}
+		if _, err := s.repo.GetArtist(ctx, artistID); err != nil {
+			return Album{}, err
+		}
+		album.ArtistID = artistID
+	}
+	if req.ReleaseYear != nil {
+		if *req.ReleaseYear < 0 {
+			return Album{}, fmt.Errorf("%w: release_year must be non-negative", ErrInvalidAlbum)
+		}
+		album.ReleaseYear = *req.ReleaseYear
+	}
+	album.UpdatedAt = s.now().UTC()
+	if err := s.repo.SaveAlbum(ctx, album); err != nil {
+		return Album{}, err
+	}
+	return album, nil
 }
 
 func (s *Service) CreateTrack(ctx context.Context, title, sortTitle, artistID, albumID, mediaObjectID string, trackNumber, discNumber, durationMS int) (Track, error) {
@@ -162,6 +236,74 @@ func (s *Service) GetTrack(ctx context.Context, id string) (Track, error) {
 
 func (s *Service) DeleteTrack(ctx context.Context, id string) error {
 	return s.repo.DeleteTrack(ctx, strings.TrimSpace(id))
+}
+
+// UpdateTrack applies a partial update to an existing track.
+// Only non-nil fields in req are applied. Title and ArtistID may not be set to empty strings.
+// When ArtistID or AlbumID changes, the referenced entities must exist; artist ownership of
+// the album is enforced using the final ArtistID (after applying any ArtistID change).
+func (s *Service) UpdateTrack(ctx context.Context, id string, req UpdateTrackRequest) (Track, error) {
+	id = strings.TrimSpace(id)
+	track, err := s.repo.GetTrack(ctx, id)
+	if err != nil {
+		return Track{}, err
+	}
+	if req.Title != nil {
+		title := strings.TrimSpace(*req.Title)
+		if title == "" {
+			return Track{}, fmt.Errorf("%w: title must not be empty", ErrInvalidTrack)
+		}
+		track.Title = title
+	}
+	if req.SortTitle != nil {
+		track.SortTitle = strings.TrimSpace(*req.SortTitle)
+	}
+	if req.ArtistID != nil {
+		artistID := strings.TrimSpace(*req.ArtistID)
+		if artistID == "" {
+			return Track{}, fmt.Errorf("%w: artist_id must not be empty", ErrInvalidTrack)
+		}
+		if _, err := s.repo.GetArtist(ctx, artistID); err != nil {
+			return Track{}, err
+		}
+		track.ArtistID = artistID
+	}
+	if req.AlbumID != nil {
+		albumID := strings.TrimSpace(*req.AlbumID)
+		if albumID != "" {
+			album, err := s.repo.GetAlbum(ctx, albumID)
+			if err != nil {
+				return Track{}, err
+			}
+			if album.ArtistID != track.ArtistID {
+				return Track{}, fmt.Errorf("%w: album artist mismatch", ErrInvalidTrack)
+			}
+		}
+		track.AlbumID = albumID
+	}
+	if req.TrackNumber != nil {
+		if *req.TrackNumber < 0 {
+			return Track{}, fmt.Errorf("%w: track_number must be non-negative", ErrInvalidTrack)
+		}
+		track.TrackNumber = *req.TrackNumber
+	}
+	if req.DiscNumber != nil {
+		if *req.DiscNumber < 0 {
+			return Track{}, fmt.Errorf("%w: disc_number must be non-negative", ErrInvalidTrack)
+		}
+		track.DiscNumber = *req.DiscNumber
+	}
+	if req.DurationMS != nil {
+		if *req.DurationMS < 0 {
+			return Track{}, fmt.Errorf("%w: duration_ms must be non-negative", ErrInvalidTrack)
+		}
+		track.DurationMS = *req.DurationMS
+	}
+	track.UpdatedAt = s.now().UTC()
+	if err := s.repo.SaveTrack(ctx, track); err != nil {
+		return Track{}, err
+	}
+	return track, nil
 }
 
 // ImportTrack validates a media object and creates a Track record that references it.

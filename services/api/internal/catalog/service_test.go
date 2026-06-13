@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"inori-music/services/api/internal/catalog"
 )
@@ -669,5 +670,201 @@ func TestBatchImportTracksIndexPreserved(t *testing.T) {
 	}
 	if result.Items[1].ErrorCode == "" {
 		t.Error("middle item should have ErrorCode")
+	}
+}
+
+// ---------- Phase 45: UpdateArtist / UpdateAlbum / UpdateTrack ----------
+
+func strPtr(s string) *string { return &s }
+func intPtr(i int) *int       { return &i }
+
+func newSteppingService(repo catalog.Repository) *catalog.Service {
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	tick := 0
+	return catalog.NewService(repo).WithClock(func() time.Time {
+		tick++
+		return base.Add(time.Duration(tick) * time.Second)
+	})
+}
+
+func TestUpdateArtistChangesNameAndSortName(t *testing.T) {
+	ctx := context.Background()
+	svc := newSteppingService(newMemRepo())
+	artist, _ := svc.CreateArtist(ctx, "Old Name", "Old, Name")
+
+	updated, err := svc.UpdateArtist(ctx, artist.ID, catalog.UpdateArtistRequest{
+		Name:     strPtr("New Name"),
+		SortName: strPtr("Name, New"),
+	})
+	if err != nil {
+		t.Fatalf("UpdateArtist: %v", err)
+	}
+	if updated.Name != "New Name" || updated.SortName != "Name, New" {
+		t.Fatalf("got Name=%q SortName=%q", updated.Name, updated.SortName)
+	}
+	if updated.ID != artist.ID {
+		t.Fatal("ID must not change")
+	}
+	if !updated.UpdatedAt.After(artist.UpdatedAt) {
+		t.Fatal("UpdatedAt must advance")
+	}
+}
+
+func TestUpdateArtistPartialNilFields(t *testing.T) {
+	ctx := context.Background()
+	svc := catalog.NewService(newMemRepo())
+	artist, _ := svc.CreateArtist(ctx, "Unchanged", "Sort")
+
+	// Only update SortName; Name should stay.
+	updated, err := svc.UpdateArtist(ctx, artist.ID, catalog.UpdateArtistRequest{
+		SortName: strPtr("New Sort"),
+	})
+	if err != nil {
+		t.Fatalf("UpdateArtist: %v", err)
+	}
+	if updated.Name != "Unchanged" {
+		t.Fatalf("Name changed unexpectedly to %q", updated.Name)
+	}
+	if updated.SortName != "New Sort" {
+		t.Fatalf("SortName = %q, want %q", updated.SortName, "New Sort")
+	}
+}
+
+func TestUpdateArtistRejectsEmptyName(t *testing.T) {
+	ctx := context.Background()
+	svc := catalog.NewService(newMemRepo())
+	artist, _ := svc.CreateArtist(ctx, "Some Artist", "")
+
+	_, err := svc.UpdateArtist(ctx, artist.ID, catalog.UpdateArtistRequest{Name: strPtr("")})
+	if !errors.Is(err, catalog.ErrInvalidArtist) {
+		t.Fatalf("expected ErrInvalidArtist, got %v", err)
+	}
+}
+
+func TestUpdateArtistNotFound(t *testing.T) {
+	ctx := context.Background()
+	svc := catalog.NewService(newMemRepo())
+	_, err := svc.UpdateArtist(ctx, "nonexistent", catalog.UpdateArtistRequest{Name: strPtr("X")})
+	if !errors.Is(err, catalog.ErrArtistNotFound) {
+		t.Fatalf("expected ErrArtistNotFound, got %v", err)
+	}
+}
+
+func TestUpdateAlbumChangesTitle(t *testing.T) {
+	ctx := context.Background()
+	svc := catalog.NewService(newMemRepo())
+	artist, _ := svc.CreateArtist(ctx, "Artist", "")
+	album, _ := svc.CreateAlbum(ctx, "Old Title", "", artist.ID, 2000)
+
+	updated, err := svc.UpdateAlbum(ctx, album.ID, catalog.UpdateAlbumRequest{
+		Title:       strPtr("New Title"),
+		ReleaseYear: intPtr(2024),
+	})
+	if err != nil {
+		t.Fatalf("UpdateAlbum: %v", err)
+	}
+	if updated.Title != "New Title" || updated.ReleaseYear != 2024 {
+		t.Fatalf("got Title=%q Year=%d", updated.Title, updated.ReleaseYear)
+	}
+	if !updated.UpdatedAt.After(album.UpdatedAt) {
+		t.Fatal("UpdatedAt must advance")
+	}
+}
+
+func TestUpdateAlbumChangesArtist(t *testing.T) {
+	ctx := context.Background()
+	svc := catalog.NewService(newMemRepo())
+	a1, _ := svc.CreateArtist(ctx, "Artist1", "")
+	a2, _ := svc.CreateArtist(ctx, "Artist2", "")
+	album, _ := svc.CreateAlbum(ctx, "Album", "", a1.ID, 0)
+
+	updated, err := svc.UpdateAlbum(ctx, album.ID, catalog.UpdateAlbumRequest{ArtistID: &a2.ID})
+	if err != nil {
+		t.Fatalf("UpdateAlbum: %v", err)
+	}
+	if updated.ArtistID != a2.ID {
+		t.Fatalf("ArtistID = %q, want %q", updated.ArtistID, a2.ID)
+	}
+}
+
+func TestUpdateAlbumRejectsNegativeYear(t *testing.T) {
+	ctx := context.Background()
+	svc := catalog.NewService(newMemRepo())
+	artist, _ := svc.CreateArtist(ctx, "A", "")
+	album, _ := svc.CreateAlbum(ctx, "B", "", artist.ID, 0)
+
+	_, err := svc.UpdateAlbum(ctx, album.ID, catalog.UpdateAlbumRequest{ReleaseYear: intPtr(-1)})
+	if !errors.Is(err, catalog.ErrInvalidAlbum) {
+		t.Fatalf("expected ErrInvalidAlbum, got %v", err)
+	}
+}
+
+func TestUpdateAlbumNotFound(t *testing.T) {
+	ctx := context.Background()
+	svc := catalog.NewService(newMemRepo())
+	_, err := svc.UpdateAlbum(ctx, "nope", catalog.UpdateAlbumRequest{Title: strPtr("X")})
+	if !errors.Is(err, catalog.ErrAlbumNotFound) {
+		t.Fatalf("expected ErrAlbumNotFound, got %v", err)
+	}
+}
+
+func TestUpdateTrackChangesTitle(t *testing.T) {
+	ctx := context.Background()
+	svc := newSteppingService(newMemRepo())
+	artist, _ := svc.CreateArtist(ctx, "A", "")
+	album, _ := svc.CreateAlbum(ctx, "B", "", artist.ID, 0)
+	track, _ := svc.CreateTrack(ctx, "Old", "", artist.ID, album.ID, "mo1", 1, 1, 60000)
+
+	updated, err := svc.UpdateTrack(ctx, track.ID, catalog.UpdateTrackRequest{
+		Title:       strPtr("New"),
+		TrackNumber: intPtr(2),
+		DurationMS:  intPtr(90000),
+	})
+	if err != nil {
+		t.Fatalf("UpdateTrack: %v", err)
+	}
+	if updated.Title != "New" || updated.TrackNumber != 2 || updated.DurationMS != 90000 {
+		t.Fatalf("unexpected values: %+v", updated)
+	}
+	if !updated.UpdatedAt.After(track.UpdatedAt) {
+		t.Fatal("UpdatedAt must advance")
+	}
+}
+
+func TestUpdateTrackClearsAlbum(t *testing.T) {
+	ctx := context.Background()
+	svc := catalog.NewService(newMemRepo())
+	artist, _ := svc.CreateArtist(ctx, "A", "")
+	album, _ := svc.CreateAlbum(ctx, "B", "", artist.ID, 0)
+	track, _ := svc.CreateTrack(ctx, "T", "", artist.ID, album.ID, "mo2", 0, 0, 0)
+
+	empty := ""
+	updated, err := svc.UpdateTrack(ctx, track.ID, catalog.UpdateTrackRequest{AlbumID: &empty})
+	if err != nil {
+		t.Fatalf("UpdateTrack: %v", err)
+	}
+	if updated.AlbumID != "" {
+		t.Fatalf("expected empty AlbumID, got %q", updated.AlbumID)
+	}
+}
+
+func TestUpdateTrackRejectsEmptyTitle(t *testing.T) {
+	ctx := context.Background()
+	svc := catalog.NewService(newMemRepo())
+	artist, _ := svc.CreateArtist(ctx, "A", "")
+	track, _ := svc.CreateTrack(ctx, "T", "", artist.ID, "", "mo3", 0, 0, 0)
+
+	_, err := svc.UpdateTrack(ctx, track.ID, catalog.UpdateTrackRequest{Title: strPtr("")})
+	if !errors.Is(err, catalog.ErrInvalidTrack) {
+		t.Fatalf("expected ErrInvalidTrack, got %v", err)
+	}
+}
+
+func TestUpdateTrackNotFound(t *testing.T) {
+	ctx := context.Background()
+	svc := catalog.NewService(newMemRepo())
+	_, err := svc.UpdateTrack(ctx, "nope", catalog.UpdateTrackRequest{Title: strPtr("X")})
+	if !errors.Is(err, catalog.ErrTrackNotFound) {
+		t.Fatalf("expected ErrTrackNotFound, got %v", err)
 	}
 }

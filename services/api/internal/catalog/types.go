@@ -134,6 +134,34 @@ type ImportTrackRequest struct {
 	DurationMS    int
 }
 
+// UpdateArtistRequest carries the fields that may be changed via a PATCH request.
+// Nil pointer fields are left unchanged; a pointer to an empty string clears the field.
+type UpdateArtistRequest struct {
+	Name     *string
+	SortName *string
+}
+
+// UpdateAlbumRequest carries the fields that may be changed via a PATCH request.
+// Nil pointer fields are left unchanged.
+type UpdateAlbumRequest struct {
+	Title       *string
+	SortTitle   *string
+	ArtistID    *string
+	ReleaseYear *int
+}
+
+// UpdateTrackRequest carries the fields that may be changed via a PATCH request.
+// Nil pointer fields are left unchanged.
+type UpdateTrackRequest struct {
+	Title       *string
+	SortTitle   *string
+	ArtistID    *string
+	AlbumID     *string
+	TrackNumber *int
+	DiscNumber  *int
+	DurationMS  *int
+}
+
 // BatchImportResultItem holds the outcome of a single import within a batch request.
 // Exactly one of Track or Error is set.
 type BatchImportResultItem struct {

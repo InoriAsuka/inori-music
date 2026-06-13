@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.44.0`
+`0.45.0`
 
 ## Product Goal
 
@@ -320,4 +320,17 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add 5 `BatchImportTracks` unit tests and 6 HTTP-layer tests covering full-success, partial-success, all-fail, empty batch, no-catalog-service, and 405 guard.
 - Update OpenAPI contract with `/api/v1/admin/catalog/batch-import` path and `CatalogBatchImportRequest`, `CatalogBatchImportResult`, `CatalogBatchImportResultItem` schemas; bump `info.version` to `0.44.0`.
 - Fix pre-existing flaky `TestMediaObjectServiceUpdatesLifecycleState` by injecting a stepping clock that guarantees distinct timestamps across `RegisterMediaObject` and `SetMediaObjectLifecycleState` calls.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+
+### v0.45.0 - 2026-06-14
+
+- Add `PATCH /api/v1/admin/catalog/artists/{id}`, `PATCH /api/v1/admin/catalog/albums/{id}`, and `PATCH /api/v1/admin/catalog/tracks/{id}` endpoints for partial metadata updates.
+- Pointer-typed request fields (`*string`, `*int`) distinguish "not provided" from "explicitly empty", enabling clients to clear optional fields without touching unmentioned fields.
+- Validation mirrors create: name, title, and artistId may not be set to an empty string; numeric fields must be non-negative; artist ownership of the referenced album is enforced when updating a track's albumId.
+- Add `UpdateArtistRequest`, `UpdateAlbumRequest`, `UpdateTrackRequest` types to the catalog package.
+- Add `WithClock` setter on `catalog.Service` for deterministic timestamp injection in tests.
+- Implement `UpdateArtist`, `UpdateAlbum`, `UpdateTrack` on `catalog.Service`; each reads the current record, applies non-nil fields, bumps `UpdatedAt`, and saves.
+- Add 11 `catalog.Service` unit tests and 7 HTTP-layer tests covering field changes, nil-field passthrough, empty-name rejection, not-found, and unconfigured-service guard.
+- Update OpenAPI contract with `CatalogUpdateArtistRequest`, `CatalogUpdateAlbumRequest`, `CatalogUpdateTrackRequest` schemas and `patch` operations on artist, album, and track `/{id}` paths; bump `info.version` to `0.45.0`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
