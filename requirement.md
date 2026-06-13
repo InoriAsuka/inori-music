@@ -334,3 +334,19 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add 11 `catalog.Service` unit tests and 7 HTTP-layer tests covering field changes, nil-field passthrough, empty-name rejection, not-found, and unconfigured-service guard.
 - Update OpenAPI contract with `CatalogUpdateArtistRequest`, `CatalogUpdateAlbumRequest`, `CatalogUpdateTrackRequest` schemas and `patch` operations on artist, album, and track `/{id}` paths; bump `info.version` to `0.45.0`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+
+### v0.46.0 - 2026-06-14
+
+- Add `Playlist` entity to the catalog domain: ordered collection of tracks with name, optional description, and an ordered `TrackIDs` list.
+- Add `ErrInvalidPlaylist` and `ErrPlaylistNotFound` sentinel errors to the catalog package.
+- Extend `catalog.Repository` interface with `SavePlaylist`, `GetPlaylist`, `ListPlaylists`, `DeletePlaylist`.
+- Implement playlist methods on `catalog.MemoryRepository` (defensive slice copies) and `catalogpg.Repository` (transactional upsert + playlist_tracks replace).
+- Add `CreatePlaylist`, `ListPlaylists`, `GetPlaylist`, `DeletePlaylist`, `UpdatePlaylist`, `AddTrackToPlaylist`, `RemoveTrackFromPlaylist` methods to `catalog.Service`; validate name non-empty, enforce track existence on add.
+- Add migration `007_playlists` with `playlists` and `playlist_tracks` tables; `playlist_tracks` uses `ON DELETE CASCADE` for both foreign keys and a `(playlist_id, position)` primary key for ordering.
+- Expose admin playlist endpoints under `/api/v1/admin/catalog/playlists/`: list, create, get, PATCH metadata, delete, `POST /{id}/tracks` (append), `DELETE /{id}/tracks/{trackId}` (remove first occurrence).
+- Expose viewer-only read endpoints under `/api/v1/catalog/playlists/`: list and get.
+- Add `ErrInvalidPlaylist` and `ErrPlaylistNotFound` to the `writeError` switch in the HTTP handler.
+- Add 9 `catalog.Service` unit tests and 7 HTTP-layer tests covering CRUD, add/remove track, viewer access, not-found, empty-name rejection, and 405 guard.
+- Update OpenAPI contract with `Playlist`, `CreatePlaylistRequest`, `UpdatePlaylistRequest`, `AddPlaylistTrackRequest` schemas and all 8 new paths; bump `info.version` to `0.46.0`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.

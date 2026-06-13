@@ -7,15 +7,17 @@ import (
 )
 
 var (
-	ErrInvalidArtist  = errors.New("invalid artist")
-	ErrArtistNotFound = errors.New("artist not found")
-	ErrArtistConflict = errors.New("artist conflict")
-	ErrInvalidAlbum   = errors.New("invalid album")
-	ErrAlbumNotFound  = errors.New("album not found")
-	ErrAlbumConflict  = errors.New("album conflict")
-	ErrInvalidTrack   = errors.New("invalid track")
-	ErrTrackNotFound  = errors.New("track not found")
-	ErrTrackConflict  = errors.New("track conflict")
+	ErrInvalidArtist    = errors.New("invalid artist")
+	ErrArtistNotFound   = errors.New("artist not found")
+	ErrArtistConflict   = errors.New("artist conflict")
+	ErrInvalidAlbum     = errors.New("invalid album")
+	ErrAlbumNotFound    = errors.New("album not found")
+	ErrAlbumConflict    = errors.New("album conflict")
+	ErrInvalidTrack     = errors.New("invalid track")
+	ErrTrackNotFound    = errors.New("track not found")
+	ErrTrackConflict    = errors.New("track conflict")
+	ErrInvalidPlaylist  = errors.New("invalid playlist")
+	ErrPlaylistNotFound = errors.New("playlist not found")
 	// ErrImportRejected is returned when a media object cannot be imported as a track
 	// (e.g. wrong asset kind or lifecycle state).
 	ErrImportRejected = errors.New("import rejected")
@@ -104,6 +106,11 @@ type Repository interface {
 	// Implementations that do not support full-text search may fall back to
 	// case-insensitive substring matching.
 	SearchCatalog(ctx context.Context, query string) (CatalogSearchResult, error)
+
+	SavePlaylist(ctx context.Context, playlist Playlist) error
+	GetPlaylist(ctx context.Context, id string) (Playlist, error)
+	ListPlaylists(ctx context.Context) ([]Playlist, error)
+	DeletePlaylist(ctx context.Context, id string) error
 }
 
 // MediaObjectInfo carries the subset of media object metadata that the catalog
@@ -181,4 +188,21 @@ type BatchImportResult struct {
 	Imported int                     `json:"imported"`
 	Failed   int                     `json:"failed"`
 	Items    []BatchImportResultItem `json:"items"`
+}
+
+// Playlist is an ordered collection of tracks curated by a user or administrator.
+type Playlist struct {
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	Description string    `json:"description,omitempty"`
+	TrackIDs    []string  `json:"trackIds"`
+	CreatedAt   time.Time `json:"createdAt"`
+	UpdatedAt   time.Time `json:"updatedAt"`
+}
+
+// UpdatePlaylistRequest carries the fields that may be changed via a PATCH request.
+// Nil pointer fields are left unchanged.
+type UpdatePlaylistRequest struct {
+	Name        *string
+	Description *string
 }

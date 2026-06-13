@@ -9,18 +9,20 @@ import (
 
 // MemoryRepository is an in-memory catalog repository for tests and development.
 type MemoryRepository struct {
-	mu      sync.RWMutex
-	artists map[string]Artist
-	albums  map[string]Album
-	tracks  map[string]Track
+	mu        sync.RWMutex
+	artists   map[string]Artist
+	albums    map[string]Album
+	tracks    map[string]Track
+	playlists map[string]Playlist
 }
 
 // NewMemoryRepository returns an empty in-memory catalog repository.
 func NewMemoryRepository() *MemoryRepository {
 	return &MemoryRepository{
-		artists: map[string]Artist{},
-		albums:  map[string]Album{},
-		tracks:  map[string]Track{},
+		artists:   map[string]Artist{},
+		albums:    map[string]Album{},
+		tracks:    map[string]Track{},
+		playlists: map[string]Playlist{},
 	}
 }
 
@@ -168,6 +170,53 @@ func (r *MemoryRepository) DeleteTrack(_ context.Context, id string) error {
 		return fmt.Errorf("%w: %s", ErrTrackNotFound, id)
 	}
 	delete(r.tracks, id)
+	return nil
+}
+
+func (r *MemoryRepository) SavePlaylist(_ context.Context, p Playlist) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	// Store a defensive copy of the TrackIDs slice.
+	cp := p
+	cp.TrackIDs = make([]string, len(p.TrackIDs))
+	copy(cp.TrackIDs, p.TrackIDs)
+	r.playlists[p.ID] = cp
+	return nil
+}
+
+func (r *MemoryRepository) GetPlaylist(_ context.Context, id string) (Playlist, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	p, ok := r.playlists[id]
+	if !ok {
+		return Playlist{}, fmt.Errorf("%w: %s", ErrPlaylistNotFound, id)
+	}
+	cp := p
+	cp.TrackIDs = make([]string, len(p.TrackIDs))
+	copy(cp.TrackIDs, p.TrackIDs)
+	return cp, nil
+}
+
+func (r *MemoryRepository) ListPlaylists(_ context.Context) ([]Playlist, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make([]Playlist, 0, len(r.playlists))
+	for _, p := range r.playlists {
+		cp := p
+		cp.TrackIDs = make([]string, len(p.TrackIDs))
+		copy(cp.TrackIDs, p.TrackIDs)
+		out = append(out, cp)
+	}
+	return out, nil
+}
+
+func (r *MemoryRepository) DeletePlaylist(_ context.Context, id string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.playlists[id]; !ok {
+		return fmt.Errorf("%w: %s", ErrPlaylistNotFound, id)
+	}
+	delete(r.playlists, id)
 	return nil
 }
 

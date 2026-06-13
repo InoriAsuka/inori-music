@@ -305,6 +305,15 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/catalog/tracks", handler.requireViewerAuth(handler.listTracks))
 	mux.HandleFunc("GET /api/v1/catalog/tracks/{id}", handler.requireViewerAuth(handler.getTrack))
 	mux.HandleFunc("GET /api/v1/catalog/search", handler.requireViewerAuth(handler.searchCatalog))
+	mux.HandleFunc("GET /api/v1/admin/catalog/playlists", handler.requireAdminAuth(handler.listPlaylists))
+	mux.HandleFunc("POST /api/v1/admin/catalog/playlists", handler.requireAdminAuth(handler.createPlaylist))
+	mux.HandleFunc("GET /api/v1/admin/catalog/playlists/{id}", handler.requireAdminAuth(handler.getPlaylist))
+	mux.HandleFunc("PATCH /api/v1/admin/catalog/playlists/{id}", handler.requireAdminAuth(handler.patchPlaylist))
+	mux.HandleFunc("DELETE /api/v1/admin/catalog/playlists/{id}", handler.requireAdminAuth(handler.deletePlaylist))
+	mux.HandleFunc("POST /api/v1/admin/catalog/playlists/{id}/tracks", handler.requireAdminAuth(handler.addPlaylistTrack))
+	mux.HandleFunc("DELETE /api/v1/admin/catalog/playlists/{id}/tracks/{trackId}", handler.requireAdminAuth(handler.removePlaylistTrack))
+	mux.HandleFunc("GET /api/v1/catalog/playlists", handler.requireViewerAuth(handler.listPlaylists))
+	mux.HandleFunc("GET /api/v1/catalog/playlists/{id}", handler.requireViewerAuth(handler.getPlaylist))
 	mux.HandleFunc("GET /api/v1/admin/storage/backends", handler.requireAdminAuth(handler.listStorageBackends))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends", handler.requireAdminAuth(handler.registerStorageBackend))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends/validate", handler.requireAdminAuth(handler.validateStorageBackend))
@@ -342,6 +351,12 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("/api/v1/admin/catalog/import", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/catalog/batch-import", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/catalog/search", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/catalog/playlists", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/catalog/playlists/{id}", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/catalog/playlists/{id}/tracks", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/catalog/playlists/{id}/tracks/{trackId}", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/catalog/playlists", handler.requireViewerAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/catalog/playlists/{id}", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/catalog/artists", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/catalog/artists/{id}", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/catalog/albums", handler.requireViewerAuth(handler.methodNotAllowed))
@@ -1029,6 +1044,123 @@ func (handler *Handler) patchTrack(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, track)
 }
 
+// ---- playlist handlers ----
+
+type createPlaylistRequest struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
+type patchPlaylistRequest struct {
+	Name        *string `json:"name"`
+	Description *string `json:"description"`
+}
+
+type addPlaylistTrackRequest struct {
+	TrackID string `json:"trackId"`
+}
+
+func (handler *Handler) listPlaylists(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireCatalogService(w) {
+		return
+	}
+	playlists, err := handler.catalogService.ListPlaylists(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"playlists": playlists})
+}
+
+func (handler *Handler) createPlaylist(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireCatalogService(w) {
+		return
+	}
+	var req createPlaylistRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeError(w, err)
+		return
+	}
+	pl, err := handler.catalogService.CreatePlaylist(r.Context(), req.Name, req.Description)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, pl)
+}
+
+func (handler *Handler) getPlaylist(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireCatalogService(w) {
+		return
+	}
+	pl, err := handler.catalogService.GetPlaylist(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, pl)
+}
+
+func (handler *Handler) deletePlaylist(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireCatalogService(w) {
+		return
+	}
+	if err := handler.catalogService.DeletePlaylist(r.Context(), r.PathValue("id")); err != nil {
+		writeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (handler *Handler) patchPlaylist(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireCatalogService(w) {
+		return
+	}
+	var req patchPlaylistRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeError(w, err)
+		return
+	}
+	pl, err := handler.catalogService.UpdatePlaylist(r.Context(), r.PathValue("id"), catalog.UpdatePlaylistRequest{
+		Name:        req.Name,
+		Description: req.Description,
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, pl)
+}
+
+func (handler *Handler) addPlaylistTrack(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireCatalogService(w) {
+		return
+	}
+	var req addPlaylistTrackRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeError(w, err)
+		return
+	}
+	pl, err := handler.catalogService.AddTrackToPlaylist(r.Context(), r.PathValue("id"), req.TrackID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, pl)
+}
+
+func (handler *Handler) removePlaylistTrack(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireCatalogService(w) {
+		return
+	}
+	pl, err := handler.catalogService.RemoveTrackFromPlaylist(r.Context(), r.PathValue("id"), r.PathValue("trackId"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, pl)
+}
+
 // requireViewerAuth allows any session-authenticated user (admin or viewer role).
 // The static bootstrap adminToken is intentionally NOT accepted here — catalog
 // browse requires a real session. Returns 503 when no auth service is configured,
@@ -1455,10 +1587,12 @@ func writeError(w http.ResponseWriter, err error) {
 	case errors.Is(err, auth.ErrBadCredentials):
 		status = http.StatusUnauthorized
 		code = "unauthorized"
-	case errors.Is(err, catalog.ErrInvalidArtist), errors.Is(err, catalog.ErrInvalidAlbum), errors.Is(err, catalog.ErrInvalidTrack):
+	case errors.Is(err, catalog.ErrInvalidArtist), errors.Is(err, catalog.ErrInvalidAlbum), errors.Is(err, catalog.ErrInvalidTrack),
+		errors.Is(err, catalog.ErrInvalidPlaylist):
 		status = http.StatusBadRequest
 		code = "invalid_catalog_entity"
-	case errors.Is(err, catalog.ErrArtistNotFound), errors.Is(err, catalog.ErrAlbumNotFound), errors.Is(err, catalog.ErrTrackNotFound):
+	case errors.Is(err, catalog.ErrArtistNotFound), errors.Is(err, catalog.ErrAlbumNotFound), errors.Is(err, catalog.ErrTrackNotFound),
+		errors.Is(err, catalog.ErrPlaylistNotFound):
 		status = http.StatusNotFound
 		code = "not_found"
 	case errors.Is(err, catalog.ErrArtistConflict), errors.Is(err, catalog.ErrAlbumConflict), errors.Is(err, catalog.ErrTrackConflict):

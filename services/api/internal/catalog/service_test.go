@@ -13,14 +13,20 @@ import (
 )
 
 type memRepo struct {
-	mu      sync.RWMutex
-	artists map[string]catalog.Artist
-	albums  map[string]catalog.Album
-	tracks  map[string]catalog.Track
+	mu        sync.RWMutex
+	artists   map[string]catalog.Artist
+	albums    map[string]catalog.Album
+	tracks    map[string]catalog.Track
+	playlists map[string]catalog.Playlist
 }
 
 func newMemRepo() *memRepo {
-	return &memRepo{artists: map[string]catalog.Artist{}, albums: map[string]catalog.Album{}, tracks: map[string]catalog.Track{}}
+	return &memRepo{
+		artists:   map[string]catalog.Artist{},
+		albums:    map[string]catalog.Album{},
+		tracks:    map[string]catalog.Track{},
+		playlists: map[string]catalog.Playlist{},
+	}
 }
 
 func (r *memRepo) SaveArtist(_ context.Context, a catalog.Artist) error {
@@ -167,6 +173,52 @@ func (r *memRepo) DeleteTrack(_ context.Context, id string) error {
 		return fmt.Errorf("%w: %s", catalog.ErrTrackNotFound, id)
 	}
 	delete(r.tracks, id)
+	return nil
+}
+
+func (r *memRepo) SavePlaylist(_ context.Context, p catalog.Playlist) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	cp := p
+	cp.TrackIDs = make([]string, len(p.TrackIDs))
+	copy(cp.TrackIDs, p.TrackIDs)
+	r.playlists[p.ID] = cp
+	return nil
+}
+
+func (r *memRepo) GetPlaylist(_ context.Context, id string) (catalog.Playlist, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	p, ok := r.playlists[id]
+	if !ok {
+		return catalog.Playlist{}, fmt.Errorf("%w: %s", catalog.ErrPlaylistNotFound, id)
+	}
+	cp := p
+	cp.TrackIDs = make([]string, len(p.TrackIDs))
+	copy(cp.TrackIDs, p.TrackIDs)
+	return cp, nil
+}
+
+func (r *memRepo) ListPlaylists(_ context.Context) ([]catalog.Playlist, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make([]catalog.Playlist, 0, len(r.playlists))
+	for _, p := range r.playlists {
+		cp := p
+		cp.TrackIDs = make([]string, len(p.TrackIDs))
+		copy(cp.TrackIDs, p.TrackIDs)
+		out = append(out, cp)
+	}
+	return out, nil
+}
+
+func (r *memRepo) DeletePlaylist(_ context.Context, id string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.playlists[id]; !ok {
+		return fmt.Errorf("%w: %s", catalog.ErrPlaylistNotFound, id)
+	}
+	delete(r.playlists, id)
 	return nil
 }
 
@@ -866,5 +918,142 @@ func TestUpdateTrackNotFound(t *testing.T) {
 	_, err := svc.UpdateTrack(ctx, "nope", catalog.UpdateTrackRequest{Title: strPtr("X")})
 	if !errors.Is(err, catalog.ErrTrackNotFound) {
 		t.Fatalf("expected ErrTrackNotFound, got %v", err)
+	}
+}
+
+// ---------- Phase 46: Playlist service tests ----------
+
+func TestPlaylistCreateAndGet(t *testing.T) {
+	ctx := context.Background()
+	svc := catalog.NewService(newMemRepo())
+	p, err := svc.CreatePlaylist(ctx, "My Mix", "a great playlist")
+	if err != nil {
+		t.Fatalf("CreatePlaylist: %v", err)
+	}
+	if p.ID == "" || p.Name != "My Mix" || p.Description != "a great playlist" {
+		t.Fatalf("unexpected playlist: %+v", p)
+	}
+	if len(p.TrackIDs) != 0 {
+		t.Fatalf("expected empty track list, got %v", p.TrackIDs)
+	}
+	got, err := svc.GetPlaylist(ctx, p.ID)
+	if err != nil {
+		t.Fatalf("GetPlaylist: %v", err)
+	}
+	if got.ID != p.ID || got.Name != p.Name {
+		t.Fatalf("got = %+v, want %+v", got, p)
+	}
+}
+
+func TestPlaylistRequiresName(t *testing.T) {
+	ctx := context.Background()
+	svc := catalog.NewService(newMemRepo())
+	_, err := svc.CreatePlaylist(ctx, "  ", "")
+	if !errors.Is(err, catalog.ErrInvalidPlaylist) {
+		t.Fatalf("expected ErrInvalidPlaylist, got %v", err)
+	}
+}
+
+func TestPlaylistAddAndRemoveTrack(t *testing.T) {
+	ctx := context.Background()
+	svc := catalog.NewService(newMemRepo())
+	artist, _ := svc.CreateArtist(ctx, "A", "")
+	t1, _ := svc.CreateTrack(ctx, "T1", "", artist.ID, "", "mo1", 0, 0, 0)
+	t2, _ := svc.CreateTrack(ctx, "T2", "", artist.ID, "", "mo2", 0, 0, 0)
+
+	pl, _ := svc.CreatePlaylist(ctx, "PL", "")
+	pl, err := svc.AddTrackToPlaylist(ctx, pl.ID, t1.ID)
+	if err != nil {
+		t.Fatalf("AddTrack: %v", err)
+	}
+	pl, err = svc.AddTrackToPlaylist(ctx, pl.ID, t2.ID)
+	if err != nil {
+		t.Fatalf("AddTrack 2: %v", err)
+	}
+	if len(pl.TrackIDs) != 2 || pl.TrackIDs[0] != t1.ID || pl.TrackIDs[1] != t2.ID {
+		t.Fatalf("unexpected trackIDs: %v", pl.TrackIDs)
+	}
+
+	pl, err = svc.RemoveTrackFromPlaylist(ctx, pl.ID, t1.ID)
+	if err != nil {
+		t.Fatalf("RemoveTrack: %v", err)
+	}
+	if len(pl.TrackIDs) != 1 || pl.TrackIDs[0] != t2.ID {
+		t.Fatalf("after remove: %v", pl.TrackIDs)
+	}
+}
+
+func TestPlaylistAddNonExistentTrack(t *testing.T) {
+	ctx := context.Background()
+	svc := catalog.NewService(newMemRepo())
+	pl, _ := svc.CreatePlaylist(ctx, "PL", "")
+	_, err := svc.AddTrackToPlaylist(ctx, pl.ID, "no-such-track")
+	if !errors.Is(err, catalog.ErrTrackNotFound) {
+		t.Fatalf("expected ErrTrackNotFound, got %v", err)
+	}
+}
+
+func TestPlaylistRemoveAbsentTrack(t *testing.T) {
+	ctx := context.Background()
+	svc := catalog.NewService(newMemRepo())
+	artist, _ := svc.CreateArtist(ctx, "A", "")
+	tr, _ := svc.CreateTrack(ctx, "T", "", artist.ID, "", "mo1", 0, 0, 0)
+	pl, _ := svc.CreatePlaylist(ctx, "PL", "")
+	_, _ = svc.AddTrackToPlaylist(ctx, pl.ID, tr.ID)
+
+	_, err := svc.RemoveTrackFromPlaylist(ctx, pl.ID, "not-in-list")
+	if !errors.Is(err, catalog.ErrInvalidPlaylist) {
+		t.Fatalf("expected ErrInvalidPlaylist, got %v", err)
+	}
+}
+
+func TestPlaylistUpdateMetadata(t *testing.T) {
+	ctx := context.Background()
+	svc := newSteppingService(newMemRepo())
+	pl, _ := svc.CreatePlaylist(ctx, "Old", "desc")
+	updated, err := svc.UpdatePlaylist(ctx, pl.ID, catalog.UpdatePlaylistRequest{
+		Name:        strPtr("New Name"),
+		Description: strPtr("new desc"),
+	})
+	if err != nil {
+		t.Fatalf("UpdatePlaylist: %v", err)
+	}
+	if updated.Name != "New Name" || updated.Description != "new desc" {
+		t.Fatalf("unexpected: %+v", updated)
+	}
+	if !updated.UpdatedAt.After(pl.UpdatedAt) {
+		t.Fatal("UpdatedAt must advance")
+	}
+}
+
+func TestPlaylistUpdateRejectsEmptyName(t *testing.T) {
+	ctx := context.Background()
+	svc := catalog.NewService(newMemRepo())
+	pl, _ := svc.CreatePlaylist(ctx, "PL", "")
+	_, err := svc.UpdatePlaylist(ctx, pl.ID, catalog.UpdatePlaylistRequest{Name: strPtr("")})
+	if !errors.Is(err, catalog.ErrInvalidPlaylist) {
+		t.Fatalf("expected ErrInvalidPlaylist, got %v", err)
+	}
+}
+
+func TestPlaylistDeleteAndNotFound(t *testing.T) {
+	ctx := context.Background()
+	svc := catalog.NewService(newMemRepo())
+	pl, _ := svc.CreatePlaylist(ctx, "PL", "")
+	if err := svc.DeletePlaylist(ctx, pl.ID); err != nil {
+		t.Fatalf("DeletePlaylist: %v", err)
+	}
+	_, err := svc.GetPlaylist(ctx, pl.ID)
+	if !errors.Is(err, catalog.ErrPlaylistNotFound) {
+		t.Fatalf("expected ErrPlaylistNotFound, got %v", err)
+	}
+}
+
+func TestPlaylistGetNotFound(t *testing.T) {
+	ctx := context.Background()
+	svc := catalog.NewService(newMemRepo())
+	_, err := svc.GetPlaylist(ctx, "nonexistent")
+	if !errors.Is(err, catalog.ErrPlaylistNotFound) {
+		t.Fatalf("expected ErrPlaylistNotFound, got %v", err)
 	}
 }

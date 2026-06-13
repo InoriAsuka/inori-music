@@ -430,6 +430,124 @@ func (s *Service) SearchCatalog(ctx context.Context, query string) (CatalogSearc
 	return s.repo.SearchCatalog(ctx, query)
 }
 
+// CreatePlaylist creates a new empty playlist with the given name and optional description.
+func (s *Service) CreatePlaylist(ctx context.Context, name, description string) (Playlist, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return Playlist{}, fmt.Errorf("%w: name is required", ErrInvalidPlaylist)
+	}
+	id, err := newID()
+	if err != nil {
+		return Playlist{}, fmt.Errorf("generate playlist id: %w", err)
+	}
+	now := s.now().UTC()
+	p := Playlist{
+		ID:          id,
+		Name:        name,
+		Description: strings.TrimSpace(description),
+		TrackIDs:    []string{},
+		CreatedAt:   now,
+		UpdatedAt:   now,
+	}
+	if err := s.repo.SavePlaylist(ctx, p); err != nil {
+		return Playlist{}, err
+	}
+	return p, nil
+}
+
+// ListPlaylists returns all playlists in the repository.
+func (s *Service) ListPlaylists(ctx context.Context) ([]Playlist, error) {
+	return s.repo.ListPlaylists(ctx)
+}
+
+// GetPlaylist returns a single playlist by ID.
+func (s *Service) GetPlaylist(ctx context.Context, id string) (Playlist, error) {
+	return s.repo.GetPlaylist(ctx, strings.TrimSpace(id))
+}
+
+// DeletePlaylist removes a playlist by ID.
+func (s *Service) DeletePlaylist(ctx context.Context, id string) error {
+	return s.repo.DeletePlaylist(ctx, strings.TrimSpace(id))
+}
+
+// UpdatePlaylist applies a partial metadata update to an existing playlist.
+// Only non-nil fields in req are applied. Name may not be set to an empty string.
+func (s *Service) UpdatePlaylist(ctx context.Context, id string, req UpdatePlaylistRequest) (Playlist, error) {
+	id = strings.TrimSpace(id)
+	p, err := s.repo.GetPlaylist(ctx, id)
+	if err != nil {
+		return Playlist{}, err
+	}
+	if req.Name != nil {
+		name := strings.TrimSpace(*req.Name)
+		if name == "" {
+			return Playlist{}, fmt.Errorf("%w: name must not be empty", ErrInvalidPlaylist)
+		}
+		p.Name = name
+	}
+	if req.Description != nil {
+		p.Description = strings.TrimSpace(*req.Description)
+	}
+	p.UpdatedAt = s.now().UTC()
+	if err := s.repo.SavePlaylist(ctx, p); err != nil {
+		return Playlist{}, err
+	}
+	return p, nil
+}
+
+// AddTrackToPlaylist appends a track to the end of the playlist's ordered track list.
+// The track must exist. Duplicate entries are permitted (same track may appear multiple times).
+func (s *Service) AddTrackToPlaylist(ctx context.Context, playlistID, trackID string) (Playlist, error) {
+	playlistID = strings.TrimSpace(playlistID)
+	trackID = strings.TrimSpace(trackID)
+	if trackID == "" {
+		return Playlist{}, fmt.Errorf("%w: track_id is required", ErrInvalidPlaylist)
+	}
+	if _, err := s.repo.GetTrack(ctx, trackID); err != nil {
+		return Playlist{}, err
+	}
+	p, err := s.repo.GetPlaylist(ctx, playlistID)
+	if err != nil {
+		return Playlist{}, err
+	}
+	p.TrackIDs = append(p.TrackIDs, trackID)
+	p.UpdatedAt = s.now().UTC()
+	if err := s.repo.SavePlaylist(ctx, p); err != nil {
+		return Playlist{}, err
+	}
+	return p, nil
+}
+
+// RemoveTrackFromPlaylist removes the first occurrence of trackID from the playlist.
+// Returns ErrInvalidPlaylist when trackID is not found in the list.
+func (s *Service) RemoveTrackFromPlaylist(ctx context.Context, playlistID, trackID string) (Playlist, error) {
+	playlistID = strings.TrimSpace(playlistID)
+	trackID = strings.TrimSpace(trackID)
+	if trackID == "" {
+		return Playlist{}, fmt.Errorf("%w: track_id is required", ErrInvalidPlaylist)
+	}
+	p, err := s.repo.GetPlaylist(ctx, playlistID)
+	if err != nil {
+		return Playlist{}, err
+	}
+	idx := -1
+	for i, tid := range p.TrackIDs {
+		if tid == trackID {
+			idx = i
+			break
+		}
+	}
+	if idx == -1 {
+		return Playlist{}, fmt.Errorf("%w: track %s not found in playlist", ErrInvalidPlaylist, trackID)
+	}
+	p.TrackIDs = append(p.TrackIDs[:idx], p.TrackIDs[idx+1:]...)
+	p.UpdatedAt = s.now().UTC()
+	if err := s.repo.SavePlaylist(ctx, p); err != nil {
+		return Playlist{}, err
+	}
+	return p, nil
+}
+
 func newID() (string, error) {
 	var b [8]byte
 	if _, err := rand.Read(b[:]); err != nil {

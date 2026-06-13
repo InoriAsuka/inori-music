@@ -1894,3 +1894,154 @@ func TestCatalogPatchNoCatalogService(t *testing.T) {
 	resp := performRequest(t, h, http.MethodPatch, "/api/v1/admin/catalog/artists/x", `{"name":"X"}`)
 	assertAPIError(t, resp, http.StatusServiceUnavailable, "catalog_not_configured")
 }
+
+// ---------- Phase 46: Playlist HTTP tests ----------
+
+func TestPlaylistCreateAndList(t *testing.T) {
+	h := newCatalogTestHandler()
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/playlists",
+		`{"name":"Weekend Mix","description":"a fun playlist"}`)
+	if resp.Code != http.StatusCreated {
+		t.Fatalf("create playlist: %d %s", resp.Code, resp.Body)
+	}
+	var pl map[string]any
+	decodeResponse(t, resp, &pl)
+	if pl["name"] != "Weekend Mix" || pl["description"] != "a fun playlist" {
+		t.Fatalf("unexpected playlist body: %v", pl)
+	}
+	plID, _ := pl["id"].(string)
+	if plID == "" {
+		t.Fatal("expected non-empty id")
+	}
+	if trackIDs, ok := pl["trackIds"].([]any); !ok || len(trackIDs) != 0 {
+		t.Fatalf("expected empty trackIds, got %v", pl["trackIds"])
+	}
+
+	listResp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/playlists", "")
+	if listResp.Code != http.StatusOK {
+		t.Fatalf("list playlists: %d %s", listResp.Code, listResp.Body)
+	}
+	var listBody map[string]any
+	decodeResponse(t, listResp, &listBody)
+	items, _ := listBody["playlists"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("expected 1 playlist, got %d", len(items))
+	}
+}
+
+func TestPlaylistAddAndRemoveTrack(t *testing.T) {
+	h := newCatalogTestHandler()
+
+	// Create an artist and track first.
+	artistResp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Artist"}`)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID, _ := artist["id"].(string)
+
+	trackResp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"Song","artistId":%q,"mediaObjectId":"mo-pl-1"}`, artistID))
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID, _ := track["id"].(string)
+
+	// Create playlist and add track.
+	plResp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/playlists", `{"name":"My PL"}`)
+	var pl map[string]any
+	decodeResponse(t, plResp, &pl)
+	plID, _ := pl["id"].(string)
+
+	addResp := performRequest(t, h, http.MethodPost,
+		"/api/v1/admin/catalog/playlists/"+plID+"/tracks",
+		fmt.Sprintf(`{"trackId":%q}`, trackID))
+	if addResp.Code != http.StatusOK {
+		t.Fatalf("add track: %d %s", addResp.Code, addResp.Body)
+	}
+	var added map[string]any
+	decodeResponse(t, addResp, &added)
+	ids, _ := added["trackIds"].([]any)
+	if len(ids) != 1 || ids[0] != trackID {
+		t.Fatalf("trackIds after add = %v", ids)
+	}
+
+	// Remove the track.
+	rmResp := performRequest(t, h, http.MethodDelete,
+		"/api/v1/admin/catalog/playlists/"+plID+"/tracks/"+trackID, "")
+	if rmResp.Code != http.StatusOK {
+		t.Fatalf("remove track: %d %s", rmResp.Code, rmResp.Body)
+	}
+	var removed map[string]any
+	decodeResponse(t, rmResp, &removed)
+	idsAfter, _ := removed["trackIds"].([]any)
+	if len(idsAfter) != 0 {
+		t.Fatalf("trackIds after remove = %v", idsAfter)
+	}
+}
+
+func TestPlaylistPatchMetadata(t *testing.T) {
+	h := newCatalogTestHandler()
+	plResp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/playlists", `{"name":"Old"}`)
+	var pl map[string]any
+	decodeResponse(t, plResp, &pl)
+	plID, _ := pl["id"].(string)
+
+	patchResp := performRequest(t, h, http.MethodPatch, "/api/v1/admin/catalog/playlists/"+plID,
+		`{"name":"New Name","description":"updated"}`)
+	if patchResp.Code != http.StatusOK {
+		t.Fatalf("patch playlist: %d %s", patchResp.Code, patchResp.Body)
+	}
+	var patched map[string]any
+	decodeResponse(t, patchResp, &patched)
+	if patched["name"] != "New Name" || patched["description"] != "updated" {
+		t.Fatalf("unexpected patch result: %v", patched)
+	}
+}
+
+func TestPlaylistDeleteAndNotFound(t *testing.T) {
+	h := newCatalogTestHandler()
+	plResp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/playlists", `{"name":"Temp"}`)
+	var pl map[string]any
+	decodeResponse(t, plResp, &pl)
+	plID, _ := pl["id"].(string)
+
+	delResp := performRequest(t, h, http.MethodDelete, "/api/v1/admin/catalog/playlists/"+plID, "")
+	if delResp.Code != http.StatusNoContent {
+		t.Fatalf("delete playlist: %d %s", delResp.Code, delResp.Body)
+	}
+
+	getResp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/playlists/"+plID, "")
+	assertAPIError(t, getResp, http.StatusNotFound, "not_found")
+}
+
+func TestPlaylistViewerCanRead(t *testing.T) {
+	h, viewerToken, adminToken := newViewerTestHandler(t)
+
+	plResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/playlists",
+		`{"name":"Public PL"}`, "Bearer "+adminToken)
+	var pl map[string]any
+	decodeResponse(t, plResp, &pl)
+	plID, _ := pl["id"].(string)
+
+	listResp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/playlists", "", "Bearer "+viewerToken)
+	if listResp.Code != http.StatusOK {
+		t.Fatalf("viewer list playlists: %d %s", listResp.Code, listResp.Body)
+	}
+
+	getResp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/playlists/"+plID, "", "Bearer "+viewerToken)
+	if getResp.Code != http.StatusOK {
+		t.Fatalf("viewer get playlist: %d %s", getResp.Code, getResp.Body)
+	}
+}
+
+func TestPlaylistNoCatalogService(t *testing.T) {
+	h := newTestHandler()
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/playlists", "")
+	assertAPIError(t, resp, http.StatusServiceUnavailable, "catalog_not_configured")
+}
+
+func TestPlaylistMethodNotAllowed(t *testing.T) {
+	h := newCatalogTestHandler()
+	resp := performRequest(t, h, http.MethodPut, "/api/v1/admin/catalog/playlists", "")
+	if resp.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", resp.Code)
+	}
+}

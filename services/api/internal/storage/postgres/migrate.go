@@ -166,4 +166,27 @@ CREATE INDEX IF NOT EXISTS artists_search_vector_idx ON artists USING GIN (searc
 CREATE INDEX IF NOT EXISTS albums_search_vector_idx  ON albums  USING GIN (search_vector);
 CREATE INDEX IF NOT EXISTS tracks_search_vector_idx  ON tracks  USING GIN (search_vector);`,
 	},
+	{
+		name: "007_playlists",
+		sql: `
+CREATE TABLE IF NOT EXISTS playlists (
+    id          TEXT        NOT NULL PRIMARY KEY,
+    name        TEXT        NOT NULL,
+    description TEXT        NOT NULL DEFAULT '',
+    created_at  TIMESTAMPTZ NOT NULL,
+    updated_at  TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS playlists_name_idx ON playlists (lower(name));
+
+-- Ordered mapping of playlists to tracks.
+-- position is a zero-based integer that controls playback order.
+-- ON DELETE CASCADE removes entries when a playlist or track is deleted.
+CREATE TABLE IF NOT EXISTS playlist_tracks (
+    playlist_id TEXT    NOT NULL REFERENCES playlists(id) ON DELETE CASCADE,
+    track_id    TEXT    NOT NULL REFERENCES tracks(id)    ON DELETE CASCADE,
+    position    INTEGER NOT NULL,
+    PRIMARY KEY (playlist_id, position)
+);
+CREATE INDEX IF NOT EXISTS playlist_tracks_playlist_id_idx ON playlist_tracks (playlist_id);`,
+	},
 }

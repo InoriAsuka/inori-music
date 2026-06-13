@@ -312,3 +312,118 @@ func scanTrack(s scanner) (catalog.Track, error) {
 	}
 	return t, nil
 }
+
+// SavePlaylist upserts a playlist record and replaces its ordered track list.
+func (r *Repository) SavePlaylist(ctx context.Context, p catalog.Playlist) error {
+	tx, err := r.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	_, err = tx.Exec(ctx, `
+		INSERT INTO playlists (id, name, description, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5)
+		ON CONFLICT (id) DO UPDATE SET
+		    name        = EXCLUDED.name,
+		    description = EXCLUDED.description,
+		    updated_at  = EXCLUDED.updated_at`,
+		p.ID, p.Name, p.Description, p.CreatedAt.UTC(), p.UpdatedAt.UTC(),
+	)
+	if err != nil {
+		return err
+	}
+	// Replace the ordered track list atomically.
+	if _, err = tx.Exec(ctx, `DELETE FROM playlist_tracks WHERE playlist_id = $1`, p.ID); err != nil {
+		return err
+	}
+	for pos, trackID := range p.TrackIDs {
+		if _, err = tx.Exec(ctx,
+			`INSERT INTO playlist_tracks (playlist_id, track_id, position) VALUES ($1, $2, $3)`,
+			p.ID, trackID, pos,
+		); err != nil {
+			return err
+		}
+	}
+	return tx.Commit(ctx)
+}
+
+func (r *Repository) GetPlaylist(ctx context.Context, id string) (catalog.Playlist, error) {
+	row := r.pool.QueryRow(ctx,
+		`SELECT id, name, description, created_at, updated_at FROM playlists WHERE id = $1`, id)
+	var p catalog.Playlist
+	if err := row.Scan(&p.ID, &p.Name, &p.Description, &p.CreatedAt, &p.UpdatedAt); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return catalog.Playlist{}, fmt.Errorf("%w: %s", catalog.ErrPlaylistNotFound, id)
+		}
+		return catalog.Playlist{}, err
+	}
+	trackIDs, err := r.loadPlaylistTracks(ctx, id)
+	if err != nil {
+		return catalog.Playlist{}, err
+	}
+	p.TrackIDs = trackIDs
+	return p, nil
+}
+
+func (r *Repository) ListPlaylists(ctx context.Context) ([]catalog.Playlist, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT id, name, description, created_at, updated_at FROM playlists ORDER BY lower(name), id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var playlists []catalog.Playlist
+	for rows.Next() {
+		var p catalog.Playlist
+		if err := rows.Scan(&p.ID, &p.Name, &p.Description, &p.CreatedAt, &p.UpdatedAt); err != nil {
+			return nil, err
+		}
+		playlists = append(playlists, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	// Load track lists for each playlist.
+	for i := range playlists {
+		trackIDs, err := r.loadPlaylistTracks(ctx, playlists[i].ID)
+		if err != nil {
+			return nil, err
+		}
+		playlists[i].TrackIDs = trackIDs
+	}
+	return playlists, nil
+}
+
+func (r *Repository) DeletePlaylist(ctx context.Context, id string) error {
+	tag, err := r.pool.Exec(ctx, `DELETE FROM playlists WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("%w: %s", catalog.ErrPlaylistNotFound, id)
+	}
+	return nil
+}
+
+// loadPlaylistTracks returns the ordered list of track IDs for a playlist.
+func (r *Repository) loadPlaylistTracks(ctx context.Context, playlistID string) ([]string, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT track_id FROM playlist_tracks WHERE playlist_id = $1 ORDER BY position`, playlistID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var ids []string
+	for rows.Next() {
+		var tid string
+		if err := rows.Scan(&tid); err != nil {
+			return nil, err
+		}
+		ids = append(ids, tid)
+	}
+	if ids == nil {
+		ids = []string{}
+	}
+	return ids, rows.Err()
+}
