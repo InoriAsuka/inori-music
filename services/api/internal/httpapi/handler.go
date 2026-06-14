@@ -307,6 +307,8 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/catalog/tracks/{id}", handler.requireViewerAuth(handler.getTrack))
 	mux.HandleFunc("GET /api/v1/catalog/search", handler.requireViewerAuth(handler.searchCatalog))
 	mux.HandleFunc("GET /api/v1/admin/catalog/stats", handler.requireAdminAuth(handler.getCatalogStats))
+	mux.HandleFunc("GET /api/v1/admin/catalog/stats/artists", handler.requireAdminAuth(handler.getArtistStatsBreakdown))
+	mux.HandleFunc("GET /api/v1/admin/catalog/stats/albums", handler.requireAdminAuth(handler.getAlbumStatsBreakdown))
 	mux.HandleFunc("GET /api/v1/admin/catalog/playlists", handler.requireAdminAuth(handler.listPlaylists))
 	mux.HandleFunc("POST /api/v1/admin/catalog/playlists", handler.requireAdminAuth(handler.createPlaylist))
 	mux.HandleFunc("GET /api/v1/admin/catalog/playlists/{id}", handler.requireAdminAuth(handler.getPlaylist))
@@ -358,6 +360,8 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("/api/v1/admin/catalog/batch-import", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/catalog/search", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/catalog/stats", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/catalog/stats/artists", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/catalog/stats/albums", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/catalog/playlists", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/catalog/playlists/{id}", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/catalog/playlists/{id}/tracks", handler.requireAdminAuth(handler.methodNotAllowed))
@@ -1240,6 +1244,30 @@ func (handler *Handler) getCatalogStats(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	writeJSON(w, http.StatusOK, stats)
+}
+
+func (handler *Handler) getArtistStatsBreakdown(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireCatalogService(w) {
+		return
+	}
+	breakdown, err := handler.catalogService.GetArtistStatsBreakdown(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, breakdown)
+}
+
+func (handler *Handler) getAlbumStatsBreakdown(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireCatalogService(w) {
+		return
+	}
+	breakdown, err := handler.catalogService.GetAlbumStatsBreakdown(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, breakdown)
 }
 
 // requireViewerAuth allows any session-authenticated user (admin or viewer role).

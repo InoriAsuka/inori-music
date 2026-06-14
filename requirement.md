@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.50.0`
+`0.51.0`
 
 ## Product Goal
 
@@ -398,4 +398,17 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Register `GET /api/v1/admin/catalog/stats` (admin-auth) and 405 fallback for the path.
 - Add 3 `catalog.Service` unit tests (empty catalog, populated counts, no-error baseline) and 4 HTTP-layer tests (empty response shape, populated counts, no-catalog-service 503, method-not-allowed 405).
 - Add `CatalogStats` schema and `get` operation on `/api/v1/admin/catalog/stats` to the OpenAPI contract; bump `info.version` to `0.50.0`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+
+### v0.51.0 - 2026-06-14
+
+- Add `GET /api/v1/admin/catalog/stats/artists` endpoint returning per-artist album and track counts as a `CatalogArtistStatsBreakdown` object, eliminating the need for N separate list calls.
+- Add `GET /api/v1/admin/catalog/stats/albums` endpoint returning per-album track counts as a `CatalogAlbumStatsBreakdown` object.
+- Add `ArtistStatItem`, `ArtistStatsBreakdown`, `AlbumStatItem`, `AlbumStatsBreakdown` types to the catalog package.
+- Add `GetArtistStatsBreakdown(ctx)` and `GetAlbumStatsBreakdown(ctx)` to `catalog.Service`; counts are derived from existing `ListAlbumsByArtist`, `ListTracksByArtist`, `ListTracksByAlbum` calls. No new `Repository` interface methods required.
+- Add `getArtistStatsBreakdown` and `getAlbumStatsBreakdown` handlers to the HTTP handler layer; each returns 503 when no catalog service is configured.
+- Register `GET /api/v1/admin/catalog/stats/artists` and `GET /api/v1/admin/catalog/stats/albums` (admin-auth) with 405 fallbacks.
+- Add 4 `catalog.Service` unit tests (empty/populated for each breakdown) and 8 HTTP-layer tests (empty shape, populated counts, 503, 405 for each endpoint).
+- Add `CatalogArtistStatItem`, `CatalogArtistStatsBreakdown`, `CatalogAlbumStatItem`, `CatalogAlbumStatsBreakdown` schemas and `get` operations on both new paths to the OpenAPI contract; bump `info.version` to `0.51.0`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

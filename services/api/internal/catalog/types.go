@@ -223,3 +223,29 @@ type CatalogStats struct {
 	Tracks    int `json:"tracks"`
 	Playlists int `json:"playlists"`
 }
+
+// ArtistStatItem holds per-artist album and track counts for the breakdown stats endpoint.
+type ArtistStatItem struct {
+	ArtistID   string `json:"artistId"`
+	Name       string `json:"name"`
+	AlbumCount int    `json:"albumCount"`
+	TrackCount int    `json:"trackCount"`
+}
+
+// ArtistStatsBreakdown holds the per-artist breakdown returned by the stats/artists endpoint.
+type ArtistStatsBreakdown struct {
+	Artists []ArtistStatItem `json:"artists"`
+}
+
+// AlbumStatItem holds per-album track counts for the breakdown stats endpoint.
+type AlbumStatItem struct {
+	AlbumID    string `json:"albumId"`
+	Title      string `json:"title"`
+	ArtistID   string `json:"artistId"`
+	TrackCount int    `json:"trackCount"`
+}
+
+// AlbumStatsBreakdown holds the per-album breakdown returned by the stats/albums endpoint.
+type AlbumStatsBreakdown struct {
+	Albums []AlbumStatItem `json:"albums"`
+}

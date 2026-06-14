@@ -2465,3 +2465,163 @@ func TestGetCatalogStatsMethodNotAllowed(t *testing.T) {
 		t.Fatalf("expected 405, got %d", resp.Code)
 	}
 }
+
+func TestGetArtistStatsBreakdownEmpty(t *testing.T) {
+	h := newCatalogTestHandler()
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/stats/artists", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	artists, ok := got["artists"]
+	if !ok {
+		t.Fatal("response missing key \"artists\"")
+	}
+	if arr, ok := artists.([]any); !ok || len(arr) != 0 {
+		t.Errorf("expected empty artists array, got %v", artists)
+	}
+}
+
+func TestGetArtistStatsBreakdownPopulated(t *testing.T) {
+	h := newCatalogTestHandler()
+
+	// seed: 2 artists, artist-1 has 1 album + 2 tracks
+	r1 := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"ArtistX"}`)
+	var a1 map[string]any
+	decodeResponse(t, r1, &a1)
+	a1ID := a1["id"].(string)
+
+	performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"ArtistY"}`)
+	performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/albums",
+		fmt.Sprintf(`{"title":"AlbumX","artistId":%q}`, a1ID))
+	performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"TX1","artistId":%q,"mediaObjectId":"mo-x1"}`, a1ID))
+	performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"TX2","artistId":%q,"mediaObjectId":"mo-x2"}`, a1ID))
+
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/stats/artists", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	arr := got["artists"].([]any)
+	if len(arr) != 2 {
+		t.Fatalf("expected 2 artist items, got %d", len(arr))
+	}
+	byID := map[string]map[string]any{}
+	for _, item := range arr {
+		m := item.(map[string]any)
+		byID[m["artistId"].(string)] = m
+	}
+	if m := byID[a1ID]; m["albumCount"].(float64) != 1 || m["trackCount"].(float64) != 2 {
+		t.Errorf("artist1: albumCount=%v trackCount=%v, want 1/2", m["albumCount"], m["trackCount"])
+	}
+}
+
+func TestGetArtistStatsBreakdownNoCatalogService(t *testing.T) {
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAdminToken(testAdminToken),
+		WithServiceInfo(ServiceInfo{Name: "inori-api", Version: "test"}),
+	).Routes()
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/stats/artists", "")
+	if resp.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", resp.Code)
+	}
+}
+
+func TestGetArtistStatsBreakdownMethodNotAllowed(t *testing.T) {
+	h := newCatalogTestHandler()
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/stats/artists", `{}`)
+	if resp.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", resp.Code)
+	}
+}
+
+func TestGetAlbumStatsBreakdownEmpty(t *testing.T) {
+	h := newCatalogTestHandler()
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/stats/albums", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	albums, ok := got["albums"]
+	if !ok {
+		t.Fatal("response missing key \"albums\"")
+	}
+	if arr, ok := albums.([]any); !ok || len(arr) != 0 {
+		t.Errorf("expected empty albums array, got %v", albums)
+	}
+}
+
+func TestGetAlbumStatsBreakdownPopulated(t *testing.T) {
+	h := newCatalogTestHandler()
+
+	// seed: 1 artist, 2 albums, album-1 has 2 tracks
+	r1 := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"BandZ"}`)
+	var a1 map[string]any
+	decodeResponse(t, r1, &a1)
+	a1ID := a1["id"].(string)
+
+	r2 := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/albums",
+		fmt.Sprintf(`{"title":"Debut","artistId":%q}`, a1ID))
+	var al1 map[string]any
+	decodeResponse(t, r2, &al1)
+	al1ID := al1["id"].(string)
+
+	r3 := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/albums",
+		fmt.Sprintf(`{"title":"Sophomore","artistId":%q}`, a1ID))
+	var al2 map[string]any
+	decodeResponse(t, r3, &al2)
+	al2ID := al2["id"].(string)
+
+	performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"Song1","artistId":%q,"albumId":%q,"mediaObjectId":"mo-z1"}`, a1ID, al1ID))
+	performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"Song2","artistId":%q,"albumId":%q,"mediaObjectId":"mo-z2"}`, a1ID, al1ID))
+
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/stats/albums", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	arr := got["albums"].([]any)
+	if len(arr) != 2 {
+		t.Fatalf("expected 2 album items, got %d", len(arr))
+	}
+	byID := map[string]map[string]any{}
+	for _, item := range arr {
+		m := item.(map[string]any)
+		byID[m["albumId"].(string)] = m
+	}
+	if m := byID[al1ID]; m["trackCount"].(float64) != 2 {
+		t.Errorf("album1 trackCount=%v, want 2", m["trackCount"])
+	}
+	if m := byID[al2ID]; m["trackCount"].(float64) != 0 {
+		t.Errorf("album2 trackCount=%v, want 0", m["trackCount"])
+	}
+}
+
+func TestGetAlbumStatsBreakdownNoCatalogService(t *testing.T) {
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAdminToken(testAdminToken),
+		WithServiceInfo(ServiceInfo{Name: "inori-api", Version: "test"}),
+	).Routes()
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/stats/albums", "")
+	if resp.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", resp.Code)
+	}
+}
+
+func TestGetAlbumStatsBreakdownMethodNotAllowed(t *testing.T) {
+	h := newCatalogTestHandler()
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/stats/albums", `{}`)
+	if resp.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", resp.Code)
+	}
+}

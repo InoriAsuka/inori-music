@@ -1339,3 +1339,94 @@ func TestGetCatalogStatsRepoError(t *testing.T) {
 		t.Fatalf("expected 0 artists, got %d", stats.Artists)
 	}
 }
+
+func TestGetArtistStatsBreakdownEmpty(t *testing.T) {
+	ctx := context.Background()
+	svc := catalog.NewService(newMemRepo())
+
+	result, err := svc.GetArtistStatsBreakdown(ctx)
+	if err != nil {
+		t.Fatalf("GetArtistStatsBreakdown: %v", err)
+	}
+	if result.Artists == nil {
+		t.Fatal("expected non-nil Artists slice")
+	}
+	if len(result.Artists) != 0 {
+		t.Fatalf("expected empty Artists, got %d items", len(result.Artists))
+	}
+}
+
+func TestGetArtistStatsBreakdownPopulated(t *testing.T) {
+	ctx := context.Background()
+	svc := catalog.NewService(newMemRepo())
+
+	a1, _ := svc.CreateArtist(ctx, "Aria", "")
+	a2, _ := svc.CreateArtist(ctx, "Bloom", "")
+	_, _ = svc.CreateAlbum(ctx, "First Album", "", a1.ID, 2020)
+	_, _ = svc.CreateTrack(ctx, "Track A", "", a1.ID, "", "mo-1", 0, 0, 0)
+	_, _ = svc.CreateTrack(ctx, "Track B", "", a1.ID, "", "mo-2", 0, 0, 0)
+	_, _ = svc.CreateTrack(ctx, "Track C", "", a1.ID, "", "mo-3", 0, 0, 0)
+
+	result, err := svc.GetArtistStatsBreakdown(ctx)
+	if err != nil {
+		t.Fatalf("GetArtistStatsBreakdown: %v", err)
+	}
+	if len(result.Artists) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(result.Artists))
+	}
+	byID := map[string]catalog.ArtistStatItem{}
+	for _, item := range result.Artists {
+		byID[item.ArtistID] = item
+	}
+	if got := byID[a1.ID]; got.AlbumCount != 1 || got.TrackCount != 3 {
+		t.Errorf("artist1: albumCount=%d trackCount=%d, want 1/3", got.AlbumCount, got.TrackCount)
+	}
+	if got := byID[a2.ID]; got.AlbumCount != 0 || got.TrackCount != 0 {
+		t.Errorf("artist2: albumCount=%d trackCount=%d, want 0/0", got.AlbumCount, got.TrackCount)
+	}
+}
+
+func TestGetAlbumStatsBreakdownEmpty(t *testing.T) {
+	ctx := context.Background()
+	svc := catalog.NewService(newMemRepo())
+
+	result, err := svc.GetAlbumStatsBreakdown(ctx)
+	if err != nil {
+		t.Fatalf("GetAlbumStatsBreakdown: %v", err)
+	}
+	if result.Albums == nil {
+		t.Fatal("expected non-nil Albums slice")
+	}
+	if len(result.Albums) != 0 {
+		t.Fatalf("expected empty Albums, got %d items", len(result.Albums))
+	}
+}
+
+func TestGetAlbumStatsBreakdownPopulated(t *testing.T) {
+	ctx := context.Background()
+	svc := catalog.NewService(newMemRepo())
+
+	artist, _ := svc.CreateArtist(ctx, "Solo Artist", "")
+	al1, _ := svc.CreateAlbum(ctx, "Debut", "", artist.ID, 2021)
+	al2, _ := svc.CreateAlbum(ctx, "Sophomore", "", artist.ID, 2023)
+	_, _ = svc.CreateTrack(ctx, "Song 1", "", artist.ID, al1.ID, "mo-a1", 0, 0, 0)
+	_, _ = svc.CreateTrack(ctx, "Song 2", "", artist.ID, al1.ID, "mo-a2", 0, 0, 0)
+
+	result, err := svc.GetAlbumStatsBreakdown(ctx)
+	if err != nil {
+		t.Fatalf("GetAlbumStatsBreakdown: %v", err)
+	}
+	if len(result.Albums) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(result.Albums))
+	}
+	byID := map[string]catalog.AlbumStatItem{}
+	for _, item := range result.Albums {
+		byID[item.AlbumID] = item
+	}
+	if got := byID[al1.ID]; got.TrackCount != 2 {
+		t.Errorf("album1 trackCount=%d, want 2", got.TrackCount)
+	}
+	if got := byID[al2.ID]; got.TrackCount != 0 {
+		t.Errorf("album2 trackCount=%d, want 0", got.TrackCount)
+	}
+}

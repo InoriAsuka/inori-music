@@ -650,6 +650,56 @@ func (s *Service) GetCatalogStats(ctx context.Context) (CatalogStats, error) {
 	}, nil
 }
 
+// GetArtistStatsBreakdown returns per-artist album and track counts.
+// Counts are derived from existing list calls; no new Repository interface methods are required.
+func (s *Service) GetArtistStatsBreakdown(ctx context.Context) (ArtistStatsBreakdown, error) {
+	artists, err := s.repo.ListArtists(ctx)
+	if err != nil {
+		return ArtistStatsBreakdown{}, err
+	}
+	items := make([]ArtistStatItem, 0, len(artists))
+	for _, a := range artists {
+		albums, err := s.repo.ListAlbumsByArtist(ctx, a.ID)
+		if err != nil {
+			return ArtistStatsBreakdown{}, err
+		}
+		tracks, err := s.repo.ListTracksByArtist(ctx, a.ID)
+		if err != nil {
+			return ArtistStatsBreakdown{}, err
+		}
+		items = append(items, ArtistStatItem{
+			ArtistID:   a.ID,
+			Name:       a.Name,
+			AlbumCount: len(albums),
+			TrackCount: len(tracks),
+		})
+	}
+	return ArtistStatsBreakdown{Artists: items}, nil
+}
+
+// GetAlbumStatsBreakdown returns per-album track counts.
+// Counts are derived from existing list calls; no new Repository interface methods are required.
+func (s *Service) GetAlbumStatsBreakdown(ctx context.Context) (AlbumStatsBreakdown, error) {
+	albums, err := s.repo.ListAlbums(ctx)
+	if err != nil {
+		return AlbumStatsBreakdown{}, err
+	}
+	items := make([]AlbumStatItem, 0, len(albums))
+	for _, al := range albums {
+		tracks, err := s.repo.ListTracksByAlbum(ctx, al.ID)
+		if err != nil {
+			return AlbumStatsBreakdown{}, err
+		}
+		items = append(items, AlbumStatItem{
+			AlbumID:    al.ID,
+			Title:      al.Title,
+			ArtistID:   al.ArtistID,
+			TrackCount: len(tracks),
+		})
+	}
+	return AlbumStatsBreakdown{Albums: items}, nil
+}
+
 func newID() (string, error) {
 	var b [8]byte
 	if _, err := rand.Read(b[:]); err != nil {
