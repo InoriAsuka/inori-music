@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.45.0`
+`0.47.0`
 
 ## Product Goal
 
@@ -349,4 +349,16 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add `ErrInvalidPlaylist` and `ErrPlaylistNotFound` to the `writeError` switch in the HTTP handler.
 - Add 9 `catalog.Service` unit tests and 7 HTTP-layer tests covering CRUD, add/remove track, viewer access, not-found, empty-name rejection, and 405 guard.
 - Update OpenAPI contract with `Playlist`, `CreatePlaylistRequest`, `UpdatePlaylistRequest`, `AddPlaylistTrackRequest` schemas and all 8 new paths; bump `info.version` to `0.46.0`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+
+### v0.47.0 - 2026-06-14
+
+- Add `PUT /api/v1/admin/catalog/playlists/{id}/tracks` endpoint that atomically replaces the entire ordered track list of a playlist.
+- Every supplied track ID must exist; an unknown ID returns 404. An empty `trackIds` array is valid and clears the playlist. Duplicate entries are preserved.
+- Add `SetPlaylistTracks(ctx, playlistID, trackIDs)` to `catalog.Service`; validates track existence via `repo.GetTrack` for each ID, then calls `repo.SavePlaylist` which already performs a transactional full-replace of `playlist_tracks` rows in the PostgreSQL backend.
+- No `catalog.Repository` interface change required — `SavePlaylist` already handles atomic replacement.
+- Add `setPlaylistTracksRequest` struct and `setPlaylistTracks` handler to the HTTP handler layer.
+- Add 5 `catalog.Service` unit tests and 7 HTTP-layer tests covering reorder, clear, duplicate preservation, unknown track, unknown playlist, missing `trackIds` field, and no-catalog-service 503.
+- Add `SetPlaylistTracksRequest` schema and `put` operation on `/api/v1/admin/catalog/playlists/{id}/tracks` to the OpenAPI contract; bump `info.version` to `0.47.0`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

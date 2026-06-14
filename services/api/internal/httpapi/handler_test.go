@@ -2045,3 +2045,83 @@ func TestPlaylistMethodNotAllowed(t *testing.T) {
 		t.Fatalf("expected 405, got %d", resp.Code)
 	}
 }
+
+func TestPlaylistSetTracks(t *testing.T) {
+	h := newCatalogTestHandler()
+
+	// Seed artist and two tracks.
+	artistResp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Artist"}`)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID, _ := artist["id"].(string)
+
+	t1Resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"Track1","artistId":%q,"mediaObjectId":"mo-set-1"}`, artistID))
+	var t1 map[string]any
+	decodeResponse(t, t1Resp, &t1)
+	t1ID, _ := t1["id"].(string)
+
+	t2Resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"Track2","artistId":%q,"mediaObjectId":"mo-set-2"}`, artistID))
+	var t2 map[string]any
+	decodeResponse(t, t2Resp, &t2)
+	t2ID, _ := t2["id"].(string)
+
+	plResp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/playlists", `{"name":"SetPL"}`)
+	var pl map[string]any
+	decodeResponse(t, plResp, &pl)
+	plID, _ := pl["id"].(string)
+
+	// Happy path: set [t2, t1] — reorder.
+	setResp := performRequest(t, h, http.MethodPut,
+		"/api/v1/admin/catalog/playlists/"+plID+"/tracks",
+		fmt.Sprintf(`{"trackIds":[%q,%q]}`, t2ID, t1ID))
+	if setResp.Code != http.StatusOK {
+		t.Fatalf("set tracks: %d %s", setResp.Code, setResp.Body)
+	}
+	var got map[string]any
+	decodeResponse(t, setResp, &got)
+	ids, _ := got["trackIds"].([]any)
+	if len(ids) != 2 || ids[0] != t2ID || ids[1] != t1ID {
+		t.Fatalf("trackIds after set = %v, want [%s %s]", ids, t2ID, t1ID)
+	}
+
+	// Clear: empty slice.
+	clearResp := performRequest(t, h, http.MethodPut,
+		"/api/v1/admin/catalog/playlists/"+plID+"/tracks",
+		`{"trackIds":[]}`)
+	if clearResp.Code != http.StatusOK {
+		t.Fatalf("clear tracks: %d %s", clearResp.Code, clearResp.Body)
+	}
+	var cleared map[string]any
+	decodeResponse(t, clearResp, &cleared)
+	clearedIDs, _ := cleared["trackIds"].([]any)
+	if len(clearedIDs) != 0 {
+		t.Fatalf("trackIds after clear = %v, want []", clearedIDs)
+	}
+
+	// Unknown track → 404.
+	badTrackResp := performRequest(t, h, http.MethodPut,
+		"/api/v1/admin/catalog/playlists/"+plID+"/tracks",
+		`{"trackIds":["no-such-track"]}`)
+	assertAPIError(t, badTrackResp, http.StatusNotFound, "not_found")
+
+	// Unknown playlist → 404.
+	badPLResp := performRequest(t, h, http.MethodPut,
+		"/api/v1/admin/catalog/playlists/no-such-pl/tracks",
+		fmt.Sprintf(`{"trackIds":[%q]}`, t1ID))
+	assertAPIError(t, badPLResp, http.StatusNotFound, "not_found")
+
+	// Missing trackIds field → 400.
+	missingResp := performRequest(t, h, http.MethodPut,
+		"/api/v1/admin/catalog/playlists/"+plID+"/tracks",
+		`{}`)
+	assertAPIError(t, missingResp, http.StatusBadRequest, "validation_error")
+}
+
+func TestPlaylistSetTracksNoCatalogService(t *testing.T) {
+	h := newTestHandler()
+	resp := performRequest(t, h, http.MethodPut, "/api/v1/admin/catalog/playlists/some-id/tracks",
+		`{"trackIds":[]}`)
+	assertAPIError(t, resp, http.StatusServiceUnavailable, "catalog_not_configured")
+}

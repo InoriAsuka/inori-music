@@ -311,6 +311,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("PATCH /api/v1/admin/catalog/playlists/{id}", handler.requireAdminAuth(handler.patchPlaylist))
 	mux.HandleFunc("DELETE /api/v1/admin/catalog/playlists/{id}", handler.requireAdminAuth(handler.deletePlaylist))
 	mux.HandleFunc("POST /api/v1/admin/catalog/playlists/{id}/tracks", handler.requireAdminAuth(handler.addPlaylistTrack))
+	mux.HandleFunc("PUT /api/v1/admin/catalog/playlists/{id}/tracks", handler.requireAdminAuth(handler.setPlaylistTracks))
 	mux.HandleFunc("DELETE /api/v1/admin/catalog/playlists/{id}/tracks/{trackId}", handler.requireAdminAuth(handler.removePlaylistTrack))
 	mux.HandleFunc("GET /api/v1/catalog/playlists", handler.requireViewerAuth(handler.listPlaylists))
 	mux.HandleFunc("GET /api/v1/catalog/playlists/{id}", handler.requireViewerAuth(handler.getPlaylist))
@@ -1060,6 +1061,10 @@ type addPlaylistTrackRequest struct {
 	TrackID string `json:"trackId"`
 }
 
+type setPlaylistTracksRequest struct {
+	TrackIDs []string `json:"trackIds"`
+}
+
 func (handler *Handler) listPlaylists(w http.ResponseWriter, r *http.Request) {
 	if !handler.requireCatalogService(w) {
 		return
@@ -1154,6 +1159,27 @@ func (handler *Handler) removePlaylistTrack(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	pl, err := handler.catalogService.RemoveTrackFromPlaylist(r.Context(), r.PathValue("id"), r.PathValue("trackId"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, pl)
+}
+
+func (handler *Handler) setPlaylistTracks(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireCatalogService(w) {
+		return
+	}
+	var req setPlaylistTracksRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeError(w, err)
+		return
+	}
+	if req.TrackIDs == nil {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", "trackIds is required")
+		return
+	}
+	pl, err := handler.catalogService.SetPlaylistTracks(r.Context(), r.PathValue("id"), req.TrackIDs)
 	if err != nil {
 		writeError(w, err)
 		return

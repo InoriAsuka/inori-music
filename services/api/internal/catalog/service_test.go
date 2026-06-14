@@ -1057,3 +1057,51 @@ func TestPlaylistGetNotFound(t *testing.T) {
 		t.Fatalf("expected ErrPlaylistNotFound, got %v", err)
 	}
 }
+
+func TestPlaylistSetTracks(t *testing.T) {
+	ctx := context.Background()
+	svc := catalog.NewService(newMemRepo())
+	artist, _ := svc.CreateArtist(ctx, "A", "")
+	t1, _ := svc.CreateTrack(ctx, "T1", "", artist.ID, "", "mo1", 0, 0, 0)
+	t2, _ := svc.CreateTrack(ctx, "T2", "", artist.ID, "", "mo2", 0, 0, 0)
+	pl, _ := svc.CreatePlaylist(ctx, "PL", "")
+
+	// happy path: reorder [t2, t1]
+	got, err := svc.SetPlaylistTracks(ctx, pl.ID, []string{t2.ID, t1.ID})
+	if err != nil {
+		t.Fatalf("SetPlaylistTracks: %v", err)
+	}
+	if len(got.TrackIDs) != 2 || got.TrackIDs[0] != t2.ID || got.TrackIDs[1] != t1.ID {
+		t.Fatalf("unexpected trackIDs after reorder: %v", got.TrackIDs)
+	}
+
+	// clear: empty slice
+	got, err = svc.SetPlaylistTracks(ctx, pl.ID, []string{})
+	if err != nil {
+		t.Fatalf("SetPlaylistTracks clear: %v", err)
+	}
+	if len(got.TrackIDs) != 0 {
+		t.Fatalf("expected empty trackIDs after clear, got %v", got.TrackIDs)
+	}
+
+	// duplicates preserved
+	got, err = svc.SetPlaylistTracks(ctx, pl.ID, []string{t1.ID, t1.ID})
+	if err != nil {
+		t.Fatalf("SetPlaylistTracks duplicates: %v", err)
+	}
+	if len(got.TrackIDs) != 2 || got.TrackIDs[0] != t1.ID || got.TrackIDs[1] != t1.ID {
+		t.Fatalf("unexpected trackIDs with duplicates: %v", got.TrackIDs)
+	}
+
+	// unknown track → ErrTrackNotFound
+	_, err = svc.SetPlaylistTracks(ctx, pl.ID, []string{"no-such-track"})
+	if !errors.Is(err, catalog.ErrTrackNotFound) {
+		t.Fatalf("expected ErrTrackNotFound for unknown track, got %v", err)
+	}
+
+	// unknown playlist → ErrPlaylistNotFound
+	_, err = svc.SetPlaylistTracks(ctx, "no-such-pl", []string{t1.ID})
+	if !errors.Is(err, catalog.ErrPlaylistNotFound) {
+		t.Fatalf("expected ErrPlaylistNotFound for unknown playlist, got %v", err)
+	}
+}
