@@ -21,6 +21,9 @@ var (
 	// ErrImportRejected is returned when a media object cannot be imported as a track
 	// (e.g. wrong asset kind or lifecycle state).
 	ErrImportRejected = errors.New("import rejected")
+	// ErrRelinkRejected is returned when a media object cannot be used to relink an
+	// existing track (e.g. wrong asset kind or lifecycle state).
+	ErrRelinkRejected = errors.New("relink rejected")
 )
 
 // Artist represents a music library artist or performer.
@@ -140,6 +143,12 @@ type ImportTrackRequest struct {
 	DiscNumber    int
 	DurationMS    int
 }
+
+// RelinkTrackRequest carries the new media object reference for an existing track.
+type RelinkTrackRequest struct {
+	MediaObjectID string
+}
+
 
 // UpdateArtistRequest carries the fields that may be changed via a PATCH request.
 // Nil pointer fields are left unchanged; a pointer to an empty string clears the field.

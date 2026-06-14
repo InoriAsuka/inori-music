@@ -510,6 +510,109 @@ func TestImportTrackAlbumArtistInherited(t *testing.T) {
 	}
 }
 
+// ---- RelinkTrack tests ----
+
+func TestRelinkTrackSuccess(t *testing.T) {
+	ctx := context.Background()
+	svc, reader := newImportSvc(t)
+	reader.add("media-a", "original_audio", "active")
+	reader.add("media-b", "transcoded_audio", "active")
+
+	// create a track with media-a via import
+	orig, err := svc.ImportTrack(ctx, catalog.ImportTrackRequest{
+		MediaObjectID: "media-a",
+		Title:         "Song A",
+	})
+	if err != nil {
+		t.Fatalf("ImportTrack: %v", err)
+	}
+
+	// relink to media-b
+	linked, err := svc.RelinkTrack(ctx, orig.ID, catalog.RelinkTrackRequest{MediaObjectID: "media-b"})
+	if err != nil {
+		t.Fatalf("RelinkTrack: %v", err)
+	}
+	if linked.MediaObjectID != "media-b" {
+		t.Fatalf("MediaObjectID = %q, want media-b", linked.MediaObjectID)
+	}
+	// other fields must be preserved
+	if linked.Title != "Song A" {
+		t.Fatalf("Title = %q, want Song A", linked.Title)
+	}
+}
+
+func TestRelinkTrackWrongAssetKind(t *testing.T) {
+	ctx := context.Background()
+	svc, reader := newImportSvc(t)
+	reader.add("media-a", "original_audio", "active")
+	reader.add("media-art", "artwork", "active")
+
+	orig, _ := svc.ImportTrack(ctx, catalog.ImportTrackRequest{MediaObjectID: "media-a", Title: "T"})
+	_, err := svc.RelinkTrack(ctx, orig.ID, catalog.RelinkTrackRequest{MediaObjectID: "media-art"})
+	if !errors.Is(err, catalog.ErrRelinkRejected) {
+		t.Fatalf("err = %v, want ErrRelinkRejected", err)
+	}
+}
+
+func TestRelinkTrackNotActive(t *testing.T) {
+	ctx := context.Background()
+	svc, reader := newImportSvc(t)
+	reader.add("media-a", "original_audio", "active")
+	reader.add("media-staged", "original_audio", "staged")
+
+	orig, _ := svc.ImportTrack(ctx, catalog.ImportTrackRequest{MediaObjectID: "media-a", Title: "T"})
+	_, err := svc.RelinkTrack(ctx, orig.ID, catalog.RelinkTrackRequest{MediaObjectID: "media-staged"})
+	if !errors.Is(err, catalog.ErrRelinkRejected) {
+		t.Fatalf("err = %v, want ErrRelinkRejected", err)
+	}
+}
+
+func TestRelinkTrackMediaNotFound(t *testing.T) {
+	ctx := context.Background()
+	svc, reader := newImportSvc(t)
+	reader.add("media-a", "original_audio", "active")
+
+	orig, _ := svc.ImportTrack(ctx, catalog.ImportTrackRequest{MediaObjectID: "media-a", Title: "T"})
+	_, err := svc.RelinkTrack(ctx, orig.ID, catalog.RelinkTrackRequest{MediaObjectID: "missing"})
+	if err == nil {
+		t.Fatal("expected error for missing media object")
+	}
+}
+
+func TestRelinkTrackTrackNotFound(t *testing.T) {
+	ctx := context.Background()
+	svc, reader := newImportSvc(t)
+	reader.add("media-a", "original_audio", "active")
+
+	_, err := svc.RelinkTrack(ctx, "no-such-track", catalog.RelinkTrackRequest{MediaObjectID: "media-a"})
+	if !errors.Is(err, catalog.ErrTrackNotFound) {
+		t.Fatalf("err = %v, want ErrTrackNotFound", err)
+	}
+}
+
+func TestRelinkTrackNoReaderConfigured(t *testing.T) {
+	ctx := context.Background()
+	repo := catalog.NewMemoryRepository()
+	svc := catalog.NewService(repo) // no media reader
+
+	_, err := svc.RelinkTrack(ctx, "any", catalog.RelinkTrackRequest{MediaObjectID: "media-a"})
+	if !errors.Is(err, catalog.ErrRelinkRejected) {
+		t.Fatalf("err = %v, want ErrRelinkRejected", err)
+	}
+}
+
+func TestRelinkTrackEmptyMediaObjectID(t *testing.T) {
+	ctx := context.Background()
+	svc, reader := newImportSvc(t)
+	reader.add("media-a", "original_audio", "active")
+
+	orig, _ := svc.ImportTrack(ctx, catalog.ImportTrackRequest{MediaObjectID: "media-a", Title: "T"})
+	_, err := svc.RelinkTrack(ctx, orig.ID, catalog.RelinkTrackRequest{MediaObjectID: "  "})
+	if !errors.Is(err, catalog.ErrRelinkRejected) {
+		t.Fatalf("err = %v, want ErrRelinkRejected", err)
+	}
+}
+
 // ---- SearchCatalog tests ----
 
 func TestSearchCatalogEmptyQueryRejected(t *testing.T) {

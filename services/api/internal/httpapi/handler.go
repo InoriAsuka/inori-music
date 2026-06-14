@@ -295,6 +295,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/catalog/tracks/{id}", handler.requireAdminAuth(handler.getTrack))
 	mux.HandleFunc("PATCH /api/v1/admin/catalog/tracks/{id}", handler.requireAdminAuth(handler.patchTrack))
 	mux.HandleFunc("DELETE /api/v1/admin/catalog/tracks/{id}", handler.requireAdminAuth(handler.deleteTrack))
+	mux.HandleFunc("POST /api/v1/admin/catalog/tracks/{id}/relink", handler.requireAdminAuth(handler.relinkTrack))
 	mux.HandleFunc("POST /api/v1/admin/catalog/import", handler.requireAdminAuth(handler.importTrack))
 	mux.HandleFunc("POST /api/v1/admin/catalog/batch-import", handler.requireAdminAuth(handler.batchImportTracks))
 	mux.HandleFunc("GET /api/v1/admin/catalog/search", handler.requireAdminAuth(handler.searchCatalog))
@@ -349,6 +350,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("/api/v1/admin/catalog/albums/{id}", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/catalog/tracks", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/catalog/tracks/{id}", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/catalog/tracks/{id}/relink", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/catalog/import", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/catalog/batch-import", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/catalog/search", handler.requireAdminAuth(handler.methodNotAllowed))
@@ -1009,6 +1011,30 @@ func (handler *Handler) deleteTrack(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// relinkTrackRequest carries the new media object reference for a relink operation.
+type relinkTrackRequest struct {
+	MediaObjectID string `json:"mediaObjectId"`
+}
+
+func (handler *Handler) relinkTrack(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireCatalogService(w) {
+		return
+	}
+	var req relinkTrackRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeError(w, err)
+		return
+	}
+	track, err := handler.catalogService.RelinkTrack(r.Context(), r.PathValue("id"), catalog.RelinkTrackRequest{
+		MediaObjectID: req.MediaObjectID,
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, track)
+}
+
 // patchTrackRequest carries the fields that may be changed via PATCH.
 type patchTrackRequest struct {
 	Title       *string `json:"title"`
@@ -1627,6 +1653,9 @@ func writeError(w http.ResponseWriter, err error) {
 	case errors.Is(err, catalog.ErrImportRejected):
 		status = http.StatusUnprocessableEntity
 		code = "import_rejected"
+	case errors.Is(err, catalog.ErrRelinkRejected):
+		status = http.StatusUnprocessableEntity
+		code = "relink_rejected"
 	case errors.Is(err, storage.ErrInvalidMediaObject):
 		status = http.StatusBadRequest
 		code = "invalid_media_object"

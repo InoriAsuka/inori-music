@@ -379,6 +379,40 @@ func (s *Service) ImportTrack(ctx context.Context, req ImportTrackRequest) (Trac
 	return track, nil
 }
 
+// RelinkTrack replaces the media object reference on an existing track.
+// The new media object must exist, be of kind original_audio or transcoded_audio,
+// and have lifecycle state active.
+func (s *Service) RelinkTrack(ctx context.Context, id string, req RelinkTrackRequest) (Track, error) {
+	if s.mediaReader == nil {
+		return Track{}, fmt.Errorf("%w: media object reader not configured", ErrRelinkRejected)
+	}
+	id = strings.TrimSpace(id)
+	track, err := s.repo.GetTrack(ctx, id)
+	if err != nil {
+		return Track{}, err
+	}
+	req.MediaObjectID = strings.TrimSpace(req.MediaObjectID)
+	if req.MediaObjectID == "" {
+		return Track{}, fmt.Errorf("%w: media_object_id is required", ErrRelinkRejected)
+	}
+	info, err := s.mediaReader.GetMediaObjectInfo(ctx, req.MediaObjectID)
+	if err != nil {
+		return Track{}, err
+	}
+	if info.AssetKind != "original_audio" && info.AssetKind != "transcoded_audio" {
+		return Track{}, fmt.Errorf("%w: media object asset_kind must be original_audio or transcoded_audio, got %q", ErrRelinkRejected, info.AssetKind)
+	}
+	if info.LifecycleState != "active" {
+		return Track{}, fmt.Errorf("%w: media object lifecycle_state must be active, got %q", ErrRelinkRejected, info.LifecycleState)
+	}
+	track.MediaObjectID = req.MediaObjectID
+	track.UpdatedAt = s.now().UTC()
+	if err := s.repo.SaveTrack(ctx, track); err != nil {
+		return Track{}, err
+	}
+	return track, nil
+}
+
 // BatchImportTracks imports each item in req independently. Failures do not abort
 // subsequent items. The returned BatchImportResult records both successes and
 // per-item error details so callers can present partial results to the user.

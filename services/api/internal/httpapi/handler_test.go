@@ -1467,6 +1467,124 @@ func TestCatalogImportTrackWithArtistAndAlbum(t *testing.T) {
 	}
 }
 
+// ---- catalog relink HTTP tests ----
+
+func TestCatalogRelinkTrackSuccess(t *testing.T) {
+	h, _ := newImportTestHandlerWithMediaObject(t, "relink-src", "original_audio", "active")
+	// register a second media object
+	{
+		repo := storage.NewMemoryMediaObjectRepository()
+		obj := storage.MediaObject{
+			ID:             "relink-dst",
+			BackendID:      "backend-1",
+			ObjectKey:      "key/relink-dst",
+			AssetKind:      "transcoded_audio",
+			LifecycleState: "active",
+		}
+		_ = repo.SaveMediaObject(context.Background(), obj)
+	}
+	// We need a handler with both media objects accessible; easiest: build one
+	// from scratch with both pre-seeded.
+	h = func() http.Handler {
+		sysRepo := storage.NewMemoryRepository()
+		mediaRepo := storage.NewMemoryMediaObjectRepository()
+		for _, obj := range []storage.MediaObject{
+			{ID: "relink-src", BackendID: "b1", ObjectKey: "k/relink-src", AssetKind: "original_audio", LifecycleState: "active"},
+			{ID: "relink-dst", BackendID: "b1", ObjectKey: "k/relink-dst", AssetKind: "transcoded_audio", LifecycleState: "active"},
+		} {
+			if err := mediaRepo.SaveMediaObject(context.Background(), obj); err != nil {
+				t.Fatalf("SaveMediaObject %s: %v", obj.ID, err)
+			}
+		}
+		catalogRepo := catalog.NewMemoryRepository()
+		catalogSvc := catalog.NewService(catalogRepo)
+		mediaSvc := storage.NewMediaObjectService(sysRepo, mediaRepo)
+		return NewHandler(
+			storage.NewService(sysRepo),
+			WithAdminToken(testAdminToken),
+			WithCatalogService(catalogSvc),
+			WithMediaObjectService(mediaSvc),
+			WithServiceInfo(ServiceInfo{Name: "inori-api", Version: "test", Commit: "c", BuildTime: "t"}),
+		).Routes()
+	}()
+
+	// import original track
+	body := `{"mediaObjectId":"relink-src","title":"My Song"}`
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/import", body)
+	if resp.Code != http.StatusCreated {
+		t.Fatalf("import status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var track map[string]any
+	decodeResponse(t, resp, &track)
+	trackID := track["id"].(string)
+
+	// relink to new media object
+	relinkBody := `{"mediaObjectId":"relink-dst"}`
+	resp = performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks/"+trackID+"/relink", relinkBody)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("relink status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var linked map[string]any
+	decodeResponse(t, resp, &linked)
+	if linked["mediaObjectId"] != "relink-dst" {
+		t.Fatalf("mediaObjectId = %q, want relink-dst", linked["mediaObjectId"])
+	}
+	if linked["title"] != "My Song" {
+		t.Fatalf("title = %q, want My Song", linked["title"])
+	}
+}
+
+func TestCatalogRelinkTrackWrongAssetKind(t *testing.T) {
+	h := func() http.Handler {
+		sysRepo := storage.NewMemoryRepository()
+		mediaRepo := storage.NewMemoryMediaObjectRepository()
+		for _, obj := range []storage.MediaObject{
+			{ID: "rk-audio", BackendID: "b1", ObjectKey: "k/rk-audio", AssetKind: "original_audio", LifecycleState: "active"},
+			{ID: "rk-art", BackendID: "b1", ObjectKey: "k/rk-art", AssetKind: "artwork", LifecycleState: "active"},
+		} {
+			_ = mediaRepo.SaveMediaObject(context.Background(), obj)
+		}
+		catalogSvc := catalog.NewService(catalog.NewMemoryRepository())
+		mediaSvc := storage.NewMediaObjectService(sysRepo, mediaRepo)
+		return NewHandler(
+			storage.NewService(sysRepo),
+			WithAdminToken(testAdminToken),
+			WithCatalogService(catalogSvc),
+			WithMediaObjectService(mediaSvc),
+			WithServiceInfo(ServiceInfo{Name: "inori-api", Version: "test", Commit: "c", BuildTime: "t"}),
+		).Routes()
+	}()
+
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/import", `{"mediaObjectId":"rk-audio","title":"T"}`)
+	if resp.Code != http.StatusCreated {
+		t.Fatalf("import status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var track map[string]any
+	decodeResponse(t, resp, &track)
+	trackID := track["id"].(string)
+
+	resp = performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks/"+trackID+"/relink", `{"mediaObjectId":"rk-art"}`)
+	assertAPIError(t, resp, http.StatusUnprocessableEntity, "relink_rejected")
+}
+
+func TestCatalogRelinkTrackNotFound(t *testing.T) {
+	h, _ := newImportTestHandlerWithMediaObject(t, "rk-exists", "original_audio", "active")
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks/no-such-id/relink", `{"mediaObjectId":"rk-exists"}`)
+	assertAPIError(t, resp, http.StatusNotFound, "not_found")
+}
+
+func TestCatalogRelinkTrackNoCatalogService(t *testing.T) {
+	h := newTestHandler()
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks/some-id/relink", `{"mediaObjectId":"x"}`)
+	assertAPIError(t, resp, http.StatusServiceUnavailable, "catalog_not_configured")
+}
+
+func TestCatalogRelinkTrackMethodNotAllowed(t *testing.T) {
+	h, _ := newImportTestHandlerWithMediaObject(t, "rk-m", "original_audio", "active")
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/tracks/some-id/relink", "")
+	assertAPIError(t, resp, http.StatusMethodNotAllowed, "method_not_allowed")
+}
+
 // ---- catalog search HTTP tests ----
 
 func newSearchTestHandler(t *testing.T) http.Handler {

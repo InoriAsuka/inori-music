@@ -1652,6 +1652,20 @@
         "required": [
           "trackIds"
         ]
+      },
+      "CatalogRelinkTrackRequest": {
+        "type": "object",
+        "description": "Replace the media object linked to a catalog track.",
+        "required": [
+          "mediaObjectId"
+        ],
+        "properties": {
+          "mediaObjectId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "ID of the new media object. Must be active and of kind original_audio or transcoded_audio."
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -4885,7 +4899,7 @@
             }
           },
           "207": {
-            "description": "Partial success \u2014 some items failed",
+            "description": "Partial success — some items failed",
             "content": {
               "application/json": {
                 "schema": {
@@ -5289,6 +5303,93 @@
           },
           "404": {
             "description": "Not found"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/catalog/tracks/{id}/relink": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/CatalogId"
+        }
+      ],
+      "post": {
+        "summary": "Relink track to a different media object",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CatalogRelinkTrackRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Track with updated media object reference",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogTrack"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Catalog service not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
           }
         }
       }
