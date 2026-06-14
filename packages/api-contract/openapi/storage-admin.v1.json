@@ -1666,6 +1666,21 @@
             "description": "ID of the new media object. Must be active and of kind original_audio or transcoded_audio."
           }
         }
+      },
+      "PlaylistTracksResult": {
+        "type": "object",
+        "required": [
+          "tracks"
+        ],
+        "properties": {
+          "tracks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CatalogTrack"
+            },
+            "description": "Ordered list of full track objects for the playlist"
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -1679,7 +1694,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "0.47.0"
+    "version": "0.49.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -4899,7 +4914,7 @@
             }
           },
           "207": {
-            "description": "Partial success — some items failed",
+            "description": "Partial success \u2014 some items failed",
             "content": {
               "application/json": {
                 "schema": {
@@ -5192,6 +5207,37 @@
             "description": "Not found"
           }
         }
+      },
+      "get": {
+        "summary": "List the tracks of a playlist in playlist order",
+        "tags": [
+          "admin",
+          "catalog",
+          "playlists"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ordered playlist tracks",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaylistTracksResult"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Playlist not found"
+          },
+          "503": {
+            "description": "Catalog service not configured"
+          }
+        }
       }
     },
     "/api/v1/admin/catalog/playlists/{id}/tracks/{trackId}": {
@@ -5390,6 +5436,43 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/catalog/playlists/{id}/tracks": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/CatalogId"
+        }
+      ],
+      "get": {
+        "summary": "List the tracks of a playlist in playlist order (viewer)",
+        "tags": [
+          "catalog",
+          "playlists"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ordered playlist tracks",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlaylistTracksResult"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "404": {
+            "description": "Playlist not found"
           }
         }
       }

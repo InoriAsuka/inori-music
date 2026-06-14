@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.48.0`
+`0.49.0`
 
 ## Product Goal
 
@@ -361,4 +361,29 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add `setPlaylistTracksRequest` struct and `setPlaylistTracks` handler to the HTTP handler layer.
 - Add 5 `catalog.Service` unit tests and 7 HTTP-layer tests covering reorder, clear, duplicate preservation, unknown track, unknown playlist, missing `trackIds` field, and no-catalog-service 503.
 - Add `SetPlaylistTracksRequest` schema and `put` operation on `/api/v1/admin/catalog/playlists/{id}/tracks` to the OpenAPI contract; bump `info.version` to `0.47.0`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+
+### v0.48.0 - 2026-06-14
+
+- Add `POST /api/v1/admin/catalog/tracks/{id}/relink` endpoint that replaces the media object reference on an existing track.
+- The new media object must exist, have `assetKind` of `original_audio` or `transcoded_audio`, and have `lifecycleState` of `active`; otherwise `422 relink_rejected` is returned.
+- Add `ErrRelinkRejected` sentinel error and `RelinkTrackRequest` type to the catalog package.
+- Add `RelinkTrack(ctx, id, req)` to `catalog.Service`; validates media object via `MediaObjectReader` before overwriting `mediaObjectId` and bumping `UpdatedAt`.
+- Add `relinkTrack` handler and route to the HTTP handler layer; register 405 fallback for the sub-path.
+- Add 7 `catalog.Service` unit tests and 6 HTTP-layer tests covering success, wrong asset kind, not-active lifecycle, media not found, track not found, no reader configured, and empty `mediaObjectId`.
+- Add `CatalogRelinkTrackRequest` schema and `post` operation on `/api/v1/admin/catalog/tracks/{id}/relink` to the OpenAPI contract; bump `info.version` to `0.48.0` (corrected in v0.49.0).
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+
+### v0.49.0 - 2026-06-14
+
+- Add `GET /api/v1/admin/catalog/playlists/{id}/tracks` and `GET /api/v1/catalog/playlists/{id}/tracks` endpoints that return the full ordered `Track` object list for a playlist in a single request, eliminating the need for N separate per-track fetches.
+- An empty playlist returns an empty `tracks` array. Duplicate track entries (same ID appearing multiple times) are expanded once per occurrence in order.
+- Add `GetPlaylistTracks(ctx, playlistID)` to `catalog.Service`; resolves each `trackID` in the playlist's `TrackIDs` slice via `repo.GetTrack` and returns them in order. Returns `ErrPlaylistNotFound` for unknown playlist IDs.
+- Add `getPlaylistTracks` handler shared by both the admin and viewer routes; response shape is `{"tracks": [...Track...]}`.
+- Register `GET /api/v1/admin/catalog/playlists/{id}/tracks` (admin-auth) and `GET /api/v1/catalog/playlists/{id}/tracks` (viewer-auth) routes; register 405 fallback for the viewer sub-path.
+- Add 4 `catalog.Service` unit tests (ordered, empty, not-found, duplicate expansion) and 6 HTTP-layer tests (admin happy path, empty playlist, 404, viewer access, no-catalog-service 503, method-not-allowed 405).
+- Add `PlaylistTracksResult` schema and `get` operations on both tracks sub-paths to the OpenAPI contract; bump `info.version` to `0.49.0`.
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes` to assert all eight playlist paths.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

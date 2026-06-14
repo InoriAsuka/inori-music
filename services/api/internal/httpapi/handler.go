@@ -314,8 +314,10 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/admin/catalog/playlists/{id}/tracks", handler.requireAdminAuth(handler.addPlaylistTrack))
 	mux.HandleFunc("PUT /api/v1/admin/catalog/playlists/{id}/tracks", handler.requireAdminAuth(handler.setPlaylistTracks))
 	mux.HandleFunc("DELETE /api/v1/admin/catalog/playlists/{id}/tracks/{trackId}", handler.requireAdminAuth(handler.removePlaylistTrack))
+	mux.HandleFunc("GET /api/v1/admin/catalog/playlists/{id}/tracks", handler.requireAdminAuth(handler.getPlaylistTracks))
 	mux.HandleFunc("GET /api/v1/catalog/playlists", handler.requireViewerAuth(handler.listPlaylists))
 	mux.HandleFunc("GET /api/v1/catalog/playlists/{id}", handler.requireViewerAuth(handler.getPlaylist))
+	mux.HandleFunc("GET /api/v1/catalog/playlists/{id}/tracks", handler.requireViewerAuth(handler.getPlaylistTracks))
 	mux.HandleFunc("GET /api/v1/admin/storage/backends", handler.requireAdminAuth(handler.listStorageBackends))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends", handler.requireAdminAuth(handler.registerStorageBackend))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends/validate", handler.requireAdminAuth(handler.validateStorageBackend))
@@ -357,6 +359,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("/api/v1/admin/catalog/playlists", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/catalog/playlists/{id}", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/catalog/playlists/{id}/tracks", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/catalog/playlists/{id}/tracks", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/catalog/playlists/{id}/tracks/{trackId}", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/catalog/playlists", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/catalog/playlists/{id}", handler.requireViewerAuth(handler.methodNotAllowed))
@@ -1211,6 +1214,18 @@ func (handler *Handler) setPlaylistTracks(w http.ResponseWriter, r *http.Request
 		return
 	}
 	writeJSON(w, http.StatusOK, pl)
+}
+
+func (handler *Handler) getPlaylistTracks(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireCatalogService(w) {
+		return
+	}
+	tracks, err := handler.catalogService.GetPlaylistTracks(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"tracks": tracks})
 }
 
 // requireViewerAuth allows any session-authenticated user (admin or viewer role).

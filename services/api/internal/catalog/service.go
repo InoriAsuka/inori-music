@@ -585,6 +585,26 @@ func (s *Service) RemoveTrackFromPlaylist(ctx context.Context, playlistID, track
 // SetPlaylistTracks atomically replaces the ordered track list of a playlist.
 // Every trackID in the supplied slice must exist; an unknown ID returns ErrTrackNotFound.
 // An empty slice is valid and clears the track list.
+// GetPlaylistTracks returns the full Track objects for a playlist in the
+// playlist's defined order. If the playlist has no tracks an empty slice is
+// returned. An unknown playlist ID returns ErrPlaylistNotFound.
+func (s *Service) GetPlaylistTracks(ctx context.Context, playlistID string) ([]Track, error) {
+	playlistID = strings.TrimSpace(playlistID)
+	p, err := s.repo.GetPlaylist(ctx, playlistID)
+	if err != nil {
+		return nil, err
+	}
+	tracks := make([]Track, 0, len(p.TrackIDs))
+	for _, tid := range p.TrackIDs {
+		t, err := s.repo.GetTrack(ctx, tid)
+		if err != nil {
+			return nil, err
+		}
+		tracks = append(tracks, t)
+	}
+	return tracks, nil
+}
+
 func (s *Service) SetPlaylistTracks(ctx context.Context, playlistID string, trackIDs []string) (Playlist, error) {
 	playlistID = strings.TrimSpace(playlistID)
 	p, err := s.repo.GetPlaylist(ctx, playlistID)

@@ -1208,3 +1208,74 @@ func TestPlaylistSetTracks(t *testing.T) {
 		t.Fatalf("expected ErrPlaylistNotFound for unknown playlist, got %v", err)
 	}
 }
+
+// ---------- Phase 49: GetPlaylistTracks service tests ----------
+
+func TestGetPlaylistTracksOrdered(t *testing.T) {
+	ctx := context.Background()
+	svc := catalog.NewService(newMemRepo())
+	artist, _ := svc.CreateArtist(ctx, "A", "")
+	tr1, _ := svc.CreateTrack(ctx, "Alpha", "", artist.ID, "", "mo-gpt-1", 0, 0, 0)
+	tr2, _ := svc.CreateTrack(ctx, "Beta", "", artist.ID, "", "mo-gpt-2", 0, 0, 0)
+	tr3, _ := svc.CreateTrack(ctx, "Gamma", "", artist.ID, "", "mo-gpt-3", 0, 0, 0)
+
+	pl, _ := svc.CreatePlaylist(ctx, "TestPL", "")
+	_, _ = svc.SetPlaylistTracks(ctx, pl.ID, []string{tr3.ID, tr1.ID, tr2.ID})
+
+	tracks, err := svc.GetPlaylistTracks(ctx, pl.ID)
+	if err != nil {
+		t.Fatalf("GetPlaylistTracks: %v", err)
+	}
+	if len(tracks) != 3 {
+		t.Fatalf("len = %d, want 3", len(tracks))
+	}
+	if tracks[0].ID != tr3.ID || tracks[1].ID != tr1.ID || tracks[2].ID != tr2.ID {
+		t.Fatalf("wrong order: got [%s %s %s]", tracks[0].ID, tracks[1].ID, tracks[2].ID)
+	}
+}
+
+func TestGetPlaylistTracksEmpty(t *testing.T) {
+	ctx := context.Background()
+	svc := catalog.NewService(newMemRepo())
+	pl, _ := svc.CreatePlaylist(ctx, "Empty PL", "")
+
+	tracks, err := svc.GetPlaylistTracks(ctx, pl.ID)
+	if err != nil {
+		t.Fatalf("GetPlaylistTracks: %v", err)
+	}
+	if len(tracks) != 0 {
+		t.Fatalf("expected empty slice, got %v", tracks)
+	}
+}
+
+func TestGetPlaylistTracksNotFound(t *testing.T) {
+	ctx := context.Background()
+	svc := catalog.NewService(newMemRepo())
+	_, err := svc.GetPlaylistTracks(ctx, "no-such-pl")
+	if !errors.Is(err, catalog.ErrPlaylistNotFound) {
+		t.Fatalf("expected ErrPlaylistNotFound, got %v", err)
+	}
+}
+
+func TestGetPlaylistTracksPreserveDuplicates(t *testing.T) {
+	ctx := context.Background()
+	svc := catalog.NewService(newMemRepo())
+	artist, _ := svc.CreateArtist(ctx, "A", "")
+	tr, _ := svc.CreateTrack(ctx, "T", "", artist.ID, "", "mo-dup-1", 0, 0, 0)
+
+	pl, _ := svc.CreatePlaylist(ctx, "DupPL", "")
+	_, _ = svc.SetPlaylistTracks(ctx, pl.ID, []string{tr.ID, tr.ID, tr.ID})
+
+	tracks, err := svc.GetPlaylistTracks(ctx, pl.ID)
+	if err != nil {
+		t.Fatalf("GetPlaylistTracks: %v", err)
+	}
+	if len(tracks) != 3 {
+		t.Fatalf("len = %d, want 3 (duplicates preserved)", len(tracks))
+	}
+	for i, got := range tracks {
+		if got.ID != tr.ID {
+			t.Errorf("tracks[%d].ID = %q, want %q", i, got.ID, tr.ID)
+		}
+	}
+}
