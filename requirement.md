@@ -412,3 +412,16 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add 4 `catalog.Service` unit tests (empty/populated for each breakdown) and 8 HTTP-layer tests (empty shape, populated counts, 503, 405 for each endpoint).
 - Add `CatalogArtistStatItem`, `CatalogArtistStatsBreakdown`, `CatalogAlbumStatItem`, `CatalogAlbumStatsBreakdown` schemas and `get` operations on both new paths to the OpenAPI contract; bump `info.version` to `0.51.0`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+
+### v0.52.0 - 2026-06-14
+
+- Add `GET /api/v1/admin/catalog/stats/playlists` endpoint returning per-playlist track counts as a `CatalogPlaylistStatsBreakdown` object.
+- Add `PlaylistStatItem`, `PlaylistStatsBreakdown` types to the catalog package; each item carries `playlistId`, `name`, and `trackCount` (duplicate track entries counted separately).
+- Add `GetPlaylistStatsBreakdown(ctx)` to `catalog.Service`; counts are derived from each playlist's `TrackIDs` slice length. No new `Repository` interface methods required.
+- Add `getPlaylistStatsBreakdown` handler to the HTTP handler layer; returns 503 when no catalog service is configured.
+- Register `GET /api/v1/admin/catalog/stats/playlists` (admin-auth) and 405 fallback for the path.
+- Add 2 `catalog.Service` unit tests (empty, populated with duplicate-track counting) and 4 HTTP-layer tests (empty shape, populated counts, no-catalog-service 503, method-not-allowed 405).
+- Add `CatalogPlaylistStatItem`, `CatalogPlaylistStatsBreakdown` schemas and `get` operation on `/api/v1/admin/catalog/stats/playlists` to the OpenAPI contract; bump `info.version` to `0.52.0`.
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes` to assert the new playlists stats path.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.

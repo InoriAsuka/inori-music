@@ -2625,3 +2625,95 @@ func TestGetAlbumStatsBreakdownMethodNotAllowed(t *testing.T) {
 		t.Fatalf("expected 405, got %d", resp.Code)
 	}
 }
+
+func TestGetPlaylistStatsBreakdownEmpty(t *testing.T) {
+	h := newCatalogTestHandler()
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/stats/playlists", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	playlists, ok := got["playlists"]
+	if !ok {
+		t.Fatal("response missing key \"playlists\"")
+	}
+	if arr, ok := playlists.([]any); !ok || len(arr) != 0 {
+		t.Errorf("expected empty playlists array, got %v", playlists)
+	}
+}
+
+func TestGetPlaylistStatsBreakdownPopulated(t *testing.T) {
+	h := newCatalogTestHandler()
+
+	// seed: 1 artist, 1 track, 2 playlists; first playlist has 2 track entries
+	r1 := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"StatsArtist"}`)
+	var a1 map[string]any
+	decodeResponse(t, r1, &a1)
+	a1ID := a1["id"].(string)
+
+	r2 := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"StatTrack","artistId":%q,"mediaObjectId":"mo-ps1"}`, a1ID))
+	var tr1 map[string]any
+	decodeResponse(t, r2, &tr1)
+	tr1ID := tr1["id"].(string)
+
+	r3 := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/playlists", `{"name":"PL Alpha"}`)
+	var pl1 map[string]any
+	decodeResponse(t, r3, &pl1)
+	pl1ID := pl1["id"].(string)
+
+	r4 := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/playlists", `{"name":"PL Beta"}`)
+	var pl2 map[string]any
+	decodeResponse(t, r4, &pl2)
+	pl2ID := pl2["id"].(string)
+
+	// add tr1 twice to pl1
+	performRequest(t, h, http.MethodPost, fmt.Sprintf("/api/v1/admin/catalog/playlists/%s/tracks", pl1ID),
+		fmt.Sprintf(`{"trackId":%q}`, tr1ID))
+	performRequest(t, h, http.MethodPost, fmt.Sprintf("/api/v1/admin/catalog/playlists/%s/tracks", pl1ID),
+		fmt.Sprintf(`{"trackId":%q}`, tr1ID))
+	// pl2 stays empty
+
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/stats/playlists", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	arr := got["playlists"].([]any)
+	if len(arr) != 2 {
+		t.Fatalf("expected 2 playlist items, got %d", len(arr))
+	}
+	byID := map[string]map[string]any{}
+	for _, item := range arr {
+		m := item.(map[string]any)
+		byID[m["playlistId"].(string)] = m
+	}
+	if m := byID[pl1ID]; m["trackCount"].(float64) != 2 {
+		t.Errorf("playlist1 trackCount=%v, want 2", m["trackCount"])
+	}
+	if m := byID[pl2ID]; m["trackCount"].(float64) != 0 {
+		t.Errorf("playlist2 trackCount=%v, want 0", m["trackCount"])
+	}
+}
+
+func TestGetPlaylistStatsBreakdownNoCatalogService(t *testing.T) {
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAdminToken(testAdminToken),
+		WithServiceInfo(ServiceInfo{Name: "inori-api", Version: "test"}),
+	).Routes()
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/stats/playlists", "")
+	if resp.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", resp.Code)
+	}
+}
+
+func TestGetPlaylistStatsBreakdownMethodNotAllowed(t *testing.T) {
+	h := newCatalogTestHandler()
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/stats/playlists", `{}`)
+	if resp.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", resp.Code)
+	}
+}

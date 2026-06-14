@@ -249,3 +249,15 @@ type AlbumStatItem struct {
 type AlbumStatsBreakdown struct {
 	Albums []AlbumStatItem `json:"albums"`
 }
+
+// PlaylistStatItem holds per-playlist track counts for the breakdown stats endpoint.
+type PlaylistStatItem struct {
+	PlaylistID string `json:"playlistId"`
+	Name       string `json:"name"`
+	TrackCount int    `json:"trackCount"`
+}
+
+// PlaylistStatsBreakdown holds the per-playlist breakdown returned by the stats/playlists endpoint.
+type PlaylistStatsBreakdown struct {
+	Playlists []PlaylistStatItem `json:"playlists"`
+}

@@ -60,6 +60,7 @@ func TestStorageAdminOpenAPIContractCoversRoutes(t *testing.T) {
 		"/api/v1/admin/catalog/stats":                  {"get"},
 		"/api/v1/admin/catalog/stats/artists":          {"get"},
 		"/api/v1/admin/catalog/stats/albums":           {"get"},
+		"/api/v1/admin/catalog/stats/playlists":        {"get"},
 	}
 
 	for path, methods := range expected {

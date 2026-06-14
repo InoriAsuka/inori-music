@@ -1430,3 +1430,53 @@ func TestGetAlbumStatsBreakdownPopulated(t *testing.T) {
 		t.Errorf("album2 trackCount=%d, want 0", got.TrackCount)
 	}
 }
+
+func TestGetPlaylistStatsBreakdownEmpty(t *testing.T) {
+	ctx := context.Background()
+	svc := catalog.NewService(newMemRepo())
+
+	result, err := svc.GetPlaylistStatsBreakdown(ctx)
+	if err != nil {
+		t.Fatalf("GetPlaylistStatsBreakdown: %v", err)
+	}
+	if result.Playlists == nil {
+		t.Fatal("expected non-nil Playlists slice")
+	}
+	if len(result.Playlists) != 0 {
+		t.Fatalf("expected empty Playlists, got %d items", len(result.Playlists))
+	}
+}
+
+func TestGetPlaylistStatsBreakdownPopulated(t *testing.T) {
+	ctx := context.Background()
+	svc := catalog.NewService(newMemRepo())
+
+	artist, _ := svc.CreateArtist(ctx, "Test Artist", "")
+	tr1, _ := svc.CreateTrack(ctx, "Track A", "", artist.ID, "", "mo-p1", 0, 0, 0)
+	tr2, _ := svc.CreateTrack(ctx, "Track B", "", artist.ID, "", "mo-p2", 0, 0, 0)
+
+	pl1, _ := svc.CreatePlaylist(ctx, "Playlist One", "")
+	pl2, _ := svc.CreatePlaylist(ctx, "Playlist Two", "")
+
+	_, _ = svc.AddTrackToPlaylist(ctx, pl1.ID, tr1.ID)
+	_, _ = svc.AddTrackToPlaylist(ctx, pl1.ID, tr2.ID)
+	// pl2 stays empty
+
+	result, err := svc.GetPlaylistStatsBreakdown(ctx)
+	if err != nil {
+		t.Fatalf("GetPlaylistStatsBreakdown: %v", err)
+	}
+	if len(result.Playlists) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(result.Playlists))
+	}
+	byID := map[string]catalog.PlaylistStatItem{}
+	for _, item := range result.Playlists {
+		byID[item.PlaylistID] = item
+	}
+	if got := byID[pl1.ID]; got.TrackCount != 2 {
+		t.Errorf("playlist1 trackCount=%d, want 2", got.TrackCount)
+	}
+	if got := byID[pl2.ID]; got.TrackCount != 0 {
+		t.Errorf("playlist2 trackCount=%d, want 0", got.TrackCount)
+	}
+}

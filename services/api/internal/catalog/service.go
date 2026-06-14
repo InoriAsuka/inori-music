@@ -700,6 +700,24 @@ func (s *Service) GetAlbumStatsBreakdown(ctx context.Context) (AlbumStatsBreakdo
 	return AlbumStatsBreakdown{Albums: items}, nil
 }
 
+// GetPlaylistStatsBreakdown returns per-playlist track counts.
+// Counts are derived from the playlist's TrackIDs length; no new Repository interface methods are required.
+func (s *Service) GetPlaylistStatsBreakdown(ctx context.Context) (PlaylistStatsBreakdown, error) {
+	playlists, err := s.repo.ListPlaylists(ctx)
+	if err != nil {
+		return PlaylistStatsBreakdown{}, err
+	}
+	items := make([]PlaylistStatItem, 0, len(playlists))
+	for _, p := range playlists {
+		items = append(items, PlaylistStatItem{
+			PlaylistID: p.ID,
+			Name:       p.Name,
+			TrackCount: len(p.TrackIDs),
+		})
+	}
+	return PlaylistStatsBreakdown{Playlists: items}, nil
+}
+
 func newID() (string, error) {
 	var b [8]byte
 	if _, err := rand.Read(b[:]); err != nil {
