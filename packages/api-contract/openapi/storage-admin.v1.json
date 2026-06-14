@@ -1681,6 +1681,34 @@
             "description": "Ordered list of full track objects for the playlist"
           }
         }
+      },
+      "CatalogStats": {
+        "type": "object",
+        "description": "Metadata-only aggregate entity counts for the catalog.",
+        "required": [
+          "artists",
+          "albums",
+          "tracks",
+          "playlists"
+        ],
+        "properties": {
+          "artists": {
+            "type": "integer",
+            "description": "Total number of artists."
+          },
+          "albums": {
+            "type": "integer",
+            "description": "Total number of albums."
+          },
+          "tracks": {
+            "type": "integer",
+            "description": "Total number of tracks."
+          },
+          "playlists": {
+            "type": "integer",
+            "description": "Total number of playlists."
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -1694,7 +1722,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "0.49.0"
+    "version": "0.50.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -5473,6 +5501,39 @@
           },
           "404": {
             "description": "Playlist not found"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/catalog/stats": {
+      "get": {
+        "summary": "Catalog entity count statistics",
+        "description": "Returns metadata-only aggregate counts for artists, albums, tracks, and playlists.",
+        "operationId": "getCatalogStats",
+        "tags": [
+          "catalog-admin"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Catalog statistics.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogStats"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
           }
         }
       }

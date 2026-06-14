@@ -624,6 +624,32 @@ func (s *Service) SetPlaylistTracks(ctx context.Context, playlistID string, trac
 	return p, nil
 }
 
+// GetCatalogStats returns metadata-only aggregate entity counts.
+func (s *Service) GetCatalogStats(ctx context.Context) (CatalogStats, error) {
+	artists, err := s.repo.ListArtists(ctx)
+	if err != nil {
+		return CatalogStats{}, err
+	}
+	albums, err := s.repo.ListAlbums(ctx)
+	if err != nil {
+		return CatalogStats{}, err
+	}
+	tracks, err := s.repo.ListTracks(ctx)
+	if err != nil {
+		return CatalogStats{}, err
+	}
+	playlists, err := s.repo.ListPlaylists(ctx)
+	if err != nil {
+		return CatalogStats{}, err
+	}
+	return CatalogStats{
+		Artists:   len(artists),
+		Albums:    len(albums),
+		Tracks:    len(tracks),
+		Playlists: len(playlists),
+	}, nil
+}
+
 func newID() (string, error) {
 	var b [8]byte
 	if _, err := rand.Read(b[:]); err != nil {

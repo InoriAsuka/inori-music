@@ -2391,3 +2391,77 @@ func TestGetPlaylistTracksMethodNotAllowed(t *testing.T) {
 		t.Fatalf("expected 405, got %d", resp.Code)
 	}
 }
+
+// ---- catalog stats tests ----
+
+func TestGetCatalogStatsEmpty(t *testing.T) {
+	h := newCatalogTestHandler()
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/stats", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	for _, key := range []string{"artists", "albums", "tracks", "playlists"} {
+		if got[key] == nil {
+			t.Errorf("response missing key %q", key)
+		}
+	}
+}
+
+func TestGetCatalogStatsPopulatedCounts(t *testing.T) {
+	h := newCatalogTestHandler()
+
+	// seed: 2 artists, 1 album, 2 tracks, 1 playlist
+	aResp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"A1"}`)
+	var a1 map[string]any
+	decodeResponse(t, aResp, &a1)
+	a1ID := a1["id"].(string)
+
+	performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"A2"}`)
+	performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/albums",
+		fmt.Sprintf(`{"title":"Album1","artistId":%q}`, a1ID))
+	performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"T1","artistId":%q,"mediaObjectId":"mo-st1"}`, a1ID))
+	performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"T2","artistId":%q,"mediaObjectId":"mo-st2"}`, a1ID))
+	performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/playlists", `{"name":"PL1"}`)
+
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/stats", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	assertEqual := func(key string, want float64) {
+		t.Helper()
+		v, ok := got[key].(float64)
+		if !ok || v != want {
+			t.Errorf("%s = %v, want %v", key, got[key], want)
+		}
+	}
+	assertEqual("artists", 2)
+	assertEqual("albums", 1)
+	assertEqual("tracks", 2)
+	assertEqual("playlists", 1)
+}
+
+func TestGetCatalogStatsNoCatalogService(t *testing.T) {
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAdminToken(testAdminToken),
+		WithServiceInfo(ServiceInfo{Name: "inori-api", Version: "test"}),
+	).Routes()
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/stats", "")
+	if resp.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", resp.Code)
+	}
+}
+
+func TestGetCatalogStatsMethodNotAllowed(t *testing.T) {
+	h := newCatalogTestHandler()
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/stats", `{}`)
+	if resp.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", resp.Code)
+	}
+}

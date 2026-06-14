@@ -215,3 +215,11 @@ type UpdatePlaylistRequest struct {
 	Name        *string
 	Description *string
 }
+
+// CatalogStats holds metadata-only aggregate counts for admin dashboards.
+type CatalogStats struct {
+	Artists   int `json:"artists"`
+	Albums    int `json:"albums"`
+	Tracks    int `json:"tracks"`
+	Playlists int `json:"playlists"`
+}

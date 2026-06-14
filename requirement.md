@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.49.0`
+`0.50.0`
 
 ## Product Goal
 
@@ -386,4 +386,16 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add 4 `catalog.Service` unit tests (ordered, empty, not-found, duplicate expansion) and 6 HTTP-layer tests (admin happy path, empty playlist, 404, viewer access, no-catalog-service 503, method-not-allowed 405).
 - Add `PlaylistTracksResult` schema and `get` operations on both tracks sub-paths to the OpenAPI contract; bump `info.version` to `0.49.0`.
 - Extend `TestStorageAdminOpenAPIContractCoversRoutes` to assert all eight playlist paths.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+
+### v0.50.0 - 2026-06-14
+
+- Add `GET /api/v1/admin/catalog/stats` endpoint returning metadata-only aggregate entity counts for artists, albums, tracks, and playlists as a `CatalogStats` object.
+- Add `CatalogStats` struct to the catalog package with `artists`, `albums`, `tracks`, `playlists` integer fields.
+- Add `GetCatalogStats(ctx)` to `catalog.Service`; delegates to `repo.ListArtists`, `repo.ListAlbums`, `repo.ListTracks`, `repo.ListPlaylists` and returns counts. No new `Repository` interface methods required.
+- Add `getCatalogStats` handler to the HTTP handler layer; returns 503 when no catalog service is configured.
+- Register `GET /api/v1/admin/catalog/stats` (admin-auth) and 405 fallback for the path.
+- Add 3 `catalog.Service` unit tests (empty catalog, populated counts, no-error baseline) and 4 HTTP-layer tests (empty response shape, populated counts, no-catalog-service 503, method-not-allowed 405).
+- Add `CatalogStats` schema and `get` operation on `/api/v1/admin/catalog/stats` to the OpenAPI contract; bump `info.version` to `0.50.0`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
