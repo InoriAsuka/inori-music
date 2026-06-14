@@ -149,7 +149,6 @@ type RelinkTrackRequest struct {
 	MediaObjectID string
 }
 
-
 // UpdateArtistRequest carries the fields that may be changed via a PATCH request.
 // Nil pointer fields are left unchanged; a pointer to an empty string clears the field.
 type UpdateArtistRequest struct {
@@ -260,4 +259,30 @@ type PlaylistStatItem struct {
 // PlaylistStatsBreakdown holds the per-playlist breakdown returned by the stats/playlists endpoint.
 type PlaylistStatsBreakdown struct {
 	Playlists []PlaylistStatItem `json:"playlists"`
+}
+
+// RecentItemKind identifies which entity type a recently-added item belongs to.
+type RecentItemKind string
+
+const (
+	RecentItemArtist RecentItemKind = "artist"
+	RecentItemAlbum  RecentItemKind = "album"
+	RecentItemTrack  RecentItemKind = "track"
+)
+
+// RecentCatalogItem is a single entity entry in the recently-added timeline.
+// Exactly one of Artist, Album, or Track is non-nil depending on Kind.
+type RecentCatalogItem struct {
+	Kind   RecentItemKind `json:"kind"`
+	Artist *Artist        `json:"artist,omitempty"`
+	Album  *Album         `json:"album,omitempty"`
+	Track  *Track         `json:"track,omitempty"`
+	// AddedAt mirrors the entity's CreatedAt and is surfaced here for
+	// consumers that sort the unified timeline without inspecting sub-fields.
+	AddedAt time.Time `json:"addedAt"`
+}
+
+// RecentCatalogResult holds the ordered (newest-first) list of recently-added catalog items.
+type RecentCatalogResult struct {
+	Items []RecentCatalogItem `json:"items"`
 }

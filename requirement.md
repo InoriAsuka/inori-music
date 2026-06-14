@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.51.0`
+`0.53.0`
 
 ## Product Goal
 
@@ -424,4 +424,17 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add 2 `catalog.Service` unit tests (empty, populated with duplicate-track counting) and 4 HTTP-layer tests (empty shape, populated counts, no-catalog-service 503, method-not-allowed 405).
 - Add `CatalogPlaylistStatItem`, `CatalogPlaylistStatsBreakdown` schemas and `get` operation on `/api/v1/admin/catalog/stats/playlists` to the OpenAPI contract; bump `info.version` to `0.52.0`.
 - Extend `TestStorageAdminOpenAPIContractCoversRoutes` to assert the new playlists stats path.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+
+### v0.53.0 - 2026-06-15
+
+- Add `GET /api/v1/admin/catalog/recently-added` endpoint returning a newest-first unified timeline of recently created artists, albums, and tracks.
+- Add `RecentItemKind`, `RecentCatalogItem`, and `RecentCatalogResult` types to the catalog package. Each timeline item includes `kind`, one entity payload, and `addedAt` copied from the entity's `CreatedAt` timestamp.
+- Add `GetRecentlyAdded(ctx, kind, limit)` to `catalog.Service`; it derives results from existing `ListArtists`, `ListAlbums`, and `ListTracks` repository methods, supports `kind=artist|album|track`, defaults `limit` to 20, and clamps values above 100. No new `Repository` interface methods required.
+- Add `getRecentlyAdded` handler to the HTTP handler layer; returns 400 for invalid `limit` or `kind`, 503 when no catalog service is configured, and registers a 405 fallback for the path.
+- Register `GET /api/v1/admin/catalog/recently-added` (admin-auth).
+- Add 5 `catalog.Service` unit tests and 8 HTTP-layer tests covering empty response shape, populated timeline payload, kind filter, invalid kind, invalid limit, limit handling, no-catalog-service 503, and method-not-allowed 405.
+- Add `RecentItemKind`, `RecentCatalogItem`, and `RecentCatalogResult` schemas plus the `get` operation on `/api/v1/admin/catalog/recently-added` to the OpenAPI contract; bump `info.version` to `0.53.0`.
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes` to assert the recently-added path.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

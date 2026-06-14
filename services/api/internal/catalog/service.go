@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 )
@@ -716,6 +717,84 @@ func (s *Service) GetPlaylistStatsBreakdown(ctx context.Context) (PlaylistStatsB
 		})
 	}
 	return PlaylistStatsBreakdown{Playlists: items}, nil
+}
+
+// GetRecentlyAdded returns the most recently created catalog items across artists, albums,
+// and tracks in a unified newest-first timeline. limit caps the result set (1–100; default 20).
+// kind filters to a single entity type ("artist", "album", or "track"); an empty string
+// returns all kinds.
+func (s *Service) GetRecentlyAdded(ctx context.Context, kind string, limit int) (RecentCatalogResult, error) {
+	const defaultLimit = 20
+	const maxLimit = 100
+	kind = strings.TrimSpace(kind)
+	switch kind {
+	case "", string(RecentItemArtist), string(RecentItemAlbum), string(RecentItemTrack):
+	default:
+		return RecentCatalogResult{}, fmt.Errorf("%w: kind must be artist, album, or track", ErrInvalidTrack)
+	}
+	if limit <= 0 {
+		limit = defaultLimit
+	}
+	if limit > maxLimit {
+		limit = maxLimit
+	}
+
+	items := make([]RecentCatalogItem, 0)
+
+	if kind == "" || kind == string(RecentItemArtist) {
+		artists, err := s.repo.ListArtists(ctx)
+		if err != nil {
+			return RecentCatalogResult{}, err
+		}
+		for i := range artists {
+			a := artists[i]
+			items = append(items, RecentCatalogItem{
+				Kind:    RecentItemArtist,
+				Artist:  &a,
+				AddedAt: a.CreatedAt,
+			})
+		}
+	}
+
+	if kind == "" || kind == string(RecentItemAlbum) {
+		albums, err := s.repo.ListAlbums(ctx)
+		if err != nil {
+			return RecentCatalogResult{}, err
+		}
+		for i := range albums {
+			al := albums[i]
+			items = append(items, RecentCatalogItem{
+				Kind:    RecentItemAlbum,
+				Album:   &al,
+				AddedAt: al.CreatedAt,
+			})
+		}
+	}
+
+	if kind == "" || kind == string(RecentItemTrack) {
+		tracks, err := s.repo.ListTracks(ctx)
+		if err != nil {
+			return RecentCatalogResult{}, err
+		}
+		for i := range tracks {
+			t := tracks[i]
+			items = append(items, RecentCatalogItem{
+				Kind:    RecentItemTrack,
+				Track:   &t,
+				AddedAt: t.CreatedAt,
+			})
+		}
+	}
+
+	sort.SliceStable(items, func(i, j int) bool {
+		return items[i].AddedAt.After(items[j].AddedAt)
+	})
+
+	if limit < len(items) {
+		items = items[:limit]
+	}
+
+	return RecentCatalogResult{Items: items}, nil
 }
 
 func newID() (string, error) {

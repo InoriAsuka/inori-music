@@ -1480,3 +1480,107 @@ func TestGetPlaylistStatsBreakdownPopulated(t *testing.T) {
 		t.Errorf("playlist2 trackCount=%d, want 0", got.TrackCount)
 	}
 }
+
+// ---- GetRecentlyAdded tests ----
+
+func TestGetRecentlyAddedEmpty(t *testing.T) {
+	svc := catalog.NewService(newMemRepo())
+	result, err := svc.GetRecentlyAdded(context.Background(), "", 0)
+	if err != nil {
+		t.Fatalf("GetRecentlyAdded: %v", err)
+	}
+	if result.Items == nil {
+		t.Fatal("expected non-nil Items slice")
+	}
+	if len(result.Items) != 0 {
+		t.Fatalf("expected 0 items, got %d", len(result.Items))
+	}
+}
+
+func TestGetRecentlyAddedNewestFirst(t *testing.T) {
+	repo := newMemRepo()
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	svc := catalog.NewService(repo)
+	svc.WithClock(func() time.Time { return base })
+	ctx := context.Background()
+
+	_, _ = svc.CreateArtist(ctx, "Artist A", "")
+
+	svc.WithClock(func() time.Time { return base.Add(time.Hour) })
+	_, _ = svc.CreateArtist(ctx, "Artist B", "")
+
+	result, err := svc.GetRecentlyAdded(ctx, "", 0)
+	if err != nil {
+		t.Fatalf("GetRecentlyAdded: %v", err)
+	}
+	if len(result.Items) != 2 {
+		t.Fatalf("expected 2 items, got %d", len(result.Items))
+	}
+	if result.Items[0].Artist == nil || result.Items[0].Artist.Name != "Artist B" {
+		t.Errorf("expected newest item first, got %+v", result.Items[0])
+	}
+}
+
+func TestGetRecentlyAddedKindFilter(t *testing.T) {
+	repo := newMemRepo()
+	svc := catalog.NewService(repo)
+	ctx := context.Background()
+
+	artist, _ := svc.CreateArtist(ctx, "Solo Artist", "")
+	_, _ = svc.CreateTrack(ctx, "Track 1", "", artist.ID, "", "mo-001", 1, 0, 180000)
+
+	result, err := svc.GetRecentlyAdded(ctx, "artist", 0)
+	if err != nil {
+		t.Fatalf("GetRecentlyAdded artist: %v", err)
+	}
+	for _, item := range result.Items {
+		if item.Kind != catalog.RecentItemArtist {
+			t.Errorf("expected only artist items, got %s", item.Kind)
+		}
+	}
+
+	result, err = svc.GetRecentlyAdded(ctx, "track", 0)
+	if err != nil {
+		t.Fatalf("GetRecentlyAdded track: %v", err)
+	}
+	for _, item := range result.Items {
+		if item.Kind != catalog.RecentItemTrack {
+			t.Errorf("expected only track items, got %s", item.Kind)
+		}
+	}
+}
+
+func TestGetRecentlyAddedRejectsInvalidKind(t *testing.T) {
+	svc := catalog.NewService(newMemRepo())
+	_, err := svc.GetRecentlyAdded(context.Background(), "playlist", 0)
+	if !errors.Is(err, catalog.ErrInvalidTrack) {
+		t.Fatalf("expected ErrInvalidTrack for invalid kind, got %v", err)
+	}
+}
+
+func TestGetRecentlyAddedLimitCaps(t *testing.T) {
+	repo := newMemRepo()
+	svc := catalog.NewService(repo)
+	ctx := context.Background()
+
+	for i := 0; i < 25; i++ {
+		svc.CreateArtist(ctx, "Artist", "")
+	}
+
+	result, err := svc.GetRecentlyAdded(ctx, "", 5)
+	if err != nil {
+		t.Fatalf("GetRecentlyAdded: %v", err)
+	}
+	if len(result.Items) != 5 {
+		t.Errorf("expected 5 items (limit=5), got %d", len(result.Items))
+	}
+
+	// limit > max (100) should be clamped
+	result, err = svc.GetRecentlyAdded(ctx, "", 999)
+	if err != nil {
+		t.Fatalf("GetRecentlyAdded limit=999: %v", err)
+	}
+	if len(result.Items) != 25 {
+		t.Errorf("expected all 25 items when limit>count, got %d", len(result.Items))
+	}
+}

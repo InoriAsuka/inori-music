@@ -310,6 +310,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/catalog/stats/artists", handler.requireAdminAuth(handler.getArtistStatsBreakdown))
 	mux.HandleFunc("GET /api/v1/admin/catalog/stats/albums", handler.requireAdminAuth(handler.getAlbumStatsBreakdown))
 	mux.HandleFunc("GET /api/v1/admin/catalog/stats/playlists", handler.requireAdminAuth(handler.getPlaylistStatsBreakdown))
+	mux.HandleFunc("GET /api/v1/admin/catalog/recently-added", handler.requireAdminAuth(handler.getRecentlyAdded))
 	mux.HandleFunc("GET /api/v1/admin/catalog/playlists", handler.requireAdminAuth(handler.listPlaylists))
 	mux.HandleFunc("POST /api/v1/admin/catalog/playlists", handler.requireAdminAuth(handler.createPlaylist))
 	mux.HandleFunc("GET /api/v1/admin/catalog/playlists/{id}", handler.requireAdminAuth(handler.getPlaylist))
@@ -364,6 +365,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("/api/v1/admin/catalog/stats/artists", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/catalog/stats/albums", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/catalog/stats/playlists", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/catalog/recently-added", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/catalog/playlists", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/catalog/playlists/{id}", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/catalog/playlists/{id}/tracks", handler.requireAdminAuth(handler.methodNotAllowed))
@@ -1282,6 +1284,29 @@ func (handler *Handler) getPlaylistStatsBreakdown(w http.ResponseWriter, r *http
 		return
 	}
 	writeJSON(w, http.StatusOK, breakdown)
+}
+
+func (handler *Handler) getRecentlyAdded(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireCatalogService(w) {
+		return
+	}
+	q := r.URL.Query()
+	kind := q.Get("kind")
+	limit := 0
+	if raw := q.Get("limit"); raw != "" {
+		v, err := strconv.Atoi(raw)
+		if err != nil || v < 1 {
+			writeAPIError(w, http.StatusBadRequest, "invalid_limit", "limit must be a positive integer")
+			return
+		}
+		limit = v
+	}
+	result, err := handler.catalogService.GetRecentlyAdded(r.Context(), kind, limit)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 // requireViewerAuth allows any session-authenticated user (admin or viewer role).

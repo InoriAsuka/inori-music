@@ -2717,3 +2717,135 @@ func TestGetPlaylistStatsBreakdownMethodNotAllowed(t *testing.T) {
 		t.Fatalf("expected 405, got %d", resp.Code)
 	}
 }
+
+// ---- recently-added handler tests ----
+
+func TestGetRecentlyAddedEmpty(t *testing.T) {
+	h := newCatalogTestHandler()
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/recently-added", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	items, ok := got["items"].([]any)
+	if !ok || len(items) != 0 {
+		t.Errorf("expected empty items array, got %v", got["items"])
+	}
+}
+
+func TestGetRecentlyAddedPopulated(t *testing.T) {
+	h := newCatalogTestHandler()
+
+	// create an artist, then a track under it
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Inori Yuzuriha"}`)
+	if resp.Code != http.StatusCreated {
+		t.Fatalf("create artist: %d", resp.Code)
+	}
+	var artistResp map[string]any
+	decodeResponse(t, resp, &artistResp)
+	artistID := artistResp["id"].(string)
+
+	trackBody := fmt.Sprintf(`{"title":"Departures","artistId":%q,"mediaObjectId":"mo-001","durationMs":200000}`, artistID)
+	resp = performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks", trackBody)
+	if resp.Code != http.StatusCreated {
+		t.Fatalf("create track: %d", resp.Code)
+	}
+
+	resp = performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/recently-added", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("recently-added status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	items := got["items"].([]any)
+	if len(items) == 0 {
+		t.Fatal("expected at least 1 item")
+	}
+	for _, raw := range items {
+		m := raw.(map[string]any)
+		if m["kind"] == nil || m["addedAt"] == nil {
+			t.Errorf("item missing kind or addedAt: %v", m)
+		}
+	}
+}
+
+func TestGetRecentlyAddedKindQueryParam(t *testing.T) {
+	h := newCatalogTestHandler()
+
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Miku"}`)
+	if resp.Code != http.StatusCreated {
+		t.Fatalf("create artist: %d", resp.Code)
+	}
+
+	// artist-only filter
+	resp = performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/recently-added?kind=artist", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("recently-added?kind=artist status = %d", resp.Code)
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	items := got["items"].([]any)
+	for _, raw := range items {
+		m := raw.(map[string]any)
+		if m["kind"].(string) != "artist" {
+			t.Errorf("expected kind=artist, got %s", m["kind"])
+		}
+	}
+}
+
+func TestGetRecentlyAddedLimitParam(t *testing.T) {
+	h := newCatalogTestHandler()
+
+	for i := 0; i < 5; i++ {
+		performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/artists",
+			fmt.Sprintf(`{"name":"Artist %d"}`, i))
+	}
+
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/recently-added?limit=2", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d", resp.Code)
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	items := got["items"].([]any)
+	if len(items) != 2 {
+		t.Errorf("expected 2 items (limit=2), got %d", len(items))
+	}
+}
+
+func TestGetRecentlyAddedInvalidKind(t *testing.T) {
+	h := newCatalogTestHandler()
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/recently-added?kind=playlist", "")
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid kind, got %d", resp.Code)
+	}
+}
+
+func TestGetRecentlyAddedInvalidLimit(t *testing.T) {
+	h := newCatalogTestHandler()
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/recently-added?limit=abc", "")
+	if resp.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 for invalid limit, got %d", resp.Code)
+	}
+}
+
+func TestGetRecentlyAddedNoCatalogService(t *testing.T) {
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAdminToken(testAdminToken),
+		WithServiceInfo(ServiceInfo{Name: "inori-api", Version: "test"}),
+	).Routes()
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/recently-added", "")
+	if resp.Code != http.StatusServiceUnavailable {
+		t.Fatalf("expected 503, got %d", resp.Code)
+	}
+}
+
+func TestGetRecentlyAddedMethodNotAllowed(t *testing.T) {
+	h := newCatalogTestHandler()
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/recently-added", `{}`)
+	if resp.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", resp.Code)
+	}
+}
