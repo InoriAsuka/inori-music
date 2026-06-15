@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.54.0`
+`0.55.0`
 
 ## Product Goal
 
@@ -449,4 +449,14 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add `catalog.Service` unit tests and HTTP-layer tests covering empty response shape, updated timestamp ordering, kind filter, invalid kind, invalid limit, limit handling, no-catalog-service 503, and method-not-allowed 405.
 - Add `UpdatedCatalogItem` and `UpdatedCatalogResult` schemas plus the `get` operation on `/api/v1/admin/catalog/recently-updated` to the OpenAPI contract; bump `info.version` to `0.54.0`.
 - Extend `TestStorageAdminOpenAPIContractCoversRoutes` to assert the recently-updated path.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.55.0 - 2026-06-15
+
+- Extend `GET /api/v1/admin/catalog/recently-added` and `GET /api/v1/admin/catalog/recently-updated` so unified admin timelines include playlist entries alongside artists, albums, and tracks.
+- Add `playlist` payload support to `RecentCatalogItem` and `UpdatedCatalogItem`; playlist timeline timestamps mirror `Playlist.CreatedAt` and `Playlist.UpdatedAt` respectively.
+- Extend `RecentItemKind` and recent timeline validation to support `kind=playlist`; invalid values still return 400 through the existing `ErrInvalidTrack` path.
+- Update `GetRecentlyAdded(ctx, kind, limit)` and `GetRecentlyUpdated(ctx, kind, limit)` to derive playlist entries from existing `ListPlaylists` without adding `Repository` methods, preserving default limit 20, max clamp 100, non-nil empty arrays, and newest-first cross-kind ordering.
+- Add `catalog.Service` unit tests and HTTP-layer tests covering playlist inclusion, playlist-only filters, invalid kind preservation, and limit behavior with playlist results.
+- Update OpenAPI `RecentItemKind`, `RecentCatalogItem`, and `UpdatedCatalogItem` schemas for playlist entries; bump `info.version` to `0.55.0`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

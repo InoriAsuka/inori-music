@@ -2777,6 +2777,10 @@ func TestGetRecentlyAddedKindQueryParam(t *testing.T) {
 	if resp.Code != http.StatusCreated {
 		t.Fatalf("create artist: %d", resp.Code)
 	}
+	resp = performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/playlists", `{"name":"Miku Playlist"}`)
+	if resp.Code != http.StatusCreated {
+		t.Fatalf("create playlist: %d %s", resp.Code, resp.Body.String())
+	}
 
 	// artist-only filter
 	resp = performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/recently-added?kind=artist", "")
@@ -2790,6 +2794,25 @@ func TestGetRecentlyAddedKindQueryParam(t *testing.T) {
 		m := raw.(map[string]any)
 		if m["kind"].(string) != "artist" {
 			t.Errorf("expected kind=artist, got %s", m["kind"])
+		}
+	}
+
+	resp = performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/recently-added?kind=playlist", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("recently-added?kind=playlist status = %d body = %s", resp.Code, resp.Body.String())
+	}
+	decodeResponse(t, resp, &got)
+	items = got["items"].([]any)
+	if len(items) == 0 {
+		t.Fatal("expected playlist items")
+	}
+	for _, raw := range items {
+		m := raw.(map[string]any)
+		if m["kind"].(string) != "playlist" {
+			t.Errorf("expected kind=playlist, got %s", m["kind"])
+		}
+		if m["playlist"] == nil {
+			t.Fatalf("expected playlist payload, got %v", m)
 		}
 	}
 }
@@ -2816,7 +2839,7 @@ func TestGetRecentlyAddedLimitParam(t *testing.T) {
 
 func TestGetRecentlyAddedInvalidKind(t *testing.T) {
 	h := newCatalogTestHandler()
-	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/recently-added?kind=playlist", "")
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/recently-added?kind=collection", "")
 	if resp.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for invalid kind, got %d", resp.Code)
 	}
@@ -2917,6 +2940,10 @@ func TestGetRecentlyUpdatedKindQueryParam(t *testing.T) {
 	if resp.Code != http.StatusCreated {
 		t.Fatalf("create artist: %d", resp.Code)
 	}
+	resp = performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/playlists", `{"name":"Miku Playlist"}`)
+	if resp.Code != http.StatusCreated {
+		t.Fatalf("create playlist: %d %s", resp.Code, resp.Body.String())
+	}
 
 	resp = performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/recently-updated?kind=artist", "")
 	if resp.Code != http.StatusOK {
@@ -2929,6 +2956,25 @@ func TestGetRecentlyUpdatedKindQueryParam(t *testing.T) {
 		m := raw.(map[string]any)
 		if m["kind"].(string) != "artist" {
 			t.Errorf("expected kind=artist, got %s", m["kind"])
+		}
+	}
+
+	resp = performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/recently-updated?kind=playlist", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("recently-updated?kind=playlist status = %d body = %s", resp.Code, resp.Body.String())
+	}
+	decodeResponse(t, resp, &got)
+	items = got["items"].([]any)
+	if len(items) == 0 {
+		t.Fatal("expected playlist items")
+	}
+	for _, raw := range items {
+		m := raw.(map[string]any)
+		if m["kind"].(string) != "playlist" {
+			t.Errorf("expected kind=playlist, got %s", m["kind"])
+		}
+		if m["playlist"] == nil {
+			t.Fatalf("expected playlist payload, got %v", m)
 		}
 	}
 }
@@ -2955,7 +3001,7 @@ func TestGetRecentlyUpdatedLimitParam(t *testing.T) {
 
 func TestGetRecentlyUpdatedInvalidKind(t *testing.T) {
 	h := newCatalogTestHandler()
-	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/recently-updated?kind=playlist", "")
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/recently-updated?kind=collection", "")
 	if resp.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for invalid kind, got %d", resp.Code)
 	}

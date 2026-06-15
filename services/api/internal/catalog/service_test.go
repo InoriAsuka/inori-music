@@ -1509,15 +1509,21 @@ func TestGetRecentlyAddedNewestFirst(t *testing.T) {
 	svc.WithClock(func() time.Time { return base.Add(time.Hour) })
 	_, _ = svc.CreateArtist(ctx, "Artist B", "")
 
+	svc.WithClock(func() time.Time { return base.Add(2 * time.Hour) })
+	_, _ = svc.CreatePlaylist(ctx, "Playlist A", "")
+
 	result, err := svc.GetRecentlyAdded(ctx, "", 0)
 	if err != nil {
 		t.Fatalf("GetRecentlyAdded: %v", err)
 	}
-	if len(result.Items) != 2 {
-		t.Fatalf("expected 2 items, got %d", len(result.Items))
+	if len(result.Items) != 3 {
+		t.Fatalf("expected 3 items, got %d", len(result.Items))
 	}
-	if result.Items[0].Artist == nil || result.Items[0].Artist.Name != "Artist B" {
-		t.Errorf("expected newest item first, got %+v", result.Items[0])
+	if result.Items[0].Playlist == nil || result.Items[0].Playlist.Name != "Playlist A" {
+		t.Errorf("expected newest playlist item first, got %+v", result.Items[0])
+	}
+	if result.Items[0].AddedAt != result.Items[0].Playlist.CreatedAt {
+		t.Errorf("AddedAt = %s, want playlist CreatedAt %s", result.Items[0].AddedAt, result.Items[0].Playlist.CreatedAt)
 	}
 }
 
@@ -1528,6 +1534,7 @@ func TestGetRecentlyAddedKindFilter(t *testing.T) {
 
 	artist, _ := svc.CreateArtist(ctx, "Solo Artist", "")
 	_, _ = svc.CreateTrack(ctx, "Track 1", "", artist.ID, "", "mo-001", 1, 0, 180000)
+	_, _ = svc.CreatePlaylist(ctx, "Playlist 1", "")
 
 	result, err := svc.GetRecentlyAdded(ctx, "artist", 0)
 	if err != nil {
@@ -1548,11 +1555,24 @@ func TestGetRecentlyAddedKindFilter(t *testing.T) {
 			t.Errorf("expected only track items, got %s", item.Kind)
 		}
 	}
+
+	result, err = svc.GetRecentlyAdded(ctx, "playlist", 0)
+	if err != nil {
+		t.Fatalf("GetRecentlyAdded playlist: %v", err)
+	}
+	for _, item := range result.Items {
+		if item.Kind != catalog.RecentItemPlaylist {
+			t.Errorf("expected only playlist items, got %s", item.Kind)
+		}
+		if item.Playlist == nil {
+			t.Fatalf("expected playlist payload, got %+v", item)
+		}
+	}
 }
 
 func TestGetRecentlyAddedRejectsInvalidKind(t *testing.T) {
 	svc := catalog.NewService(newMemRepo())
-	_, err := svc.GetRecentlyAdded(context.Background(), "playlist", 0)
+	_, err := svc.GetRecentlyAdded(context.Background(), "collection", 0)
 	if !errors.Is(err, catalog.ErrInvalidTrack) {
 		t.Fatalf("expected ErrInvalidTrack for invalid kind, got %v", err)
 	}
@@ -1560,11 +1580,18 @@ func TestGetRecentlyAddedRejectsInvalidKind(t *testing.T) {
 
 func TestGetRecentlyAddedLimitCaps(t *testing.T) {
 	repo := newMemRepo()
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	svc := catalog.NewService(repo)
 	ctx := context.Background()
 
 	for i := 0; i < 25; i++ {
-		svc.CreateArtist(ctx, "Artist", "")
+		ts := base.Add(time.Duration(i) * time.Minute)
+		svc.WithClock(func() time.Time { return ts })
+		if i%2 == 0 {
+			_, _ = svc.CreateArtist(ctx, fmt.Sprintf("Artist %d", i), "")
+			continue
+		}
+		_, _ = svc.CreatePlaylist(ctx, fmt.Sprintf("Playlist %d", i), "")
 	}
 
 	result, err := svc.GetRecentlyAdded(ctx, "", 5)
@@ -1574,8 +1601,12 @@ func TestGetRecentlyAddedLimitCaps(t *testing.T) {
 	if len(result.Items) != 5 {
 		t.Errorf("expected 5 items (limit=5), got %d", len(result.Items))
 	}
+	for _, item := range result.Items {
+		if item.Kind != catalog.RecentItemArtist && item.Kind != catalog.RecentItemPlaylist {
+			t.Fatalf("expected artist or playlist item in mixed limited results, got %s", item.Kind)
+		}
+	}
 
-	// limit > max (100) should be clamped
 	result, err = svc.GetRecentlyAdded(ctx, "", 999)
 	if err != nil {
 		t.Fatalf("GetRecentlyAdded limit=999: %v", err)
@@ -1614,20 +1645,32 @@ func TestGetRecentlyUpdatedNewestFirst(t *testing.T) {
 	_, _ = svc.CreateArtist(ctx, "Artist B", "")
 
 	svc.WithClock(func() time.Time { return base.Add(2 * time.Hour) })
+	playlist, _ := svc.CreatePlaylist(ctx, "Playlist A", "")
+
+	svc.WithClock(func() time.Time { return base.Add(3 * time.Hour) })
 	_, err := svc.UpdateArtist(ctx, artistA.ID, catalog.UpdateArtistRequest{SortName: strPtr("A")})
 	if err != nil {
 		t.Fatalf("UpdateArtist: %v", err)
+	}
+
+	svc.WithClock(func() time.Time { return base.Add(4 * time.Hour) })
+	_, err = svc.UpdatePlaylist(ctx, playlist.ID, catalog.UpdatePlaylistRequest{Description: strPtr("updated")})
+	if err != nil {
+		t.Fatalf("UpdatePlaylist: %v", err)
 	}
 
 	result, err := svc.GetRecentlyUpdated(ctx, "", 0)
 	if err != nil {
 		t.Fatalf("GetRecentlyUpdated: %v", err)
 	}
-	if len(result.Items) != 2 {
-		t.Fatalf("expected 2 items, got %d", len(result.Items))
+	if len(result.Items) != 3 {
+		t.Fatalf("expected 3 items, got %d", len(result.Items))
 	}
-	if result.Items[0].Artist == nil || result.Items[0].Artist.Name != "Artist A" {
-		t.Errorf("expected most recently updated item first, got %+v", result.Items[0])
+	if result.Items[0].Playlist == nil || result.Items[0].Playlist.Name != "Playlist A" {
+		t.Errorf("expected most recently updated playlist first, got %+v", result.Items[0])
+	}
+	if result.Items[0].UpdatedAt != result.Items[0].Playlist.UpdatedAt {
+		t.Errorf("UpdatedAt = %s, want playlist UpdatedAt %s", result.Items[0].UpdatedAt, result.Items[0].Playlist.UpdatedAt)
 	}
 	if !result.Items[0].UpdatedAt.After(result.Items[1].UpdatedAt) {
 		t.Errorf("expected UpdatedAt descending order, got %s then %s", result.Items[0].UpdatedAt, result.Items[1].UpdatedAt)
@@ -1641,6 +1684,7 @@ func TestGetRecentlyUpdatedKindFilter(t *testing.T) {
 
 	artist, _ := svc.CreateArtist(ctx, "Solo Artist", "")
 	_, _ = svc.CreateTrack(ctx, "Track 1", "", artist.ID, "", "mo-001", 1, 0, 180000)
+	_, _ = svc.CreatePlaylist(ctx, "Playlist 1", "")
 
 	result, err := svc.GetRecentlyUpdated(ctx, "artist", 0)
 	if err != nil {
@@ -1661,11 +1705,24 @@ func TestGetRecentlyUpdatedKindFilter(t *testing.T) {
 			t.Errorf("expected only track items, got %s", item.Kind)
 		}
 	}
+
+	result, err = svc.GetRecentlyUpdated(ctx, "playlist", 0)
+	if err != nil {
+		t.Fatalf("GetRecentlyUpdated playlist: %v", err)
+	}
+	for _, item := range result.Items {
+		if item.Kind != catalog.RecentItemPlaylist {
+			t.Errorf("expected only playlist items, got %s", item.Kind)
+		}
+		if item.Playlist == nil {
+			t.Fatalf("expected playlist payload, got %+v", item)
+		}
+	}
 }
 
 func TestGetRecentlyUpdatedRejectsInvalidKind(t *testing.T) {
 	svc := catalog.NewService(newMemRepo())
-	_, err := svc.GetRecentlyUpdated(context.Background(), "playlist", 0)
+	_, err := svc.GetRecentlyUpdated(context.Background(), "collection", 0)
 	if !errors.Is(err, catalog.ErrInvalidTrack) {
 		t.Fatalf("expected ErrInvalidTrack for invalid kind, got %v", err)
 	}
@@ -1673,11 +1730,18 @@ func TestGetRecentlyUpdatedRejectsInvalidKind(t *testing.T) {
 
 func TestGetRecentlyUpdatedLimitCaps(t *testing.T) {
 	repo := newMemRepo()
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
 	svc := catalog.NewService(repo)
 	ctx := context.Background()
 
 	for i := 0; i < 25; i++ {
-		svc.CreateArtist(ctx, "Artist", "")
+		ts := base.Add(time.Duration(i) * time.Minute)
+		svc.WithClock(func() time.Time { return ts })
+		if i%2 == 0 {
+			_, _ = svc.CreateArtist(ctx, fmt.Sprintf("Artist %d", i), "")
+			continue
+		}
+		_, _ = svc.CreatePlaylist(ctx, fmt.Sprintf("Playlist %d", i), "")
 	}
 
 	result, err := svc.GetRecentlyUpdated(ctx, "", 5)
@@ -1686,6 +1750,11 @@ func TestGetRecentlyUpdatedLimitCaps(t *testing.T) {
 	}
 	if len(result.Items) != 5 {
 		t.Errorf("expected 5 items (limit=5), got %d", len(result.Items))
+	}
+	for _, item := range result.Items {
+		if item.Kind != catalog.RecentItemArtist && item.Kind != catalog.RecentItemPlaylist {
+			t.Fatalf("expected artist or playlist item in mixed limited results, got %s", item.Kind)
+		}
 	}
 
 	result, err = svc.GetRecentlyUpdated(ctx, "", 999)
