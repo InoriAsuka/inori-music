@@ -1951,7 +1951,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "0.55.0"
+    "version": "0.56.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -5137,6 +5137,138 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/catalog/recently-added": {
+      "get": {
+        "summary": "List recently added catalog items",
+        "description": "Returns a newest-first unified timeline of recently created artists, albums, tracks, and playlists. Use kind to filter to one entity type and limit to cap the response size (default 20, max 100).",
+        "operationId": "listRecentlyAddedCatalogItems",
+        "tags": [
+          "Catalog"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "description": "Optional entity kind filter.",
+            "schema": {
+              "$ref": "#/components/schemas/RecentItemKind"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of items to return. Defaults to 20; values above 100 are clamped.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recently-added catalog timeline.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecentCatalogResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameter.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/catalog/recently-updated": {
+      "get": {
+        "summary": "List recently updated catalog items",
+        "description": "Returns a newest-first unified timeline of recently updated artists, albums, tracks, and playlists. Use kind to filter to one entity type and limit to cap the response size (default 20, max 100).",
+        "operationId": "listRecentlyUpdatedCatalogItems",
+        "tags": [
+          "Catalog"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "required": false,
+            "description": "Optional entity kind filter.",
+            "schema": {
+              "$ref": "#/components/schemas/RecentItemKind"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of items to return. Defaults to 20; values above 100 are clamped.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Recently-updated catalog timeline.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdatedCatalogResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query parameter.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
           }
         }
       }

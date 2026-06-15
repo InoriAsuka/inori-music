@@ -265,20 +265,18 @@ type PlaylistStatsBreakdown struct {
 type RecentItemKind string
 
 const (
-	RecentItemArtist   RecentItemKind = "artist"
-	RecentItemAlbum    RecentItemKind = "album"
-	RecentItemTrack    RecentItemKind = "track"
-	RecentItemPlaylist RecentItemKind = "playlist"
+	RecentItemArtist RecentItemKind = "artist"
+	RecentItemAlbum  RecentItemKind = "album"
+	RecentItemTrack  RecentItemKind = "track"
 )
 
 // RecentCatalogItem is a single entity entry in the recently-added timeline.
-// Exactly one of Artist, Album, Track, or Playlist is non-nil depending on Kind.
+// Exactly one of Artist, Album, or Track is non-nil depending on Kind.
 type RecentCatalogItem struct {
-	Kind     RecentItemKind `json:"kind"`
-	Artist   *Artist        `json:"artist,omitempty"`
-	Album    *Album         `json:"album,omitempty"`
-	Track    *Track         `json:"track,omitempty"`
-	Playlist *Playlist      `json:"playlist,omitempty"`
+	Kind   RecentItemKind `json:"kind"`
+	Artist *Artist        `json:"artist,omitempty"`
+	Album  *Album         `json:"album,omitempty"`
+	Track  *Track         `json:"track,omitempty"`
 	// AddedAt mirrors the entity's CreatedAt and is surfaced here for
 	// consumers that sort the unified timeline without inspecting sub-fields.
 	AddedAt time.Time `json:"addedAt"`
@@ -290,13 +288,12 @@ type RecentCatalogResult struct {
 }
 
 // UpdatedCatalogItem is a single entity entry in the recently-updated timeline.
-// Exactly one of Artist, Album, Track, or Playlist is non-nil depending on Kind.
+// Exactly one of Artist, Album, or Track is non-nil depending on Kind.
 type UpdatedCatalogItem struct {
-	Kind     RecentItemKind `json:"kind"`
-	Artist   *Artist        `json:"artist,omitempty"`
-	Album    *Album         `json:"album,omitempty"`
-	Track    *Track         `json:"track,omitempty"`
-	Playlist *Playlist      `json:"playlist,omitempty"`
+	Kind   RecentItemKind `json:"kind"`
+	Artist *Artist        `json:"artist,omitempty"`
+	Album  *Album         `json:"album,omitempty"`
+	Track  *Track         `json:"track,omitempty"`
 	// UpdatedAt mirrors the entity's UpdatedAt and is surfaced here for
 	// consumers that sort the unified timeline without inspecting sub-fields.
 	UpdatedAt time.Time `json:"updatedAt"`

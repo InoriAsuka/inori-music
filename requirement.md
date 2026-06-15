@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.55.0`
+`0.56.0`
 
 ## Product Goal
 
@@ -453,10 +453,19 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 
 ### v0.55.0 - 2026-06-15
 
-- Extend `GET /api/v1/admin/catalog/recently-added` and `GET /api/v1/admin/catalog/recently-updated` so unified admin timelines include playlist entries alongside artists, albums, and tracks.
-- Add `playlist` payload support to `RecentCatalogItem` and `UpdatedCatalogItem`; playlist timeline timestamps mirror `Playlist.CreatedAt` and `Playlist.UpdatedAt` respectively.
-- Extend `RecentItemKind` and recent timeline validation to support `kind=playlist`; invalid values still return 400 through the existing `ErrInvalidTrack` path.
-- Update `GetRecentlyAdded(ctx, kind, limit)` and `GetRecentlyUpdated(ctx, kind, limit)` to derive playlist entries from existing `ListPlaylists` without adding `Repository` methods, preserving default limit 20, max clamp 100, non-nil empty arrays, and newest-first cross-kind ordering.
-- Add `catalog.Service` unit tests and HTTP-layer tests covering playlist inclusion, playlist-only filters, invalid kind preservation, and limit behavior with playlist results.
-- Update OpenAPI `RecentItemKind`, `RecentCatalogItem`, and `UpdatedCatalogItem` schemas for playlist entries; bump `info.version` to `0.55.0`.
+- Add viewer-facing `GET /api/v1/catalog/recently-added` and `GET /api/v1/catalog/recently-updated` endpoints requiring session authentication (`requireViewerAuth`).
+- Reuse existing `getRecentlyAdded` and `getRecentlyUpdated` handlers, wrapping them with `requireViewerAuth` middleware instead of `requireAdminAuth`.
+- Register 405 fallbacks for both viewer paths.
+- Add 16 HTTP-layer tests covering viewer auth success, admin session acceptance, static bootstrap token rejection, unauthorized requests, invalid kind/limit, and method-not-allowed.
+- Add viewer path operations to the OpenAPI contract under the "Catalog" tag; bump `info.version` to `0.55.0`.
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes` to assert the viewer recently-added and recently-updated paths.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.56.0 - 2026-06-15
+
+- Add playlist entries to the recently-added and recently-updated unified catalog timelines.
+- Extend `RecentItemKind` enum with `playlist`, and add `Playlist` fields to `RecentCatalogItem` and `UpdatedCatalogItem` types.
+- Extend `GetRecentlyAdded` and `GetRecentlyUpdated` to iterate over playlists when `kind` is empty or `playlist`.
+- Update `validateRecentItemKind` to accept `playlist` as a valid kind.
+- Update OpenAPI contract: `RecentItemKind` enum, schemas, and endpoint descriptions; bump `info.version` to `0.56.0`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

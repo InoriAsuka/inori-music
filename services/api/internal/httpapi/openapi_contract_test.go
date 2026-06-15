@@ -57,6 +57,8 @@ func TestStorageAdminOpenAPIContractCoversRoutes(t *testing.T) {
 		"/api/v1/catalog/tracks":                                {"get"},
 		"/api/v1/catalog/tracks/{id}":                           {"get"},
 		"/api/v1/catalog/search":                                {"get"},
+		"/api/v1/catalog/recently-added":                        {"get"},
+		"/api/v1/catalog/recently-updated":                      {"get"},
 		"/api/v1/admin/catalog/stats":                           {"get"},
 		"/api/v1/admin/catalog/stats/artists":                   {"get"},
 		"/api/v1/admin/catalog/stats/albums":                    {"get"},
@@ -214,20 +216,9 @@ func TestStorageAdminOpenAPIContractSchemasAndErrors(t *testing.T) {
 	document := loadOpenAPIContract(t)
 	components := document["components"].(map[string]any)
 	schemas := components["schemas"].(map[string]any)
-	for _, name := range []string{"StorageBackend", "StorageBackendRequest", "BackendConfig", "LocalConfig", "NFSConfig", "SMBConfig", "S3Config", "DistributedConfig", "CapabilitySet", "ProbeResult", "CapacityReport", "RefreshReport", "RefreshResult", "ServiceInfo", "ReadinessCheck", "ReadinessReport", "MediaObject", "MediaObjectRequest", "MediaObjectLifecycleRequest", "MediaObjectLifecycleChange", "MediaObjectTimeline", "MediaObjectTimelineEvent", "MediaObjectSelectionFilter", "MediaObjectBulkLifecycleRequest", "MediaObjectLifecycleUpdateReport", "MediaObjectLifecycleUpdateResult", "MediaObjectStats", "MediaObjectDuplicateReport", "MediaObjectDuplicateGroup", "MediaObjectVerificationResult", "MediaObjectVerificationReport", "PaginationMetadata", "ErrorEnvelope", "CatalogArtist", "CatalogAlbum", "CatalogTrack", "Playlist", "CatalogSearchResult", "SearchResultItem", "SearchResultKind", "CatalogArtistStatItem", "CatalogArtistStatsBreakdown", "CatalogAlbumStatItem", "CatalogAlbumStatsBreakdown", "RecentItemKind", "RecentCatalogItem", "RecentCatalogResult", "UpdatedCatalogItem", "UpdatedCatalogResult"} {
+	for _, name := range []string{"StorageBackend", "StorageBackendRequest", "BackendConfig", "LocalConfig", "NFSConfig", "SMBConfig", "S3Config", "DistributedConfig", "CapabilitySet", "ProbeResult", "CapacityReport", "RefreshReport", "RefreshResult", "ServiceInfo", "ReadinessCheck", "ReadinessReport", "MediaObject", "MediaObjectRequest", "MediaObjectLifecycleRequest", "MediaObjectLifecycleChange", "MediaObjectTimeline", "MediaObjectTimelineEvent", "MediaObjectSelectionFilter", "MediaObjectBulkLifecycleRequest", "MediaObjectLifecycleUpdateReport", "MediaObjectLifecycleUpdateResult", "MediaObjectStats", "MediaObjectDuplicateReport", "MediaObjectDuplicateGroup", "MediaObjectVerificationResult", "MediaObjectVerificationReport", "PaginationMetadata", "ErrorEnvelope", "CatalogArtist", "CatalogAlbum", "CatalogTrack", "CatalogSearchResult", "SearchResultItem", "SearchResultKind", "CatalogArtistStatItem", "CatalogArtistStatsBreakdown", "CatalogAlbumStatItem", "CatalogAlbumStatsBreakdown", "RecentItemKind", "RecentCatalogItem", "RecentCatalogResult", "UpdatedCatalogItem", "UpdatedCatalogResult"} {
 		if _, ok := schemas[name].(map[string]any); !ok {
 			t.Fatalf("schema %q is missing", name)
-		}
-	}
-
-	recentItemKind := schemas["RecentItemKind"].(map[string]any)
-	if !containsString(recentItemKind["enum"].([]any), "playlist") {
-		t.Fatalf("RecentItemKind enum missing playlist: %#v", recentItemKind["enum"])
-	}
-	for _, name := range []string{"RecentCatalogItem", "UpdatedCatalogItem"} {
-		properties := schemas[name].(map[string]any)["properties"].(map[string]any)
-		if _, ok := properties["playlist"].(map[string]any); !ok {
-			t.Fatalf("%s playlist payload property is missing", name)
 		}
 	}
 

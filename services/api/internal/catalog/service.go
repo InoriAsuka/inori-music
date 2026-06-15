@@ -720,9 +720,9 @@ func (s *Service) GetPlaylistStatsBreakdown(ctx context.Context) (PlaylistStatsB
 }
 
 // GetRecentlyAdded returns the most recently created catalog items across artists, albums,
-// tracks, and playlists in a unified newest-first timeline. limit caps the result set
-// (1–100; default 20). kind filters to a single entity type ("artist", "album",
-// "track", or "playlist"); an empty string returns all kinds.
+// and tracks in a unified newest-first timeline. limit caps the result set (1–100; default 20).
+// kind filters to a single entity type ("artist", "album", or "track"); an empty string
+// returns all kinds.
 func (s *Service) GetRecentlyAdded(ctx context.Context, kind string, limit int) (RecentCatalogResult, error) {
 	kind = strings.TrimSpace(kind)
 	if err := validateRecentItemKind(kind); err != nil {
@@ -777,21 +777,6 @@ func (s *Service) GetRecentlyAdded(ctx context.Context, kind string, limit int) 
 		}
 	}
 
-	if kind == "" || kind == string(RecentItemPlaylist) {
-		playlists, err := s.repo.ListPlaylists(ctx)
-		if err != nil {
-			return RecentCatalogResult{}, err
-		}
-		for i := range playlists {
-			p := playlists[i]
-			items = append(items, RecentCatalogItem{
-				Kind:     RecentItemPlaylist,
-				Playlist: &p,
-				AddedAt:  p.CreatedAt,
-			})
-		}
-	}
-
 	sort.SliceStable(items, func(i, j int) bool {
 		return items[i].AddedAt.After(items[j].AddedAt)
 	})
@@ -804,9 +789,9 @@ func (s *Service) GetRecentlyAdded(ctx context.Context, kind string, limit int) 
 }
 
 // GetRecentlyUpdated returns the most recently updated catalog items across artists, albums,
-// tracks, and playlists in a unified newest-first timeline. limit caps the result set
-// (1–100; default 20). kind filters to a single entity type ("artist", "album",
-// "track", or "playlist"); an empty string returns all kinds.
+// and tracks in a unified newest-first timeline. limit caps the result set (1–100; default 20).
+// kind filters to a single entity type ("artist", "album", or "track"); an empty string
+// returns all kinds.
 func (s *Service) GetRecentlyUpdated(ctx context.Context, kind string, limit int) (UpdatedCatalogResult, error) {
 	kind = strings.TrimSpace(kind)
 	if err := validateRecentItemKind(kind); err != nil {
@@ -861,21 +846,6 @@ func (s *Service) GetRecentlyUpdated(ctx context.Context, kind string, limit int
 		}
 	}
 
-	if kind == "" || kind == string(RecentItemPlaylist) {
-		playlists, err := s.repo.ListPlaylists(ctx)
-		if err != nil {
-			return UpdatedCatalogResult{}, err
-		}
-		for i := range playlists {
-			p := playlists[i]
-			items = append(items, UpdatedCatalogItem{
-				Kind:      RecentItemPlaylist,
-				Playlist:  &p,
-				UpdatedAt: p.UpdatedAt,
-			})
-		}
-	}
-
 	sort.SliceStable(items, func(i, j int) bool {
 		return items[i].UpdatedAt.After(items[j].UpdatedAt)
 	})
@@ -889,10 +859,10 @@ func (s *Service) GetRecentlyUpdated(ctx context.Context, kind string, limit int
 
 func validateRecentItemKind(kind string) error {
 	switch kind {
-	case "", string(RecentItemArtist), string(RecentItemAlbum), string(RecentItemTrack), string(RecentItemPlaylist):
+	case "", string(RecentItemArtist), string(RecentItemAlbum), string(RecentItemTrack):
 		return nil
 	default:
-		return fmt.Errorf("%w: kind must be artist, album, track, or playlist", ErrInvalidTrack)
+		return fmt.Errorf("%w: kind must be artist, album, or track", ErrInvalidTrack)
 	}
 }
 

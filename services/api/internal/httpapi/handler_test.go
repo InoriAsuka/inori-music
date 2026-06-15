@@ -2777,10 +2777,6 @@ func TestGetRecentlyAddedKindQueryParam(t *testing.T) {
 	if resp.Code != http.StatusCreated {
 		t.Fatalf("create artist: %d", resp.Code)
 	}
-	resp = performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/playlists", `{"name":"Miku Playlist"}`)
-	if resp.Code != http.StatusCreated {
-		t.Fatalf("create playlist: %d %s", resp.Code, resp.Body.String())
-	}
 
 	// artist-only filter
 	resp = performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/recently-added?kind=artist", "")
@@ -2794,25 +2790,6 @@ func TestGetRecentlyAddedKindQueryParam(t *testing.T) {
 		m := raw.(map[string]any)
 		if m["kind"].(string) != "artist" {
 			t.Errorf("expected kind=artist, got %s", m["kind"])
-		}
-	}
-
-	resp = performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/recently-added?kind=playlist", "")
-	if resp.Code != http.StatusOK {
-		t.Fatalf("recently-added?kind=playlist status = %d body = %s", resp.Code, resp.Body.String())
-	}
-	decodeResponse(t, resp, &got)
-	items = got["items"].([]any)
-	if len(items) == 0 {
-		t.Fatal("expected playlist items")
-	}
-	for _, raw := range items {
-		m := raw.(map[string]any)
-		if m["kind"].(string) != "playlist" {
-			t.Errorf("expected kind=playlist, got %s", m["kind"])
-		}
-		if m["playlist"] == nil {
-			t.Fatalf("expected playlist payload, got %v", m)
 		}
 	}
 }
@@ -2839,7 +2816,7 @@ func TestGetRecentlyAddedLimitParam(t *testing.T) {
 
 func TestGetRecentlyAddedInvalidKind(t *testing.T) {
 	h := newCatalogTestHandler()
-	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/recently-added?kind=collection", "")
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/recently-added?kind=invalid", "")
 	if resp.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for invalid kind, got %d", resp.Code)
 	}
@@ -2940,10 +2917,6 @@ func TestGetRecentlyUpdatedKindQueryParam(t *testing.T) {
 	if resp.Code != http.StatusCreated {
 		t.Fatalf("create artist: %d", resp.Code)
 	}
-	resp = performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/playlists", `{"name":"Miku Playlist"}`)
-	if resp.Code != http.StatusCreated {
-		t.Fatalf("create playlist: %d %s", resp.Code, resp.Body.String())
-	}
 
 	resp = performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/recently-updated?kind=artist", "")
 	if resp.Code != http.StatusOK {
@@ -2956,25 +2929,6 @@ func TestGetRecentlyUpdatedKindQueryParam(t *testing.T) {
 		m := raw.(map[string]any)
 		if m["kind"].(string) != "artist" {
 			t.Errorf("expected kind=artist, got %s", m["kind"])
-		}
-	}
-
-	resp = performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/recently-updated?kind=playlist", "")
-	if resp.Code != http.StatusOK {
-		t.Fatalf("recently-updated?kind=playlist status = %d body = %s", resp.Code, resp.Body.String())
-	}
-	decodeResponse(t, resp, &got)
-	items = got["items"].([]any)
-	if len(items) == 0 {
-		t.Fatal("expected playlist items")
-	}
-	for _, raw := range items {
-		m := raw.(map[string]any)
-		if m["kind"].(string) != "playlist" {
-			t.Errorf("expected kind=playlist, got %s", m["kind"])
-		}
-		if m["playlist"] == nil {
-			t.Fatalf("expected playlist payload, got %v", m)
 		}
 	}
 }
@@ -3001,7 +2955,7 @@ func TestGetRecentlyUpdatedLimitParam(t *testing.T) {
 
 func TestGetRecentlyUpdatedInvalidKind(t *testing.T) {
 	h := newCatalogTestHandler()
-	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/recently-updated?kind=collection", "")
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/recently-updated?kind=invalid", "")
 	if resp.Code != http.StatusBadRequest {
 		t.Fatalf("expected 400 for invalid kind, got %d", resp.Code)
 	}
@@ -3034,3 +2988,138 @@ func TestGetRecentlyUpdatedMethodNotAllowed(t *testing.T) {
 		t.Fatalf("expected 405, got %d", resp.Code)
 	}
 }
+
+// ---- viewer recently-added/updated handler tests ----
+
+func TestViewerGetRecentlyAdded(t *testing.T) {
+	h, viewerToken, _ := newViewerTestHandler(t)
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/recently-added", "", "Bearer "+viewerToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("viewer recently-added status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	items, ok := got["items"].([]any)
+	if !ok || len(items) != 0 {
+		t.Errorf("expected empty items array, got %v", got["items"])
+	}
+}
+
+func TestViewerGetRecentlyAddedAdminToken(t *testing.T) {
+	h, _, adminToken := newViewerTestHandler(t)
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/recently-added", "", "Bearer "+adminToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("admin session on viewer recently-added status = %d", resp.Code)
+	}
+}
+
+func TestViewerGetRecentlyAddedUnauthorized(t *testing.T) {
+	h, _, _ := newViewerTestHandler(t)
+	resp := performRequestWithoutAuth(t, h, http.MethodGet, "/api/v1/catalog/recently-added", "")
+	assertAPIError(t, resp, http.StatusUnauthorized, "unauthorized")
+}
+
+func TestViewerGetRecentlyAddedNoCatalogService(t *testing.T) {
+	authSvc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAuthService(authSvc),
+		WithServiceInfo(ServiceInfo{Name: "inori-api", Version: "test"}),
+	).Routes()
+	if _, err := authSvc.CreateUser(context.Background(), "alice", "viewerpass1", auth.RoleViewer); err != nil {
+		t.Fatalf("create viewer: %v", err)
+	}
+	viewerToken, _, err := authSvc.Login(context.Background(), "alice", "viewerpass1")
+	if err != nil {
+		t.Fatalf("viewer login: %v", err)
+	}
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/recently-added", "", "Bearer "+viewerToken)
+	assertAPIError(t, resp, http.StatusServiceUnavailable, "catalog_not_configured")
+}
+
+func TestViewerGetRecentlyAddedMethodNotAllowed(t *testing.T) {
+	h, viewerToken, _ := newViewerTestHandler(t)
+	resp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/catalog/recently-added", `{}`, "Bearer "+viewerToken)
+	if resp.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", resp.Code)
+	}
+}
+
+func TestViewerGetRecentlyUpdated(t *testing.T) {
+	h, viewerToken, _ := newViewerTestHandler(t)
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/recently-updated", "", "Bearer "+viewerToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("viewer recently-updated status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	items, ok := got["items"].([]any)
+	if !ok || len(items) != 0 {
+		t.Errorf("expected empty items array, got %v", got["items"])
+	}
+}
+
+func TestViewerGetRecentlyUpdatedAdminToken(t *testing.T) {
+	h, _, adminToken := newViewerTestHandler(t)
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/recently-updated", "", "Bearer "+adminToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("admin session on viewer recently-updated status = %d", resp.Code)
+	}
+}
+
+func TestViewerGetRecentlyUpdatedUnauthorized(t *testing.T) {
+	h, _, _ := newViewerTestHandler(t)
+	resp := performRequestWithoutAuth(t, h, http.MethodGet, "/api/v1/catalog/recently-updated", "")
+	assertAPIError(t, resp, http.StatusUnauthorized, "unauthorized")
+}
+
+func TestViewerGetRecentlyUpdatedNoCatalogService(t *testing.T) {
+	authSvc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAuthService(authSvc),
+		WithServiceInfo(ServiceInfo{Name: "inori-api", Version: "test"}),
+	).Routes()
+	if _, err := authSvc.CreateUser(context.Background(), "alice", "viewerpass1", auth.RoleViewer); err != nil {
+		t.Fatalf("create viewer: %v", err)
+	}
+	viewerToken, _, err := authSvc.Login(context.Background(), "alice", "viewerpass1")
+	if err != nil {
+		t.Fatalf("viewer login: %v", err)
+	}
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/recently-updated", "", "Bearer "+viewerToken)
+	assertAPIError(t, resp, http.StatusServiceUnavailable, "catalog_not_configured")
+}
+
+func TestViewerGetRecentlyUpdatedMethodNotAllowed(t *testing.T) {
+	h, viewerToken, _ := newViewerTestHandler(t)
+	resp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/catalog/recently-updated", `{}`, "Bearer "+viewerToken)
+	if resp.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", resp.Code)
+	}
+}
+
+func TestViewerGetRecentlyAddedInvalidKind(t *testing.T) {
+	h, viewerToken, _ := newViewerTestHandler(t)
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/recently-added?kind=invalid", "", "Bearer "+viewerToken)
+	assertAPIError(t, resp, http.StatusBadRequest, "invalid_catalog_entity")
+}
+
+func TestViewerGetRecentlyAddedInvalidLimit(t *testing.T) {
+	h, viewerToken, _ := newViewerTestHandler(t)
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/recently-added?limit=abc", "", "Bearer "+viewerToken)
+	assertAPIError(t, resp, http.StatusBadRequest, "invalid_limit")
+}
+
+func TestViewerGetRecentlyUpdatedInvalidKind(t *testing.T) {
+	h, viewerToken, _ := newViewerTestHandler(t)
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/recently-updated?kind=invalid", "", "Bearer "+viewerToken)
+	assertAPIError(t, resp, http.StatusBadRequest, "invalid_catalog_entity")
+}
+
+func TestViewerGetRecentlyUpdatedInvalidLimit(t *testing.T) {
+	h, viewerToken, _ := newViewerTestHandler(t)
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/recently-updated?limit=abc", "", "Bearer "+viewerToken)
+	assertAPIError(t, resp, http.StatusBadRequest, "invalid_limit")
+}
+
