@@ -724,20 +724,11 @@ func (s *Service) GetPlaylistStatsBreakdown(ctx context.Context) (PlaylistStatsB
 // kind filters to a single entity type ("artist", "album", or "track"); an empty string
 // returns all kinds.
 func (s *Service) GetRecentlyAdded(ctx context.Context, kind string, limit int) (RecentCatalogResult, error) {
-	const defaultLimit = 20
-	const maxLimit = 100
 	kind = strings.TrimSpace(kind)
-	switch kind {
-	case "", string(RecentItemArtist), string(RecentItemAlbum), string(RecentItemTrack):
-	default:
-		return RecentCatalogResult{}, fmt.Errorf("%w: kind must be artist, album, or track", ErrInvalidTrack)
+	if err := validateRecentItemKind(kind); err != nil {
+		return RecentCatalogResult{}, err
 	}
-	if limit <= 0 {
-		limit = defaultLimit
-	}
-	if limit > maxLimit {
-		limit = maxLimit
-	}
+	limit = normalizeRecentLimit(limit)
 
 	items := make([]RecentCatalogItem, 0)
 
@@ -795,6 +786,96 @@ func (s *Service) GetRecentlyAdded(ctx context.Context, kind string, limit int) 
 	}
 
 	return RecentCatalogResult{Items: items}, nil
+}
+
+// GetRecentlyUpdated returns the most recently updated catalog items across artists, albums,
+// and tracks in a unified newest-first timeline. limit caps the result set (1–100; default 20).
+// kind filters to a single entity type ("artist", "album", or "track"); an empty string
+// returns all kinds.
+func (s *Service) GetRecentlyUpdated(ctx context.Context, kind string, limit int) (UpdatedCatalogResult, error) {
+	kind = strings.TrimSpace(kind)
+	if err := validateRecentItemKind(kind); err != nil {
+		return UpdatedCatalogResult{}, err
+	}
+	limit = normalizeRecentLimit(limit)
+
+	items := make([]UpdatedCatalogItem, 0)
+
+	if kind == "" || kind == string(RecentItemArtist) {
+		artists, err := s.repo.ListArtists(ctx)
+		if err != nil {
+			return UpdatedCatalogResult{}, err
+		}
+		for i := range artists {
+			a := artists[i]
+			items = append(items, UpdatedCatalogItem{
+				Kind:      RecentItemArtist,
+				Artist:    &a,
+				UpdatedAt: a.UpdatedAt,
+			})
+		}
+	}
+
+	if kind == "" || kind == string(RecentItemAlbum) {
+		albums, err := s.repo.ListAlbums(ctx)
+		if err != nil {
+			return UpdatedCatalogResult{}, err
+		}
+		for i := range albums {
+			al := albums[i]
+			items = append(items, UpdatedCatalogItem{
+				Kind:      RecentItemAlbum,
+				Album:     &al,
+				UpdatedAt: al.UpdatedAt,
+			})
+		}
+	}
+
+	if kind == "" || kind == string(RecentItemTrack) {
+		tracks, err := s.repo.ListTracks(ctx)
+		if err != nil {
+			return UpdatedCatalogResult{}, err
+		}
+		for i := range tracks {
+			t := tracks[i]
+			items = append(items, UpdatedCatalogItem{
+				Kind:      RecentItemTrack,
+				Track:     &t,
+				UpdatedAt: t.UpdatedAt,
+			})
+		}
+	}
+
+	sort.SliceStable(items, func(i, j int) bool {
+		return items[i].UpdatedAt.After(items[j].UpdatedAt)
+	})
+
+	if limit < len(items) {
+		items = items[:limit]
+	}
+
+	return UpdatedCatalogResult{Items: items}, nil
+}
+
+func validateRecentItemKind(kind string) error {
+	switch kind {
+	case "", string(RecentItemArtist), string(RecentItemAlbum), string(RecentItemTrack):
+		return nil
+	default:
+		return fmt.Errorf("%w: kind must be artist, album, or track", ErrInvalidTrack)
+	}
+}
+
+func normalizeRecentLimit(limit int) int {
+	const defaultLimit = 20
+	const maxLimit = 100
+	if limit <= 0 {
+		return defaultLimit
+	}
+	if limit > maxLimit {
+		return maxLimit
+	}
+	return limit
 }
 
 func newID() (string, error) {

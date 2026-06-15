@@ -261,7 +261,7 @@ type PlaylistStatsBreakdown struct {
 	Playlists []PlaylistStatItem `json:"playlists"`
 }
 
-// RecentItemKind identifies which entity type a recently-added item belongs to.
+// RecentItemKind identifies which entity type a recent timeline item belongs to.
 type RecentItemKind string
 
 const (
@@ -285,4 +285,21 @@ type RecentCatalogItem struct {
 // RecentCatalogResult holds the ordered (newest-first) list of recently-added catalog items.
 type RecentCatalogResult struct {
 	Items []RecentCatalogItem `json:"items"`
+}
+
+// UpdatedCatalogItem is a single entity entry in the recently-updated timeline.
+// Exactly one of Artist, Album, or Track is non-nil depending on Kind.
+type UpdatedCatalogItem struct {
+	Kind   RecentItemKind `json:"kind"`
+	Artist *Artist        `json:"artist,omitempty"`
+	Album  *Album         `json:"album,omitempty"`
+	Track  *Track         `json:"track,omitempty"`
+	// UpdatedAt mirrors the entity's UpdatedAt and is surfaced here for
+	// consumers that sort the unified timeline without inspecting sub-fields.
+	UpdatedAt time.Time `json:"updatedAt"`
+}
+
+// UpdatedCatalogResult holds the ordered (newest-first) list of recently-updated catalog items.
+type UpdatedCatalogResult struct {
+	Items []UpdatedCatalogItem `json:"items"`
 }
