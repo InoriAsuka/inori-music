@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.57.0`
+`0.58.0`
 
 ## Product Goal
 
@@ -477,4 +477,14 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Update OpenAPI contract: add `relink_rejected`, `validation_error`, and `invalid_limit` to the error code enum; bump `info.version` to `0.57.0`.
 - Correct `services/api/internal/storage/capacity.go`: remove duplicate `FilesystemCapacityProvider` body now superseded by the build-tagged `capacity_unix.go` and `capacity_unsupported.go` files pulled in with the upstream update.
 - Strengthen `openapi_contract_test.go`: assert `patch` on artist/album `{id}` paths, assert all three new error codes, and add `TestStorageAdminOpenAPIContractRecentTimelineSchemas` asserting the `RecentItemKind` enum includes `"playlist"` and both recent timeline item schemas carry a `playlist` payload ref.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.58.0 - 2026-06-17
+
+- Add `GET /api/v1/catalog/tracks/{id}/playback` viewer-only endpoint returning a metadata-only `TrackPlaybackDescriptor` with `trackId`, `mediaObjectId`, `mimeType`, `durationMs`, `backendId`, `backendType`, and `objectKey`.
+- Validate that the linked media object has `lifecycleState = active` and `assetKind ∈ {original_audio, transcoded_audio}`; return 422 `playback_unavailable` otherwise.
+- Add `ErrPlaybackUnavailable` sentinel to the storage package and `playback_unavailable` to the `writeError` switch.
+- Add `TrackPlaybackDescriptor` schema, `GET /api/v1/catalog/tracks/{id}/playback` path, and `playback_unavailable` error code to the OpenAPI contract; bump `info.version` to `0.58.0`.
+- Add 8 HTTP-layer tests covering success, admin-session access, track-not-found, media-object-not-found, non-active lifecycle, wrong asset kind, no-catalog-service, and method-not-allowed.
+- Extend `openapi_contract_test.go` with the new path, schema, error code, and `TestStorageAdminOpenAPIContractTrackPlaybackDescriptor`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

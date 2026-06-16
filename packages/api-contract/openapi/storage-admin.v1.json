@@ -374,7 +374,8 @@
                   "import_rejected",
                   "relink_rejected",
                   "validation_error",
-                  "invalid_limit"
+                  "invalid_limit",
+                  "playback_unavailable"
                 ],
                 "type": "string"
               },
@@ -1896,6 +1897,48 @@
           }
         }
       },
+      "TrackPlaybackDescriptor": {
+        "type": "object",
+        "description": "Metadata-only playback descriptor returned by the viewer playback endpoint. Carries the fields a client needs to fetch the audio file from its storage backend.",
+        "required": [
+          "trackId",
+          "mediaObjectId",
+          "mimeType",
+          "durationMs",
+          "backendId",
+          "objectKey"
+        ],
+        "properties": {
+          "trackId": {
+            "type": "string",
+            "description": "Catalog track identifier."
+          },
+          "mediaObjectId": {
+            "type": "string",
+            "description": "Media object identifier for the linked audio file."
+          },
+          "mimeType": {
+            "type": "string",
+            "description": "MIME type of the audio file, e.g. audio/flac."
+          },
+          "durationMs": {
+            "type": "integer",
+            "description": "Track duration in milliseconds."
+          },
+          "backendId": {
+            "type": "string",
+            "description": "Storage backend identifier where the object resides."
+          },
+          "backendType": {
+            "type": "string",
+            "description": "Storage backend type (local, nfs, smb, s3, distributed). Omitted when the backend record cannot be resolved."
+          },
+          "objectKey": {
+            "type": "string",
+            "description": "Object key within the storage backend."
+          }
+        }
+      },
       "UpdatedCatalogItem": {
         "type": "object",
         "description": "One recently-updated catalog entity in the unified timeline. Exactly one entity payload is present based on kind.",
@@ -1954,7 +1997,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "0.57.0"
+    "version": "0.58.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -5054,6 +5097,78 @@
             }
           },
           "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/catalog/tracks/{id}/playback": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/CatalogId"
+        }
+      ],
+      "get": {
+        "summary": "Get track playback descriptor",
+        "operationId": "getTrackPlaybackDescriptor",
+        "description": "Returns a metadata-only playback descriptor for the specified track. The linked media object must be active and have an audio asset kind (original_audio or transcoded_audio); otherwise 422 is returned.",
+        "tags": [
+          "Catalog"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Track playback descriptor",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrackPlaybackDescriptor"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
             "description": "Error",
             "content": {
               "application/json": {

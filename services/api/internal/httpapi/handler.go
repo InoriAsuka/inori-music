@@ -305,6 +305,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/catalog/albums/{id}", handler.requireViewerAuth(handler.getAlbum))
 	mux.HandleFunc("GET /api/v1/catalog/tracks", handler.requireViewerAuth(handler.listTracks))
 	mux.HandleFunc("GET /api/v1/catalog/tracks/{id}", handler.requireViewerAuth(handler.getTrack))
+	mux.HandleFunc("GET /api/v1/catalog/tracks/{id}/playback", handler.requireViewerAuth(handler.getTrackPlayback))
 	mux.HandleFunc("GET /api/v1/catalog/search", handler.requireViewerAuth(handler.searchCatalog))
 	mux.HandleFunc("GET /api/v1/admin/catalog/stats", handler.requireAdminAuth(handler.getCatalogStats))
 	mux.HandleFunc("GET /api/v1/admin/catalog/stats/artists", handler.requireAdminAuth(handler.getArtistStatsBreakdown))
@@ -383,6 +384,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("/api/v1/catalog/albums/{id}", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/catalog/tracks", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/catalog/tracks/{id}", handler.requireViewerAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/catalog/tracks/{id}/playback", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/catalog/search", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/catalog/recently-added", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/catalog/recently-updated", handler.requireViewerAuth(handler.methodNotAllowed))
@@ -1017,6 +1019,66 @@ func (handler *Handler) getTrack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, track)
+}
+
+// trackPlaybackDescriptor is the metadata-only response returned by the viewer
+// playback endpoint. It carries the fields a client needs to fetch the audio
+// file from its storage backend without the server streaming bytes.
+type trackPlaybackDescriptor struct {
+	TrackID       string `json:"trackId"`
+	MediaObjectID string `json:"mediaObjectId"`
+	MIMEType      string `json:"mimeType"`
+	DurationMS    int    `json:"durationMs"`
+	BackendID     string `json:"backendId"`
+	BackendType   string `json:"backendType,omitempty"`
+	ObjectKey     string `json:"objectKey"`
+}
+
+func (handler *Handler) getTrackPlayback(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireCatalogService(w) {
+		return
+	}
+	track, err := handler.catalogService.GetTrack(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if handler.mediaObjects == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "media_registry_not_configured", "media object registry is not configured")
+		return
+	}
+	mo, err := handler.mediaObjects.GetMediaObject(r.Context(), track.MediaObjectID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if mo.LifecycleState != string(storage.LifecycleStateActive) ||
+		(mo.AssetKind != string(storage.AssetKindOriginalAudio) && mo.AssetKind != string(storage.AssetKindTranscodedAudio)) {
+		writeError(w, fmt.Errorf("%w: media object %s is not in a playable state (lifecycleState=%s assetKind=%s)",
+			storage.ErrPlaybackUnavailable, mo.ID, mo.LifecycleState, mo.AssetKind))
+		return
+	}
+	backendType := ""
+	if handler.storage != nil {
+		backends, listErr := handler.storage.ListBackends(r.Context())
+		if listErr == nil {
+			for _, b := range backends {
+				if b.ID == mo.BackendID {
+					backendType = string(b.Type)
+					break
+				}
+			}
+		}
+	}
+	writeJSON(w, http.StatusOK, trackPlaybackDescriptor{
+		TrackID:       track.ID,
+		MediaObjectID: mo.ID,
+		MIMEType:      mo.MIMEType,
+		DurationMS:    track.DurationMS,
+		BackendID:     mo.BackendID,
+		BackendType:   backendType,
+		ObjectKey:     mo.ObjectKey,
+	})
 }
 
 func (handler *Handler) deleteTrack(w http.ResponseWriter, r *http.Request) {
@@ -1782,6 +1844,9 @@ func writeError(w http.ResponseWriter, err error) {
 	case errors.Is(err, catalog.ErrRelinkRejected):
 		status = http.StatusUnprocessableEntity
 		code = "relink_rejected"
+	case errors.Is(err, storage.ErrPlaybackUnavailable):
+		status = http.StatusUnprocessableEntity
+		code = "playback_unavailable"
 	case errors.Is(err, storage.ErrInvalidMediaObject):
 		status = http.StatusBadRequest
 		code = "invalid_media_object"

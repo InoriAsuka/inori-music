@@ -12,6 +12,7 @@ import (
 )
 
 var ErrInvalidMediaObject = errors.New("invalid media object")
+var ErrPlaybackUnavailable = errors.New("track playback unavailable")
 
 type AssetKind string
 

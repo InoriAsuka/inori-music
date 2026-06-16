@@ -3265,3 +3265,218 @@ func TestViewerGetRecentlyUpdatedInvalidLimit(t *testing.T) {
 	assertAPIError(t, resp, http.StatusBadRequest, "invalid_limit")
 }
 
+// ---- track playback descriptor tests ----
+
+func newViewerWithMediaHandler(t *testing.T) (http.Handler, string, string) {
+	t.Helper()
+	authSvc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
+	storageRepo := storage.NewMemoryRepository()
+	storageSvc := storage.NewService(storageRepo)
+	mediaRepo := storage.NewMemoryMediaObjectRepository()
+	mediaSvc := storage.NewMediaObjectService(storageRepo, mediaRepo)
+	catalogRepo := catalog.NewMemoryRepository()
+	h := NewHandler(
+		storageSvc,
+		WithAuthService(authSvc),
+		WithAdminToken(testAdminToken),
+		WithMediaObjectService(mediaSvc),
+		WithCatalogService(catalog.NewService(catalogRepo)),
+		WithServiceInfo(ServiceInfo{Name: "inori-api", Version: "test", Commit: "c", BuildTime: "t"}),
+	).Routes()
+	if _, err := authSvc.CreateUser(context.Background(), "alice", "viewerpass1", auth.RoleViewer); err != nil {
+		t.Fatalf("create viewer: %v", err)
+	}
+	viewerToken, _, err := authSvc.Login(context.Background(), "alice", "viewerpass1")
+	if err != nil {
+		t.Fatalf("viewer login: %v", err)
+	}
+	if _, err := authSvc.CreateUser(context.Background(), "bob", "adminpass2", auth.RoleAdmin); err != nil {
+		t.Fatalf("create admin: %v", err)
+	}
+	adminToken, _, err := authSvc.Login(context.Background(), "bob", "adminpass2")
+	if err != nil {
+		t.Fatalf("admin login: %v", err)
+	}
+	return h, viewerToken, adminToken
+}
+
+func TestGetTrackPlaybackDescriptor(t *testing.T) {
+	h, viewerToken, adminToken := newViewerWithMediaHandler(t)
+
+	backendBody := `{"id":"b-1","type":"local","displayName":"Local","enabled":true,"isDefault":true,"config":{"local":{"rootPath":"/music"}}}`
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/storage/backends", backendBody, "Bearer "+adminToken)
+
+	moBody := `{"id":"mo-pb-1","backendId":"b-1","objectKey":"track.flac","contentHash":"sha256:abc","sizeBytes":1024,"mimeType":"audio/flac","assetKind":"original_audio","lifecycleState":"active"}`
+	resp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/media/objects", moBody, "Bearer "+adminToken)
+	if resp.Code != http.StatusCreated {
+		t.Fatalf("register media object: %d %s", resp.Code, resp.Body.String())
+	}
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Artist"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackBody := fmt.Sprintf(`{"title":"Song","artistId":%q,"mediaObjectId":"mo-pb-1","durationMs":180000}`, artistID)
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks", trackBody, "Bearer "+adminToken)
+	if trackResp.Code != http.StatusCreated {
+		t.Fatalf("create track: %d %s", trackResp.Code, trackResp.Body.String())
+	}
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	resp = performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/tracks/"+trackID+"/playback", "", "Bearer "+viewerToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("playback descriptor status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var desc map[string]any
+	decodeResponse(t, resp, &desc)
+	if desc["trackId"] != trackID {
+		t.Errorf("trackId = %v, want %s", desc["trackId"], trackID)
+	}
+	if desc["mediaObjectId"] != "mo-pb-1" {
+		t.Errorf("mediaObjectId = %v, want mo-pb-1", desc["mediaObjectId"])
+	}
+	if desc["mimeType"] != "audio/flac" {
+		t.Errorf("mimeType = %v, want audio/flac", desc["mimeType"])
+	}
+	if int(desc["durationMs"].(float64)) != 180000 {
+		t.Errorf("durationMs = %v, want 180000", desc["durationMs"])
+	}
+	if desc["backendId"] != "b-1" {
+		t.Errorf("backendId = %v, want b-1", desc["backendId"])
+	}
+	if desc["backendType"] != "local" {
+		t.Errorf("backendType = %v, want local", desc["backendType"])
+	}
+	if desc["objectKey"] != "track.flac" {
+		t.Errorf("objectKey = %v, want track.flac", desc["objectKey"])
+	}
+}
+
+func TestGetTrackPlaybackDescriptorAdminSession(t *testing.T) {
+	h, _, adminToken := newViewerWithMediaHandler(t)
+
+	backendBody := `{"id":"b-admin","type":"local","displayName":"Local","enabled":true,"isDefault":true,"config":{"local":{"rootPath":"/music"}}}`
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/storage/backends", backendBody, "Bearer "+adminToken)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Artist"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	moBody := `{"id":"mo-admin-1","backendId":"b-admin","objectKey":"a.flac","contentHash":"sha256:x","sizeBytes":1,"mimeType":"audio/flac","assetKind":"original_audio","lifecycleState":"active"}`
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/media/objects", moBody, "Bearer "+adminToken)
+
+	trackBody := fmt.Sprintf(`{"title":"Song","artistId":%q,"mediaObjectId":"mo-admin-1","durationMs":1000}`, artistID)
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks", trackBody, "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/tracks/"+trackID+"/playback", "", "Bearer "+adminToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("admin session playback: %d %s", resp.Code, resp.Body.String())
+	}
+}
+
+func TestGetTrackPlaybackDescriptorTrackNotFound(t *testing.T) {
+	h, viewerToken, _ := newViewerWithMediaHandler(t)
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/tracks/no-such-track/playback", "", "Bearer "+viewerToken)
+	assertAPIError(t, resp, http.StatusNotFound, "not_found")
+}
+
+func TestGetTrackPlaybackDescriptorMediaObjectNotFound(t *testing.T) {
+	h, viewerToken, adminToken := newViewerWithMediaHandler(t)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Artist"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackBody := fmt.Sprintf(`{"title":"Orphan","artistId":%q,"mediaObjectId":"mo-missing","durationMs":1000}`, artistID)
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks", trackBody, "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/tracks/"+trackID+"/playback", "", "Bearer "+viewerToken)
+	assertAPIError(t, resp, http.StatusNotFound, "not_found")
+}
+
+func TestGetTrackPlaybackDescriptorNotActive(t *testing.T) {
+	h, viewerToken, adminToken := newViewerWithMediaHandler(t)
+
+	backendBody := `{"id":"b-x","type":"local","displayName":"Local","enabled":true,"isDefault":true,"config":{"local":{"rootPath":"/music"}}}`
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/storage/backends", backendBody, "Bearer "+adminToken)
+
+	moBody := `{"id":"mo-staged","backendId":"b-x","objectKey":"s.flac","contentHash":"sha256:y","sizeBytes":1,"mimeType":"audio/flac","assetKind":"original_audio","lifecycleState":"staged"}`
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/media/objects", moBody, "Bearer "+adminToken)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Artist"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackBody := fmt.Sprintf(`{"title":"Staged","artistId":%q,"mediaObjectId":"mo-staged","durationMs":1000}`, artistID)
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks", trackBody, "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/tracks/"+trackID+"/playback", "", "Bearer "+viewerToken)
+	assertAPIError(t, resp, http.StatusUnprocessableEntity, "playback_unavailable")
+}
+
+func TestGetTrackPlaybackDescriptorWrongKind(t *testing.T) {
+	h, viewerToken, adminToken := newViewerWithMediaHandler(t)
+
+	backendBody := `{"id":"b-art","type":"local","displayName":"Local","enabled":true,"isDefault":true,"config":{"local":{"rootPath":"/music"}}}`
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/storage/backends", backendBody, "Bearer "+adminToken)
+
+	moBody := `{"id":"mo-art","backendId":"b-art","objectKey":"cover.jpg","contentHash":"sha256:z","sizeBytes":1,"mimeType":"image/jpeg","assetKind":"artwork","lifecycleState":"active"}`
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/media/objects", moBody, "Bearer "+adminToken)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Artist"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackBody := fmt.Sprintf(`{"title":"Artwork","artistId":%q,"mediaObjectId":"mo-art","durationMs":1000}`, artistID)
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks", trackBody, "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/tracks/"+trackID+"/playback", "", "Bearer "+viewerToken)
+	assertAPIError(t, resp, http.StatusUnprocessableEntity, "playback_unavailable")
+}
+
+func TestGetTrackPlaybackDescriptorNoCatalogService(t *testing.T) {
+	authSvc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAuthService(authSvc),
+		WithServiceInfo(ServiceInfo{Name: "inori-api", Version: "test"}),
+	).Routes()
+	if _, err := authSvc.CreateUser(context.Background(), "alice", "viewerpass1", auth.RoleViewer); err != nil {
+		t.Fatalf("create viewer: %v", err)
+	}
+	viewerToken, _, err := authSvc.Login(context.Background(), "alice", "viewerpass1")
+	if err != nil {
+		t.Fatalf("viewer login: %v", err)
+	}
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/tracks/any-id/playback", "", "Bearer "+viewerToken)
+	assertAPIError(t, resp, http.StatusServiceUnavailable, "catalog_not_configured")
+}
+
+func TestGetTrackPlaybackDescriptorMethodNotAllowed(t *testing.T) {
+	h, viewerToken, _ := newViewerWithMediaHandler(t)
+	resp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/catalog/tracks/any-id/playback", `{}`, "Bearer "+viewerToken)
+	if resp.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", resp.Code)
+	}
+}
+
+
