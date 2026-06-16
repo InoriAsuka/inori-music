@@ -329,6 +329,16 @@ func (service *MediaObjectService) GetMediaObject(ctx context.Context, id string
 	return service.mediaRepository.GetMediaObject(ctx, id)
 }
 
+// GetMediaObjectInfoForImport returns the fields needed by the catalog import workflow.
+// Callers typically wrap *MediaObjectService in a thin adapter to avoid a cross-package import.
+func (service *MediaObjectService) GetMediaObjectInfoForImport(ctx context.Context, id string) (id2 string, assetKind string, lifecycleState string, mimeType string, err error) {
+	obj, err := service.mediaRepository.GetMediaObject(ctx, id)
+	if err != nil {
+		return "", "", "", "", err
+	}
+	return obj.ID, obj.AssetKind, string(obj.LifecycleState), obj.MIMEType, nil
+}
+
 func (service *MediaObjectService) GetMediaObjectTimeline(ctx context.Context, id string) (MediaObjectTimeline, error) {
 	id = strings.TrimSpace(id)
 	if id == "" {
@@ -370,10 +380,10 @@ func (service *MediaObjectService) GetMediaObjectTimeline(ctx context.Context, i
 
 func (service *MediaObjectService) SetMediaObjectLifecycleState(ctx context.Context, id string, state string) (MediaObject, error) {
 	id = strings.TrimSpace(id)
-	state, err := normalizeLifecycleState(state)
 	if id == "" {
 		return MediaObject{}, fmt.Errorf("%w: id is required", ErrInvalidMediaObject)
 	}
+	state, err := normalizeLifecycleState(state)
 	if err != nil {
 		return MediaObject{}, err
 	}

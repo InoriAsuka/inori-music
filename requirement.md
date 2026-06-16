@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.34.0`
+`0.56.0`
 
 ## Product Goal
 
@@ -189,8 +189,7 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 
 ### v0.30.0 - 2026-06-05
 
-- Add GitHub Actions automation for Go API validation, semantic tag releases, and multi-architecture Docker image publishing.
-- Add a production-oriented API Dockerfile and release/container operations documentation.
+- Add metadata-only media object statistics backend scoping.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
 
 ### v0.31.0 - 2026-06-05
@@ -215,4 +214,258 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 
 - Add low-cardinality HTTP request counters and cumulative duration metrics labeled by method, route pattern, and status.
 - Reuse the public `/metrics` endpoint while avoiding raw URL labels and secret-bearing request data.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.35.0 - 2026-06-10
+
+- Add PostgreSQL-backed repository implementations for storage backends and media objects with automatic schema migration and shared connection pool.
+- File and in-memory repositories remain available when INORI_DATABASE_URL is not set.
+- Integration tests use testcontainers-go with a real PostgreSQL container under the integration build tag.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.36.0 - 2026-06-11
+
+- Add user domain with PostgreSQL persistence: User and Session types, UserRepository and SessionRepository interfaces and PostgreSQL implementations.
+- Add bcrypt password hashing (cost=12) and SHA-256 session token storage; plaintext token returned once at login, never stored.
+- Add auth.Service: CreateUser, Login, Logout, ValidateToken, DisableUser, DeleteUser, EnsureInitialAdmin.
+- Add INORI_SESSION_TTL env var (default 24h) and INORI_INITIAL_ADMIN_USER/PASSWORD bootstrap env vars.
+- Add migrations 003_users and 004_sessions to shared PostgreSQL migration runner.
+- Add 13 unit tests covering all service paths, race-clean.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.37.0 - 2026-06-11
+
+- Add POST /api/v1/auth/login and POST /api/v1/auth/logout endpoints for session-based authentication.
+- Upgrade requireAdminAuth middleware: validate session token via auth.Service first, fall back to INORI_ADMIN_TOKEN bootstrap token.
+- Return 503 when neither auth service nor admin token is configured; return 401 on bad/missing credentials.
+- Add 8 HTTP-layer tests covering login, logout, session token access, and revoked token denial.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+
+### v0.38.0 - 2026-06-11
+
+- Add authenticated user management APIs for administrators: list users, create users, disable users, and delete users.
+- Restrict user management routes to session-authenticated admin users while preserving bootstrap-token fallback behavior.
+- Add HTTP-layer tests covering the full user management workflow, validation, conflicts, authorization, and missing auth service handling.
+- Extend the OpenAPI contract with auth login/logout and user management schemas and paths.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+
+### v0.39.0 - 2026-06-12
+
+- Add the music catalog domain foundation with Artist, Album, and Track metadata entities and repository interfaces.
+- Add catalog service validation for required names, artist ownership, album membership, media object references, and non-negative numeric metadata.
+- Add PostgreSQL-backed catalog repository implementations for artists, albums, and tracks.
+- Add migration 005_catalog to the shared PostgreSQL migration runner with catalog tables and lookup indexes.
+- Add race-clean catalog service tests and integration-build coverage for the PostgreSQL repository.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+
+### v0.40.0 - 2026-06-12
+
+- Expose authenticated catalog administration endpoints for artists, albums, and tracks under `/api/v1/admin/catalog/`.
+- Add list, create, get, and delete operations for all three entity types with `artistId` and `albumId` filter parameters on list endpoints.
+- Add `MemoryRepository` to the catalog package for use in HTTP handler tests without external dependencies.
+- Update the OpenAPI contract with catalog paths, `UserId`, and `CatalogId` path parameter components.
+- Add 11 HTTP-layer catalog tests covering workflows, not-found errors, validation errors, and unconfigured service handling.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+
+### v0.41.0 - 2026-06-13
+
+- Add `POST /api/v1/admin/catalog/import` endpoint that converts a verified media object into a catalog track record.
+- Import validates that the media object exists, has `original_audio` or `transcoded_audio` asset kind, and is in `active` lifecycle state.
+- Track title falls back to the media object ID when not supplied.
+- Artist inherits from the album when only `albumId` is provided.
+- Add `MediaObjectReader` interface and `ImportTrackRequest` to the catalog package; `GetMediaObjectInfoForImport` helper on `MediaObjectService`.
+- Wire media object service → catalog service via `mediaObjectReaderAdapter` in the HTTP handler layer (no import cycle).
+- Add `WithMediaObjectReader` method to `catalog.Service`.
+- Add `ErrImportRejected` sentinel error mapped to HTTP 422.
+- Add 7 `ImportTrack` unit tests in the catalog package and 7 HTTP-layer tests.
+- Update OpenAPI contract with import route and `CatalogImportRequest` schema.
+
+
+### v0.42.0 - 2026-06-13
+
+- Add PostgreSQL full-text search over catalog metadata via `GET /api/v1/admin/catalog/search?q=`.
+- Add migration `006_catalog_fts` with generated `tsvector` columns (weighted `A`/`B` for name vs sort-name) and GIN indexes on `artists`, `albums`, and `tracks`.
+- Add `SearchCatalog(ctx, query)` to `catalog.Repository` interface and `catalog.Service`; empty query rejected with validation error.
+- Implement `SearchCatalog` on `catalogpg.Repository` using `plainto_tsquery('simple', ...)` with `ts_rank` ordering; results grouped artists → albums → tracks.
+- Add `MemoryRepository.SearchCatalog` with case-insensitive substring fallback for unit-test environments.
+- Add `CatalogSearchResult`, `SearchResultItem`, `SearchResultKind` types.
+- Add 5 `SearchCatalog` service unit tests and 4 HTTP-layer tests.
+- Add `TestRepositorySearchCatalog` integration test (build tag: integration).
+- Update OpenAPI contract with `/api/v1/admin/catalog/search` path, `CatalogSearchResult`, `SearchResultItem`, `SearchResultKind` schemas, and new error codes.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+
+### v0.43.0 - 2026-06-13
+
+- Add read-only catalog browse endpoints for session-authenticated viewers and admins under `/api/v1/catalog/`: list/get artists, list/get albums (`?artistId=`), list/get tracks (`?albumId=`/`?artistId=`), and full-text search (`?q=`).
+- Add `requireViewerAuth` middleware that accepts any valid session token (admin or viewer role) but rejects the static bootstrap admin token; returns 503 when no auth service is configured, 401 for missing or invalid tokens.
+- Reuse existing `listArtists`, `getArtist`, `listAlbums`, `getAlbum`, `listTracks`, `getTrack`, and `searchCatalog` handlers without modification.
+- Fix missing 405 method-not-allowed fallback for `/api/v1/admin/catalog/search`.
+- Add `newViewerTestHandler` helper and 11 HTTP-layer tests covering viewer/admin session, 401 unauthorized, 503 for no-auth-service, not-found, missing query, seeded search, and 405 guards.
+- Update OpenAPI contract with 7 new viewer catalog paths; bump `info.version` to `0.43.0`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+
+### v0.44.0 - 2026-06-13
+
+- Add `POST /api/v1/admin/catalog/batch-import` endpoint that accepts a list of `CatalogImportRequest` items and processes each independently.
+- Return HTTP 200 on full success, HTTP 207 Multi-Status on partial success, HTTP 422 when all items fail.
+- Each result item carries `index`, `mediaObjectId`, the created `track` on success, or `error`/`errorCode` on failure.
+- Add `BatchImportTracks(ctx, items)` method to `catalog.Service`; individual item failures do not abort subsequent items.
+- Add `BatchImportResult`, `BatchImportResultItem` types to the catalog package.
+- Add 5 `BatchImportTracks` unit tests and 6 HTTP-layer tests covering full-success, partial-success, all-fail, empty batch, no-catalog-service, and 405 guard.
+- Update OpenAPI contract with `/api/v1/admin/catalog/batch-import` path and `CatalogBatchImportRequest`, `CatalogBatchImportResult`, `CatalogBatchImportResultItem` schemas; bump `info.version` to `0.44.0`.
+- Fix pre-existing flaky `TestMediaObjectServiceUpdatesLifecycleState` by injecting a stepping clock that guarantees distinct timestamps across `RegisterMediaObject` and `SetMediaObjectLifecycleState` calls.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+
+### v0.45.0 - 2026-06-14
+
+- Add `PATCH /api/v1/admin/catalog/artists/{id}`, `PATCH /api/v1/admin/catalog/albums/{id}`, and `PATCH /api/v1/admin/catalog/tracks/{id}` endpoints for partial metadata updates.
+- Pointer-typed request fields (`*string`, `*int`) distinguish "not provided" from "explicitly empty", enabling clients to clear optional fields without touching unmentioned fields.
+- Validation mirrors create: name, title, and artistId may not be set to an empty string; numeric fields must be non-negative; artist ownership of the referenced album is enforced when updating a track's albumId.
+- Add `UpdateArtistRequest`, `UpdateAlbumRequest`, `UpdateTrackRequest` types to the catalog package.
+- Add `WithClock` setter on `catalog.Service` for deterministic timestamp injection in tests.
+- Implement `UpdateArtist`, `UpdateAlbum`, `UpdateTrack` on `catalog.Service`; each reads the current record, applies non-nil fields, bumps `UpdatedAt`, and saves.
+- Add 11 `catalog.Service` unit tests and 7 HTTP-layer tests covering field changes, nil-field passthrough, empty-name rejection, not-found, and unconfigured-service guard.
+- Update OpenAPI contract with `CatalogUpdateArtistRequest`, `CatalogUpdateAlbumRequest`, `CatalogUpdateTrackRequest` schemas and `patch` operations on artist, album, and track `/{id}` paths; bump `info.version` to `0.45.0`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+
+### v0.46.0 - 2026-06-14
+
+- Add `Playlist` entity to the catalog domain: ordered collection of tracks with name, optional description, and an ordered `TrackIDs` list.
+- Add `ErrInvalidPlaylist` and `ErrPlaylistNotFound` sentinel errors to the catalog package.
+- Extend `catalog.Repository` interface with `SavePlaylist`, `GetPlaylist`, `ListPlaylists`, `DeletePlaylist`.
+- Implement playlist methods on `catalog.MemoryRepository` (defensive slice copies) and `catalogpg.Repository` (transactional upsert + playlist_tracks replace).
+- Add `CreatePlaylist`, `ListPlaylists`, `GetPlaylist`, `DeletePlaylist`, `UpdatePlaylist`, `AddTrackToPlaylist`, `RemoveTrackFromPlaylist` methods to `catalog.Service`; validate name non-empty, enforce track existence on add.
+- Add migration `007_playlists` with `playlists` and `playlist_tracks` tables; `playlist_tracks` uses `ON DELETE CASCADE` for both foreign keys and a `(playlist_id, position)` primary key for ordering.
+- Expose admin playlist endpoints under `/api/v1/admin/catalog/playlists/`: list, create, get, PATCH metadata, delete, `POST /{id}/tracks` (append), `DELETE /{id}/tracks/{trackId}` (remove first occurrence).
+- Expose viewer-only read endpoints under `/api/v1/catalog/playlists/`: list and get.
+- Add `ErrInvalidPlaylist` and `ErrPlaylistNotFound` to the `writeError` switch in the HTTP handler.
+- Add 9 `catalog.Service` unit tests and 7 HTTP-layer tests covering CRUD, add/remove track, viewer access, not-found, empty-name rejection, and 405 guard.
+- Update OpenAPI contract with `Playlist`, `CreatePlaylistRequest`, `UpdatePlaylistRequest`, `AddPlaylistTrackRequest` schemas and all 8 new paths; bump `info.version` to `0.46.0`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+
+### v0.47.0 - 2026-06-14
+
+- Add `PUT /api/v1/admin/catalog/playlists/{id}/tracks` endpoint that atomically replaces the entire ordered track list of a playlist.
+- Every supplied track ID must exist; an unknown ID returns 404. An empty `trackIds` array is valid and clears the playlist. Duplicate entries are preserved.
+- Add `SetPlaylistTracks(ctx, playlistID, trackIDs)` to `catalog.Service`; validates track existence via `repo.GetTrack` for each ID, then calls `repo.SavePlaylist` which already performs a transactional full-replace of `playlist_tracks` rows in the PostgreSQL backend.
+- No `catalog.Repository` interface change required — `SavePlaylist` already handles atomic replacement.
+- Add `setPlaylistTracksRequest` struct and `setPlaylistTracks` handler to the HTTP handler layer.
+- Add 5 `catalog.Service` unit tests and 7 HTTP-layer tests covering reorder, clear, duplicate preservation, unknown track, unknown playlist, missing `trackIds` field, and no-catalog-service 503.
+- Add `SetPlaylistTracksRequest` schema and `put` operation on `/api/v1/admin/catalog/playlists/{id}/tracks` to the OpenAPI contract; bump `info.version` to `0.47.0`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+
+### v0.48.0 - 2026-06-14
+
+- Add `POST /api/v1/admin/catalog/tracks/{id}/relink` endpoint that replaces the media object reference on an existing track.
+- The new media object must exist, have `assetKind` of `original_audio` or `transcoded_audio`, and have `lifecycleState` of `active`; otherwise `422 relink_rejected` is returned.
+- Add `ErrRelinkRejected` sentinel error and `RelinkTrackRequest` type to the catalog package.
+- Add `RelinkTrack(ctx, id, req)` to `catalog.Service`; validates media object via `MediaObjectReader` before overwriting `mediaObjectId` and bumping `UpdatedAt`.
+- Add `relinkTrack` handler and route to the HTTP handler layer; register 405 fallback for the sub-path.
+- Add 7 `catalog.Service` unit tests and 6 HTTP-layer tests covering success, wrong asset kind, not-active lifecycle, media not found, track not found, no reader configured, and empty `mediaObjectId`.
+- Add `CatalogRelinkTrackRequest` schema and `post` operation on `/api/v1/admin/catalog/tracks/{id}/relink` to the OpenAPI contract; bump `info.version` to `0.48.0` (corrected in v0.49.0).
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+
+### v0.49.0 - 2026-06-14
+
+- Add `GET /api/v1/admin/catalog/playlists/{id}/tracks` and `GET /api/v1/catalog/playlists/{id}/tracks` endpoints that return the full ordered `Track` object list for a playlist in a single request, eliminating the need for N separate per-track fetches.
+- An empty playlist returns an empty `tracks` array. Duplicate track entries (same ID appearing multiple times) are expanded once per occurrence in order.
+- Add `GetPlaylistTracks(ctx, playlistID)` to `catalog.Service`; resolves each `trackID` in the playlist's `TrackIDs` slice via `repo.GetTrack` and returns them in order. Returns `ErrPlaylistNotFound` for unknown playlist IDs.
+- Add `getPlaylistTracks` handler shared by both the admin and viewer routes; response shape is `{"tracks": [...Track...]}`.
+- Register `GET /api/v1/admin/catalog/playlists/{id}/tracks` (admin-auth) and `GET /api/v1/catalog/playlists/{id}/tracks` (viewer-auth) routes; register 405 fallback for the viewer sub-path.
+- Add 4 `catalog.Service` unit tests (ordered, empty, not-found, duplicate expansion) and 6 HTTP-layer tests (admin happy path, empty playlist, 404, viewer access, no-catalog-service 503, method-not-allowed 405).
+- Add `PlaylistTracksResult` schema and `get` operations on both tracks sub-paths to the OpenAPI contract; bump `info.version` to `0.49.0`.
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes` to assert all eight playlist paths.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+
+### v0.50.0 - 2026-06-14
+
+- Add `GET /api/v1/admin/catalog/stats` endpoint returning metadata-only aggregate entity counts for artists, albums, tracks, and playlists as a `CatalogStats` object.
+- Add `CatalogStats` struct to the catalog package with `artists`, `albums`, `tracks`, `playlists` integer fields.
+- Add `GetCatalogStats(ctx)` to `catalog.Service`; delegates to `repo.ListArtists`, `repo.ListAlbums`, `repo.ListTracks`, `repo.ListPlaylists` and returns counts. No new `Repository` interface methods required.
+- Add `getCatalogStats` handler to the HTTP handler layer; returns 503 when no catalog service is configured.
+- Register `GET /api/v1/admin/catalog/stats` (admin-auth) and 405 fallback for the path.
+- Add 3 `catalog.Service` unit tests (empty catalog, populated counts, no-error baseline) and 4 HTTP-layer tests (empty response shape, populated counts, no-catalog-service 503, method-not-allowed 405).
+- Add `CatalogStats` schema and `get` operation on `/api/v1/admin/catalog/stats` to the OpenAPI contract; bump `info.version` to `0.50.0`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+
+### v0.51.0 - 2026-06-14
+
+- Add `GET /api/v1/admin/catalog/stats/artists` endpoint returning per-artist album and track counts as a `CatalogArtistStatsBreakdown` object, eliminating the need for N separate list calls.
+- Add `GET /api/v1/admin/catalog/stats/albums` endpoint returning per-album track counts as a `CatalogAlbumStatsBreakdown` object.
+- Add `ArtistStatItem`, `ArtistStatsBreakdown`, `AlbumStatItem`, `AlbumStatsBreakdown` types to the catalog package.
+- Add `GetArtistStatsBreakdown(ctx)` and `GetAlbumStatsBreakdown(ctx)` to `catalog.Service`; counts are derived from existing `ListAlbumsByArtist`, `ListTracksByArtist`, `ListTracksByAlbum` calls. No new `Repository` interface methods required.
+- Add `getArtistStatsBreakdown` and `getAlbumStatsBreakdown` handlers to the HTTP handler layer; each returns 503 when no catalog service is configured.
+- Register `GET /api/v1/admin/catalog/stats/artists` and `GET /api/v1/admin/catalog/stats/albums` (admin-auth) with 405 fallbacks.
+- Add 4 `catalog.Service` unit tests (empty/populated for each breakdown) and 8 HTTP-layer tests (empty shape, populated counts, 503, 405 for each endpoint).
+- Add `CatalogArtistStatItem`, `CatalogArtistStatsBreakdown`, `CatalogAlbumStatItem`, `CatalogAlbumStatsBreakdown` schemas and `get` operations on both new paths to the OpenAPI contract; bump `info.version` to `0.51.0`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+
+### v0.52.0 - 2026-06-14
+
+- Add `GET /api/v1/admin/catalog/stats/playlists` endpoint returning per-playlist track counts as a `CatalogPlaylistStatsBreakdown` object.
+- Add `PlaylistStatItem`, `PlaylistStatsBreakdown` types to the catalog package; each item carries `playlistId`, `name`, and `trackCount` (duplicate track entries counted separately).
+- Add `GetPlaylistStatsBreakdown(ctx)` to `catalog.Service`; counts are derived from each playlist's `TrackIDs` slice length. No new `Repository` interface methods required.
+- Add `getPlaylistStatsBreakdown` handler to the HTTP handler layer; returns 503 when no catalog service is configured.
+- Register `GET /api/v1/admin/catalog/stats/playlists` (admin-auth) and 405 fallback for the path.
+- Add 2 `catalog.Service` unit tests (empty, populated with duplicate-track counting) and 4 HTTP-layer tests (empty shape, populated counts, no-catalog-service 503, method-not-allowed 405).
+- Add `CatalogPlaylistStatItem`, `CatalogPlaylistStatsBreakdown` schemas and `get` operation on `/api/v1/admin/catalog/stats/playlists` to the OpenAPI contract; bump `info.version` to `0.52.0`.
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes` to assert the new playlists stats path.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+
+### v0.53.0 - 2026-06-15
+
+- Add `GET /api/v1/admin/catalog/recently-added` endpoint returning a newest-first unified timeline of recently created artists, albums, and tracks.
+- Add `RecentItemKind`, `RecentCatalogItem`, and `RecentCatalogResult` types to the catalog package. Each timeline item includes `kind`, one entity payload, and `addedAt` copied from the entity's `CreatedAt` timestamp.
+- Add `GetRecentlyAdded(ctx, kind, limit)` to `catalog.Service`; it derives results from existing `ListArtists`, `ListAlbums`, and `ListTracks` repository methods, supports `kind=artist|album|track`, defaults `limit` to 20, and clamps values above 100. No new `Repository` interface methods required.
+- Add `getRecentlyAdded` handler to the HTTP handler layer; returns 400 for invalid `limit` or `kind`, 503 when no catalog service is configured, and registers a 405 fallback for the path.
+- Register `GET /api/v1/admin/catalog/recently-added` (admin-auth).
+- Add 5 `catalog.Service` unit tests and 8 HTTP-layer tests covering empty response shape, populated timeline payload, kind filter, invalid kind, invalid limit, limit handling, no-catalog-service 503, and method-not-allowed 405.
+- Add `RecentItemKind`, `RecentCatalogItem`, and `RecentCatalogResult` schemas plus the `get` operation on `/api/v1/admin/catalog/recently-added` to the OpenAPI contract; bump `info.version` to `0.53.0`.
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes` to assert the recently-added path.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.54.0 - 2026-06-15
+
+- Add `GET /api/v1/admin/catalog/recently-updated` endpoint returning a newest-first unified timeline of recently updated artists, albums, and tracks.
+- Add `UpdatedCatalogItem` and `UpdatedCatalogResult` types to the catalog package. Each timeline item includes `kind`, one entity payload, and `updatedAt` copied from the entity's `UpdatedAt` timestamp.
+- Add `GetRecentlyUpdated(ctx, kind, limit)` to `catalog.Service`; it derives results from existing `ListArtists`, `ListAlbums`, and `ListTracks` repository methods, supports `kind=artist|album|track`, defaults `limit` to 20, and clamps values above 100. No new `Repository` interface methods required.
+- Add `getRecentlyUpdated` handler to the HTTP handler layer; returns 400 for invalid `limit` or `kind`, 503 when no catalog service is configured, and registers a 405 fallback for the path.
+- Register `GET /api/v1/admin/catalog/recently-updated` (admin-auth).
+- Add `catalog.Service` unit tests and HTTP-layer tests covering empty response shape, updated timestamp ordering, kind filter, invalid kind, invalid limit, limit handling, no-catalog-service 503, and method-not-allowed 405.
+- Add `UpdatedCatalogItem` and `UpdatedCatalogResult` schemas plus the `get` operation on `/api/v1/admin/catalog/recently-updated` to the OpenAPI contract; bump `info.version` to `0.54.0`.
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes` to assert the recently-updated path.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.55.0 - 2026-06-15
+
+- Add viewer-facing `GET /api/v1/catalog/recently-added` and `GET /api/v1/catalog/recently-updated` endpoints requiring session authentication (`requireViewerAuth`).
+- Reuse existing `getRecentlyAdded` and `getRecentlyUpdated` handlers, wrapping them with `requireViewerAuth` middleware instead of `requireAdminAuth`.
+- Register 405 fallbacks for both viewer paths.
+- Add 16 HTTP-layer tests covering viewer auth success, admin session acceptance, static bootstrap token rejection, unauthorized requests, invalid kind/limit, and method-not-allowed.
+- Add viewer path operations to the OpenAPI contract under the "Catalog" tag; bump `info.version` to `0.55.0`.
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes` to assert the viewer recently-added and recently-updated paths.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.56.0 - 2026-06-15
+
+- Add playlist entries to the recently-added and recently-updated unified catalog timelines.
+- Extend `RecentItemKind` enum with `playlist`, and add `Playlist` fields to `RecentCatalogItem` and `UpdatedCatalogItem` types.
+- Extend `GetRecentlyAdded` and `GetRecentlyUpdated` to iterate over playlists when `kind` is empty or `playlist`.
+- Update `validateRecentItemKind` to accept `playlist` as a valid kind.
+- Update OpenAPI contract: `RecentItemKind` enum, schemas, and endpoint descriptions; bump `info.version` to `0.56.0`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

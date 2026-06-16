@@ -24,8 +24,10 @@ type S3Prober struct {
 	now    func() time.Time
 }
 
+const s3ProbeTimeout = 30 * time.Second
+
 func NewS3Prober() *S3Prober {
-	return &S3Prober{client: http.DefaultClient, now: time.Now}
+	return &S3Prober{client: &http.Client{Timeout: s3ProbeTimeout}, now: time.Now}
 }
 
 func (prober *S3Prober) Probe(ctx context.Context, backend StorageBackend) error {

@@ -9,8 +9,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgxpool"
+
+	"inori-music/services/api/internal/auth"
+	authpg "inori-music/services/api/internal/auth/postgres"
 	"inori-music/services/api/internal/httpapi"
 	"inori-music/services/api/internal/storage"
+	pgstore "inori-music/services/api/internal/storage/postgres"
 )
 
 var (
@@ -29,18 +34,43 @@ func main() {
 		log.Print("INORI_ADMIN_TOKEN is not set; /api/v1/admin routes will return 503")
 	}
 
-	repository, err := storageRepository()
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	// Open a single shared pool if INORI_DATABASE_URL is set.
+	pool, err := openDatabasePool(ctx)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	repository, err := storageRepository(ctx, pool)
 	if err != nil {
 		log.Fatal(err)
 	}
 	storageService := storage.NewService(repository)
-	mediaObjectRepository, err := mediaObjectRepository()
+	mediaObjectRepository, err := mediaObjectRepository(ctx, pool)
 	if err != nil {
 		log.Fatal(err)
 	}
 	mediaObjectService := storage.NewMediaObjectService(repository, mediaObjectRepository)
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
+
+	// Auth service — only available when PostgreSQL is configured.
+	var authService *auth.Service
+	if pool != nil {
+		authService = auth.NewService(
+			authpg.NewUserRepository(pool),
+			authpg.NewSessionRepository(pool),
+			auth.ServiceConfig{SessionTTL: sessionTTL()},
+		)
+		if err := authService.EnsureInitialAdmin(
+			ctx,
+			os.Getenv("INORI_INITIAL_ADMIN_USER"),
+			os.Getenv("INORI_INITIAL_ADMIN_PASSWORD"),
+		); err != nil {
+			log.Printf("initial admin setup: %v", err)
+		}
+	}
+
 	if interval := storageRefreshInterval(); interval > 0 {
 		log.Printf("storage refresh scheduler enabled with interval %s", interval)
 		scheduler := storage.NewRefreshScheduler(storageService, interval, func(report storage.RefreshReport, err error) {
@@ -53,14 +83,18 @@ func main() {
 		go scheduler.Run(ctx)
 	}
 
+	handlerOpts := []httpapi.HandlerOption{
+		httpapi.WithAdminToken(adminToken),
+		httpapi.WithMediaObjectService(mediaObjectService),
+		httpapi.WithServiceInfo(httpapi.ServiceInfo{Name: "inori-api", Version: version, Commit: commit, BuildTime: buildTime}),
+	}
+	if authService != nil {
+		handlerOpts = append(handlerOpts, httpapi.WithAuthService(authService))
+	}
+
 	server := &http.Server{
-		Addr: address,
-		Handler: httpapi.NewHandler(
-			storageService,
-			httpapi.WithAdminToken(adminToken),
-			httpapi.WithMediaObjectService(mediaObjectService),
-			httpapi.WithServiceInfo(httpapi.ServiceInfo{Name: "inori-api", Version: version, Commit: commit, BuildTime: buildTime}),
-		).Routes(),
+		Addr:              address,
+		Handler:           httpapi.NewHandler(storageService, handlerOpts...).Routes(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 	go func() {
@@ -91,7 +125,47 @@ func storageRefreshInterval() time.Duration {
 	return interval
 }
 
-func storageRepository() (storage.Repository, error) {
+func sessionTTL() time.Duration {
+	value := os.Getenv("INORI_SESSION_TTL")
+	if value == "" {
+		return 24 * time.Hour
+	}
+	ttl, err := time.ParseDuration(value)
+	if err != nil || ttl <= 0 {
+		log.Printf("ignoring invalid INORI_SESSION_TTL %q, using 24h", value)
+		return 24 * time.Hour
+	}
+	return ttl
+}
+
+// openDatabasePool opens a pgxpool if INORI_DATABASE_URL is set, or returns nil.
+func openDatabasePool(ctx context.Context) (*pgxpool.Pool, error) {
+	dsn := os.Getenv("INORI_DATABASE_URL")
+	if dsn == "" {
+		return nil, nil
+	}
+	pool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		return nil, err
+	}
+	conn, err := pool.Acquire(ctx)
+	if err != nil {
+		pool.Close()
+		return nil, err
+	}
+	defer conn.Release()
+	if err := pgstore.Migrate(ctx, conn.Conn()); err != nil {
+		pool.Close()
+		return nil, err
+	}
+	log.Print("storage: using PostgreSQL persistence")
+	return pool, nil
+}
+
+func storageRepository(ctx context.Context, pool *pgxpool.Pool) (storage.Repository, error) {
+	if pool != nil {
+		return pgstore.NewBackendRepository(pool), nil
+	}
 	path := os.Getenv("INORI_STORAGE_REPOSITORY_FILE")
 	if path == "" {
 		return storage.NewMemoryRepository(), nil
@@ -100,7 +174,10 @@ func storageRepository() (storage.Repository, error) {
 	return storage.NewFileRepository(path)
 }
 
-func mediaObjectRepository() (storage.MediaObjectRepository, error) {
+func mediaObjectRepository(ctx context.Context, pool *pgxpool.Pool) (storage.MediaObjectRepository, error) {
+	if pool != nil {
+		return pgstore.NewMediaObjectRepository(pool), nil
+	}
 	path := os.Getenv("INORI_MEDIA_OBJECT_REPOSITORY_FILE")
 	if path == "" {
 		return storage.NewMemoryMediaObjectRepository(), nil

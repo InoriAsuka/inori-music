@@ -17,22 +17,54 @@ func TestStorageAdminOpenAPIContractCoversRoutes(t *testing.T) {
 		"/readyz":                        {"get"},
 		"/versionz":                      {"get"},
 		"/api/v1/admin/storage/backends": {"get", "post"},
-		"/api/v1/admin/storage/backends/validate":      {"post"},
-		"/api/v1/admin/storage/backends/refresh":       {"post"},
-		"/api/v1/admin/storage/backends/{id}/default":  {"post"},
-		"/api/v1/admin/storage/backends/{id}/disable":  {"post"},
-		"/api/v1/admin/storage/backends/{id}/probe":    {"post"},
-		"/api/v1/admin/storage/backends/{id}/health":   {"get"},
-		"/api/v1/admin/storage/backends/{id}/capacity": {"get"},
-		"/api/v1/admin/media/objects":                  {"get", "post"},
-		"/api/v1/admin/media/objects/stats":            {"get"},
-		"/api/v1/admin/media/objects/duplicates":       {"get"},
-		"/api/v1/admin/media/objects/lifecycle":        {"post"},
-		"/api/v1/admin/media/objects/{id}":             {"get"},
-		"/api/v1/admin/media/objects/{id}/timeline":    {"get"},
-		"/api/v1/admin/media/objects/{id}/lifecycle":   {"post"},
-		"/api/v1/admin/media/objects/verify":           {"post"},
-		"/api/v1/admin/media/objects/{id}/verify":      {"post"},
+		"/api/v1/admin/storage/backends/validate":               {"post"},
+		"/api/v1/admin/storage/backends/refresh":                {"post"},
+		"/api/v1/admin/storage/backends/{id}/default":           {"post"},
+		"/api/v1/admin/storage/backends/{id}/disable":           {"post"},
+		"/api/v1/admin/storage/backends/{id}/probe":             {"post"},
+		"/api/v1/admin/storage/backends/{id}/health":            {"get"},
+		"/api/v1/admin/storage/backends/{id}/capacity":          {"get"},
+		"/api/v1/admin/media/objects":                           {"get", "post"},
+		"/api/v1/admin/media/objects/stats":                     {"get"},
+		"/api/v1/admin/media/objects/duplicates":                {"get"},
+		"/api/v1/admin/media/objects/lifecycle":                 {"post"},
+		"/api/v1/admin/media/objects/{id}":                      {"get"},
+		"/api/v1/admin/media/objects/{id}/timeline":             {"get"},
+		"/api/v1/admin/media/objects/{id}/lifecycle":            {"post"},
+		"/api/v1/admin/media/objects/verify":                    {"post"},
+		"/api/v1/admin/media/objects/{id}/verify":               {"post"},
+		"/api/v1/admin/catalog/artists":                         {"get", "post"},
+		"/api/v1/admin/catalog/artists/{id}":                    {"get", "delete"},
+		"/api/v1/admin/catalog/albums":                          {"get", "post"},
+		"/api/v1/admin/catalog/albums/{id}":                     {"get", "delete"},
+		"/api/v1/admin/catalog/tracks":                          {"get", "post"},
+		"/api/v1/admin/catalog/tracks/{id}":                     {"get", "delete", "patch"},
+		"/api/v1/admin/catalog/tracks/{id}/relink":              {"post"},
+		"/api/v1/admin/catalog/import":                          {"post"},
+		"/api/v1/admin/catalog/batch-import":                    {"post"},
+		"/api/v1/admin/catalog/search":                          {"get"},
+		"/api/v1/admin/catalog/playlists":                       {"get", "post"},
+		"/api/v1/admin/catalog/playlists/{id}":                  {"get", "patch", "delete"},
+		"/api/v1/admin/catalog/playlists/{id}/tracks":           {"get", "post", "put"},
+		"/api/v1/admin/catalog/playlists/{id}/tracks/{trackId}": {"delete"},
+		"/api/v1/catalog/playlists":                             {"get"},
+		"/api/v1/catalog/playlists/{id}":                        {"get"},
+		"/api/v1/catalog/playlists/{id}/tracks":                 {"get"},
+		"/api/v1/catalog/artists":                               {"get"},
+		"/api/v1/catalog/artists/{id}":                          {"get"},
+		"/api/v1/catalog/albums":                                {"get"},
+		"/api/v1/catalog/albums/{id}":                           {"get"},
+		"/api/v1/catalog/tracks":                                {"get"},
+		"/api/v1/catalog/tracks/{id}":                           {"get"},
+		"/api/v1/catalog/search":                                {"get"},
+		"/api/v1/catalog/recently-added":                        {"get"},
+		"/api/v1/catalog/recently-updated":                      {"get"},
+		"/api/v1/admin/catalog/stats":                           {"get"},
+		"/api/v1/admin/catalog/stats/artists":                   {"get"},
+		"/api/v1/admin/catalog/stats/albums":                    {"get"},
+		"/api/v1/admin/catalog/stats/playlists":                 {"get"},
+		"/api/v1/admin/catalog/recently-added":                  {"get"},
+		"/api/v1/admin/catalog/recently-updated":                {"get"},
 	}
 
 	for path, methods := range expected {
@@ -53,13 +85,19 @@ func TestStorageAdminOpenAPIContractPathParameters(t *testing.T) {
 	paths := document["paths"].(map[string]any)
 	components := document["components"].(map[string]any)
 	parameters := components["parameters"].(map[string]any)
-	if _, ok := parameters["BackendId"].(map[string]any); !ok {
-		t.Fatal("OpenAPI BackendId path parameter is missing")
-	}
-	if _, ok := parameters["MediaObjectId"].(map[string]any); !ok {
-		t.Fatal("OpenAPI MediaObjectId path parameter is missing")
+	for _, want := range []string{"BackendId", "MediaObjectId", "UserId", "CatalogId"} {
+		if _, ok := parameters[want].(map[string]any); !ok {
+			t.Fatalf("OpenAPI %s path parameter is missing", want)
+		}
 	}
 
+	// All paths containing {id} must have exactly one $ref path-level parameter.
+	validRefs := map[string]bool{
+		"#/components/parameters/BackendId":     true,
+		"#/components/parameters/MediaObjectId": true,
+		"#/components/parameters/UserId":        true,
+		"#/components/parameters/CatalogId":     true,
+	}
 	for path, item := range paths {
 		if !strings.Contains(path, "{id}") {
 			continue
@@ -67,15 +105,11 @@ func TestStorageAdminOpenAPIContractPathParameters(t *testing.T) {
 		pathItem := item.(map[string]any)
 		refs, ok := pathItem["parameters"].([]any)
 		if !ok || len(refs) != 1 {
-			t.Fatalf("path %s parameters = %#v, want BackendId reference", path, pathItem["parameters"])
+			t.Fatalf("path %s parameters = %#v, want exactly one parameter ref", path, pathItem["parameters"])
 		}
-		want := "#/components/parameters/BackendId"
-		if strings.HasPrefix(path, "/api/v1/admin/media/objects/") {
-			want = "#/components/parameters/MediaObjectId"
-		}
-		ref := refs[0].(map[string]any)["$ref"]
-		if ref != want {
-			t.Fatalf("path %s parameter ref = %#v, want %s", path, ref, want)
+		ref, _ := refs[0].(map[string]any)["$ref"].(string)
+		if !validRefs[ref] {
+			t.Fatalf("path %s parameter ref = %q, want a known components/parameters ref", path, ref)
 		}
 	}
 }
@@ -150,6 +184,10 @@ func TestStorageAdminOpenAPIContractSecurity(t *testing.T) {
 		if path == "/healthz" || path == "/metrics" || path == "/readyz" || path == "/versionz" {
 			continue
 		}
+		// Login and logout are public endpoints (empty security, no bearerAuth required).
+		if path == "/api/v1/auth/login" || path == "/api/v1/auth/logout" {
+			continue
+		}
 		pathItem := item.(map[string]any)
 		for method := range pathItem {
 			if method == "parameters" {
@@ -178,7 +216,7 @@ func TestStorageAdminOpenAPIContractSchemasAndErrors(t *testing.T) {
 	document := loadOpenAPIContract(t)
 	components := document["components"].(map[string]any)
 	schemas := components["schemas"].(map[string]any)
-	for _, name := range []string{"StorageBackend", "StorageBackendRequest", "BackendConfig", "LocalConfig", "NFSConfig", "SMBConfig", "S3Config", "DistributedConfig", "CapabilitySet", "ProbeResult", "CapacityReport", "RefreshReport", "RefreshResult", "ServiceInfo", "ReadinessCheck", "ReadinessReport", "MediaObject", "MediaObjectRequest", "MediaObjectLifecycleRequest", "MediaObjectLifecycleChange", "MediaObjectTimeline", "MediaObjectTimelineEvent", "MediaObjectSelectionFilter", "MediaObjectBulkLifecycleRequest", "MediaObjectLifecycleUpdateReport", "MediaObjectLifecycleUpdateResult", "MediaObjectStats", "MediaObjectDuplicateReport", "MediaObjectDuplicateGroup", "MediaObjectVerificationResult", "MediaObjectVerificationReport", "PaginationMetadata", "ErrorEnvelope"} {
+	for _, name := range []string{"StorageBackend", "StorageBackendRequest", "BackendConfig", "LocalConfig", "NFSConfig", "SMBConfig", "S3Config", "DistributedConfig", "CapabilitySet", "ProbeResult", "CapacityReport", "RefreshReport", "RefreshResult", "ServiceInfo", "ReadinessCheck", "ReadinessReport", "MediaObject", "MediaObjectRequest", "MediaObjectLifecycleRequest", "MediaObjectLifecycleChange", "MediaObjectTimeline", "MediaObjectTimelineEvent", "MediaObjectSelectionFilter", "MediaObjectBulkLifecycleRequest", "MediaObjectLifecycleUpdateReport", "MediaObjectLifecycleUpdateResult", "MediaObjectStats", "MediaObjectDuplicateReport", "MediaObjectDuplicateGroup", "MediaObjectVerificationResult", "MediaObjectVerificationReport", "PaginationMetadata", "ErrorEnvelope", "CatalogArtist", "CatalogAlbum", "CatalogTrack", "CatalogSearchResult", "SearchResultItem", "SearchResultKind", "CatalogArtistStatItem", "CatalogArtistStatsBreakdown", "CatalogAlbumStatItem", "CatalogAlbumStatsBreakdown", "RecentItemKind", "RecentCatalogItem", "RecentCatalogResult", "UpdatedCatalogItem", "UpdatedCatalogResult"} {
 		if _, ok := schemas[name].(map[string]any); !ok {
 			t.Fatalf("schema %q is missing", name)
 		}
@@ -188,7 +226,7 @@ func TestStorageAdminOpenAPIContractSchemasAndErrors(t *testing.T) {
 	errorProperty := errorEnvelope["properties"].(map[string]any)["error"].(map[string]any)
 	codeProperty := errorProperty["properties"].(map[string]any)["code"].(map[string]any)
 	enums := codeProperty["enum"].([]any)
-	for _, code := range []string{"invalid_backend", "invalid_media_object", "unauthorized", "not_found", "method_not_allowed", "conflict", "probe_unsupported", "probe_failed", "capacity_unsupported", "internal_error", "admin_auth_not_configured", "media_registry_not_configured", "media_object_verification_unsupported", "media_object_verification_failed"} {
+	for _, code := range []string{"invalid_backend", "invalid_media_object", "unauthorized", "not_found", "method_not_allowed", "conflict", "probe_unsupported", "probe_failed", "capacity_unsupported", "internal_error", "admin_auth_not_configured", "media_registry_not_configured", "media_object_verification_unsupported", "media_object_verification_failed", "missing_query", "catalog_not_configured", "invalid_catalog_entity", "import_rejected"} {
 		if !containsString(enums, code) {
 			t.Fatalf("error code %q is missing from OpenAPI enum %#v", code, enums)
 		}
