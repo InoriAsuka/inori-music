@@ -34,9 +34,9 @@ func TestStorageAdminOpenAPIContractCoversRoutes(t *testing.T) {
 		"/api/v1/admin/media/objects/verify":                    {"post"},
 		"/api/v1/admin/media/objects/{id}/verify":               {"post"},
 		"/api/v1/admin/catalog/artists":                         {"get", "post"},
-		"/api/v1/admin/catalog/artists/{id}":                    {"get", "delete"},
+		"/api/v1/admin/catalog/artists/{id}":                    {"get", "delete", "patch"},
 		"/api/v1/admin/catalog/albums":                          {"get", "post"},
-		"/api/v1/admin/catalog/albums/{id}":                     {"get", "delete"},
+		"/api/v1/admin/catalog/albums/{id}":                     {"get", "delete", "patch"},
 		"/api/v1/admin/catalog/tracks":                          {"get", "post"},
 		"/api/v1/admin/catalog/tracks/{id}":                     {"get", "delete", "patch"},
 		"/api/v1/admin/catalog/tracks/{id}/relink":              {"post"},
@@ -226,12 +226,38 @@ func TestStorageAdminOpenAPIContractSchemasAndErrors(t *testing.T) {
 	errorProperty := errorEnvelope["properties"].(map[string]any)["error"].(map[string]any)
 	codeProperty := errorProperty["properties"].(map[string]any)["code"].(map[string]any)
 	enums := codeProperty["enum"].([]any)
-	for _, code := range []string{"invalid_backend", "invalid_media_object", "unauthorized", "not_found", "method_not_allowed", "conflict", "probe_unsupported", "probe_failed", "capacity_unsupported", "internal_error", "admin_auth_not_configured", "media_registry_not_configured", "media_object_verification_unsupported", "media_object_verification_failed", "missing_query", "catalog_not_configured", "invalid_catalog_entity", "import_rejected"} {
+	for _, code := range []string{"invalid_backend", "invalid_media_object", "unauthorized", "not_found", "method_not_allowed", "conflict", "probe_unsupported", "probe_failed", "capacity_unsupported", "internal_error", "admin_auth_not_configured", "media_registry_not_configured", "media_object_verification_unsupported", "media_object_verification_failed", "auth_not_configured", "invalid_user", "user_disabled", "missing_query", "catalog_not_configured", "invalid_catalog_entity", "import_rejected", "relink_rejected", "validation_error", "invalid_limit"} {
 		if !containsString(enums, code) {
 			t.Fatalf("error code %q is missing from OpenAPI enum %#v", code, enums)
 		}
 	}
 }
+
+func TestStorageAdminOpenAPIContractRecentTimelineSchemas(t *testing.T) {
+	document := loadOpenAPIContract(t)
+	components := document["components"].(map[string]any)
+	schemas := components["schemas"].(map[string]any)
+
+	recentKind := schemas["RecentItemKind"].(map[string]any)
+	for _, kind := range []string{"artist", "album", "track", "playlist"} {
+		if !containsString(recentKind["enum"].([]any), kind) {
+			t.Fatalf("RecentItemKind enum is missing %q", kind)
+		}
+	}
+
+	for _, schemaName := range []string{"RecentCatalogItem", "UpdatedCatalogItem"} {
+		schema := schemas[schemaName].(map[string]any)
+		properties := schema["properties"].(map[string]any)
+		playlist, ok := properties["playlist"].(map[string]any)
+		if !ok {
+			t.Fatalf("%s playlist payload property is missing", schemaName)
+		}
+		if playlist["$ref"] != "#/components/schemas/Playlist" {
+			t.Fatalf("%s playlist ref = %#v, want Playlist schema ref", schemaName, playlist["$ref"])
+		}
+	}
+}
+
 
 func loadOpenAPIContract(t *testing.T) map[string]any {
 	t.Helper()

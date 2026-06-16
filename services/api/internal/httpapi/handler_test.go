@@ -2794,6 +2794,52 @@ func TestGetRecentlyAddedKindQueryParam(t *testing.T) {
 	}
 }
 
+func TestGetRecentlyAddedPlaylistKindQueryParam(t *testing.T) {
+	h := newCatalogTestHandler()
+
+	playlistResp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/playlists", `{"name":"Recent Mix"}`)
+	if playlistResp.Code != http.StatusCreated {
+		t.Fatalf("create playlist: %d %s", playlistResp.Code, playlistResp.Body.String())
+	}
+	artistResp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Other Artist"}`)
+	if artistResp.Code != http.StatusCreated {
+		t.Fatalf("create artist: %d %s", artistResp.Code, artistResp.Body.String())
+	}
+
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/recently-added?kind=playlist", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("recently-added?kind=playlist status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	items := got["items"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("expected 1 playlist item, got %d", len(items))
+	}
+	item := items[0].(map[string]any)
+	playlist := item["playlist"].(map[string]any)
+	if item["kind"] != "playlist" || playlist["name"] != "Recent Mix" || item["addedAt"] == nil {
+		t.Fatalf("unexpected playlist recent item: %v", item)
+	}
+
+	resp = performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/recently-added", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("recently-added status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	decodeResponse(t, resp, &got)
+	items = got["items"].([]any)
+	hasPlaylist := false
+	for _, raw := range items {
+		m := raw.(map[string]any)
+		if m["kind"] == "playlist" && m["playlist"] != nil {
+			hasPlaylist = true
+		}
+	}
+	if !hasPlaylist {
+		t.Fatalf("expected unified recently-added timeline to include playlist, got %v", items)
+	}
+}
+
 func TestGetRecentlyAddedLimitParam(t *testing.T) {
 	h := newCatalogTestHandler()
 
@@ -2933,6 +2979,52 @@ func TestGetRecentlyUpdatedKindQueryParam(t *testing.T) {
 	}
 }
 
+func TestGetRecentlyUpdatedPlaylistKindQueryParam(t *testing.T) {
+	h := newCatalogTestHandler()
+
+	playlistResp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/playlists", `{"name":"Fresh Mix"}`)
+	if playlistResp.Code != http.StatusCreated {
+		t.Fatalf("create playlist: %d %s", playlistResp.Code, playlistResp.Body.String())
+	}
+	artistResp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Other Artist"}`)
+	if artistResp.Code != http.StatusCreated {
+		t.Fatalf("create artist: %d %s", artistResp.Code, artistResp.Body.String())
+	}
+
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/recently-updated?kind=playlist", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("recently-updated?kind=playlist status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	items := got["items"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("expected 1 playlist item, got %d", len(items))
+	}
+	item := items[0].(map[string]any)
+	playlist := item["playlist"].(map[string]any)
+	if item["kind"] != "playlist" || playlist["name"] != "Fresh Mix" || item["updatedAt"] == nil {
+		t.Fatalf("unexpected playlist recent item: %v", item)
+	}
+
+	resp = performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/recently-updated", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("recently-updated status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	decodeResponse(t, resp, &got)
+	items = got["items"].([]any)
+	hasPlaylist := false
+	for _, raw := range items {
+		m := raw.(map[string]any)
+		if m["kind"] == "playlist" && m["playlist"] != nil {
+			hasPlaylist = true
+		}
+	}
+	if !hasPlaylist {
+		t.Fatalf("expected unified recently-updated timeline to include playlist, got %v", items)
+	}
+}
+
 func TestGetRecentlyUpdatedLimitParam(t *testing.T) {
 	h := newCatalogTestHandler()
 
@@ -3005,6 +3097,31 @@ func TestViewerGetRecentlyAdded(t *testing.T) {
 	}
 }
 
+func TestViewerGetRecentlyAddedPlaylistKind(t *testing.T) {
+	h, viewerToken, adminToken := newViewerTestHandler(t)
+
+	playlistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/playlists", `{"name":"Viewer Mix"}`, "Bearer "+adminToken)
+	if playlistResp.Code != http.StatusCreated {
+		t.Fatalf("create playlist: %d %s", playlistResp.Code, playlistResp.Body.String())
+	}
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/recently-added?kind=playlist", "", "Bearer "+viewerToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("viewer recently-added?kind=playlist status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	items := got["items"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("expected 1 playlist item, got %d", len(items))
+	}
+	item := items[0].(map[string]any)
+	playlist := item["playlist"].(map[string]any)
+	if item["kind"] != "playlist" || playlist["name"] != "Viewer Mix" || item["addedAt"] == nil {
+		t.Fatalf("unexpected playlist recent item: %v", item)
+	}
+}
+
 func TestViewerGetRecentlyAddedAdminToken(t *testing.T) {
 	h, _, adminToken := newViewerTestHandler(t)
 	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/recently-added", "", "Bearer "+adminToken)
@@ -3056,6 +3173,31 @@ func TestViewerGetRecentlyUpdated(t *testing.T) {
 	items, ok := got["items"].([]any)
 	if !ok || len(items) != 0 {
 		t.Errorf("expected empty items array, got %v", got["items"])
+	}
+}
+
+func TestViewerGetRecentlyUpdatedPlaylistKind(t *testing.T) {
+	h, viewerToken, adminToken := newViewerTestHandler(t)
+
+	playlistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/playlists", `{"name":"Updated Viewer Mix"}`, "Bearer "+adminToken)
+	if playlistResp.Code != http.StatusCreated {
+		t.Fatalf("create playlist: %d %s", playlistResp.Code, playlistResp.Body.String())
+	}
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/recently-updated?kind=playlist", "", "Bearer "+viewerToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("viewer recently-updated?kind=playlist status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	items := got["items"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("expected 1 playlist item, got %d", len(items))
+	}
+	item := items[0].(map[string]any)
+	playlist := item["playlist"].(map[string]any)
+	if item["kind"] != "playlist" || playlist["name"] != "Updated Viewer Mix" || item["updatedAt"] == nil {
+		t.Fatalf("unexpected playlist recent item: %v", item)
 	}
 }
 

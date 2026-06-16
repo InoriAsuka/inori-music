@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.56.0`
+`0.57.0`
 
 ## Product Goal
 
@@ -468,4 +468,13 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Extend `GetRecentlyAdded` and `GetRecentlyUpdated` to iterate over playlists when `kind` is empty or `playlist`.
 - Update `validateRecentItemKind` to accept `playlist` as a valid kind.
 - Update OpenAPI contract: `RecentItemKind` enum, schemas, and endpoint descriptions; bump `info.version` to `0.56.0`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.57.0 - 2026-06-16
+
+- Repair playlist participation in recently-added and recently-updated catalog timelines: the v0.56.0 implementation was incomplete — `RecentItemPlaylist` constant, `Playlist` payload fields on `RecentCatalogItem` and `UpdatedCatalogItem`, and `ListPlaylists` iterations in `GetRecentlyAdded` / `GetRecentlyUpdated` were missing.
+- Update `validateRecentItemKind` to accept `"playlist"` and update the validation message to name all four valid kinds.
+- Update OpenAPI contract: add `relink_rejected`, `validation_error`, and `invalid_limit` to the error code enum; bump `info.version` to `0.57.0`.
+- Correct `services/api/internal/storage/capacity.go`: remove duplicate `FilesystemCapacityProvider` body now superseded by the build-tagged `capacity_unix.go` and `capacity_unsupported.go` files pulled in with the upstream update.
+- Strengthen `openapi_contract_test.go`: assert `patch` on artist/album `{id}` paths, assert all three new error codes, and add `TestStorageAdminOpenAPIContractRecentTimelineSchemas` asserting the `RecentItemKind` enum includes `"playlist"` and both recent timeline item schemas carry a `playlist` payload ref.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
