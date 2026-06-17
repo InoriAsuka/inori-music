@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"sort"
 	"strings"
 	"time"
 )
@@ -695,77 +694,10 @@ func (s *Service) GetRecentlyAdded(ctx context.Context, kind string, limit int) 
 		return RecentCatalogResult{}, err
 	}
 	limit = normalizeRecentLimit(limit)
-
-	items := make([]RecentCatalogItem, 0)
-
-	if kind == "" || kind == string(RecentItemArtist) {
-		artists, err := s.repo.ListArtists(ctx)
-		if err != nil {
-			return RecentCatalogResult{}, err
-		}
-		for i := range artists {
-			a := artists[i]
-			items = append(items, RecentCatalogItem{
-				Kind:    RecentItemArtist,
-				Artist:  &a,
-				AddedAt: a.CreatedAt,
-			})
-		}
+	items, err := s.repo.RecentlyAdded(ctx, kind, limit)
+	if err != nil {
+		return RecentCatalogResult{}, err
 	}
-
-	if kind == "" || kind == string(RecentItemAlbum) {
-		albums, err := s.repo.ListAlbums(ctx)
-		if err != nil {
-			return RecentCatalogResult{}, err
-		}
-		for i := range albums {
-			al := albums[i]
-			items = append(items, RecentCatalogItem{
-				Kind:    RecentItemAlbum,
-				Album:   &al,
-				AddedAt: al.CreatedAt,
-			})
-		}
-	}
-
-	if kind == "" || kind == string(RecentItemTrack) {
-		tracks, err := s.repo.ListTracks(ctx)
-		if err != nil {
-			return RecentCatalogResult{}, err
-		}
-		for i := range tracks {
-			t := tracks[i]
-			items = append(items, RecentCatalogItem{
-				Kind:    RecentItemTrack,
-				Track:   &t,
-				AddedAt: t.CreatedAt,
-			})
-		}
-	}
-
-	if kind == "" || kind == string(RecentItemPlaylist) {
-		playlists, err := s.repo.ListPlaylists(ctx)
-		if err != nil {
-			return RecentCatalogResult{}, err
-		}
-		for i := range playlists {
-			p := playlists[i]
-			items = append(items, RecentCatalogItem{
-				Kind:     RecentItemPlaylist,
-				Playlist: &p,
-				AddedAt:  p.CreatedAt,
-			})
-		}
-	}
-
-	sort.SliceStable(items, func(i, j int) bool {
-		return items[i].AddedAt.After(items[j].AddedAt)
-	})
-
-	if limit < len(items) {
-		items = items[:limit]
-	}
-
 	return RecentCatalogResult{Items: items}, nil
 }
 
@@ -779,77 +711,10 @@ func (s *Service) GetRecentlyUpdated(ctx context.Context, kind string, limit int
 		return UpdatedCatalogResult{}, err
 	}
 	limit = normalizeRecentLimit(limit)
-
-	items := make([]UpdatedCatalogItem, 0)
-
-	if kind == "" || kind == string(RecentItemArtist) {
-		artists, err := s.repo.ListArtists(ctx)
-		if err != nil {
-			return UpdatedCatalogResult{}, err
-		}
-		for i := range artists {
-			a := artists[i]
-			items = append(items, UpdatedCatalogItem{
-				Kind:      RecentItemArtist,
-				Artist:    &a,
-				UpdatedAt: a.UpdatedAt,
-			})
-		}
+	items, err := s.repo.RecentlyUpdated(ctx, kind, limit)
+	if err != nil {
+		return UpdatedCatalogResult{}, err
 	}
-
-	if kind == "" || kind == string(RecentItemAlbum) {
-		albums, err := s.repo.ListAlbums(ctx)
-		if err != nil {
-			return UpdatedCatalogResult{}, err
-		}
-		for i := range albums {
-			al := albums[i]
-			items = append(items, UpdatedCatalogItem{
-				Kind:      RecentItemAlbum,
-				Album:     &al,
-				UpdatedAt: al.UpdatedAt,
-			})
-		}
-	}
-
-	if kind == "" || kind == string(RecentItemTrack) {
-		tracks, err := s.repo.ListTracks(ctx)
-		if err != nil {
-			return UpdatedCatalogResult{}, err
-		}
-		for i := range tracks {
-			t := tracks[i]
-			items = append(items, UpdatedCatalogItem{
-				Kind:      RecentItemTrack,
-				Track:     &t,
-				UpdatedAt: t.UpdatedAt,
-			})
-		}
-	}
-
-	if kind == "" || kind == string(RecentItemPlaylist) {
-		playlists, err := s.repo.ListPlaylists(ctx)
-		if err != nil {
-			return UpdatedCatalogResult{}, err
-		}
-		for i := range playlists {
-			p := playlists[i]
-			items = append(items, UpdatedCatalogItem{
-				Kind:      RecentItemPlaylist,
-				Playlist:  &p,
-				UpdatedAt: p.UpdatedAt,
-			})
-		}
-	}
-
-	sort.SliceStable(items, func(i, j int) bool {
-		return items[i].UpdatedAt.After(items[j].UpdatedAt)
-	})
-
-	if limit < len(items) {
-		items = items[:limit]
-	}
-
 	return UpdatedCatalogResult{Items: items}, nil
 }
 

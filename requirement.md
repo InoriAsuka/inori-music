@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.66.0`
+`0.67.0`
 
 ## Product Goal
 
@@ -575,4 +575,13 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Replace `GetCatalogStats`, `GetArtistStatsBreakdown`, `GetAlbumStatsBreakdown`, and `GetPlaylistStatsBreakdown` in `catalog.Service` with single-aggregate-call implementations.
 - Add 2 PostgreSQL integration tests (`TestRepositoryCountEntities`, `TestRepositoryArtistAlbumTrackCounts`) under the `integration` build tag.
 - Bump OpenAPI `info.version` to `0.66.0`. No HTTP API shape change.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.67.0 - 2026-06-17
+
+- Add `RecentlyAdded(ctx, kind, limit)` and `RecentlyUpdated(ctx, kind, limit)` to the `catalog.Repository` interface.
+- Implement on `catalog.MemoryRepository` (in-memory sort + slice) and `catalogpg.Repository` (single `UNION ALL … ORDER BY … LIMIT` query per method).
+- Replace the 4-branch list-and-merge logic in `GetRecentlyAdded` and `GetRecentlyUpdated` (`catalog.Service`) with single delegate calls to the new repo methods; remove unused `sort` import from `service.go`.
+- Add `TestRepositoryRecentlyAdded` PostgreSQL integration test (unified + kind filter + limit).
+- Bump OpenAPI `info.version` to `0.67.0`. No HTTP API shape change.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

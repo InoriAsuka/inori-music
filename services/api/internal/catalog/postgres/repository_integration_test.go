@@ -393,3 +393,56 @@ func TestRepositoryArtistAlbumTrackCounts(t *testing.T) {
 		t.Errorf("TrackCount = %d, want 0", items[0].TrackCount)
 	}
 }
+
+func TestRepositoryRecentlyAdded(t *testing.T) {
+	pool := setupCatalogTestDB(t)
+	repo := catalogpg.NewRepository(pool)
+	ctx := context.Background()
+
+	now := time.Now().UTC()
+	t1 := now.Add(-2 * time.Hour)
+	t2 := now.Add(-1 * time.Hour)
+
+	// Artist created earlier, album created later
+	if err := repo.SaveArtist(ctx, catalog.Artist{ID: "r-a1", Name: "Artist A", SortName: "A",
+		CreatedAt: t1, UpdatedAt: t1}); err != nil {
+		t.Fatalf("SaveArtist: %v", err)
+	}
+	if err := repo.SaveAlbum(ctx, catalog.Album{ID: "r-al1", Title: "Album A", SortTitle: "Album A",
+		ArtistID: "r-a1", ReleaseYear: 2024, CreatedAt: t2, UpdatedAt: t2}); err != nil {
+		t.Fatalf("SaveAlbum: %v", err)
+	}
+
+	// Unified: most recent first
+	items, err := repo.RecentlyAdded(ctx, "", 10)
+	if err != nil {
+		t.Fatalf("RecentlyAdded: %v", err)
+	}
+	if len(items) != 2 {
+		t.Fatalf("items = %d, want 2", len(items))
+	}
+	if items[0].Kind != catalog.RecentItemAlbum {
+		t.Errorf("items[0].Kind = %v, want album (newer)", items[0].Kind)
+	}
+	if items[1].Kind != catalog.RecentItemArtist {
+		t.Errorf("items[1].Kind = %v, want artist (older)", items[1].Kind)
+	}
+
+	// kind filter
+	items, err = repo.RecentlyAdded(ctx, "artist", 10)
+	if err != nil {
+		t.Fatalf("RecentlyAdded artist: %v", err)
+	}
+	if len(items) != 1 || items[0].Kind != catalog.RecentItemArtist {
+		t.Errorf("artist filter: items = %v", items)
+	}
+
+	// limit
+	items, err = repo.RecentlyAdded(ctx, "", 1)
+	if err != nil {
+		t.Fatalf("RecentlyAdded limit=1: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("limit=1: items = %d, want 1", len(items))
+	}
+}

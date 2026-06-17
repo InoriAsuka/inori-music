@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"inori-music/services/api/internal/catalog"
 )
@@ -369,4 +370,198 @@ func (r *Repository) PlaylistTrackCounts(ctx context.Context) ([]catalog.Playlis
 		items = []catalog.PlaylistStatItem{}
 	}
 	return items, nil
+}
+
+// ---- Recent timeline methods using UNION ALL + ORDER BY + LIMIT ----
+
+// recentAddedSQL builds a UNION ALL query that returns the top-N most recently
+// created items across the requested kinds, tagged with their entity data as
+// JSON so a single query suffices.
+// Each branch returns: (kind text, ts timestamptz, id text, json_payload text)
+func recentAddedSQL(kind string, limit int) (string, []any) {
+	branches := []string{}
+	if kind == "" || kind == "artist" {
+		branches = append(branches, `
+			SELECT 'artist' AS kind, created_at AS ts, id, name, '' AS sort_title, '' AS artist_id,
+			       0 AS release_year, '' AS sort_name, 0 AS track_number, 0 AS disc_number, 0 AS duration_ms,
+			       '' AS album_id, '' AS media_object_id, '' AS description, ARRAY[]::text[] AS track_ids, updated_at
+			FROM artists`)
+	}
+	if kind == "" || kind == "album" {
+		branches = append(branches, `
+			SELECT 'album' AS kind, created_at AS ts, id, title AS name, sort_title, artist_id,
+			       release_year, '' AS sort_name, 0, 0, 0, '' AS album_id, '' AS media_object_id, '' AS description, ARRAY[]::text[], updated_at
+			FROM albums`)
+	}
+	if kind == "" || kind == "track" {
+		branches = append(branches, `
+			SELECT 'track' AS kind, created_at AS ts, id, title AS name, sort_title, artist_id,
+			       0 AS release_year, '' AS sort_name, track_number, disc_number, duration_ms,
+			       COALESCE(album_id,'') AS album_id, media_object_id, '' AS description, ARRAY[]::text[], updated_at
+			FROM tracks`)
+	}
+	if kind == "" || kind == "playlist" {
+		branches = append(branches, `
+			SELECT 'playlist' AS kind, p.created_at AS ts, p.id, p.name,
+			       '' AS sort_title, '' AS artist_id, 0, '' AS sort_name, 0, 0, 0, '', '' AS media_object_id,
+			       p.description,
+			       COALESCE(ARRAY(SELECT pt.track_id FROM playlist_tracks pt WHERE pt.playlist_id = p.id ORDER BY pt.position), ARRAY[]::text[]) AS track_ids,
+			       p.updated_at
+			FROM playlists p`)
+	}
+	union := strings.Join(branches, " UNION ALL ")
+	sql := fmt.Sprintf("SELECT * FROM (%s) combined ORDER BY ts DESC, id DESC LIMIT $1", union)
+	return sql, []any{limit}
+}
+
+func (r *Repository) RecentlyAdded(ctx context.Context, kind string, limit int) ([]catalog.RecentCatalogItem, error) {
+	sql, args := recentAddedSQL(kind, limit)
+	return r.queryRecentRows(ctx, sql, args, true)
+}
+
+func (r *Repository) RecentlyUpdated(ctx context.Context, kind string, limit int) ([]catalog.UpdatedCatalogItem, error) {
+	// For recently-updated we sort on updated_at instead of created_at.
+	// We reuse the same column layout but substitute updated_at in the ts slot.
+	branches := []string{}
+	if kind == "" || kind == "artist" {
+		branches = append(branches, `
+			SELECT 'artist', updated_at AS ts, id, name, '' AS sort_title, '' AS artist_id,
+			       0, '' AS sort_name, 0, 0, 0, '', '', '' AS description, ARRAY[]::text[]::text[], created_at
+			FROM artists`)
+	}
+	if kind == "" || kind == "album" {
+		branches = append(branches, `
+			SELECT 'album', updated_at AS ts, id, title, sort_title, artist_id,
+			       release_year, '', 0, 0, 0, '', '', '', ARRAY[]::text[], created_at
+			FROM albums`)
+	}
+	if kind == "" || kind == "track" {
+		branches = append(branches, `
+			SELECT 'track', updated_at AS ts, id, title, sort_title, artist_id,
+			       0, '', track_number, disc_number, duration_ms,
+			       COALESCE(album_id,''), media_object_id, '', ARRAY[]::text[], created_at
+			FROM tracks`)
+	}
+	if kind == "" || kind == "playlist" {
+		branches = append(branches, `
+			SELECT 'playlist', p.updated_at AS ts, p.id, p.name,
+			       '', '', 0, '', 0, 0, 0, '', '', p.description,
+			       COALESCE(ARRAY(SELECT pt.track_id FROM playlist_tracks pt WHERE pt.playlist_id = p.id ORDER BY pt.position), ARRAY[]::text[]),
+			       p.created_at
+			FROM playlists p`)
+	}
+	union := strings.Join(branches, " UNION ALL ")
+	sql := fmt.Sprintf("SELECT * FROM (%s) combined ORDER BY ts DESC, id DESC LIMIT $1", union)
+	rows, err := r.pool.Query(ctx, sql, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []catalog.UpdatedCatalogItem
+	for rows.Next() {
+		var kindStr string
+		var ts, createdAt interface{}
+		var id, name, sortTitle, artistID, sortName, albumID, mediaObjectID, description string
+		var releaseYear, trackNumber, discNumber, durationMS int
+		var trackIDs []string
+		if err := rows.Scan(&kindStr, &ts, &id, &name, &sortTitle, &artistID,
+			&releaseYear, &sortName, &trackNumber, &discNumber, &durationMS,
+			&albumID, &mediaObjectID, &description, &trackIDs, &createdAt); err != nil {
+			return nil, err
+		}
+		updatedAt := tsTime(ts)
+		item := catalog.UpdatedCatalogItem{UpdatedAt: updatedAt}
+		switch kindStr {
+		case "artist":
+			item.Kind = catalog.RecentItemArtist
+			a := catalog.Artist{ID: id, Name: name, SortName: sortName, CreatedAt: tsTime(createdAt), UpdatedAt: updatedAt}
+			item.Artist = &a
+		case "album":
+			item.Kind = catalog.RecentItemAlbum
+			al := catalog.Album{ID: id, Title: name, SortTitle: sortTitle, ArtistID: artistID, ReleaseYear: releaseYear, CreatedAt: tsTime(createdAt), UpdatedAt: updatedAt}
+			item.Album = &al
+		case "track":
+			item.Kind = catalog.RecentItemTrack
+			t := catalog.Track{ID: id, Title: name, SortTitle: sortTitle, ArtistID: artistID, AlbumID: albumID, MediaObjectID: mediaObjectID, TrackNumber: trackNumber, DiscNumber: discNumber, DurationMS: durationMS, CreatedAt: tsTime(createdAt), UpdatedAt: updatedAt}
+			item.Track = &t
+		case "playlist":
+			item.Kind = catalog.RecentItemPlaylist
+			if trackIDs == nil {
+				trackIDs = []string{}
+			}
+			p := catalog.Playlist{ID: id, Name: name, Description: description, TrackIDs: trackIDs, CreatedAt: tsTime(createdAt), UpdatedAt: updatedAt}
+			item.Playlist = &p
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if items == nil {
+		items = []catalog.UpdatedCatalogItem{}
+	}
+	return items, nil
+}
+
+func (r *Repository) queryRecentRows(ctx context.Context, sql string, args []any, useCreatedAt bool) ([]catalog.RecentCatalogItem, error) {
+	rows, err := r.pool.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []catalog.RecentCatalogItem
+	for rows.Next() {
+		var kindStr string
+		var ts, updatedAt interface{}
+		var id, name, sortTitle, artistID, sortName, albumID, mediaObjectID, description string
+		var releaseYear, trackNumber, discNumber, durationMS int
+		var trackIDs []string
+		if err := rows.Scan(&kindStr, &ts, &id, &name, &sortTitle, &artistID,
+			&releaseYear, &sortName, &trackNumber, &discNumber, &durationMS,
+			&albumID, &mediaObjectID, &description, &trackIDs, &updatedAt); err != nil {
+			return nil, err
+		}
+		addedAt := tsTime(ts)
+		item := catalog.RecentCatalogItem{AddedAt: addedAt}
+		switch kindStr {
+		case "artist":
+			item.Kind = catalog.RecentItemArtist
+			a := catalog.Artist{ID: id, Name: name, SortName: sortName, CreatedAt: addedAt, UpdatedAt: tsTime(updatedAt)}
+			item.Artist = &a
+		case "album":
+			item.Kind = catalog.RecentItemAlbum
+			al := catalog.Album{ID: id, Title: name, SortTitle: sortTitle, ArtistID: artistID, ReleaseYear: releaseYear, CreatedAt: addedAt, UpdatedAt: tsTime(updatedAt)}
+			item.Album = &al
+		case "track":
+			item.Kind = catalog.RecentItemTrack
+			t := catalog.Track{ID: id, Title: name, SortTitle: sortTitle, ArtistID: artistID, AlbumID: albumID, MediaObjectID: mediaObjectID, TrackNumber: trackNumber, DiscNumber: discNumber, DurationMS: durationMS, CreatedAt: addedAt, UpdatedAt: tsTime(updatedAt)}
+			item.Track = &t
+		case "playlist":
+			item.Kind = catalog.RecentItemPlaylist
+			if trackIDs == nil {
+				trackIDs = []string{}
+			}
+			p := catalog.Playlist{ID: id, Name: name, Description: description, TrackIDs: trackIDs, CreatedAt: addedAt, UpdatedAt: tsTime(updatedAt)}
+			item.Playlist = &p
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if items == nil {
+		items = []catalog.RecentCatalogItem{}
+	}
+	return items, nil
+}
+
+func tsTime(v interface{}) (t time.Time) {
+	if v == nil {
+		return
+	}
+	switch val := v.(type) {
+	case time.Time:
+		return val
+	}
+	return
 }

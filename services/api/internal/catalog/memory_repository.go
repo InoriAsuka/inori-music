@@ -492,3 +492,81 @@ func (r *MemoryRepository) PlaylistTrackCounts(_ context.Context) ([]PlaylistSta
 	}
 	return items, nil
 }
+
+func (r *MemoryRepository) RecentlyAdded(ctx context.Context, kind string, limit int) ([]RecentCatalogItem, error) {
+	items := make([]RecentCatalogItem, 0)
+	r.mu.RLock()
+	if kind == "" || kind == string(RecentItemArtist) {
+		for _, a := range r.artists {
+			ac := a
+			items = append(items, RecentCatalogItem{Kind: RecentItemArtist, Artist: &ac, AddedAt: a.CreatedAt})
+		}
+	}
+	if kind == "" || kind == string(RecentItemAlbum) {
+		for _, a := range r.albums {
+			ac := a
+			items = append(items, RecentCatalogItem{Kind: RecentItemAlbum, Album: &ac, AddedAt: a.CreatedAt})
+		}
+	}
+	if kind == "" || kind == string(RecentItemTrack) {
+		for _, t := range r.tracks {
+			tc := t
+			items = append(items, RecentCatalogItem{Kind: RecentItemTrack, Track: &tc, AddedAt: t.CreatedAt})
+		}
+	}
+	if kind == "" || kind == string(RecentItemPlaylist) {
+		for _, p := range r.playlists {
+			pc := p
+			pc.TrackIDs = make([]string, len(p.TrackIDs))
+			copy(pc.TrackIDs, p.TrackIDs)
+			items = append(items, RecentCatalogItem{Kind: RecentItemPlaylist, Playlist: &pc, AddedAt: p.CreatedAt})
+		}
+	}
+	r.mu.RUnlock()
+	sort.SliceStable(items, func(i, j int) bool {
+		return items[i].AddedAt.After(items[j].AddedAt)
+	})
+	if limit < len(items) {
+		items = items[:limit]
+	}
+	return items, nil
+}
+
+func (r *MemoryRepository) RecentlyUpdated(ctx context.Context, kind string, limit int) ([]UpdatedCatalogItem, error) {
+	items := make([]UpdatedCatalogItem, 0)
+	r.mu.RLock()
+	if kind == "" || kind == string(RecentItemArtist) {
+		for _, a := range r.artists {
+			ac := a
+			items = append(items, UpdatedCatalogItem{Kind: RecentItemArtist, Artist: &ac, UpdatedAt: a.UpdatedAt})
+		}
+	}
+	if kind == "" || kind == string(RecentItemAlbum) {
+		for _, a := range r.albums {
+			ac := a
+			items = append(items, UpdatedCatalogItem{Kind: RecentItemAlbum, Album: &ac, UpdatedAt: a.UpdatedAt})
+		}
+	}
+	if kind == "" || kind == string(RecentItemTrack) {
+		for _, t := range r.tracks {
+			tc := t
+			items = append(items, UpdatedCatalogItem{Kind: RecentItemTrack, Track: &tc, UpdatedAt: t.UpdatedAt})
+		}
+	}
+	if kind == "" || kind == string(RecentItemPlaylist) {
+		for _, p := range r.playlists {
+			pc := p
+			pc.TrackIDs = make([]string, len(p.TrackIDs))
+			copy(pc.TrackIDs, p.TrackIDs)
+			items = append(items, UpdatedCatalogItem{Kind: RecentItemPlaylist, Playlist: &pc, UpdatedAt: p.UpdatedAt})
+		}
+	}
+	r.mu.RUnlock()
+	sort.SliceStable(items, func(i, j int) bool {
+		return items[i].UpdatedAt.After(items[j].UpdatedAt)
+	})
+	if limit < len(items) {
+		items = items[:limit]
+	}
+	return items, nil
+}

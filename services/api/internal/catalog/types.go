@@ -143,6 +143,13 @@ type Repository interface {
 	ArtistAlbumTrackCounts(ctx context.Context) ([]ArtistStatItem, error)
 	AlbumTrackCounts(ctx context.Context) ([]AlbumStatItem, error)
 	PlaylistTrackCounts(ctx context.Context) ([]PlaylistStatItem, error)
+
+	// Recent timeline methods — return the top-N most recently created / updated
+	// catalog entities across all or a single entity kind, in newest-first order.
+	// kind="" returns all kinds; kind=artist/album/track/playlist filters to one.
+	// limit is already validated and clamped by the caller (normalizeRecentLimit).
+	RecentlyAdded(ctx context.Context, kind string, limit int) ([]RecentCatalogItem, error)
+	RecentlyUpdated(ctx context.Context, kind string, limit int) ([]UpdatedCatalogItem, error)
 }
 
 // MediaObjectInfo carries the subset of media object metadata that the catalog

@@ -310,6 +310,43 @@ func (r *memRepo) PlaylistTrackCounts(ctx context.Context) ([]catalog.PlaylistSt
 	return items, nil
 }
 
+func (r *memRepo) RecentlyAdded(ctx context.Context, kind string, limit int) ([]catalog.RecentCatalogItem, error) {
+	r.mu.RLock()
+	tmp := catalog.NewMemoryRepository()
+	for _, a := range r.artists {
+		_ = tmp.SaveArtist(ctx, a)
+	}
+	for _, a := range r.albums {
+		_ = tmp.SaveAlbum(ctx, a)
+	}
+	for _, t := range r.tracks {
+		_ = tmp.SaveTrack(ctx, t)
+	}
+	for _, p := range r.playlists {
+		_ = tmp.SavePlaylist(ctx, p)
+	}
+	r.mu.RUnlock()
+	return tmp.RecentlyAdded(ctx, kind, limit)
+}
+
+func (r *memRepo) RecentlyUpdated(ctx context.Context, kind string, limit int) ([]catalog.UpdatedCatalogItem, error) {
+	r.mu.RLock()
+	tmp := catalog.NewMemoryRepository()
+	for _, a := range r.artists {
+		_ = tmp.SaveArtist(ctx, a)
+	}
+	for _, a := range r.albums {
+		_ = tmp.SaveAlbum(ctx, a)
+	}
+	for _, t := range r.tracks {
+		_ = tmp.SaveTrack(ctx, t)
+	}
+	for _, p := range r.playlists {
+		_ = tmp.SavePlaylist(ctx, p)
+	}
+	r.mu.RUnlock()
+	return tmp.RecentlyUpdated(ctx, kind, limit)
+}
 
 func (r *memRepo) ListArtistsPage(ctx context.Context, q catalog.ListQuery) (catalog.ListPage[catalog.Artist], error) {
 	r.mu.RLock()
