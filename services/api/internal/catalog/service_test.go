@@ -251,6 +251,66 @@ func (r *memRepo) SearchCatalog(_ context.Context, query string) (catalog.Catalo
 // ListXxxPage stubs — the test memRepo delegates to the in-package MemoryRepository
 // which already implements the full page/sort logic. We construct a temporary
 // MemoryRepository, copy all items into it, and call its page method.
+
+// ---- Aggregate stats stubs ----
+
+func (r *memRepo) CountEntities(ctx context.Context) (catalog.CatalogStats, error) {
+	return catalog.CatalogStats{
+		Artists:   len(r.artists),
+		Albums:    len(r.albums),
+		Tracks:    len(r.tracks),
+		Playlists: len(r.playlists),
+	}, nil
+}
+
+func (r *memRepo) ArtistAlbumTrackCounts(ctx context.Context) ([]catalog.ArtistStatItem, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	items := make([]catalog.ArtistStatItem, 0, len(r.artists))
+	for _, a := range r.artists {
+		albumCount, trackCount := 0, 0
+		for _, al := range r.albums {
+			if al.ArtistID == a.ID {
+				albumCount++
+			}
+		}
+		for _, t := range r.tracks {
+			if t.ArtistID == a.ID {
+				trackCount++
+			}
+		}
+		items = append(items, catalog.ArtistStatItem{ArtistID: a.ID, Name: a.Name, AlbumCount: albumCount, TrackCount: trackCount})
+	}
+	return items, nil
+}
+
+func (r *memRepo) AlbumTrackCounts(ctx context.Context) ([]catalog.AlbumStatItem, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	items := make([]catalog.AlbumStatItem, 0, len(r.albums))
+	for _, al := range r.albums {
+		count := 0
+		for _, t := range r.tracks {
+			if t.AlbumID == al.ID {
+				count++
+			}
+		}
+		items = append(items, catalog.AlbumStatItem{AlbumID: al.ID, Title: al.Title, ArtistID: al.ArtistID, TrackCount: count})
+	}
+	return items, nil
+}
+
+func (r *memRepo) PlaylistTrackCounts(ctx context.Context) ([]catalog.PlaylistStatItem, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	items := make([]catalog.PlaylistStatItem, 0, len(r.playlists))
+	for _, p := range r.playlists {
+		items = append(items, catalog.PlaylistStatItem{PlaylistID: p.ID, Name: p.Name, TrackCount: len(p.TrackIDs)})
+	}
+	return items, nil
+}
+
+
 func (r *memRepo) ListArtistsPage(ctx context.Context, q catalog.ListQuery) (catalog.ListPage[catalog.Artist], error) {
 	r.mu.RLock()
 	tmp := catalog.NewMemoryRepository()

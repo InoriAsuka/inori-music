@@ -324,3 +324,72 @@ func TestRepositoryListAlbumsPageByArtist(t *testing.T) {
 		t.Errorf("items[0].ReleaseYear = %d, want 2015", page.Items[0].ReleaseYear)
 	}
 }
+
+func TestRepositoryCountEntities(t *testing.T) {
+	pool := setupCatalogTestDB(t)
+	repo := catalogpg.NewRepository(pool)
+	ctx := context.Background()
+
+	// empty
+	stats, err := repo.CountEntities(ctx)
+	if err != nil {
+		t.Fatalf("CountEntities (empty): %v", err)
+	}
+	if stats.Artists != 0 || stats.Albums != 0 || stats.Tracks != 0 || stats.Playlists != 0 {
+		t.Fatalf("empty catalog stats = %+v, want all zero", stats)
+	}
+
+	// seed one of each
+	artist := catalog.Artist{ID: "a1", Name: "Band", SortName: "Band",
+		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
+	if err := repo.SaveArtist(ctx, artist); err != nil {
+		t.Fatalf("SaveArtist: %v", err)
+	}
+	album := catalog.Album{ID: "al1", Title: "Album", SortTitle: "Album", ArtistID: "a1", ReleaseYear: 2024,
+		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
+	if err := repo.SaveAlbum(ctx, album); err != nil {
+		t.Fatalf("SaveAlbum: %v", err)
+	}
+
+	stats, err = repo.CountEntities(ctx)
+	if err != nil {
+		t.Fatalf("CountEntities: %v", err)
+	}
+	if stats.Artists != 1 || stats.Albums != 1 {
+		t.Errorf("stats = %+v, want Artists=1 Albums=1", stats)
+	}
+}
+
+func TestRepositoryArtistAlbumTrackCounts(t *testing.T) {
+	pool := setupCatalogTestDB(t)
+	repo := catalogpg.NewRepository(pool)
+	ctx := context.Background()
+
+	if err := repo.SaveArtist(ctx, catalog.Artist{ID: "b1", Name: "Band", SortName: "Band",
+		CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}); err != nil {
+		t.Fatalf("SaveArtist: %v", err)
+	}
+	for i := 0; i < 2; i++ {
+		if err := repo.SaveAlbum(ctx, catalog.Album{
+			ID: fmt.Sprintf("al%d", i), Title: fmt.Sprintf("Album %d", i),
+			SortTitle: fmt.Sprintf("Album %d", i), ArtistID: "b1", ReleaseYear: 2020 + i,
+			CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC(),
+		}); err != nil {
+			t.Fatalf("SaveAlbum: %v", err)
+		}
+	}
+
+	items, err := repo.ArtistAlbumTrackCounts(ctx)
+	if err != nil {
+		t.Fatalf("ArtistAlbumTrackCounts: %v", err)
+	}
+	if len(items) != 1 {
+		t.Fatalf("items = %d, want 1", len(items))
+	}
+	if items[0].AlbumCount != 2 {
+		t.Errorf("AlbumCount = %d, want 2", items[0].AlbumCount)
+	}
+	if items[0].TrackCount != 0 {
+		t.Errorf("TrackCount = %d, want 0", items[0].TrackCount)
+	}
+}

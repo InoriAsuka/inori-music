@@ -265,3 +265,108 @@ func (r *Repository) ListPlaylistsPage(ctx context.Context, q catalog.ListQuery)
 	}
 	return catalog.ListPage[catalog.Playlist]{Items: playlists, Total: total}, nil
 }
+
+// ---- Aggregate stats methods ----
+
+func (r *Repository) CountEntities(ctx context.Context) (catalog.CatalogStats, error) {
+	var stats catalog.CatalogStats
+	row := r.pool.QueryRow(ctx, `
+		SELECT
+		    (SELECT COUNT(*) FROM artists)  AS artists,
+		    (SELECT COUNT(*) FROM albums)   AS albums,
+		    (SELECT COUNT(*) FROM tracks)   AS tracks,
+		    (SELECT COUNT(*) FROM playlists) AS playlists`)
+	if err := row.Scan(&stats.Artists, &stats.Albums, &stats.Tracks, &stats.Playlists); err != nil {
+		return catalog.CatalogStats{}, err
+	}
+	return stats, nil
+}
+
+func (r *Repository) ArtistAlbumTrackCounts(ctx context.Context) ([]catalog.ArtistStatItem, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT a.id, a.name,
+		       COUNT(DISTINCT al.id) AS album_count,
+		       COUNT(DISTINCT t.id)  AS track_count
+		FROM artists a
+		LEFT JOIN albums al ON al.artist_id = a.id
+		LEFT JOIN tracks t  ON t.artist_id  = a.id
+		GROUP BY a.id, a.name
+		ORDER BY lower(a.sort_name), lower(a.name), a.id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []catalog.ArtistStatItem
+	for rows.Next() {
+		var item catalog.ArtistStatItem
+		if err := rows.Scan(&item.ArtistID, &item.Name, &item.AlbumCount, &item.TrackCount); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if items == nil {
+		items = []catalog.ArtistStatItem{}
+	}
+	return items, nil
+}
+
+func (r *Repository) AlbumTrackCounts(ctx context.Context) ([]catalog.AlbumStatItem, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT al.id, al.title, al.artist_id,
+		       COUNT(t.id) AS track_count
+		FROM albums al
+		LEFT JOIN tracks t ON t.album_id = al.id
+		GROUP BY al.id, al.title, al.artist_id
+		ORDER BY lower(al.sort_title), lower(al.title), al.id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []catalog.AlbumStatItem
+	for rows.Next() {
+		var item catalog.AlbumStatItem
+		if err := rows.Scan(&item.AlbumID, &item.Title, &item.ArtistID, &item.TrackCount); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if items == nil {
+		items = []catalog.AlbumStatItem{}
+	}
+	return items, nil
+}
+
+func (r *Repository) PlaylistTrackCounts(ctx context.Context) ([]catalog.PlaylistStatItem, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT p.id, p.name,
+		       COUNT(pt.track_id) AS track_count
+		FROM playlists p
+		LEFT JOIN playlist_tracks pt ON pt.playlist_id = p.id
+		GROUP BY p.id, p.name
+		ORDER BY lower(p.name), p.id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []catalog.PlaylistStatItem
+	for rows.Next() {
+		var item catalog.PlaylistStatItem
+		if err := rows.Scan(&item.PlaylistID, &item.Name, &item.TrackCount); err != nil {
+			return nil, err
+		}
+		items = append(items, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if items == nil {
+		items = []catalog.PlaylistStatItem{}
+	}
+	return items, nil
+}

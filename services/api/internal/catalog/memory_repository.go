@@ -405,3 +405,90 @@ func (r *MemoryRepository) ListPlaylistsPage(_ context.Context, q ListQuery) (Li
 		}
 	})
 }
+
+// ---- Aggregate stats methods ----
+
+func (r *MemoryRepository) CountEntities(_ context.Context) (CatalogStats, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	return CatalogStats{
+		Artists:   len(r.artists),
+		Albums:    len(r.albums),
+		Tracks:    len(r.tracks),
+		Playlists: len(r.playlists),
+	}, nil
+}
+
+func (r *MemoryRepository) ArtistAlbumTrackCounts(ctx context.Context) ([]ArtistStatItem, error) {
+	r.mu.RLock()
+	artists := make([]Artist, 0, len(r.artists))
+	for _, a := range r.artists {
+		artists = append(artists, a)
+	}
+	r.mu.RUnlock()
+	items := make([]ArtistStatItem, 0, len(artists))
+	for _, a := range artists {
+		albumCount := 0
+		trackCount := 0
+		r.mu.RLock()
+		for _, al := range r.albums {
+			if al.ArtistID == a.ID {
+				albumCount++
+			}
+		}
+		for _, t := range r.tracks {
+			if t.ArtistID == a.ID {
+				trackCount++
+			}
+		}
+		r.mu.RUnlock()
+		items = append(items, ArtistStatItem{
+			ArtistID:   a.ID,
+			Name:       a.Name,
+			AlbumCount: albumCount,
+			TrackCount: trackCount,
+		})
+	}
+	return items, nil
+}
+
+func (r *MemoryRepository) AlbumTrackCounts(ctx context.Context) ([]AlbumStatItem, error) {
+	r.mu.RLock()
+	albums := make([]Album, 0, len(r.albums))
+	for _, a := range r.albums {
+		albums = append(albums, a)
+	}
+	r.mu.RUnlock()
+	items := make([]AlbumStatItem, 0, len(albums))
+	for _, al := range albums {
+		count := 0
+		r.mu.RLock()
+		for _, t := range r.tracks {
+			if t.AlbumID == al.ID {
+				count++
+			}
+		}
+		r.mu.RUnlock()
+		items = append(items, AlbumStatItem{
+			AlbumID:    al.ID,
+			Title:      al.Title,
+			ArtistID:   al.ArtistID,
+			TrackCount: count,
+		})
+	}
+	return items, nil
+}
+
+func (r *MemoryRepository) PlaylistTrackCounts(_ context.Context) ([]PlaylistStatItem, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	items := make([]PlaylistStatItem, 0, len(r.playlists))
+	for _, p := range r.playlists {
+		items = append(items, PlaylistStatItem{
+			PlaylistID: p.ID,
+			Name:       p.Name,
+			TrackCount: len(p.TrackIDs),
+		})
+	}
+	return items, nil
+}

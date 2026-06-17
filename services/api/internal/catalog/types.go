@@ -136,6 +136,13 @@ type Repository interface {
 	ListPlaylists(ctx context.Context) ([]Playlist, error)
 	ListPlaylistsPage(ctx context.Context, q ListQuery) (ListPage[Playlist], error)
 	DeletePlaylist(ctx context.Context, id string) error
+
+	// Aggregate stats methods — implemented via SQL COUNT/GROUP BY in the Postgres
+	// backend and via in-memory counting in the memory backend.
+	CountEntities(ctx context.Context) (CatalogStats, error)
+	ArtistAlbumTrackCounts(ctx context.Context) ([]ArtistStatItem, error)
+	AlbumTrackCounts(ctx context.Context) ([]AlbumStatItem, error)
+	PlaylistTrackCounts(ctx context.Context) ([]PlaylistStatItem, error)
 }
 
 // MediaObjectInfo carries the subset of media object metadata that the catalog

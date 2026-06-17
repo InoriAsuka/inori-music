@@ -655,94 +655,32 @@ func (s *Service) SetPlaylistTracks(ctx context.Context, playlistID string, trac
 
 // GetCatalogStats returns metadata-only aggregate entity counts.
 func (s *Service) GetCatalogStats(ctx context.Context) (CatalogStats, error) {
-	artists, err := s.repo.ListArtists(ctx)
-	if err != nil {
-		return CatalogStats{}, err
-	}
-	albums, err := s.repo.ListAlbums(ctx)
-	if err != nil {
-		return CatalogStats{}, err
-	}
-	tracks, err := s.repo.ListTracks(ctx)
-	if err != nil {
-		return CatalogStats{}, err
-	}
-	playlists, err := s.repo.ListPlaylists(ctx)
-	if err != nil {
-		return CatalogStats{}, err
-	}
-	return CatalogStats{
-		Artists:   len(artists),
-		Albums:    len(albums),
-		Tracks:    len(tracks),
-		Playlists: len(playlists),
-	}, nil
+	return s.repo.CountEntities(ctx)
 }
 
-// GetArtistStatsBreakdown returns per-artist album and track counts.
-// Counts are derived from existing list calls; no new Repository interface methods are required.
+// GetArtistStatsBreakdown returns per-artist album and track counts via a single aggregate query.
 func (s *Service) GetArtistStatsBreakdown(ctx context.Context) (ArtistStatsBreakdown, error) {
-	artists, err := s.repo.ListArtists(ctx)
+	items, err := s.repo.ArtistAlbumTrackCounts(ctx)
 	if err != nil {
 		return ArtistStatsBreakdown{}, err
-	}
-	items := make([]ArtistStatItem, 0, len(artists))
-	for _, a := range artists {
-		albums, err := s.repo.ListAlbumsByArtist(ctx, a.ID)
-		if err != nil {
-			return ArtistStatsBreakdown{}, err
-		}
-		tracks, err := s.repo.ListTracksByArtist(ctx, a.ID)
-		if err != nil {
-			return ArtistStatsBreakdown{}, err
-		}
-		items = append(items, ArtistStatItem{
-			ArtistID:   a.ID,
-			Name:       a.Name,
-			AlbumCount: len(albums),
-			TrackCount: len(tracks),
-		})
 	}
 	return ArtistStatsBreakdown{Artists: items}, nil
 }
 
-// GetAlbumStatsBreakdown returns per-album track counts.
-// Counts are derived from existing list calls; no new Repository interface methods are required.
+// GetAlbumStatsBreakdown returns per-album track counts via a single aggregate query.
 func (s *Service) GetAlbumStatsBreakdown(ctx context.Context) (AlbumStatsBreakdown, error) {
-	albums, err := s.repo.ListAlbums(ctx)
+	items, err := s.repo.AlbumTrackCounts(ctx)
 	if err != nil {
 		return AlbumStatsBreakdown{}, err
-	}
-	items := make([]AlbumStatItem, 0, len(albums))
-	for _, al := range albums {
-		tracks, err := s.repo.ListTracksByAlbum(ctx, al.ID)
-		if err != nil {
-			return AlbumStatsBreakdown{}, err
-		}
-		items = append(items, AlbumStatItem{
-			AlbumID:    al.ID,
-			Title:      al.Title,
-			ArtistID:   al.ArtistID,
-			TrackCount: len(tracks),
-		})
 	}
 	return AlbumStatsBreakdown{Albums: items}, nil
 }
 
-// GetPlaylistStatsBreakdown returns per-playlist track counts.
-// Counts are derived from the playlist's TrackIDs length; no new Repository interface methods are required.
+// GetPlaylistStatsBreakdown returns per-playlist track counts via a single aggregate query.
 func (s *Service) GetPlaylistStatsBreakdown(ctx context.Context) (PlaylistStatsBreakdown, error) {
-	playlists, err := s.repo.ListPlaylists(ctx)
+	items, err := s.repo.PlaylistTrackCounts(ctx)
 	if err != nil {
 		return PlaylistStatsBreakdown{}, err
-	}
-	items := make([]PlaylistStatItem, 0, len(playlists))
-	for _, p := range playlists {
-		items = append(items, PlaylistStatItem{
-			PlaylistID: p.ID,
-			Name:       p.Name,
-			TrackCount: len(p.TrackIDs),
-		})
 	}
 	return PlaylistStatsBreakdown{Playlists: items}, nil
 }

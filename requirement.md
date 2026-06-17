@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.65.0`
+`0.66.0`
 
 ## Product Goal
 
@@ -566,4 +566,13 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add 4 `ListXxxPage` catalog service unit tests (artist sort/paginate/offset-past-end, albums-by-artist sort, tracks paginate, playlists desc).
 - Add 2 PostgreSQL integration tests under the `integration` build tag (`TestRepositoryListArtistsPage`, `TestRepositoryListAlbumsPageByArtist`).
 - No change to HTTP API shape — client-facing behavior is identical to Phases 61–62.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.66.0 - 2026-06-17
+
+- Add 4 aggregate stats methods to the `catalog.Repository` interface: `CountEntities`, `ArtistAlbumTrackCounts`, `AlbumTrackCounts`, `PlaylistTrackCounts`.
+- Implement on `catalog.MemoryRepository` (in-memory counting) and `catalogpg.Repository` with SQL `COUNT(*)`/`GROUP BY` aggregate queries (single query per stats method, no N+1 iteration).
+- Replace `GetCatalogStats`, `GetArtistStatsBreakdown`, `GetAlbumStatsBreakdown`, and `GetPlaylistStatsBreakdown` in `catalog.Service` with single-aggregate-call implementations.
+- Add 2 PostgreSQL integration tests (`TestRepositoryCountEntities`, `TestRepositoryArtistAlbumTrackCounts`) under the `integration` build tag.
+- Bump OpenAPI `info.version` to `0.66.0`. No HTTP API shape change.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
