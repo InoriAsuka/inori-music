@@ -977,14 +977,17 @@ func (handler *Handler) listArtists(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusBadRequest, "invalid_sort_order", "sortOrder must be asc or desc")
 		return
 	}
-	artists, err := handler.catalogService.ListArtists(r.Context())
+	page, err := handler.catalogService.ListArtistsPage(r.Context(), catalog.ListQuery{
+		SortBy: sortBy, SortOrder: sortOrder, Limit: limit, Offset: offset,
+	})
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	sortCatalogArtists(artists, sortBy, sortOrder)
-	page, meta := paginateCatalog(artists, limit, offset)
-	writeJSON(w, http.StatusOK, map[string]any{"artists": page, "pagination": meta})
+	meta := catalog.CatalogPaginationMeta{
+		Limit: limit, Offset: offset, Total: page.Total, HasMore: offset+limit < page.Total,
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"artists": page.Items, "pagination": meta})
 }
 
 func (handler *Handler) createArtist(w http.ResponseWriter, r *http.Request) {
@@ -1048,14 +1051,17 @@ func (handler *Handler) listAlbumsByArtist(w http.ResponseWriter, r *http.Reques
 		writeError(w, err)
 		return
 	}
-	albums, err := handler.catalogService.ListAlbumsByArtist(r.Context(), r.PathValue("id"))
+	albumPage, err := handler.catalogService.ListAlbumsByArtistPage(r.Context(), r.PathValue("id"), catalog.ListQuery{
+		SortBy: sortBy, SortOrder: sortOrder, Limit: limit, Offset: offset,
+	})
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	sortCatalogAlbums(albums, sortBy, sortOrder)
-	page, meta := paginateCatalog(albums, limit, offset)
-	writeJSON(w, http.StatusOK, map[string]any{"albums": page, "pagination": meta})
+	meta := catalog.CatalogPaginationMeta{
+		Limit: limit, Offset: offset, Total: albumPage.Total, HasMore: offset+limit < albumPage.Total,
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"albums": albumPage.Items, "pagination": meta})
 }
 
 // listTracksByArtist returns paged, sorted tracks belonging to the artist identified
@@ -1078,14 +1084,17 @@ func (handler *Handler) listTracksByArtist(w http.ResponseWriter, r *http.Reques
 		writeError(w, err)
 		return
 	}
-	tracks, err := handler.catalogService.ListTracksByArtist(r.Context(), r.PathValue("id"))
+	trackPage, err := handler.catalogService.ListTracksByArtistPage(r.Context(), r.PathValue("id"), catalog.ListQuery{
+		SortBy: sortBy, SortOrder: sortOrder, Limit: limit, Offset: offset,
+	})
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	sortCatalogTracks(tracks, sortBy, sortOrder)
-	page, meta := paginateCatalog(tracks, limit, offset)
-	writeJSON(w, http.StatusOK, map[string]any{"tracks": page, "pagination": meta})
+	meta := catalog.CatalogPaginationMeta{
+		Limit: limit, Offset: offset, Total: trackPage.Total, HasMore: offset+limit < trackPage.Total,
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"tracks": trackPage.Items, "pagination": meta})
 }
 
 // patchArtistRequest carries the fields that may be changed via PATCH.
@@ -1138,23 +1147,25 @@ func (handler *Handler) listAlbums(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusBadRequest, "invalid_sort_order", "sortOrder must be asc or desc")
 		return
 	}
+	q := catalog.ListQuery{SortBy: sortBy, SortOrder: sortOrder, Limit: limit, Offset: offset}
 	artistID := r.URL.Query().Get("artistId")
 	var (
-		albums []catalog.Album
-		err    error
+		page catalog.ListPage[catalog.Album]
+		err  error
 	)
 	if artistID != "" {
-		albums, err = handler.catalogService.ListAlbumsByArtist(r.Context(), artistID)
+		page, err = handler.catalogService.ListAlbumsByArtistPage(r.Context(), artistID, q)
 	} else {
-		albums, err = handler.catalogService.ListAlbums(r.Context())
+		page, err = handler.catalogService.ListAlbumsPage(r.Context(), q)
 	}
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	sortCatalogAlbums(albums, sortBy, sortOrder)
-	page, meta := paginateCatalog(albums, limit, offset)
-	writeJSON(w, http.StatusOK, map[string]any{"albums": page, "pagination": meta})
+	meta := catalog.CatalogPaginationMeta{
+		Limit: limit, Offset: offset, Total: page.Total, HasMore: offset+limit < page.Total,
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"albums": page.Items, "pagination": meta})
 }
 
 func (handler *Handler) createAlbum(w http.ResponseWriter, r *http.Request) {
@@ -1217,14 +1228,17 @@ func (handler *Handler) listTracksByAlbum(w http.ResponseWriter, r *http.Request
 		writeError(w, err)
 		return
 	}
-	tracks, err := handler.catalogService.ListTracksByAlbum(r.Context(), r.PathValue("id"))
+	trackPage, err := handler.catalogService.ListTracksByAlbumPage(r.Context(), r.PathValue("id"), catalog.ListQuery{
+		SortBy: sortBy, SortOrder: sortOrder, Limit: limit, Offset: offset,
+	})
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	sortCatalogTracks(tracks, sortBy, sortOrder)
-	page, meta := paginateCatalog(tracks, limit, offset)
-	writeJSON(w, http.StatusOK, map[string]any{"tracks": page, "pagination": meta})
+	meta := catalog.CatalogPaginationMeta{
+		Limit: limit, Offset: offset, Total: trackPage.Total, HasMore: offset+limit < trackPage.Total,
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"tracks": trackPage.Items, "pagination": meta})
 }
 
 // patchAlbumRequest carries the fields that may be changed via PATCH.
@@ -1284,28 +1298,30 @@ func (handler *Handler) listTracks(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusBadRequest, "invalid_sort_order", "sortOrder must be asc or desc")
 		return
 	}
-	q := r.URL.Query()
-	artistID := q.Get("artistId")
-	albumID := q.Get("albumId")
+	q := catalog.ListQuery{SortBy: sortBy, SortOrder: sortOrder, Limit: limit, Offset: offset}
+	queryArgs := r.URL.Query()
+	artistID := queryArgs.Get("artistId")
+	albumID := queryArgs.Get("albumId")
 	var (
-		tracks []catalog.Track
-		err    error
+		page catalog.ListPage[catalog.Track]
+		err  error
 	)
 	switch {
 	case albumID != "":
-		tracks, err = handler.catalogService.ListTracksByAlbum(r.Context(), albumID)
+		page, err = handler.catalogService.ListTracksByAlbumPage(r.Context(), albumID, q)
 	case artistID != "":
-		tracks, err = handler.catalogService.ListTracksByArtist(r.Context(), artistID)
+		page, err = handler.catalogService.ListTracksByArtistPage(r.Context(), artistID, q)
 	default:
-		tracks, err = handler.catalogService.ListTracks(r.Context())
+		page, err = handler.catalogService.ListTracksPage(r.Context(), q)
 	}
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	sortCatalogTracks(tracks, sortBy, sortOrder)
-	page, meta := paginateCatalog(tracks, limit, offset)
-	writeJSON(w, http.StatusOK, map[string]any{"tracks": page, "pagination": meta})
+	meta := catalog.CatalogPaginationMeta{
+		Limit: limit, Offset: offset, Total: page.Total, HasMore: offset+limit < page.Total,
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"tracks": page.Items, "pagination": meta})
 }
 
 func (handler *Handler) createTrack(w http.ResponseWriter, r *http.Request) {
@@ -1509,14 +1525,17 @@ func (handler *Handler) listPlaylists(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusBadRequest, "invalid_sort_order", "sortOrder must be asc or desc")
 		return
 	}
-	playlists, err := handler.catalogService.ListPlaylists(r.Context())
+	pgResult, err := handler.catalogService.ListPlaylistsPage(r.Context(), catalog.ListQuery{
+		SortBy: sortBy, SortOrder: sortOrder, Limit: limit, Offset: offset,
+	})
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	sortCatalogPlaylists(playlists, sortBy, sortOrder)
-	page, meta := paginateCatalog(playlists, limit, offset)
-	writeJSON(w, http.StatusOK, map[string]any{"playlists": page, "pagination": meta})
+	meta := catalog.CatalogPaginationMeta{
+		Limit: limit, Offset: offset, Total: pgResult.Total, HasMore: offset+limit < pgResult.Total,
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"playlists": pgResult.Items, "pagination": meta})
 }
 
 func (handler *Handler) createPlaylist(w http.ResponseWriter, r *http.Request) {

@@ -3,6 +3,7 @@ package catalog
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 	"sync"
 )
@@ -246,4 +247,161 @@ func (r *MemoryRepository) SearchCatalog(_ context.Context, query string) (Catal
 		}
 	}
 	return result, nil
+}
+
+// ---- ListPage methods (in-memory sort + slice to satisfy the Repository interface) ----
+
+func memPage[T any](items []T, q ListQuery, less func(a, b T) bool) (ListPage[T], error) {
+	sorted := make([]T, len(items))
+	copy(sorted, items)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		if q.SortOrder == CatalogSortOrderDesc {
+			return less(sorted[j], sorted[i])
+		}
+		return less(sorted[i], sorted[j])
+	})
+	total := len(sorted)
+	start := q.Offset
+	if start >= total {
+		return ListPage[T]{Items: []T{}, Total: total}, nil
+	}
+	end := start + q.Limit
+	if end > total {
+		end = total
+	}
+	return ListPage[T]{Items: sorted[start:end], Total: total}, nil
+}
+
+func (r *MemoryRepository) ListArtistsPage(_ context.Context, q ListQuery) (ListPage[Artist], error) {
+	r.mu.RLock()
+	all := make([]Artist, 0, len(r.artists))
+	for _, a := range r.artists {
+		all = append(all, a)
+	}
+	r.mu.RUnlock()
+	return memPage(all, q, func(a, b Artist) bool {
+		switch q.SortBy {
+		case ArtistSortBySortName:
+			return strings.ToLower(a.SortName) < strings.ToLower(b.SortName)
+		case ArtistSortByCreatedAt:
+			return a.CreatedAt.Before(b.CreatedAt)
+		case ArtistSortByUpdatedAt:
+			return a.UpdatedAt.Before(b.UpdatedAt)
+		default:
+			return strings.ToLower(a.Name) < strings.ToLower(b.Name)
+		}
+	})
+}
+
+func (r *MemoryRepository) ListAlbumsPage(_ context.Context, q ListQuery) (ListPage[Album], error) {
+	r.mu.RLock()
+	all := make([]Album, 0, len(r.albums))
+	for _, a := range r.albums {
+		all = append(all, a)
+	}
+	r.mu.RUnlock()
+	return memPage(all, q, albumLess(q.SortBy))
+}
+
+func (r *MemoryRepository) ListAlbumsByArtistPage(_ context.Context, artistID string, q ListQuery) (ListPage[Album], error) {
+	r.mu.RLock()
+	var all []Album
+	for _, a := range r.albums {
+		if a.ArtistID == artistID {
+			all = append(all, a)
+		}
+	}
+	r.mu.RUnlock()
+	return memPage(all, q, albumLess(q.SortBy))
+}
+
+func albumLess(sortBy string) func(a, b Album) bool {
+	return func(a, b Album) bool {
+		switch sortBy {
+		case AlbumSortBySortTitle:
+			return strings.ToLower(a.SortTitle) < strings.ToLower(b.SortTitle)
+		case AlbumSortByReleaseYear:
+			return a.ReleaseYear < b.ReleaseYear
+		case AlbumSortByCreatedAt:
+			return a.CreatedAt.Before(b.CreatedAt)
+		case AlbumSortByUpdatedAt:
+			return a.UpdatedAt.Before(b.UpdatedAt)
+		default:
+			return strings.ToLower(a.Title) < strings.ToLower(b.Title)
+		}
+	}
+}
+
+func (r *MemoryRepository) ListTracksPage(_ context.Context, q ListQuery) (ListPage[Track], error) {
+	r.mu.RLock()
+	all := make([]Track, 0, len(r.tracks))
+	for _, t := range r.tracks {
+		all = append(all, t)
+	}
+	r.mu.RUnlock()
+	return memPage(all, q, trackLess(q.SortBy))
+}
+
+func (r *MemoryRepository) ListTracksByAlbumPage(_ context.Context, albumID string, q ListQuery) (ListPage[Track], error) {
+	r.mu.RLock()
+	var all []Track
+	for _, t := range r.tracks {
+		if t.AlbumID == albumID {
+			all = append(all, t)
+		}
+	}
+	r.mu.RUnlock()
+	return memPage(all, q, trackLess(q.SortBy))
+}
+
+func (r *MemoryRepository) ListTracksByArtistPage(_ context.Context, artistID string, q ListQuery) (ListPage[Track], error) {
+	r.mu.RLock()
+	var all []Track
+	for _, t := range r.tracks {
+		if t.ArtistID == artistID {
+			all = append(all, t)
+		}
+	}
+	r.mu.RUnlock()
+	return memPage(all, q, trackLess(q.SortBy))
+}
+
+func trackLess(sortBy string) func(a, b Track) bool {
+	return func(a, b Track) bool {
+		switch sortBy {
+		case TrackSortBySortTitle:
+			return strings.ToLower(a.SortTitle) < strings.ToLower(b.SortTitle)
+		case TrackSortByTrackNumber:
+			return a.TrackNumber < b.TrackNumber
+		case TrackSortByDiscNumber:
+			return a.DiscNumber < b.DiscNumber
+		case TrackSortByDurationMS:
+			return a.DurationMS < b.DurationMS
+		case TrackSortByCreatedAt:
+			return a.CreatedAt.Before(b.CreatedAt)
+		case TrackSortByUpdatedAt:
+			return a.UpdatedAt.Before(b.UpdatedAt)
+		default:
+			return strings.ToLower(a.Title) < strings.ToLower(b.Title)
+		}
+	}
+}
+
+func (r *MemoryRepository) ListPlaylistsPage(_ context.Context, q ListQuery) (ListPage[Playlist], error) {
+	r.mu.RLock()
+	all := make([]Playlist, 0, len(r.playlists))
+	for _, p := range r.playlists {
+		all = append(all, p)
+	}
+	r.mu.RUnlock()
+	return memPage(all, q, func(a, b Playlist) bool {
+		switch q.SortBy {
+		case PlaylistSortByCreatedAt:
+			return a.CreatedAt.Before(b.CreatedAt)
+		case PlaylistSortByUpdatedAt:
+			return a.UpdatedAt.Before(b.UpdatedAt)
+		default:
+			return strings.ToLower(a.Name) < strings.ToLower(b.Name)
+		}
+	})
 }

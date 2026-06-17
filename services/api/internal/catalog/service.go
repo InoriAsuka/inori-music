@@ -58,6 +58,10 @@ func (s *Service) ListArtists(ctx context.Context) ([]Artist, error) {
 	return s.repo.ListArtists(ctx)
 }
 
+func (s *Service) ListArtistsPage(ctx context.Context, q ListQuery) (ListPage[Artist], error) {
+	return s.repo.ListArtistsPage(ctx, q)
+}
+
 func (s *Service) GetArtist(ctx context.Context, id string) (Artist, error) {
 	return s.repo.GetArtist(ctx, strings.TrimSpace(id))
 }
@@ -123,8 +127,16 @@ func (s *Service) ListAlbums(ctx context.Context) ([]Album, error) {
 	return s.repo.ListAlbums(ctx)
 }
 
+func (s *Service) ListAlbumsPage(ctx context.Context, q ListQuery) (ListPage[Album], error) {
+	return s.repo.ListAlbumsPage(ctx, q)
+}
+
 func (s *Service) ListAlbumsByArtist(ctx context.Context, artistID string) ([]Album, error) {
 	return s.repo.ListAlbumsByArtist(ctx, strings.TrimSpace(artistID))
+}
+
+func (s *Service) ListAlbumsByArtistPage(ctx context.Context, artistID string, q ListQuery) (ListPage[Album], error) {
+	return s.repo.ListAlbumsByArtistPage(ctx, strings.TrimSpace(artistID), q)
 }
 
 func (s *Service) GetAlbum(ctx context.Context, id string) (Album, error) {
@@ -223,12 +235,24 @@ func (s *Service) ListTracks(ctx context.Context) ([]Track, error) {
 	return s.repo.ListTracks(ctx)
 }
 
+func (s *Service) ListTracksPage(ctx context.Context, q ListQuery) (ListPage[Track], error) {
+	return s.repo.ListTracksPage(ctx, q)
+}
+
 func (s *Service) ListTracksByAlbum(ctx context.Context, albumID string) ([]Track, error) {
 	return s.repo.ListTracksByAlbum(ctx, strings.TrimSpace(albumID))
 }
 
+func (s *Service) ListTracksByAlbumPage(ctx context.Context, albumID string, q ListQuery) (ListPage[Track], error) {
+	return s.repo.ListTracksByAlbumPage(ctx, strings.TrimSpace(albumID), q)
+}
+
 func (s *Service) ListTracksByArtist(ctx context.Context, artistID string) ([]Track, error) {
 	return s.repo.ListTracksByArtist(ctx, strings.TrimSpace(artistID))
+}
+
+func (s *Service) ListTracksByArtistPage(ctx context.Context, artistID string, q ListQuery) (ListPage[Track], error) {
+	return s.repo.ListTracksByArtistPage(ctx, strings.TrimSpace(artistID), q)
 }
 
 func (s *Service) GetTrack(ctx context.Context, id string) (Track, error) {
@@ -493,6 +517,10 @@ func (s *Service) CreatePlaylist(ctx context.Context, name, description string) 
 // ListPlaylists returns all playlists in the repository.
 func (s *Service) ListPlaylists(ctx context.Context) ([]Playlist, error) {
 	return s.repo.ListPlaylists(ctx)
+}
+
+func (s *Service) ListPlaylistsPage(ctx context.Context, q ListQuery) (ListPage[Playlist], error) {
+	return s.repo.ListPlaylistsPage(ctx, q)
 }
 
 // GetPlaylist returns a single playlist by ID.

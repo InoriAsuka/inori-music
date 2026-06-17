@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.64.0`
+`0.65.0`
 
 ## Product Goal
 
@@ -555,4 +555,15 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add `limit`/`offset` query params and `pagination` response property to both playlist tracks paths in the OpenAPI contract; bump `info.version` to `0.64.0`.
 - Add `TestStorageAdminOpenAPIContractPlaylistTracksPagination` asserting `limit`/`offset` present and `sortBy`/`sortOrder` absent.
 - Add 2 HTTP-layer tests covering order preservation, limit, offset, `hasMore`, invalid params, and viewer-session access.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.65.0 - 2026-06-17
+
+- Add `ListQuery` and `ListPage[T]` types and 7 new `ListXxxPage` methods to the `catalog.Repository` interface: `ListArtistsPage`, `ListAlbumsPage`, `ListAlbumsByArtistPage`, `ListTracksPage`, `ListTracksByAlbumPage`, `ListTracksByArtistPage`, `ListPlaylistsPage`.
+- Implement the 7 page methods on `catalog.MemoryRepository` (Go in-memory sort + slice) and add a new `catalog/postgres/repository_page.go` with SQL `ORDER BY … LIMIT $1 OFFSET $2` and `COUNT(*) OVER ()` window function for accurate total counts without a separate query.
+- PostgreSQL ORDER BY uses `lower()` wrapping for text fields (consistent with existing list queries) and an `id` tiebreak for stable pagination across pages.
+- Update all 7 catalog list HTTP handlers (`listArtists`, `listAlbums`, `listTracks`, `listPlaylists`, `listAlbumsByArtist`, `listTracksByArtist`, `listTracksByAlbum`) to call the new Page methods and remove the previous in-handler sort+paginate logic.
+- Add 4 `ListXxxPage` catalog service unit tests (artist sort/paginate/offset-past-end, albums-by-artist sort, tracks paginate, playlists desc).
+- Add 2 PostgreSQL integration tests under the `integration` build tag (`TestRepositoryListArtistsPage`, `TestRepositoryListAlbumsPageByArtist`).
+- No change to HTTP API shape — client-facing behavior is identical to Phases 61–62.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

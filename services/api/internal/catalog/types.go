@@ -84,24 +84,45 @@ type CatalogSearchResult struct {
 	Items []SearchResultItem `json:"items"`
 }
 
+// ListQuery carries sort and pagination parameters for catalog list operations.
+// SortBy and SortOrder default to the entity's natural order when empty.
+type ListQuery struct {
+	SortBy    string // entity-specific sort field constant; "" = entity default
+	SortOrder string // "asc" | "desc"; "" = "asc"
+	Limit     int    // > 0
+	Offset    int    // >= 0
+}
+
+// ListPage carries one page of results together with the total unfiltered count.
+type ListPage[T any] struct {
+	Items []T
+	Total int // COUNT(*) of the full (filter-scoped) set, regardless of Limit
+}
+
 // Repository persists catalog metadata records.
 type Repository interface {
 	SaveArtist(ctx context.Context, artist Artist) error
 	GetArtist(ctx context.Context, id string) (Artist, error)
 	ListArtists(ctx context.Context) ([]Artist, error)
+	ListArtistsPage(ctx context.Context, q ListQuery) (ListPage[Artist], error)
 	DeleteArtist(ctx context.Context, id string) error
 
 	SaveAlbum(ctx context.Context, album Album) error
 	GetAlbum(ctx context.Context, id string) (Album, error)
 	ListAlbums(ctx context.Context) ([]Album, error)
+	ListAlbumsPage(ctx context.Context, q ListQuery) (ListPage[Album], error)
 	ListAlbumsByArtist(ctx context.Context, artistID string) ([]Album, error)
+	ListAlbumsByArtistPage(ctx context.Context, artistID string, q ListQuery) (ListPage[Album], error)
 	DeleteAlbum(ctx context.Context, id string) error
 
 	SaveTrack(ctx context.Context, track Track) error
 	GetTrack(ctx context.Context, id string) (Track, error)
 	ListTracks(ctx context.Context) ([]Track, error)
+	ListTracksPage(ctx context.Context, q ListQuery) (ListPage[Track], error)
 	ListTracksByAlbum(ctx context.Context, albumID string) ([]Track, error)
+	ListTracksByAlbumPage(ctx context.Context, albumID string, q ListQuery) (ListPage[Track], error)
 	ListTracksByArtist(ctx context.Context, artistID string) ([]Track, error)
+	ListTracksByArtistPage(ctx context.Context, artistID string, q ListQuery) (ListPage[Track], error)
 	DeleteTrack(ctx context.Context, id string) error
 
 	// SearchCatalog performs a full-text search across artists, albums, and tracks.
@@ -113,6 +134,7 @@ type Repository interface {
 	SavePlaylist(ctx context.Context, playlist Playlist) error
 	GetPlaylist(ctx context.Context, id string) (Playlist, error)
 	ListPlaylists(ctx context.Context) ([]Playlist, error)
+	ListPlaylistsPage(ctx context.Context, q ListQuery) (ListPage[Playlist], error)
 	DeletePlaylist(ctx context.Context, id string) error
 }
 

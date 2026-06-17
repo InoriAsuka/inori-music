@@ -248,6 +248,79 @@ func (r *memRepo) SearchCatalog(_ context.Context, query string) (catalog.Catalo
 	return result, nil
 }
 
+// ListXxxPage stubs — the test memRepo delegates to the in-package MemoryRepository
+// which already implements the full page/sort logic. We construct a temporary
+// MemoryRepository, copy all items into it, and call its page method.
+func (r *memRepo) ListArtistsPage(ctx context.Context, q catalog.ListQuery) (catalog.ListPage[catalog.Artist], error) {
+	r.mu.RLock()
+	tmp := catalog.NewMemoryRepository()
+	for _, a := range r.artists {
+		_ = tmp.SaveArtist(ctx, a)
+	}
+	r.mu.RUnlock()
+	return tmp.ListArtistsPage(ctx, q)
+}
+
+func (r *memRepo) ListAlbumsPage(ctx context.Context, q catalog.ListQuery) (catalog.ListPage[catalog.Album], error) {
+	r.mu.RLock()
+	tmp := catalog.NewMemoryRepository()
+	for _, a := range r.albums {
+		_ = tmp.SaveAlbum(ctx, a)
+	}
+	r.mu.RUnlock()
+	return tmp.ListAlbumsPage(ctx, q)
+}
+
+func (r *memRepo) ListAlbumsByArtistPage(ctx context.Context, artistID string, q catalog.ListQuery) (catalog.ListPage[catalog.Album], error) {
+	r.mu.RLock()
+	tmp := catalog.NewMemoryRepository()
+	for _, a := range r.albums {
+		_ = tmp.SaveAlbum(ctx, a)
+	}
+	r.mu.RUnlock()
+	return tmp.ListAlbumsByArtistPage(ctx, artistID, q)
+}
+
+func (r *memRepo) ListTracksPage(ctx context.Context, q catalog.ListQuery) (catalog.ListPage[catalog.Track], error) {
+	r.mu.RLock()
+	tmp := catalog.NewMemoryRepository()
+	for _, t := range r.tracks {
+		_ = tmp.SaveTrack(ctx, t)
+	}
+	r.mu.RUnlock()
+	return tmp.ListTracksPage(ctx, q)
+}
+
+func (r *memRepo) ListTracksByAlbumPage(ctx context.Context, albumID string, q catalog.ListQuery) (catalog.ListPage[catalog.Track], error) {
+	r.mu.RLock()
+	tmp := catalog.NewMemoryRepository()
+	for _, t := range r.tracks {
+		_ = tmp.SaveTrack(ctx, t)
+	}
+	r.mu.RUnlock()
+	return tmp.ListTracksByAlbumPage(ctx, albumID, q)
+}
+
+func (r *memRepo) ListTracksByArtistPage(ctx context.Context, artistID string, q catalog.ListQuery) (catalog.ListPage[catalog.Track], error) {
+	r.mu.RLock()
+	tmp := catalog.NewMemoryRepository()
+	for _, t := range r.tracks {
+		_ = tmp.SaveTrack(ctx, t)
+	}
+	r.mu.RUnlock()
+	return tmp.ListTracksByArtistPage(ctx, artistID, q)
+}
+
+func (r *memRepo) ListPlaylistsPage(ctx context.Context, q catalog.ListQuery) (catalog.ListPage[catalog.Playlist], error) {
+	r.mu.RLock()
+	tmp := catalog.NewMemoryRepository()
+	for _, p := range r.playlists {
+		_ = tmp.SavePlaylist(ctx, p)
+	}
+	r.mu.RUnlock()
+	return tmp.ListPlaylistsPage(ctx, q)
+}
+
 func TestServiceCreatesArtistAlbumAndTrack(t *testing.T) {
 	ctx := context.Background()
 	svc := catalog.NewService(newMemRepo())
@@ -1803,5 +1876,132 @@ func TestGetRecentlyUpdatedPlaylistUnified(t *testing.T) {
 	}
 	if !hasArtist {
 		t.Error("expected at least one artist item in unified timeline")
+	}
+}
+
+// ---- ListXxxPage tests ----
+
+func TestListArtistsPageSortAndPaginate(t *testing.T) {
+	repo := newMemRepo()
+	svc := catalog.NewService(repo)
+	ctx := context.Background()
+
+	for _, name := range []string{"Zara", "Alice", "Mike"} {
+		if _, err := svc.CreateArtist(ctx, name, ""); err != nil {
+			t.Fatalf("CreateArtist %q: %v", name, err)
+		}
+	}
+
+	// asc by name, all
+	page, err := svc.ListArtistsPage(ctx, catalog.ListQuery{SortBy: "name", SortOrder: "asc", Limit: 10, Offset: 0})
+	if err != nil {
+		t.Fatalf("ListArtistsPage: %v", err)
+	}
+	if len(page.Items) != 3 {
+		t.Fatalf("items = %d, want 3", len(page.Items))
+	}
+	if page.Total != 3 {
+		t.Errorf("total = %d, want 3", page.Total)
+	}
+	if page.Items[0].Name != "Alice" {
+		t.Errorf("items[0].Name = %q, want Alice", page.Items[0].Name)
+	}
+
+	// desc, limit=1
+	page, err = svc.ListArtistsPage(ctx, catalog.ListQuery{SortBy: "name", SortOrder: "desc", Limit: 1, Offset: 0})
+	if err != nil {
+		t.Fatalf("ListArtistsPage desc: %v", err)
+	}
+	if len(page.Items) != 1 {
+		t.Fatalf("items = %d, want 1", len(page.Items))
+	}
+	if page.Total != 3 {
+		t.Errorf("total = %d, want 3 even with limit=1", page.Total)
+	}
+	if page.Items[0].Name != "Zara" {
+		t.Errorf("items[0].Name = %q, want Zara", page.Items[0].Name)
+	}
+
+	// offset past end
+	page, err = svc.ListArtistsPage(ctx, catalog.ListQuery{SortBy: "name", SortOrder: "asc", Limit: 10, Offset: 99})
+	if err != nil {
+		t.Fatalf("ListArtistsPage offset>total: %v", err)
+	}
+	if len(page.Items) != 0 {
+		t.Errorf("items = %d, want 0", len(page.Items))
+	}
+	if page.Total != 3 {
+		t.Errorf("total = %d, want 3", page.Total)
+	}
+}
+
+func TestListAlbumsPageByArtist(t *testing.T) {
+	repo := newMemRepo()
+	svc := catalog.NewService(repo)
+	ctx := context.Background()
+
+	artist, _ := svc.CreateArtist(ctx, "Band", "")
+	for _, year := range []int{2020, 2015, 2023} {
+		svc.CreateAlbum(ctx, fmt.Sprintf("Album %d", year), "", artist.ID, year)
+	}
+
+	page, err := svc.ListAlbumsByArtistPage(ctx, artist.ID, catalog.ListQuery{
+		SortBy: catalog.AlbumSortByReleaseYear, SortOrder: catalog.CatalogSortOrderAsc, Limit: 10, Offset: 0,
+	})
+	if err != nil {
+		t.Fatalf("ListAlbumsByArtistPage: %v", err)
+	}
+	if len(page.Items) != 3 || page.Total != 3 {
+		t.Fatalf("want 3 items total=3, got %d total=%d", len(page.Items), page.Total)
+	}
+	if page.Items[0].ReleaseYear != 2015 {
+		t.Errorf("items[0].ReleaseYear = %d, want 2015", page.Items[0].ReleaseYear)
+	}
+}
+
+func TestListTracksPageSortByTitle(t *testing.T) {
+	repo := newMemRepo()
+	svc := catalog.NewService(repo)
+	ctx := context.Background()
+
+	artist, _ := svc.CreateArtist(ctx, "Band", "")
+	for _, title := range []string{"Zephyr", "Aura", "Midnight"} {
+		svc.CreateTrack(ctx, title, "", artist.ID, "", "mo-"+title, 0, 0, 0)
+	}
+
+	page, err := svc.ListTracksPage(ctx, catalog.ListQuery{
+		SortBy: catalog.TrackSortByTitle, SortOrder: catalog.CatalogSortOrderAsc, Limit: 2, Offset: 0,
+	})
+	if err != nil {
+		t.Fatalf("ListTracksPage: %v", err)
+	}
+	if len(page.Items) != 2 || page.Total != 3 {
+		t.Fatalf("want 2 items total=3, got %d total=%d", len(page.Items), page.Total)
+	}
+	if page.Items[0].Title != "Aura" {
+		t.Errorf("items[0].Title = %q, want Aura", page.Items[0].Title)
+	}
+}
+
+func TestListPlaylistsPageDescByName(t *testing.T) {
+	repo := newMemRepo()
+	svc := catalog.NewService(repo)
+	ctx := context.Background()
+
+	for _, name := range []string{"Zen Mix", "Alpha Hits", "Morning Chill"} {
+		svc.CreatePlaylist(ctx, name, "")
+	}
+
+	page, err := svc.ListPlaylistsPage(ctx, catalog.ListQuery{
+		SortBy: catalog.PlaylistSortByName, SortOrder: catalog.CatalogSortOrderDesc, Limit: 10, Offset: 0,
+	})
+	if err != nil {
+		t.Fatalf("ListPlaylistsPage: %v", err)
+	}
+	if len(page.Items) != 3 || page.Total != 3 {
+		t.Fatalf("want 3 items total=3, got %d total=%d", len(page.Items), page.Total)
+	}
+	if page.Items[0].Name != "Zen Mix" {
+		t.Errorf("items[0].Name = %q, want Zen Mix", page.Items[0].Name)
 	}
 }
