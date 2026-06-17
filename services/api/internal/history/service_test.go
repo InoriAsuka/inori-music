@@ -104,7 +104,7 @@ func TestGetHistoryStats(t *testing.T) {
 	svc.RecordPlay(ctx, "u1", "t2", now)
 	svc.RecordPlay(ctx, "u2", "t1", now)
 
-	stats, err := svc.GetHistoryStats(ctx)
+	stats, err := svc.GetHistoryStats(ctx, history.StatsFilter{})
 	if err != nil {
 		t.Fatalf("GetHistoryStats: %v", err)
 	}
@@ -130,7 +130,7 @@ func TestGetTopTracks(t *testing.T) {
 	}
 	svc.RecordPlay(ctx, "u2", "t2", now)
 
-	tracks, err := svc.GetTopTracks(ctx, 0) // 0 → default 10
+	tracks, err := svc.GetTopTracks(ctx, history.StatsFilter{}, 0) // 0 → default 10
 	if err != nil {
 		t.Fatalf("GetTopTracks: %v", err)
 	}
@@ -145,7 +145,7 @@ func TestGetTopTracks(t *testing.T) {
 	}
 
 	// Limit to 1
-	top1, _ := svc.GetTopTracks(ctx, 1)
+	top1, _ := svc.GetTopTracks(ctx, history.StatsFilter{}, 1)
 	if len(top1) != 1 {
 		t.Errorf("limit=1: tracks = %d, want 1", len(top1))
 	}
@@ -161,7 +161,7 @@ func TestGetTopUsers(t *testing.T) {
 	svc.RecordPlay(ctx, "u1", "t2", now)
 	svc.RecordPlay(ctx, "u2", "t1", now)
 
-	users, err := svc.GetTopUsers(ctx, 0) // 0 → default 10
+	users, err := svc.GetTopUsers(ctx, history.StatsFilter{}, 0) // 0 → default 10
 	if err != nil {
 		t.Fatalf("GetTopUsers: %v", err)
 	}
@@ -170,5 +170,87 @@ func TestGetTopUsers(t *testing.T) {
 	}
 	if users[0].UserID != "u1" || users[0].PlayCount != 2 {
 		t.Errorf("first user = %+v, want u1/2", users[0])
+	}
+}
+
+func TestGetHistoryStatsSinceFilter(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+	base := time.Now().UTC()
+	cutoff := base.Add(5 * time.Second)
+
+	// 2 events before cutoff, 1 event at/after cutoff
+	svc.RecordPlay(ctx, "u1", "t1", base)
+	svc.RecordPlay(ctx, "u2", "t2", base.Add(2*time.Second))
+	svc.RecordPlay(ctx, "u3", "t3", base.Add(10*time.Second))
+
+	// All-time: 3 events, 3 users, 3 tracks
+	all, err := svc.GetHistoryStats(ctx, history.StatsFilter{})
+	if err != nil {
+		t.Fatalf("GetHistoryStats all: %v", err)
+	}
+	if all.TotalEvents != 3 || all.UniqueUsers != 3 || all.UniqueTracks != 3 {
+		t.Errorf("all-time stats = %+v, want 3/3/3", all)
+	}
+
+	// Since cutoff: only the event at +10s
+	windowed, err := svc.GetHistoryStats(ctx, history.StatsFilter{Since: cutoff})
+	if err != nil {
+		t.Fatalf("GetHistoryStats since: %v", err)
+	}
+	if windowed.TotalEvents != 1 {
+		t.Errorf("windowed TotalEvents = %d, want 1", windowed.TotalEvents)
+	}
+	if windowed.UniqueUsers != 1 {
+		t.Errorf("windowed UniqueUsers = %d, want 1", windowed.UniqueUsers)
+	}
+	if windowed.UniqueTracks != 1 {
+		t.Errorf("windowed UniqueTracks = %d, want 1", windowed.UniqueTracks)
+	}
+}
+
+func TestGetTopTracksSinceFilter(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+	base := time.Now().UTC()
+	cutoff := base.Add(5 * time.Second)
+
+	// t1 played twice before cutoff, t2 played once after cutoff
+	svc.RecordPlay(ctx, "u1", "t1", base)
+	svc.RecordPlay(ctx, "u1", "t1", base.Add(2*time.Second))
+	svc.RecordPlay(ctx, "u1", "t2", base.Add(10*time.Second))
+
+	windowed, err := svc.GetTopTracks(ctx, history.StatsFilter{Since: cutoff}, 0)
+	if err != nil {
+		t.Fatalf("GetTopTracks since: %v", err)
+	}
+	if len(windowed) != 1 {
+		t.Fatalf("windowed tracks = %d, want 1", len(windowed))
+	}
+	if windowed[0].TrackID != "t2" || windowed[0].PlayCount != 1 {
+		t.Errorf("windowed track = %+v, want t2/1", windowed[0])
+	}
+}
+
+func TestGetTopUsersSinceFilter(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+	base := time.Now().UTC()
+	cutoff := base.Add(5 * time.Second)
+
+	// u1 played twice before cutoff, u2 played once after cutoff
+	svc.RecordPlay(ctx, "u1", "t1", base)
+	svc.RecordPlay(ctx, "u1", "t1", base.Add(2*time.Second))
+	svc.RecordPlay(ctx, "u2", "t1", base.Add(10*time.Second))
+
+	windowed, err := svc.GetTopUsers(ctx, history.StatsFilter{Since: cutoff}, 0)
+	if err != nil {
+		t.Fatalf("GetTopUsers since: %v", err)
+	}
+	if len(windowed) != 1 {
+		t.Fatalf("windowed users = %d, want 1", len(windowed))
+	}
+	if windowed[0].UserID != "u2" || windowed[0].PlayCount != 1 {
+		t.Errorf("windowed user = %+v, want u2/1", windowed[0])
 	}
 }

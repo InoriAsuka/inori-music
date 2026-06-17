@@ -1888,7 +1888,11 @@ func (handler *Handler) getAdminHistoryStats(w http.ResponseWriter, r *http.Requ
 	if !handler.requireHistoryService(w) {
 		return
 	}
-	stats, err := handler.historyService.GetHistoryStats(r.Context())
+	f, ok := parseHistoryAdminFilter(w, r)
+	if !ok {
+		return
+	}
+	stats, err := handler.historyService.GetHistoryStats(r.Context(), f)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -1900,11 +1904,15 @@ func (handler *Handler) getAdminTopTracks(w http.ResponseWriter, r *http.Request
 	if !handler.requireHistoryService(w) {
 		return
 	}
+	f, ok := parseHistoryAdminFilter(w, r)
+	if !ok {
+		return
+	}
 	limit, ok := parseHistoryAdminLimit(w, r)
 	if !ok {
 		return
 	}
-	tracks, err := handler.historyService.GetTopTracks(r.Context(), limit)
+	tracks, err := handler.historyService.GetTopTracks(r.Context(), f, limit)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -1916,16 +1924,34 @@ func (handler *Handler) getAdminTopUsers(w http.ResponseWriter, r *http.Request)
 	if !handler.requireHistoryService(w) {
 		return
 	}
+	f, ok := parseHistoryAdminFilter(w, r)
+	if !ok {
+		return
+	}
 	limit, ok := parseHistoryAdminLimit(w, r)
 	if !ok {
 		return
 	}
-	users, err := handler.historyService.GetTopUsers(r.Context(), limit)
+	users, err := handler.historyService.GetTopUsers(r.Context(), f, limit)
 	if err != nil {
 		writeError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"users": users})
+}
+
+// parseHistoryAdminFilter parses the optional ?since query param (RFC3339).
+func parseHistoryAdminFilter(w http.ResponseWriter, r *http.Request) (history.StatsFilter, bool) {
+	raw := r.URL.Query().Get("since")
+	if raw == "" {
+		return history.StatsFilter{}, true
+	}
+	t, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid_since", "since must be an RFC3339 timestamp")
+		return history.StatsFilter{}, false
+	}
+	return history.StatsFilter{Since: t.UTC()}, true
 }
 
 // parseHistoryAdminLimit parses the optional ?limit query param (default 10, max 100).

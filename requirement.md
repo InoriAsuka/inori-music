@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.69.0`
+`0.70.0`
 
 ## Product Goal
 
@@ -605,4 +605,17 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add `HistoryStats`, `TrackPlayCount`, `UserPlayCount`, `TopTracksResult`, `TopUsersResult` schemas and the 3 new admin paths to the OpenAPI contract; bump `info.version` to `0.69.0`.
 - Add 3 history service unit tests (GetHistoryStats, GetTopTracks, GetTopUsers) and 5 HTTP-layer tests (stats, top-tracks with limit, top-users, not-configured 503, 405).
 - Add `TestStorageAdminOpenAPIContractAdminHistoryPaths` asserting new schemas and path operations.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.70.0 - 2026-06-18
+
+- Add optional `?since=<RFC3339>` query parameter to `GET /api/v1/admin/history/stats`, `GET /api/v1/admin/history/top-tracks`, and `GET /api/v1/admin/history/top-users`; omitting it returns all-time data.
+- Add `StatsFilter{Since time.Time}` type to `history/types.go`; update `Repository` interface so all three aggregate methods accept `StatsFilter`.
+- Implement `since` filtering on `history.MemoryRepository` (in-memory `played_at >= since` guard) and `historypg.Repository` (`WHERE played_at >= $N` SQL clause).
+- Thread `StatsFilter` through `history.Service` methods `GetHistoryStats`, `GetTopTracks`, `GetTopUsers`.
+- Add `parseHistoryAdminFilter` helper in the HTTP handler layer to parse and validate the `since` param; invalid timestamps return `400 invalid_since`.
+- Add 3 service unit tests (windowed stats, top-tracks, top-users) and 2 HTTP-layer tests (`TestAdminHistorySinceFilter`, `TestAdminHistorySinceInvalid`).
+- Add `since` query param (string/date-time, optional) to all three admin history GET paths in the OpenAPI contract; add `invalid_since` to error code enum; bump `info.version` to `0.70.0`.
+- Add `TestStorageAdminOpenAPIContractAdminHistorySinceParam` asserting the `since` param is present and optional on all three paths.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

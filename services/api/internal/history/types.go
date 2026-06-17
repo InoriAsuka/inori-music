@@ -22,6 +22,12 @@ type PlayEventFilter struct {
 	Offset  int
 }
 
+// StatsFilter scopes admin aggregate queries.
+// A zero-value Since means "all time".
+type StatsFilter struct {
+	Since time.Time // optional lower bound on played_at (inclusive)
+}
+
 // Repository persists play events.
 type Repository interface {
 	SavePlayEvent(ctx context.Context, e PlayEvent) error
@@ -29,9 +35,9 @@ type Repository interface {
 	DeletePlayEventsByUser(ctx context.Context, userID string) error
 
 	// Aggregate stats — admin-facing queries.
-	HistoryStats(ctx context.Context) (HistoryStats, error)
-	TopTracks(ctx context.Context, limit int) ([]TrackPlayCount, error)
-	TopUsers(ctx context.Context, limit int) ([]UserPlayCount, error)
+	HistoryStats(ctx context.Context, f StatsFilter) (HistoryStats, error)
+	TopTracks(ctx context.Context, f StatsFilter, limit int) ([]TrackPlayCount, error)
+	TopUsers(ctx context.Context, f StatsFilter, limit int) ([]UserPlayCount, error)
 }
 
 // HistoryStats holds system-wide playback aggregate counts.

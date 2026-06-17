@@ -4706,3 +4706,61 @@ func TestAdminHistoryMethodNotAllowed(t *testing.T) {
 		}
 	}
 }
+
+func TestAdminHistorySinceFilter(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	// Create artist + track
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Band"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"Song","artistId":%q,"mediaObjectId":"mo-since-1"}`, artistID), "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	// Record a play event with an explicit timestamp in the past (2020-01-01)
+	oldTime := "2020-01-01T00:00:00Z"
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q,"playedAt":%q}`, trackID, oldTime), "Bearer "+viewerToken)
+
+	// With since set to 2025-01-01, the old event is excluded → totalEvents = 0
+	since := "2025-01-01T00:00:00Z"
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/admin/history/stats?since="+since, "", "Bearer "+adminToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("stats since: %d %s", resp.Code, resp.Body.String())
+	}
+	var stats map[string]any
+	decodeResponse(t, resp, &stats)
+	if int(stats["totalEvents"].(float64)) != 0 {
+		t.Errorf("windowed totalEvents = %v, want 0", stats["totalEvents"])
+	}
+
+	// top-tracks since 2025-01-01 → empty list
+	resp = performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/admin/history/top-tracks?since="+since, "", "Bearer "+adminToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("top-tracks since: %d %s", resp.Code, resp.Body.String())
+	}
+	var ttr map[string]any
+	decodeResponse(t, resp, &ttr)
+	if len(ttr["tracks"].([]any)) != 0 {
+		t.Errorf("windowed tracks = %d, want 0", len(ttr["tracks"].([]any)))
+	}
+}
+
+func TestAdminHistorySinceInvalid(t *testing.T) {
+	h, _, adminToken := newHistoryTestHandler(t)
+	for _, path := range []string{
+		"/api/v1/admin/history/stats?since=not-a-date",
+		"/api/v1/admin/history/top-tracks?since=not-a-date",
+		"/api/v1/admin/history/top-users?since=not-a-date",
+	} {
+		resp := performRequestWithAuthHeader(t, h, http.MethodGet, path, "", "Bearer "+adminToken)
+		assertAPIError(t, resp, http.StatusBadRequest, "invalid_since")
+	}
+}

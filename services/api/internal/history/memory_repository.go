@@ -64,26 +64,34 @@ func (r *MemoryRepository) DeletePlayEventsByUser(_ context.Context, userID stri
 	return nil
 }
 
-func (r *MemoryRepository) HistoryStats(_ context.Context) (HistoryStats, error) {
+func (r *MemoryRepository) HistoryStats(_ context.Context, f StatsFilter) (HistoryStats, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	users := make(map[string]struct{})
 	tracks := make(map[string]struct{})
+	total := 0
 	for _, e := range r.events {
+		if !f.Since.IsZero() && e.PlayedAt.Before(f.Since) {
+			continue
+		}
 		users[e.UserID] = struct{}{}
 		tracks[e.TrackID] = struct{}{}
+		total++
 	}
 	return HistoryStats{
-		TotalEvents:  len(r.events),
+		TotalEvents:  total,
 		UniqueUsers:  len(users),
 		UniqueTracks: len(tracks),
 	}, nil
 }
 
-func (r *MemoryRepository) TopTracks(_ context.Context, limit int) ([]TrackPlayCount, error) {
+func (r *MemoryRepository) TopTracks(_ context.Context, f StatsFilter, limit int) ([]TrackPlayCount, error) {
 	r.mu.RLock()
 	counts := make(map[string]int)
 	for _, e := range r.events {
+		if !f.Since.IsZero() && e.PlayedAt.Before(f.Since) {
+			continue
+		}
 		counts[e.TrackID]++
 	}
 	r.mu.RUnlock()
@@ -104,10 +112,13 @@ func (r *MemoryRepository) TopTracks(_ context.Context, limit int) ([]TrackPlayC
 	return result, nil
 }
 
-func (r *MemoryRepository) TopUsers(_ context.Context, limit int) ([]UserPlayCount, error) {
+func (r *MemoryRepository) TopUsers(_ context.Context, f StatsFilter, limit int) ([]UserPlayCount, error) {
 	r.mu.RLock()
 	counts := make(map[string]int)
 	for _, e := range r.events {
+		if !f.Since.IsZero() && e.PlayedAt.Before(f.Since) {
+			continue
+		}
 		counts[e.UserID]++
 	}
 	r.mu.RUnlock()
