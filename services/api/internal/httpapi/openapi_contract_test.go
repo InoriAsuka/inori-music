@@ -275,11 +275,18 @@ func TestStorageAdminOpenAPIContractTrackPlaybackDescriptor(t *testing.T) {
 			t.Fatalf("TrackPlaybackDescriptor missing field %q", field)
 		}
 	}
+	// presignedUrl is optional (omitempty) — must exist in properties but NOT in required.
+	if _, ok := properties["presignedUrl"]; !ok {
+		t.Fatal("TrackPlaybackDescriptor missing optional field \"presignedUrl\"")
+	}
 	required := desc["required"].([]any)
 	for _, field := range []string{"trackId", "mediaObjectId", "mimeType", "durationMs", "backendId", "objectKey"} {
 		if !containsString(required, field) {
 			t.Fatalf("TrackPlaybackDescriptor required is missing %q", field)
 		}
+	}
+	if containsString(required, "presignedUrl") {
+		t.Fatal("presignedUrl must not be in required (it is optional)")
 	}
 }
 

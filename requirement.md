@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.59.0`
+`0.60.0`
 
 ## Product Goal
 
@@ -497,4 +497,15 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add 14 HTTP-layer tests covering empty stats, populated counts, admin session acceptance, no-catalog-service 503, and method-not-allowed for all four endpoints.
 - Add four viewer stats paths to the OpenAPI contract; bump `info.version` to `0.59.0`.
 - Extend `TestStorageAdminOpenAPIContractCoversRoutes` to assert the four new viewer stats paths.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.60.0 - 2026-06-17
+
+- Add `presignS3URL` to the storage package: generates an AWS Signature Version 4 presigned GET URL using query-parameter signing, reusing existing `s3ObjectURL`, `s3SigningKey`, and `hmacSHA256` helpers from `s3_probe.go`.
+- Add `storage.Service.GetBackend(ctx, id)` for direct single-backend lookup; `storage.DefaultPresignedURLTTL = 15 * time.Minute` constant; `storage.Service.GeneratePresignedURL(ctx, backendID, objectKey, ttl)` orchestrating capability check, credential resolution via env var refs, and presigned URL generation.
+- Extend `GET /api/v1/catalog/tracks/{id}/playback` response: populate optional `presignedUrl` field when the backend has `PresignedURLs` capability and credentials are configured; presign failures are non-fatal.
+- Replace the backend full-list scan in `getTrackPlayback` with a single `GetBackend` call.
+- Add `presignedUrl` optional property to `TrackPlaybackDescriptor` OpenAPI schema; bump `info.version` to `0.60.0`.
+- Add 4 `presignS3URL` unit tests, 4 `GetBackend`/`GeneratePresignedURL` service tests, and 1 HTTP-layer presigned URL handler test.
+- Extend `TestStorageAdminOpenAPIContractTrackPlaybackDescriptor` to assert `presignedUrl` is present in properties but absent from `required`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

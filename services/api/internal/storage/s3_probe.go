@@ -213,6 +213,59 @@ func escapeS3Path(path string) string {
 	return strings.Join(parts, "/")
 }
 
+// presignS3URL generates an AWS Signature Version 4 presigned GET URL for a
+// single object. The URL is valid for the given TTL and does not require the
+// caller to supply any credentials at request time.
+func presignS3URL(config s3CompatibleProbeConfig, objectKey string, accessKey string, secretKey string, ttl time.Duration, now time.Time) (string, error) {
+	base, err := s3ObjectURL(config, objectKey)
+	if err != nil {
+		return "", err
+	}
+	region := strings.TrimSpace(config.Region)
+	if region == "" {
+		region = "us-east-1"
+	}
+	amzDate := now.UTC().Format("20060102T150405Z")
+	dateStamp := now.UTC().Format("20060102")
+	credentialScope := dateStamp + "/" + region + "/" + s3ServiceName + "/aws4_request"
+	credential := accessKey + "/" + credentialScope
+	expires := fmt.Sprintf("%d", int(ttl.Seconds()))
+	host := base.Host
+
+	// Build canonical query string (must be alphabetically sorted).
+	q := url.Values{}
+	q.Set("X-Amz-Algorithm", "AWS4-HMAC-SHA256")
+	q.Set("X-Amz-Credential", credential)
+	q.Set("X-Amz-Date", amzDate)
+	q.Set("X-Amz-Expires", expires)
+	q.Set("X-Amz-SignedHeaders", "host")
+	canonicalQueryString := q.Encode() // url.Values.Encode() sorts keys
+
+	canonicalURI := base.EscapedPath()
+	if canonicalURI == "" {
+		canonicalURI = "/"
+	}
+	canonicalHeaders := "host:" + host + "\n"
+	signedHeaders := "host"
+	payloadHash := "UNSIGNED-PAYLOAD"
+
+	canonicalRequest := strings.Join([]string{
+		http.MethodGet,
+		canonicalURI,
+		canonicalQueryString,
+		canonicalHeaders,
+		signedHeaders,
+		payloadHash,
+	}, "\n")
+
+	stringToSign := "AWS4-HMAC-SHA256\n" + amzDate + "\n" + credentialScope + "\n" + sha256Hex([]byte(canonicalRequest))
+	signingKey := s3SigningKey(secretKey, dateStamp, region)
+	signature := hex.EncodeToString(hmacSHA256(signingKey, stringToSign))
+
+	base.RawQuery = canonicalQueryString + "&X-Amz-Signature=" + signature
+	return base.String(), nil
+}
+
 func signS3Request(req *http.Request, region string, accessKey string, secretKey string, payload []byte, now time.Time) {
 	payloadHash := sha256Hex(payload)
 	amzDate := now.Format("20060102T150405Z")

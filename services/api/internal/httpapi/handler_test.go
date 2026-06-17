@@ -3479,6 +3479,100 @@ func TestGetTrackPlaybackDescriptorMethodNotAllowed(t *testing.T) {
 	}
 }
 
+func TestGetTrackPlaybackDescriptorPresignedURL(t *testing.T) {
+	// Build a handler with a fake S3 backend that has PresignedURLs capability.
+	// We don't need the fake server to respond — we only assert the URL shape.
+	t.Setenv("HTTP_TEST_S3_ACCESS", "test-access-key")
+	t.Setenv("HTTP_TEST_S3_SECRET", "test-secret-key")
+
+	authSvc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
+	storageRepo := storage.NewMemoryRepository()
+	storageSvc := storage.NewService(storageRepo)
+	mediaRepo := storage.NewMemoryMediaObjectRepository()
+	mediaSvc := storage.NewMediaObjectService(storageRepo, mediaRepo)
+	catalogRepo := catalog.NewMemoryRepository()
+	h := NewHandler(
+		storageSvc,
+		WithAuthService(authSvc),
+		WithAdminToken(testAdminToken),
+		WithMediaObjectService(mediaSvc),
+		WithCatalogService(catalog.NewService(catalogRepo)),
+		WithServiceInfo(ServiceInfo{Name: "inori-api", Version: "test", Commit: "c", BuildTime: "t"}),
+	).Routes()
+
+	if _, err := authSvc.CreateUser(context.Background(), "alice", "viewerpass1", auth.RoleViewer); err != nil {
+		t.Fatalf("create viewer: %v", err)
+	}
+	viewerToken, _, err := authSvc.Login(context.Background(), "alice", "viewerpass1")
+	if err != nil {
+		t.Fatalf("viewer login: %v", err)
+	}
+	if _, err := authSvc.CreateUser(context.Background(), "bob", "adminpass2", auth.RoleAdmin); err != nil {
+		t.Fatalf("create admin: %v", err)
+	}
+	adminToken, _, err := authSvc.Login(context.Background(), "bob", "adminpass2")
+	if err != nil {
+		t.Fatalf("admin login: %v", err)
+	}
+
+	// Register an S3 backend; capabilities are inferred by the server, then we
+	// override PresignedURLs directly in the repository to enable presigned URL generation.
+	backendBody := fmt.Sprintf(`{
+		"id":"s3-presign-test","type":"s3","displayName":"S3","enabled":true,"isDefault":true,
+		"config":{"s3":{"endpoint":"https://s3.example.com","region":"us-east-1","bucket":"music",
+		"pathStyle":true,"accessKeySecretRef":"HTTP_TEST_S3_ACCESS","secretKeySecretRef":"HTTP_TEST_S3_SECRET"}}
+	}`)
+	backendResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/storage/backends", backendBody, "Bearer "+adminToken)
+	if backendResp.Code != http.StatusCreated {
+		t.Fatalf("register backend: %d %s", backendResp.Code, backendResp.Body.String())
+	}
+	// Enable the PresignedURLs capability directly in the in-memory repo.
+	{
+		b, err := storageRepo.Get(context.Background(), "s3-presign-test")
+		if err != nil {
+			t.Fatalf("get backend: %v", err)
+		}
+		b.Capabilities.PresignedURLs = true
+		if err := storageRepo.Save(context.Background(), b); err != nil {
+			t.Fatalf("save backend with presigned URL capability: %v", err)
+		}
+	}
+
+	moBody := `{"id":"mo-presign","backendId":"s3-presign-test","objectKey":"music/track.flac","contentHash":"sha256:presign","sizeBytes":1024,"mimeType":"audio/flac","assetKind":"original_audio","lifecycleState":"active"}`
+	moResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/media/objects", moBody, "Bearer "+adminToken)
+	if moResp.Code != http.StatusCreated {
+		t.Fatalf("register media object: %d %s", moResp.Code, moResp.Body.String())
+	}
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Artist"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackBody := fmt.Sprintf(`{"title":"Song","artistId":%q,"mediaObjectId":"mo-presign","durationMs":180000}`, artistID)
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks", trackBody, "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/tracks/"+trackID+"/playback", "", "Bearer "+viewerToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("playback descriptor: %d %s", resp.Code, resp.Body.String())
+	}
+	var desc map[string]any
+	decodeResponse(t, resp, &desc)
+	presignedURL, _ := desc["presignedUrl"].(string)
+	if presignedURL == "" {
+		t.Fatal("presignedUrl is missing or empty; expected a signed URL for S3 backend with PresignedURLs=true")
+	}
+	if !strings.Contains(presignedURL, "X-Amz-Signature") {
+		t.Errorf("presignedUrl does not look like a SigV4 URL: %s", presignedURL)
+	}
+	if !strings.Contains(presignedURL, "track.flac") {
+		t.Errorf("presignedUrl missing object key: %s", presignedURL)
+	}
+}
+
 // ---- viewer catalog stats tests ----
 
 func TestViewerGetCatalogStatsEmpty(t *testing.T) {

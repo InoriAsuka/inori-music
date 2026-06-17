@@ -1032,6 +1032,8 @@ func (handler *Handler) getTrack(w http.ResponseWriter, r *http.Request) {
 // trackPlaybackDescriptor is the metadata-only response returned by the viewer
 // playback endpoint. It carries the fields a client needs to fetch the audio
 // file from its storage backend without the server streaming bytes.
+// PresignedURL is populated when the backend supports presigned URLs and
+// credentials are available; it is omitted otherwise.
 type trackPlaybackDescriptor struct {
 	TrackID       string `json:"trackId"`
 	MediaObjectID string `json:"mediaObjectId"`
@@ -1040,6 +1042,7 @@ type trackPlaybackDescriptor struct {
 	BackendID     string `json:"backendId"`
 	BackendType   string `json:"backendType,omitempty"`
 	ObjectKey     string `json:"objectKey"`
+	PresignedURL  string `json:"presignedUrl,omitempty"`
 }
 
 func (handler *Handler) getTrackPlayback(w http.ResponseWriter, r *http.Request) {
@@ -1067,13 +1070,16 @@ func (handler *Handler) getTrackPlayback(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	backendType := ""
+	presignedURL := ""
 	if handler.storage != nil {
-		backends, listErr := handler.storage.ListBackends(r.Context())
-		if listErr == nil {
-			for _, b := range backends {
-				if b.ID == mo.BackendID {
-					backendType = string(b.Type)
-					break
+		backend, backendErr := handler.storage.GetBackend(r.Context(), mo.BackendID)
+		if backendErr == nil {
+			backendType = string(backend.Type)
+			if backend.Capabilities.PresignedURLs {
+				if purl, pErr := handler.storage.GeneratePresignedURL(
+					r.Context(), mo.BackendID, mo.ObjectKey, storage.DefaultPresignedURLTTL,
+				); pErr == nil {
+					presignedURL = purl
 				}
 			}
 		}
@@ -1086,6 +1092,7 @@ func (handler *Handler) getTrackPlayback(w http.ResponseWriter, r *http.Request)
 		BackendID:     mo.BackendID,
 		BackendType:   backendType,
 		ObjectKey:     mo.ObjectKey,
+		PresignedURL:  presignedURL,
 	})
 }
 

@@ -1936,6 +1936,10 @@
           "objectKey": {
             "type": "string",
             "description": "Object key within the storage backend."
+          },
+          "presignedUrl": {
+            "type": "string",
+            "description": "AWS Signature Version 4 presigned GET URL, valid for 15 minutes. Present only when the backend supports presigned URLs and credentials are configured; omitted otherwise."
           }
         }
       },
@@ -1997,7 +2001,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "0.59.0"
+    "version": "0.60.0"
   },
   "openapi": "3.1.0",
   "paths": {

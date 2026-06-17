@@ -174,3 +174,34 @@ func ensureDefaultCandidate(backend StorageBackend) error {
 	}
 	return nil
 }
+
+// GetBackend returns a single backend by ID.
+func (service *Service) GetBackend(ctx context.Context, id string) (StorageBackend, error) {
+	return service.repository.Get(ctx, id)
+}
+
+// DefaultPresignedURLTTL is the time-to-live used when generating presigned URLs.
+const DefaultPresignedURLTTL = 15 * time.Minute
+
+// GeneratePresignedURL generates an AWS Signature Version 4 presigned GET URL
+// for an object on a backend that advertises PresignedURLs capability.
+// Returns ErrProbeUnsupported when the backend does not support presigned URLs.
+// Returns ErrProbeFailed when credentials cannot be resolved or the config is invalid.
+func (service *Service) GeneratePresignedURL(ctx context.Context, backendID string, objectKey string, ttl time.Duration) (string, error) {
+	backend, err := service.repository.Get(ctx, backendID)
+	if err != nil {
+		return "", err
+	}
+	if !backend.Capabilities.PresignedURLs {
+		return "", fmt.Errorf("%w: backend %s does not support presigned URLs", ErrProbeUnsupported, backendID)
+	}
+	config, ok := s3ProbeConfig(backend)
+	if !ok {
+		return "", fmt.Errorf("%w: backend %s does not have an S3-compatible configuration", ErrProbeUnsupported, backendID)
+	}
+	accessKey, secretKey, err := resolveS3ProbeCredentials(config)
+	if err != nil {
+		return "", err
+	}
+	return presignS3URL(config, objectKey, accessKey, secretKey, ttl, service.now())
+}

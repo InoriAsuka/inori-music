@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -268,5 +269,115 @@ func TestServiceProbeBackendRecordsFilesystemFailure(t *testing.T) {
 	}
 	if health.Status != HealthStatusUnhealthy || health.CheckedAt.IsZero() {
 		t.Fatalf("GetBackendHealth() = %+v, want unhealthy checked state", health)
+	}
+}
+
+func TestGetBackend(t *testing.T) {
+	ctx := context.Background()
+	svc := NewService(NewMemoryRepository())
+	_, err := svc.GetBackend(ctx, "nonexistent")
+	if !errors.Is(err, ErrNotFound) {
+		t.Fatalf("GetBackend(unknown) = %v, want ErrNotFound", err)
+	}
+
+	b := StorageBackend{
+		ID:          "local-get",
+		Type:        BackendTypeLocal,
+		DisplayName: "Local Get",
+		Enabled:     true,
+		Config:      BackendConfig{Local: &LocalConfig{RootPath: "/srv"}},
+	}
+	if _, err := svc.RegisterBackend(ctx, b); err != nil {
+		t.Fatalf("RegisterBackend: %v", err)
+	}
+	got, err := svc.GetBackend(ctx, "local-get")
+	if err != nil {
+		t.Fatalf("GetBackend: %v", err)
+	}
+	if got.ID != "local-get" {
+		t.Errorf("GetBackend().ID = %q, want local-get", got.ID)
+	}
+}
+
+func TestGeneratePresignedURLUnsupportedBackend(t *testing.T) {
+	ctx := context.Background()
+	svc := NewService(NewMemoryRepository())
+	b := StorageBackend{
+		ID:          "local-nopresign",
+		Type:        BackendTypeLocal,
+		DisplayName: "Local",
+		Enabled:     true,
+		Config:      BackendConfig{Local: &LocalConfig{RootPath: "/srv"}},
+		// Capabilities.PresignedURLs is false by default
+	}
+	if _, err := svc.RegisterBackend(ctx, b); err != nil {
+		t.Fatalf("RegisterBackend: %v", err)
+	}
+	_, err := svc.GeneratePresignedURL(ctx, "local-nopresign", "key", DefaultPresignedURLTTL)
+	if !errors.Is(err, ErrProbeUnsupported) {
+		t.Fatalf("GeneratePresignedURL(local) = %v, want ErrProbeUnsupported", err)
+	}
+}
+
+func TestGeneratePresignedURLMissingCredentials(t *testing.T) {
+	ctx := context.Background()
+	svc := NewService(NewMemoryRepository())
+	b := StorageBackend{
+		ID:          "s3-nocreds",
+		Type:        BackendTypeS3,
+		DisplayName: "S3 No Creds",
+		Enabled:     true,
+		Capabilities: CapabilitySet{PresignedURLs: true},
+		Config: BackendConfig{S3: &S3Config{
+			Endpoint:           "https://s3.example.com",
+			Region:             "us-east-1",
+			Bucket:             "bucket",
+			PathStyle:          true,
+			AccessKeySecretRef: "MISSING_PS_ACCESS",
+			SecretKeySecretRef: "MISSING_PS_SECRET",
+		}},
+	}
+	if _, err := svc.RegisterBackend(ctx, b); err != nil {
+		t.Fatalf("RegisterBackend: %v", err)
+	}
+	_, err := svc.GeneratePresignedURL(ctx, "s3-nocreds", "key.flac", DefaultPresignedURLTTL)
+	if !errors.Is(err, ErrProbeFailed) {
+		t.Fatalf("GeneratePresignedURL(missing creds) = %v, want ErrProbeFailed", err)
+	}
+}
+
+func TestGeneratePresignedURLSuccess(t *testing.T) {
+	ctx := context.Background()
+	t.Setenv("PS2_ACCESS", "access-key")
+	t.Setenv("PS2_SECRET", "secret-key")
+	svc := NewService(NewMemoryRepository())
+	svc.now = func() time.Time { return time.Date(2026, 6, 17, 12, 0, 0, 0, time.UTC) }
+	b := StorageBackend{
+		ID:          "s3-presign",
+		Type:        BackendTypeS3,
+		DisplayName: "S3 Presign",
+		Enabled:     true,
+		Capabilities: CapabilitySet{PresignedURLs: true},
+		Config: BackendConfig{S3: &S3Config{
+			Endpoint:           "https://s3.example.com",
+			Region:             "us-east-1",
+			Bucket:             "music",
+			PathStyle:          true,
+			AccessKeySecretRef: "PS2_ACCESS",
+			SecretKeySecretRef: "PS2_SECRET",
+		}},
+	}
+	if _, err := svc.RegisterBackend(ctx, b); err != nil {
+		t.Fatalf("RegisterBackend: %v", err)
+	}
+	purl, err := svc.GeneratePresignedURL(ctx, "s3-presign", "tracks/song.flac", DefaultPresignedURLTTL)
+	if err != nil {
+		t.Fatalf("GeneratePresignedURL: %v", err)
+	}
+	if !strings.Contains(purl, "X-Amz-Signature") {
+		t.Errorf("presigned URL missing X-Amz-Signature: %s", purl)
+	}
+	if !strings.Contains(purl, "tracks") {
+		t.Errorf("presigned URL missing object key: %s", purl)
 	}
 }
