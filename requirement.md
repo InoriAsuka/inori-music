@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.62.0`
+`0.63.0`
 
 ## Product Goal
 
@@ -535,4 +535,14 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add `sortBy`/`sortOrder` params and sort descriptions to all 8 catalog list paths in the OpenAPI contract; add `invalid_sort_order` to error enum; bump `info.version` to `0.62.0`.
 - Add `TestStorageAdminOpenAPIContractCatalogListSortParams` asserting sort params on all 8 list paths.
 - Add 6 HTTP-layer tests covering per-entity sort directions, invalid `sortOrder`, and viewer-session sort access.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.63.0 - 2026-06-17
+
+- Add nested catalog browse routes: `GET /api/v1/catalog/artists/{id}/albums`, `GET /api/v1/catalog/artists/{id}/tracks`, and `GET /api/v1/catalog/albums/{id}/tracks` under both admin (`/api/v1/admin/catalog/…`) and viewer (`/api/v1/catalog/…`) paths.
+- Each handler validates the parent entity (artist or album) before listing sub-entities; unknown IDs return 404.
+- All six new routes support the same `limit`, `offset`, `sortBy`, and `sortOrder` parameters established in Phases 61–62.
+- Add 4 HTTP-layer tests covering pagination, sort, 404 on unknown parent, 405 method-not-allowed, and viewer-session access to all three nested routes.
+- Add 6 new paths to the OpenAPI contract with typed response schemas (albums/tracks with pagination) and full pagination+sort parameter declarations; bump `info.version` to `0.63.0`.
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes` and `TestStorageAdminOpenAPIContractCatalogListSortParams` for all 6 new paths.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

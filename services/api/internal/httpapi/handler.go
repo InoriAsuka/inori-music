@@ -283,11 +283,14 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/catalog/artists", handler.requireAdminAuth(handler.listArtists))
 	mux.HandleFunc("POST /api/v1/admin/catalog/artists", handler.requireAdminAuth(handler.createArtist))
 	mux.HandleFunc("GET /api/v1/admin/catalog/artists/{id}", handler.requireAdminAuth(handler.getArtist))
+	mux.HandleFunc("GET /api/v1/admin/catalog/artists/{id}/albums", handler.requireAdminAuth(handler.listAlbumsByArtist))
+	mux.HandleFunc("GET /api/v1/admin/catalog/artists/{id}/tracks", handler.requireAdminAuth(handler.listTracksByArtist))
 	mux.HandleFunc("PATCH /api/v1/admin/catalog/artists/{id}", handler.requireAdminAuth(handler.patchArtist))
 	mux.HandleFunc("DELETE /api/v1/admin/catalog/artists/{id}", handler.requireAdminAuth(handler.deleteArtist))
 	mux.HandleFunc("GET /api/v1/admin/catalog/albums", handler.requireAdminAuth(handler.listAlbums))
 	mux.HandleFunc("POST /api/v1/admin/catalog/albums", handler.requireAdminAuth(handler.createAlbum))
 	mux.HandleFunc("GET /api/v1/admin/catalog/albums/{id}", handler.requireAdminAuth(handler.getAlbum))
+	mux.HandleFunc("GET /api/v1/admin/catalog/albums/{id}/tracks", handler.requireAdminAuth(handler.listTracksByAlbum))
 	mux.HandleFunc("PATCH /api/v1/admin/catalog/albums/{id}", handler.requireAdminAuth(handler.patchAlbum))
 	mux.HandleFunc("DELETE /api/v1/admin/catalog/albums/{id}", handler.requireAdminAuth(handler.deleteAlbum))
 	mux.HandleFunc("GET /api/v1/admin/catalog/tracks", handler.requireAdminAuth(handler.listTracks))
@@ -301,8 +304,11 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/catalog/search", handler.requireAdminAuth(handler.searchCatalog))
 	mux.HandleFunc("GET /api/v1/catalog/artists", handler.requireViewerAuth(handler.listArtists))
 	mux.HandleFunc("GET /api/v1/catalog/artists/{id}", handler.requireViewerAuth(handler.getArtist))
+	mux.HandleFunc("GET /api/v1/catalog/artists/{id}/albums", handler.requireViewerAuth(handler.listAlbumsByArtist))
+	mux.HandleFunc("GET /api/v1/catalog/artists/{id}/tracks", handler.requireViewerAuth(handler.listTracksByArtist))
 	mux.HandleFunc("GET /api/v1/catalog/albums", handler.requireViewerAuth(handler.listAlbums))
 	mux.HandleFunc("GET /api/v1/catalog/albums/{id}", handler.requireViewerAuth(handler.getAlbum))
+	mux.HandleFunc("GET /api/v1/catalog/albums/{id}/tracks", handler.requireViewerAuth(handler.listTracksByAlbum))
 	mux.HandleFunc("GET /api/v1/catalog/tracks", handler.requireViewerAuth(handler.listTracks))
 	mux.HandleFunc("GET /api/v1/catalog/tracks/{id}", handler.requireViewerAuth(handler.getTrack))
 	mux.HandleFunc("GET /api/v1/catalog/tracks/{id}/playback", handler.requireViewerAuth(handler.getTrackPlayback))
@@ -361,8 +367,11 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("/api/v1/admin/users/{id}", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/catalog/artists", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/catalog/artists/{id}", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/catalog/artists/{id}/albums", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/catalog/artists/{id}/tracks", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/catalog/albums", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/catalog/albums/{id}", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/catalog/albums/{id}/tracks", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/catalog/tracks", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/catalog/tracks/{id}", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/catalog/tracks/{id}/relink", handler.requireAdminAuth(handler.methodNotAllowed))
@@ -384,8 +393,11 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("/api/v1/catalog/playlists/{id}", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/catalog/artists", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/catalog/artists/{id}", handler.requireViewerAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/catalog/artists/{id}/albums", handler.requireViewerAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/catalog/artists/{id}/tracks", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/catalog/albums", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/catalog/albums/{id}", handler.requireViewerAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/catalog/albums/{id}/tracks", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/catalog/tracks", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/catalog/tracks/{id}", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/catalog/tracks/{id}/playback", handler.requireViewerAuth(handler.methodNotAllowed))
@@ -1015,6 +1027,67 @@ func (handler *Handler) deleteArtist(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// listAlbumsByArtist returns paged, sorted albums belonging to the artist identified
+// by the {id} path parameter. The parent artist must exist; unknown IDs return 404.
+func (handler *Handler) listAlbumsByArtist(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireCatalogService(w) {
+		return
+	}
+	limit, offset, sortBy, sortOrder, ok := parseCatalogPage(w, r)
+	if !ok {
+		return
+	}
+	if so, valid := normalizeSortOrder(sortOrder); valid {
+		sortOrder = so
+	} else {
+		writeAPIError(w, http.StatusBadRequest, "invalid_sort_order", "sortOrder must be asc or desc")
+		return
+	}
+	// Verify the artist exists before listing — produces 404 on unknown IDs.
+	if _, err := handler.catalogService.GetArtist(r.Context(), r.PathValue("id")); err != nil {
+		writeError(w, err)
+		return
+	}
+	albums, err := handler.catalogService.ListAlbumsByArtist(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	sortCatalogAlbums(albums, sortBy, sortOrder)
+	page, meta := paginateCatalog(albums, limit, offset)
+	writeJSON(w, http.StatusOK, map[string]any{"albums": page, "pagination": meta})
+}
+
+// listTracksByArtist returns paged, sorted tracks belonging to the artist identified
+// by the {id} path parameter. The parent artist must exist; unknown IDs return 404.
+func (handler *Handler) listTracksByArtist(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireCatalogService(w) {
+		return
+	}
+	limit, offset, sortBy, sortOrder, ok := parseCatalogPage(w, r)
+	if !ok {
+		return
+	}
+	if so, valid := normalizeSortOrder(sortOrder); valid {
+		sortOrder = so
+	} else {
+		writeAPIError(w, http.StatusBadRequest, "invalid_sort_order", "sortOrder must be asc or desc")
+		return
+	}
+	if _, err := handler.catalogService.GetArtist(r.Context(), r.PathValue("id")); err != nil {
+		writeError(w, err)
+		return
+	}
+	tracks, err := handler.catalogService.ListTracksByArtist(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	sortCatalogTracks(tracks, sortBy, sortOrder)
+	page, meta := paginateCatalog(tracks, limit, offset)
+	writeJSON(w, http.StatusOK, map[string]any{"tracks": page, "pagination": meta})
+}
+
 // patchArtistRequest carries the fields that may be changed via PATCH.
 // Pointer semantics: nil = leave unchanged, pointer-to-string = set new value.
 type patchArtistRequest struct {
@@ -1122,6 +1195,36 @@ func (handler *Handler) deleteAlbum(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+// listTracksByAlbum returns paged, sorted tracks belonging to the album identified
+// by the {id} path parameter. The parent album must exist; unknown IDs return 404.
+func (handler *Handler) listTracksByAlbum(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireCatalogService(w) {
+		return
+	}
+	limit, offset, sortBy, sortOrder, ok := parseCatalogPage(w, r)
+	if !ok {
+		return
+	}
+	if so, valid := normalizeSortOrder(sortOrder); valid {
+		sortOrder = so
+	} else {
+		writeAPIError(w, http.StatusBadRequest, "invalid_sort_order", "sortOrder must be asc or desc")
+		return
+	}
+	if _, err := handler.catalogService.GetAlbum(r.Context(), r.PathValue("id")); err != nil {
+		writeError(w, err)
+		return
+	}
+	tracks, err := handler.catalogService.ListTracksByAlbum(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	sortCatalogTracks(tracks, sortBy, sortOrder)
+	page, meta := paginateCatalog(tracks, limit, offset)
+	writeJSON(w, http.StatusOK, map[string]any{"tracks": page, "pagination": meta})
 }
 
 // patchAlbumRequest carries the fields that may be changed via PATCH.

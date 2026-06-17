@@ -4052,3 +4052,177 @@ func TestViewerCatalogListArtistsSort(t *testing.T) {
 		t.Errorf("viewer first artist (asc) = %v, want Alice", artists[0].(map[string]any)["name"])
 	}
 }
+
+// ---- nested browse route tests (Phase 63) ----
+
+func TestListAlbumsByArtistRoute(t *testing.T) {
+	h := newCatalogTestHandler()
+
+	artistResp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Band"}`)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	for i := 1; i <= 3; i++ {
+		performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/albums",
+			fmt.Sprintf(`{"title":"Album %d","artistId":%q,"releaseYear":%d}`, i, artistID, 2020+i))
+	}
+
+	// all albums for artist
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/artists/"+artistID+"/albums", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	albums := got["albums"].([]any)
+	if len(albums) != 3 {
+		t.Errorf("want 3 albums, got %d", len(albums))
+	}
+	if got["pagination"] == nil {
+		t.Error("pagination key missing")
+	}
+
+	// with limit
+	resp = performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/artists/"+artistID+"/albums?limit=2", "")
+	decodeResponse(t, resp, &got)
+	albums = got["albums"].([]any)
+	if len(albums) != 2 {
+		t.Errorf("limit=2: want 2 albums, got %d", len(albums))
+	}
+
+	// with sort
+	resp = performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/artists/"+artistID+"/albums?sortBy=releaseYear&sortOrder=desc", "")
+	decodeResponse(t, resp, &got)
+	albums = got["albums"].([]any)
+	if int(albums[0].(map[string]any)["releaseYear"].(float64)) != 2023 {
+		t.Errorf("first album year (desc) = %v, want 2023", albums[0].(map[string]any)["releaseYear"])
+	}
+
+	// unknown artist → 404
+	resp = performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/artists/no-such/albums", "")
+	assertAPIError(t, resp, http.StatusNotFound, "not_found")
+
+	// method not allowed
+	resp = performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/artists/"+artistID+"/albums", `{}`)
+	if resp.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", resp.Code)
+	}
+}
+
+func TestListTracksByArtistRoute(t *testing.T) {
+	h := newCatalogTestHandler()
+
+	artistResp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Band"}`)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	for i := 1; i <= 2; i++ {
+		performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+			fmt.Sprintf(`{"title":"Track %d","artistId":%q,"mediaObjectId":"mo-art-%d"}`, i, artistID, i))
+	}
+
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/artists/"+artistID+"/tracks", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	tracks := got["tracks"].([]any)
+	if len(tracks) != 2 {
+		t.Errorf("want 2 tracks, got %d", len(tracks))
+	}
+
+	// unknown artist → 404
+	resp = performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/artists/no-such/tracks", "")
+	assertAPIError(t, resp, http.StatusNotFound, "not_found")
+
+	// method not allowed
+	resp = performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/artists/"+artistID+"/tracks", `{}`)
+	if resp.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", resp.Code)
+	}
+}
+
+func TestListTracksByAlbumRoute(t *testing.T) {
+	h := newCatalogTestHandler()
+
+	artistResp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Band"}`)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	albumResp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/albums",
+		fmt.Sprintf(`{"title":"Album","artistId":%q,"releaseYear":2024}`, artistID))
+	var album map[string]any
+	decodeResponse(t, albumResp, &album)
+	albumID := album["id"].(string)
+
+	for i := 1; i <= 3; i++ {
+		performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+			fmt.Sprintf(`{"title":"Song %d","artistId":%q,"albumId":%q,"mediaObjectId":"mo-alb-%d"}`, i, artistID, albumID, i))
+	}
+
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/albums/"+albumID+"/tracks", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	tracks := got["tracks"].([]any)
+	if len(tracks) != 3 {
+		t.Errorf("want 3 tracks, got %d", len(tracks))
+	}
+	pagination := got["pagination"].(map[string]any)
+	if int(pagination["total"].(float64)) != 3 {
+		t.Errorf("total = %v, want 3", pagination["total"])
+	}
+
+	// sort descending
+	resp = performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/albums/"+albumID+"/tracks?sortBy=title&sortOrder=desc", "")
+	decodeResponse(t, resp, &got)
+	tracks = got["tracks"].([]any)
+	if tracks[0].(map[string]any)["title"] != "Song 3" {
+		t.Errorf("first track (desc) = %v, want Song 3", tracks[0].(map[string]any)["title"])
+	}
+
+	// unknown album → 404
+	resp = performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/albums/no-such/tracks", "")
+	assertAPIError(t, resp, http.StatusNotFound, "not_found")
+
+	// method not allowed
+	resp = performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/albums/"+albumID+"/tracks", `{}`)
+	if resp.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", resp.Code)
+	}
+}
+
+func TestViewerNestedBrowseRoutes(t *testing.T) {
+	h, viewerToken, adminToken := newViewerTestHandler(t)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Band"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	albumResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/albums",
+		fmt.Sprintf(`{"title":"Album","artistId":%q,"releaseYear":2024}`, artistID), "Bearer "+adminToken)
+	var album map[string]any
+	decodeResponse(t, albumResp, &album)
+	albumID := album["id"].(string)
+
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"Song","artistId":%q,"albumId":%q,"mediaObjectId":"mo-view-1"}`, artistID, albumID), "Bearer "+adminToken)
+
+	for _, path := range []string{
+		"/api/v1/catalog/artists/" + artistID + "/albums",
+		"/api/v1/catalog/artists/" + artistID + "/tracks",
+		"/api/v1/catalog/albums/" + albumID + "/tracks",
+	} {
+		resp := performRequestWithAuthHeader(t, h, http.MethodGet, path, "", "Bearer "+viewerToken)
+		if resp.Code != http.StatusOK {
+			t.Errorf("viewer GET %s: status = %d, body = %s", path, resp.Code, resp.Body.String())
+		}
+	}
+}
