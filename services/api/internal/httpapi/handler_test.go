@@ -4226,3 +4226,147 @@ func TestViewerNestedBrowseRoutes(t *testing.T) {
 		}
 	}
 }
+
+// ---- playlist tracks pagination tests (Phase 64) ----
+
+func TestGetPlaylistTracksPagination(t *testing.T) {
+	h := newCatalogTestHandler()
+
+	// seed: artist + 5 tracks + playlist with all 5 in order
+	artistResp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Band"}`)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackIDs := make([]string, 5)
+	for i := 0; i < 5; i++ {
+		tr := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+			fmt.Sprintf(`{"title":"Song %d","artistId":%q,"mediaObjectId":"mo-pl-pg-%d"}`, i+1, artistID, i+1))
+		var trk map[string]any
+		decodeResponse(t, tr, &trk)
+		trackIDs[i] = trk["id"].(string)
+	}
+
+	plResp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/playlists", `{"name":"PL"}`)
+	var pl map[string]any
+	decodeResponse(t, plResp, &pl)
+	plID := pl["id"].(string)
+
+	trackIDsJSON, _ := json.Marshal(trackIDs)
+	performRequest(t, h, http.MethodPut, "/api/v1/admin/catalog/playlists/"+plID+"/tracks",
+		fmt.Sprintf(`{"trackIds":%s}`, trackIDsJSON))
+
+	// default (all 5)
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/playlists/"+plID+"/tracks", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	tracks := got["tracks"].([]any)
+	if len(tracks) != 5 {
+		t.Fatalf("default: want 5 tracks, got %d", len(tracks))
+	}
+	pagination := got["pagination"].(map[string]any)
+	if int(pagination["total"].(float64)) != 5 {
+		t.Errorf("total = %v, want 5", pagination["total"])
+	}
+	if pagination["hasMore"].(bool) {
+		t.Error("hasMore should be false for default limit with 5 items")
+	}
+
+	// order preserved: first track is Song 1 (trackIDs[0])
+	first := tracks[0].(map[string]any)
+	if first["id"] != trackIDs[0] {
+		t.Errorf("order: first track id = %v, want %s", first["id"], trackIDs[0])
+	}
+
+	// limit=2
+	resp = performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/playlists/"+plID+"/tracks?limit=2", "")
+	decodeResponse(t, resp, &got)
+	tracks = got["tracks"].([]any)
+	if len(tracks) != 2 {
+		t.Errorf("limit=2: want 2 tracks, got %d", len(tracks))
+	}
+	pagination = got["pagination"].(map[string]any)
+	if !pagination["hasMore"].(bool) {
+		t.Error("hasMore should be true with limit=2 of 5")
+	}
+	// order preserved within page
+	if tracks[0].(map[string]any)["id"] != trackIDs[0] {
+		t.Errorf("page[0] id = %v, want %s", tracks[0].(map[string]any)["id"], trackIDs[0])
+	}
+	if tracks[1].(map[string]any)["id"] != trackIDs[1] {
+		t.Errorf("page[1] id = %v, want %s", tracks[1].(map[string]any)["id"], trackIDs[1])
+	}
+
+	// offset=3 limit=2 → last 2 tracks
+	resp = performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/playlists/"+plID+"/tracks?limit=2&offset=3", "")
+	decodeResponse(t, resp, &got)
+	tracks = got["tracks"].([]any)
+	if len(tracks) != 2 {
+		t.Errorf("offset=3 limit=2: want 2 tracks, got %d", len(tracks))
+	}
+	if tracks[0].(map[string]any)["id"] != trackIDs[3] {
+		t.Errorf("offset=3 page[0] id = %v, want %s", tracks[0].(map[string]any)["id"], trackIDs[3])
+	}
+	pagination = got["pagination"].(map[string]any)
+	if pagination["hasMore"].(bool) {
+		t.Error("hasMore should be false: offset=3 limit=2 total=5 consumes last 2")
+	}
+
+	// invalid limit
+	resp = performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/playlists/"+plID+"/tracks?limit=bad", "")
+	assertAPIError(t, resp, http.StatusBadRequest, "invalid_limit")
+
+	// invalid offset
+	resp = performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/playlists/"+plID+"/tracks?offset=-1", "")
+	assertAPIError(t, resp, http.StatusBadRequest, "invalid_offset")
+}
+
+func TestViewerGetPlaylistTracksPagination(t *testing.T) {
+	h, viewerToken, adminToken := newViewerTestHandler(t)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Band"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackIDs := make([]string, 3)
+	for i := 0; i < 3; i++ {
+		tr := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+			fmt.Sprintf(`{"title":"Song %d","artistId":%q,"mediaObjectId":"mo-vpl-%d"}`, i+1, artistID, i+1), "Bearer "+adminToken)
+		var trk map[string]any
+		decodeResponse(t, tr, &trk)
+		trackIDs[i] = trk["id"].(string)
+	}
+
+	plResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/playlists", `{"name":"VPL"}`, "Bearer "+adminToken)
+	var pl map[string]any
+	decodeResponse(t, plResp, &pl)
+	plID := pl["id"].(string)
+
+	trackIDsJSON, _ := json.Marshal(trackIDs)
+	performRequestWithAuthHeader(t, h, http.MethodPut, "/api/v1/admin/catalog/playlists/"+plID+"/tracks",
+		fmt.Sprintf(`{"trackIds":%s}`, trackIDsJSON), "Bearer "+adminToken)
+
+	// viewer: paginated GET
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/catalog/playlists/"+plID+"/tracks?limit=2", "", "Bearer "+viewerToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("viewer playlist tracks: %d %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	tracks := got["tracks"].([]any)
+	if len(tracks) != 2 {
+		t.Errorf("viewer limit=2: want 2 tracks, got %d", len(tracks))
+	}
+	pagination := got["pagination"].(map[string]any)
+	if int(pagination["total"].(float64)) != 3 {
+		t.Errorf("total = %v, want 3", pagination["total"])
+	}
+	if !pagination["hasMore"].(bool) {
+		t.Error("hasMore should be true")
+	}
+}

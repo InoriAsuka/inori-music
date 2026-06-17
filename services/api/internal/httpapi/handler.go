@@ -1633,12 +1633,43 @@ func (handler *Handler) getPlaylistTracks(w http.ResponseWriter, r *http.Request
 	if !handler.requireCatalogService(w) {
 		return
 	}
+	// Playlist tracks have a defined user-curated order; sortBy/sortOrder are not
+	// exposed here — only limit/offset for pagination of the ordered list.
+	limit, offset, ok := func() (int, int, bool) {
+		q := r.URL.Query()
+		lim := catalogListDefaultLimit
+		off := 0
+		if raw := q.Get("limit"); raw != "" {
+			v, err := strconv.Atoi(raw)
+			if err != nil || v < 1 {
+				writeAPIError(w, http.StatusBadRequest, "invalid_limit", "limit must be a positive integer")
+				return 0, 0, false
+			}
+			if v > catalogListMaxLimit {
+				v = catalogListMaxLimit
+			}
+			lim = v
+		}
+		if raw := q.Get("offset"); raw != "" {
+			v, err := strconv.Atoi(raw)
+			if err != nil || v < 0 {
+				writeAPIError(w, http.StatusBadRequest, "invalid_offset", "offset must be a non-negative integer")
+				return 0, 0, false
+			}
+			off = v
+		}
+		return lim, off, true
+	}()
+	if !ok {
+		return
+	}
 	tracks, err := handler.catalogService.GetPlaylistTracks(r.Context(), r.PathValue("id"))
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"tracks": tracks})
+	page, meta := paginateCatalog(tracks, limit, offset)
+	writeJSON(w, http.StatusOK, map[string]any{"tracks": page, "pagination": meta})
 }
 
 func (handler *Handler) getCatalogStats(w http.ResponseWriter, r *http.Request) {

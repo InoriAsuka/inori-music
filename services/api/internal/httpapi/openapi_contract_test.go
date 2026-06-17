@@ -325,6 +325,35 @@ func TestStorageAdminOpenAPIContractCatalogListSortParams(t *testing.T) {
 	}
 }
 
+func TestStorageAdminOpenAPIContractPlaylistTracksPagination(t *testing.T) {
+	document := loadOpenAPIContract(t)
+	paths := document["paths"].(map[string]any)
+	for _, path := range []string{
+		"/api/v1/catalog/playlists/{id}/tracks",
+		"/api/v1/admin/catalog/playlists/{id}/tracks",
+	} {
+		get := operation(t, paths, path, "get")
+		params, _ := get["parameters"].([]any)
+		seen := make(map[string]bool)
+		for _, p := range params {
+			if m, ok := p.(map[string]any); ok {
+				seen[m["name"].(string)] = true
+			}
+		}
+		for _, want := range []string{"limit", "offset"} {
+			if !seen[want] {
+				t.Errorf("path %s GET is missing pagination param %q", path, want)
+			}
+		}
+		// playlist tracks preserve order — sortBy/sortOrder must NOT be present
+		for _, noWant := range []string{"sortBy", "sortOrder"} {
+			if seen[noWant] {
+				t.Errorf("path %s GET should not have %q (playlist order is user-defined)", path, noWant)
+			}
+		}
+	}
+}
+
 func loadOpenAPIContract(t *testing.T) map[string]any {
 	t.Helper()
 	path := filepath.Clean(filepath.Join("..", "..", "..", "..", "packages", "api-contract", "openapi", "storage-admin.v1.json"))

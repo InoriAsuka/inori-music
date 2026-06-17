@@ -2031,7 +2031,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "0.63.0"
+    "version": "0.64.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -6279,7 +6279,12 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PlaylistTracksResult"
+                  "$ref": "#/components/schemas/PlaylistTracksResult",
+                  "properties": {
+                    "pagination": {
+                      "$ref": "#/components/schemas/CatalogPaginationMeta"
+                    }
+                  }
                 }
               }
             }
@@ -6290,7 +6295,30 @@
           "503": {
             "description": "Catalog service not configured"
           }
-        }
+        },
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
+            },
+            "description": "Maximum number of tracks to return (1–500, default 50)."
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            },
+            "description": "Zero-based index of the first track to return."
+          }
+        ]
       }
     },
     "/api/v1/admin/catalog/playlists/{id}/tracks/{trackId}": {
@@ -6564,7 +6592,12 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PlaylistTracksResult"
+                  "$ref": "#/components/schemas/PlaylistTracksResult",
+                  "properties": {
+                    "pagination": {
+                      "$ref": "#/components/schemas/CatalogPaginationMeta"
+                    }
+                  }
                 }
               }
             }
@@ -6575,7 +6608,30 @@
           "404": {
             "description": "Playlist not found"
           }
-        }
+        },
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
+            },
+            "description": "Maximum number of tracks to return (1–500, default 50)."
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            },
+            "description": "Zero-based index of the first track to return."
+          }
+        ]
       }
     },
     "/api/v1/admin/catalog/stats": {

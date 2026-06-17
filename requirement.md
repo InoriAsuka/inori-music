@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.63.0`
+`0.64.0`
 
 ## Product Goal
 
@@ -545,4 +545,14 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add 4 HTTP-layer tests covering pagination, sort, 404 on unknown parent, 405 method-not-allowed, and viewer-session access to all three nested routes.
 - Add 6 new paths to the OpenAPI contract with typed response schemas (albums/tracks with pagination) and full pagination+sort parameter declarations; bump `info.version` to `0.63.0`.
 - Extend `TestStorageAdminOpenAPIContractCoversRoutes` and `TestStorageAdminOpenAPIContractCatalogListSortParams` for all 6 new paths.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.64.0 - 2026-06-17
+
+- Add `limit`/`offset` pagination to `GET /api/v1/catalog/playlists/{id}/tracks` and `GET /api/v1/admin/catalog/playlists/{id}/tracks`.
+- Playlist track order is user-curated and is preserved exactly within each page; `sortBy`/`sortOrder` are intentionally not exposed.
+- Response now includes a `pagination` envelope (`limit`, `offset`, `total`, `hasMore`) alongside the `tracks` array.
+- Add `limit`/`offset` query params and `pagination` response property to both playlist tracks paths in the OpenAPI contract; bump `info.version` to `0.64.0`.
+- Add `TestStorageAdminOpenAPIContractPlaylistTracksPagination` asserting `limit`/`offset` present and `sortBy`/`sortOrder` absent.
+- Add 2 HTTP-layer tests covering order preservation, limit, offset, `hasMore`, invalid params, and viewer-session access.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
