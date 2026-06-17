@@ -86,3 +86,81 @@ func (r *Repository) DeletePlayEventsByUser(ctx context.Context, userID string) 
 	_, err := r.pool.Exec(ctx, `DELETE FROM play_events WHERE user_id = $1`, userID)
 	return err
 }
+
+func (r *Repository) HistoryStats(ctx context.Context) (history.HistoryStats, error) {
+	row := r.pool.QueryRow(ctx, `
+		SELECT
+			COUNT(*)                    AS total_events,
+			COUNT(DISTINCT user_id)     AS unique_users,
+			COUNT(DISTINCT track_id)    AS unique_tracks
+		FROM play_events`)
+	var s history.HistoryStats
+	if err := row.Scan(&s.TotalEvents, &s.UniqueUsers, &s.UniqueTracks); err != nil {
+		return history.HistoryStats{}, err
+	}
+	return s, nil
+}
+
+func (r *Repository) TopTracks(ctx context.Context, limit int) ([]history.TrackPlayCount, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	rows, err := r.pool.Query(ctx, `
+		SELECT track_id, COUNT(*) AS play_count
+		FROM play_events
+		GROUP BY track_id
+		ORDER BY play_count DESC, track_id ASC
+		LIMIT $1`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []history.TrackPlayCount
+	for rows.Next() {
+		var item history.TrackPlayCount
+		if err := rows.Scan(&item.TrackID, &item.PlayCount); err != nil {
+			return nil, err
+		}
+		result = append(result, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if result == nil {
+		result = []history.TrackPlayCount{}
+	}
+	return result, nil
+}
+
+func (r *Repository) TopUsers(ctx context.Context, limit int) ([]history.UserPlayCount, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	rows, err := r.pool.Query(ctx, `
+		SELECT user_id, COUNT(*) AS play_count
+		FROM play_events
+		GROUP BY user_id
+		ORDER BY play_count DESC, user_id ASC
+		LIMIT $1`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []history.UserPlayCount
+	for rows.Next() {
+		var item history.UserPlayCount
+		if err := rows.Scan(&item.UserID, &item.PlayCount); err != nil {
+			return nil, err
+		}
+		result = append(result, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if result == nil {
+		result = []history.UserPlayCount{}
+	}
+	return result, nil
+}

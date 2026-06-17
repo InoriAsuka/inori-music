@@ -77,6 +77,9 @@ func TestStorageAdminOpenAPIContractCoversRoutes(t *testing.T) {
 		"/api/v1/admin/catalog/stats/playlists":                 {"get"},
 		"/api/v1/admin/catalog/recently-added":                  {"get"},
 		"/api/v1/admin/catalog/recently-updated":                {"get"},
+		"/api/v1/admin/history/stats":                           {"get"},
+		"/api/v1/admin/history/top-tracks":                      {"get"},
+		"/api/v1/admin/history/top-users":                       {"get"},
 	}
 
 	for path, methods := range expected {
@@ -228,7 +231,7 @@ func TestStorageAdminOpenAPIContractSchemasAndErrors(t *testing.T) {
 	document := loadOpenAPIContract(t)
 	components := document["components"].(map[string]any)
 	schemas := components["schemas"].(map[string]any)
-	for _, name := range []string{"StorageBackend", "StorageBackendRequest", "BackendConfig", "LocalConfig", "NFSConfig", "SMBConfig", "S3Config", "DistributedConfig", "CapabilitySet", "ProbeResult", "CapacityReport", "RefreshReport", "RefreshResult", "ServiceInfo", "ReadinessCheck", "ReadinessReport", "MediaObject", "MediaObjectRequest", "MediaObjectLifecycleRequest", "MediaObjectLifecycleChange", "MediaObjectTimeline", "MediaObjectTimelineEvent", "MediaObjectSelectionFilter", "MediaObjectBulkLifecycleRequest", "MediaObjectLifecycleUpdateReport", "MediaObjectLifecycleUpdateResult", "MediaObjectStats", "MediaObjectDuplicateReport", "MediaObjectDuplicateGroup", "MediaObjectVerificationResult", "MediaObjectVerificationReport", "PaginationMetadata", "ErrorEnvelope", "CatalogArtist", "CatalogAlbum", "CatalogTrack", "CatalogSearchResult", "SearchResultItem", "SearchResultKind", "CatalogArtistStatItem", "CatalogArtistStatsBreakdown", "CatalogAlbumStatItem", "CatalogAlbumStatsBreakdown", "RecentItemKind", "RecentCatalogItem", "RecentCatalogResult", "UpdatedCatalogItem", "UpdatedCatalogResult", "TrackPlaybackDescriptor", "CatalogPaginationMeta", "PlayEvent", "PlayEventList"} {
+	for _, name := range []string{"StorageBackend", "StorageBackendRequest", "BackendConfig", "LocalConfig", "NFSConfig", "SMBConfig", "S3Config", "DistributedConfig", "CapabilitySet", "ProbeResult", "CapacityReport", "RefreshReport", "RefreshResult", "ServiceInfo", "ReadinessCheck", "ReadinessReport", "MediaObject", "MediaObjectRequest", "MediaObjectLifecycleRequest", "MediaObjectLifecycleChange", "MediaObjectTimeline", "MediaObjectTimelineEvent", "MediaObjectSelectionFilter", "MediaObjectBulkLifecycleRequest", "MediaObjectLifecycleUpdateReport", "MediaObjectLifecycleUpdateResult", "MediaObjectStats", "MediaObjectDuplicateReport", "MediaObjectDuplicateGroup", "MediaObjectVerificationResult", "MediaObjectVerificationReport", "PaginationMetadata", "ErrorEnvelope", "CatalogArtist", "CatalogAlbum", "CatalogTrack", "CatalogSearchResult", "SearchResultItem", "SearchResultKind", "CatalogArtistStatItem", "CatalogArtistStatsBreakdown", "CatalogAlbumStatItem", "CatalogAlbumStatsBreakdown", "RecentItemKind", "RecentCatalogItem", "RecentCatalogResult", "UpdatedCatalogItem", "UpdatedCatalogResult", "TrackPlaybackDescriptor", "CatalogPaginationMeta", "PlayEvent", "PlayEventList", "HistoryStats", "TrackPlayCount", "UserPlayCount", "TopTracksResult", "TopUsersResult"} {
 		if _, ok := schemas[name].(map[string]any); !ok {
 			t.Fatalf("schema %q is missing", name)
 		}
@@ -392,4 +395,40 @@ func containsString(values []any, expected string) bool {
 		}
 	}
 	return false
+}
+
+func TestStorageAdminOpenAPIContractAdminHistoryPaths(t *testing.T) {
+	document := loadOpenAPIContract(t)
+	paths := document["paths"].(map[string]any)
+	components := document["components"].(map[string]any)
+	schemas := components["schemas"].(map[string]any)
+
+	for _, path := range []string{
+		"/api/v1/admin/history/stats",
+		"/api/v1/admin/history/top-tracks",
+		"/api/v1/admin/history/top-users",
+	} {
+		pathItem, ok := paths[path].(map[string]any)
+		if !ok {
+			t.Fatalf("OpenAPI path %q is missing", path)
+		}
+		if _, ok := pathItem["get"].(map[string]any); !ok {
+			t.Fatalf("OpenAPI GET %s is missing", path)
+		}
+	}
+
+	for _, name := range []string{"HistoryStats", "TrackPlayCount", "UserPlayCount", "TopTracksResult", "TopUsersResult"} {
+		if _, ok := schemas[name].(map[string]any); !ok {
+			t.Fatalf("schema %q is missing", name)
+		}
+	}
+
+	// HistoryStats must have the three required fields
+	histStats := schemas["HistoryStats"].(map[string]any)
+	histProps := histStats["properties"].(map[string]any)
+	for _, field := range []string{"totalEvents", "uniqueUsers", "uniqueTracks"} {
+		if _, ok := histProps[field]; !ok {
+			t.Errorf("HistoryStats missing property %q", field)
+		}
+	}
 }

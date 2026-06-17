@@ -94,3 +94,81 @@ func TestClearHistory(t *testing.T) {
 		t.Errorf("u2 total = %d, want 1", total)
 	}
 }
+
+func TestGetHistoryStats(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	svc.RecordPlay(ctx, "u1", "t1", now)
+	svc.RecordPlay(ctx, "u1", "t2", now)
+	svc.RecordPlay(ctx, "u2", "t1", now)
+
+	stats, err := svc.GetHistoryStats(ctx)
+	if err != nil {
+		t.Fatalf("GetHistoryStats: %v", err)
+	}
+	if stats.TotalEvents != 3 {
+		t.Errorf("TotalEvents = %d, want 3", stats.TotalEvents)
+	}
+	if stats.UniqueUsers != 2 {
+		t.Errorf("UniqueUsers = %d, want 2", stats.UniqueUsers)
+	}
+	if stats.UniqueTracks != 2 {
+		t.Errorf("UniqueTracks = %d, want 2", stats.UniqueTracks)
+	}
+}
+
+func TestGetTopTracks(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	// t1 played 3×, t2 played 1×
+	for i := 0; i < 3; i++ {
+		svc.RecordPlay(ctx, "u1", "t1", now)
+	}
+	svc.RecordPlay(ctx, "u2", "t2", now)
+
+	tracks, err := svc.GetTopTracks(ctx, 0) // 0 → default 10
+	if err != nil {
+		t.Fatalf("GetTopTracks: %v", err)
+	}
+	if len(tracks) != 2 {
+		t.Fatalf("tracks = %d, want 2", len(tracks))
+	}
+	if tracks[0].TrackID != "t1" || tracks[0].PlayCount != 3 {
+		t.Errorf("first track = %+v, want t1/3", tracks[0])
+	}
+	if tracks[1].TrackID != "t2" || tracks[1].PlayCount != 1 {
+		t.Errorf("second track = %+v, want t2/1", tracks[1])
+	}
+
+	// Limit to 1
+	top1, _ := svc.GetTopTracks(ctx, 1)
+	if len(top1) != 1 {
+		t.Errorf("limit=1: tracks = %d, want 1", len(top1))
+	}
+}
+
+func TestGetTopUsers(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	// u1 played 2×, u2 played 1×
+	svc.RecordPlay(ctx, "u1", "t1", now)
+	svc.RecordPlay(ctx, "u1", "t2", now)
+	svc.RecordPlay(ctx, "u2", "t1", now)
+
+	users, err := svc.GetTopUsers(ctx, 0) // 0 → default 10
+	if err != nil {
+		t.Fatalf("GetTopUsers: %v", err)
+	}
+	if len(users) != 2 {
+		t.Fatalf("users = %d, want 2", len(users))
+	}
+	if users[0].UserID != "u1" || users[0].PlayCount != 2 {
+		t.Errorf("first user = %+v, want u1/2", users[0])
+	}
+}

@@ -27,4 +27,28 @@ type Repository interface {
 	SavePlayEvent(ctx context.Context, e PlayEvent) error
 	ListPlayEvents(ctx context.Context, f PlayEventFilter) ([]PlayEvent, int, error)
 	DeletePlayEventsByUser(ctx context.Context, userID string) error
+
+	// Aggregate stats — admin-facing queries.
+	HistoryStats(ctx context.Context) (HistoryStats, error)
+	TopTracks(ctx context.Context, limit int) ([]TrackPlayCount, error)
+	TopUsers(ctx context.Context, limit int) ([]UserPlayCount, error)
+}
+
+// HistoryStats holds system-wide playback aggregate counts.
+type HistoryStats struct {
+	TotalEvents  int `json:"totalEvents"`
+	UniqueUsers  int `json:"uniqueUsers"`
+	UniqueTracks int `json:"uniqueTracks"`
+}
+
+// TrackPlayCount holds a track's total play count across all users.
+type TrackPlayCount struct {
+	TrackID   string `json:"trackId"`
+	PlayCount int    `json:"playCount"`
+}
+
+// UserPlayCount holds a user's total play event count.
+type UserPlayCount struct {
+	UserID    string `json:"userId"`
+	PlayCount int    `json:"playCount"`
 }

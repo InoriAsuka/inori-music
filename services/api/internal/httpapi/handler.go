@@ -361,6 +361,12 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/me/history", handler.requireViewerAuth(handler.listPlayEvents))
 	mux.HandleFunc("DELETE /api/v1/me/history", handler.requireViewerAuth(handler.clearHistory))
 	mux.HandleFunc("/api/v1/me/history", handler.requireViewerAuth(handler.methodNotAllowed))
+	mux.HandleFunc("GET /api/v1/admin/history/stats", handler.requireAdminAuth(handler.getAdminHistoryStats))
+	mux.HandleFunc("GET /api/v1/admin/history/top-tracks", handler.requireAdminAuth(handler.getAdminTopTracks))
+	mux.HandleFunc("GET /api/v1/admin/history/top-users", handler.requireAdminAuth(handler.getAdminTopUsers))
+	mux.HandleFunc("/api/v1/admin/history/stats", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/history/top-tracks", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/history/top-users", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("GET /api/v1/admin/storage/backends", handler.requireAdminAuth(handler.listStorageBackends))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends", handler.requireAdminAuth(handler.registerStorageBackend))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends/validate", handler.requireAdminAuth(handler.validateStorageBackend))
@@ -1876,6 +1882,64 @@ func (handler *Handler) clearHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (handler *Handler) getAdminHistoryStats(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireHistoryService(w) {
+		return
+	}
+	stats, err := handler.historyService.GetHistoryStats(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, stats)
+}
+
+func (handler *Handler) getAdminTopTracks(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireHistoryService(w) {
+		return
+	}
+	limit, ok := parseHistoryAdminLimit(w, r)
+	if !ok {
+		return
+	}
+	tracks, err := handler.historyService.GetTopTracks(r.Context(), limit)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"tracks": tracks})
+}
+
+func (handler *Handler) getAdminTopUsers(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireHistoryService(w) {
+		return
+	}
+	limit, ok := parseHistoryAdminLimit(w, r)
+	if !ok {
+		return
+	}
+	users, err := handler.historyService.GetTopUsers(r.Context(), limit)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"users": users})
+}
+
+// parseHistoryAdminLimit parses the optional ?limit query param (default 10, max 100).
+func parseHistoryAdminLimit(w http.ResponseWriter, r *http.Request) (int, bool) {
+	raw := r.URL.Query().Get("limit")
+	if raw == "" {
+		return 0, true // service applies default
+	}
+	v, err := strconv.Atoi(raw)
+	if err != nil || v < 1 {
+		writeAPIError(w, http.StatusBadRequest, "invalid_limit", "limit must be a positive integer")
+		return 0, false
+	}
+	return v, true
 }
 
 func (handler *Handler) getRecentlyAdded(w http.ResponseWriter, r *http.Request) {

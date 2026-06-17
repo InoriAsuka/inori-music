@@ -2072,6 +2072,83 @@
             "$ref": "#/components/schemas/CatalogPaginationMeta"
           }
         }
+      },
+      "HistoryStats": {
+        "type": "object",
+        "required": [
+          "totalEvents",
+          "uniqueUsers",
+          "uniqueTracks"
+        ],
+        "properties": {
+          "totalEvents": {
+            "type": "integer"
+          },
+          "uniqueUsers": {
+            "type": "integer"
+          },
+          "uniqueTracks": {
+            "type": "integer"
+          }
+        }
+      },
+      "TrackPlayCount": {
+        "type": "object",
+        "required": [
+          "trackId",
+          "playCount"
+        ],
+        "properties": {
+          "trackId": {
+            "type": "string"
+          },
+          "playCount": {
+            "type": "integer"
+          }
+        }
+      },
+      "UserPlayCount": {
+        "type": "object",
+        "required": [
+          "userId",
+          "playCount"
+        ],
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "playCount": {
+            "type": "integer"
+          }
+        }
+      },
+      "TopTracksResult": {
+        "type": "object",
+        "required": [
+          "tracks"
+        ],
+        "properties": {
+          "tracks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TrackPlayCount"
+            }
+          }
+        }
+      },
+      "TopUsersResult": {
+        "type": "object",
+        "required": [
+          "users"
+        ],
+        "properties": {
+          "users": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserPlayCount"
+            }
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -2085,7 +2162,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "0.68.0"
+    "version": "0.69.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -2108,7 +2185,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of items to return (1–500, default 50)."
+            "description": "Maximum number of items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -2435,7 +2512,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of items to return (1–500, default 50)."
+            "description": "Maximum number of items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -2770,7 +2847,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of items to return (1–500, default 50)."
+            "description": "Maximum number of items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -5042,7 +5119,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of items to return (1–500, default 50)."
+            "description": "Maximum number of items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -5169,7 +5246,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of items to return (1–500, default 50)."
+            "description": "Maximum number of items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -5346,7 +5423,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of items to return (1–500, default 50)."
+            "description": "Maximum number of items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -5973,7 +6050,7 @@
             }
           },
           "207": {
-            "description": "Partial success — some items failed",
+            "description": "Partial success \u2014 some items failed",
             "content": {
               "application/json": {
                 "schema": {
@@ -6061,7 +6138,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of items to return (1–500, default 50)."
+            "description": "Maximum number of items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -6360,7 +6437,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of tracks to return (1–500, default 50)."
+            "description": "Maximum number of tracks to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -6465,7 +6542,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of items to return (1–500, default 50)."
+            "description": "Maximum number of items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -6673,7 +6750,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of tracks to return (1–500, default 50)."
+            "description": "Maximum number of tracks to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -6980,7 +7057,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Max items to return (1–500, default 50)."
+            "description": "Max items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -7097,7 +7174,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Max items to return (1–500, default 50)."
+            "description": "Max items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -7214,7 +7291,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Max items to return (1–500, default 50)."
+            "description": "Max items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -7331,7 +7408,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Max items to return (1–500, default 50)."
+            "description": "Max items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -7448,7 +7525,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Max items to return (1–500, default 50)."
+            "description": "Max items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -7565,7 +7642,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Max items to return (1–500, default 50)."
+            "description": "Max items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -7824,6 +7901,223 @@
             "description": "History cleared"
           },
           "401": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/history/stats": {
+      "get": {
+        "summary": "Get history aggregate stats",
+        "operationId": "getAdminHistoryStats",
+        "description": "Returns system-wide playback aggregate counts (admin only).",
+        "tags": [
+          "AdminHistory"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "History stats",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HistoryStats"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/history/top-tracks": {
+      "get": {
+        "summary": "Get most-played tracks",
+        "operationId": "getAdminTopTracks",
+        "description": "Returns tracks with the highest total play count across all users (admin only).",
+        "tags": [
+          "AdminHistory"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 10
+            },
+            "description": "Maximum number of results (default 10, max 100)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Top tracks list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TopTracksResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/history/top-users": {
+      "get": {
+        "summary": "Get most-active users",
+        "operationId": "getAdminTopUsers",
+        "description": "Returns users with the highest total play event count (admin only).",
+        "tags": [
+          "AdminHistory"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 10
+            },
+            "description": "Maximum number of results (default 10, max 100)."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Top users list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TopUsersResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
             "description": "Error",
             "content": {
               "application/json": {

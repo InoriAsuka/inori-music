@@ -63,3 +63,67 @@ func (r *MemoryRepository) DeletePlayEventsByUser(_ context.Context, userID stri
 	}
 	return nil
 }
+
+func (r *MemoryRepository) HistoryStats(_ context.Context) (HistoryStats, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	users := make(map[string]struct{})
+	tracks := make(map[string]struct{})
+	for _, e := range r.events {
+		users[e.UserID] = struct{}{}
+		tracks[e.TrackID] = struct{}{}
+	}
+	return HistoryStats{
+		TotalEvents:  len(r.events),
+		UniqueUsers:  len(users),
+		UniqueTracks: len(tracks),
+	}, nil
+}
+
+func (r *MemoryRepository) TopTracks(_ context.Context, limit int) ([]TrackPlayCount, error) {
+	r.mu.RLock()
+	counts := make(map[string]int)
+	for _, e := range r.events {
+		counts[e.TrackID]++
+	}
+	r.mu.RUnlock()
+
+	result := make([]TrackPlayCount, 0, len(counts))
+	for trackID, n := range counts {
+		result = append(result, TrackPlayCount{TrackID: trackID, PlayCount: n})
+	}
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].PlayCount != result[j].PlayCount {
+			return result[i].PlayCount > result[j].PlayCount
+		}
+		return result[i].TrackID < result[j].TrackID
+	})
+	if limit > 0 && len(result) > limit {
+		result = result[:limit]
+	}
+	return result, nil
+}
+
+func (r *MemoryRepository) TopUsers(_ context.Context, limit int) ([]UserPlayCount, error) {
+	r.mu.RLock()
+	counts := make(map[string]int)
+	for _, e := range r.events {
+		counts[e.UserID]++
+	}
+	r.mu.RUnlock()
+
+	result := make([]UserPlayCount, 0, len(counts))
+	for userID, n := range counts {
+		result = append(result, UserPlayCount{UserID: userID, PlayCount: n})
+	}
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].PlayCount != result[j].PlayCount {
+			return result[i].PlayCount > result[j].PlayCount
+		}
+		return result[i].UserID < result[j].UserID
+	})
+	if limit > 0 && len(result) > limit {
+		result = result[:limit]
+	}
+	return result, nil
+}

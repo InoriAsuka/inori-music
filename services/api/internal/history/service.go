@@ -68,6 +68,35 @@ func (s *Service) ClearHistory(ctx context.Context, userID string) error {
 	return s.repo.DeletePlayEventsByUser(ctx, userID)
 }
 
+// GetHistoryStats returns system-wide aggregate counts for admin use.
+func (s *Service) GetHistoryStats(ctx context.Context) (HistoryStats, error) {
+	return s.repo.HistoryStats(ctx)
+}
+
+// GetTopTracks returns the most-played tracks across all users.
+// limit ≤ 0 defaults to 10 and is clamped to 100.
+func (s *Service) GetTopTracks(ctx context.Context, limit int) ([]TrackPlayCount, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	return s.repo.TopTracks(ctx, limit)
+}
+
+// GetTopUsers returns the users with the most play events.
+// limit ≤ 0 defaults to 10 and is clamped to 100.
+func (s *Service) GetTopUsers(ctx context.Context, limit int) ([]UserPlayCount, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	return s.repo.TopUsers(ctx, limit)
+}
+
 func newID() (string, error) {
 	var b [8]byte
 	if _, err := rand.Read(b[:]); err != nil {

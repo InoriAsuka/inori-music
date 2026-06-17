@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.68.0`
+`0.69.0`
 
 ## Product Goal
 
@@ -594,4 +594,15 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add viewer-only `POST/GET/DELETE /api/v1/me/history` endpoints (user-scoped, session-auth required).
 - Add `PlayEvent`, `PlayEventList` schemas and `/api/v1/me/history` path to OpenAPI contract; add `history_not_configured` error code; bump `info.version` to `0.68.0`.
 - Add 5 history service unit tests and 5 HTTP-layer tests (record, list w/ pagination, clear, 503 not-configured, 405).
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.69.0 - 2026-06-17
+
+- Extend the `history.Repository` interface with 3 aggregate stats methods: `HistoryStats(ctx)`, `TopTracks(ctx, limit)`, `TopUsers(ctx, limit)`.
+- Implement on `history.MemoryRepository` (in-memory counting + sort) and `historypg.Repository` (single SQL `COUNT`/`GROUP BY` aggregate queries per method).
+- Add `GetHistoryStats`, `GetTopTracks`, `GetTopUsers` to `history.Service`; limit clamped to 100, default 10.
+- Add 3 admin-only routes: `GET /api/v1/admin/history/stats`, `GET /api/v1/admin/history/top-tracks`, `GET /api/v1/admin/history/top-users`.
+- Add `HistoryStats`, `TrackPlayCount`, `UserPlayCount`, `TopTracksResult`, `TopUsersResult` schemas and the 3 new admin paths to the OpenAPI contract; bump `info.version` to `0.69.0`.
+- Add 3 history service unit tests (GetHistoryStats, GetTopTracks, GetTopUsers) and 5 HTTP-layer tests (stats, top-tracks with limit, top-users, not-configured 503, 405).
+- Add `TestStorageAdminOpenAPIContractAdminHistoryPaths` asserting new schemas and path operations.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
