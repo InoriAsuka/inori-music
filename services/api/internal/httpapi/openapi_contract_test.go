@@ -231,7 +231,7 @@ func TestStorageAdminOpenAPIContractSchemasAndErrors(t *testing.T) {
 	errorProperty := errorEnvelope["properties"].(map[string]any)["error"].(map[string]any)
 	codeProperty := errorProperty["properties"].(map[string]any)["code"].(map[string]any)
 	enums := codeProperty["enum"].([]any)
-	for _, code := range []string{"invalid_backend", "invalid_media_object", "unauthorized", "not_found", "method_not_allowed", "conflict", "probe_unsupported", "probe_failed", "capacity_unsupported", "internal_error", "admin_auth_not_configured", "media_registry_not_configured", "media_object_verification_unsupported", "media_object_verification_failed", "auth_not_configured", "invalid_user", "user_disabled", "missing_query", "catalog_not_configured", "invalid_catalog_entity", "import_rejected", "relink_rejected", "validation_error", "invalid_limit", "playback_unavailable", "invalid_offset"} {
+	for _, code := range []string{"invalid_backend", "invalid_media_object", "unauthorized", "not_found", "method_not_allowed", "conflict", "probe_unsupported", "probe_failed", "capacity_unsupported", "internal_error", "admin_auth_not_configured", "media_registry_not_configured", "media_object_verification_unsupported", "media_object_verification_failed", "auth_not_configured", "invalid_user", "user_disabled", "missing_query", "catalog_not_configured", "invalid_catalog_entity", "import_rejected", "relink_rejected", "validation_error", "invalid_limit", "playback_unavailable", "invalid_offset", "invalid_sort_order"} {
 		if !containsString(enums, code) {
 			t.Fatalf("error code %q is missing from OpenAPI enum %#v", code, enums)
 		}
@@ -287,6 +287,31 @@ func TestStorageAdminOpenAPIContractTrackPlaybackDescriptor(t *testing.T) {
 	}
 	if containsString(required, "presignedUrl") {
 		t.Fatal("presignedUrl must not be in required (it is optional)")
+	}
+}
+
+func TestStorageAdminOpenAPIContractCatalogListSortParams(t *testing.T) {
+	document := loadOpenAPIContract(t)
+	paths := document["paths"].(map[string]any)
+	for _, path := range []string{
+		"/api/v1/catalog/artists", "/api/v1/catalog/albums",
+		"/api/v1/catalog/tracks", "/api/v1/catalog/playlists",
+		"/api/v1/admin/catalog/artists", "/api/v1/admin/catalog/albums",
+		"/api/v1/admin/catalog/tracks", "/api/v1/admin/catalog/playlists",
+	} {
+		get := operation(t, paths, path, "get")
+		params, _ := get["parameters"].([]any)
+		seen := make(map[string]bool)
+		for _, p := range params {
+			if m, ok := p.(map[string]any); ok {
+				seen[m["name"].(string)] = true
+			}
+		}
+		for _, want := range []string{"limit", "offset", "sortBy", "sortOrder"} {
+			if !seen[want] {
+				t.Errorf("path %s GET is missing query param %q", path, want)
+			}
+		}
 	}
 }
 

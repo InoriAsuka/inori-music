@@ -775,24 +775,26 @@ func (handler *Handler) searchCatalog(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
-// ---- catalog pagination helpers ----
+// ---- catalog pagination & sort helpers ----
 
 const (
 	catalogListDefaultLimit = 50
 	catalogListMaxLimit     = 500
 )
 
-// parseCatalogPage parses limit and offset query parameters for catalog list endpoints.
+// parseCatalogPage parses limit, offset, sortBy, and sortOrder query parameters.
 // limit defaults to catalogListDefaultLimit and is clamped to catalogListMaxLimit.
-// Returns false and writes an error response when either param is invalid.
-func parseCatalogPage(w http.ResponseWriter, r *http.Request) (limit, offset int, ok bool) {
+// sortBy and sortOrder are returned as trimmed lowercase strings; empty strings
+// signal "use entity default". Returns false and writes an error when limit or
+// offset are invalid.
+func parseCatalogPage(w http.ResponseWriter, r *http.Request) (limit, offset int, sortBy, sortOrder string, ok bool) {
 	q := r.URL.Query()
 	limit = catalogListDefaultLimit
 	if raw := q.Get("limit"); raw != "" {
 		v, err := strconv.Atoi(raw)
 		if err != nil || v < 1 {
 			writeAPIError(w, http.StatusBadRequest, "invalid_limit", "limit must be a positive integer")
-			return 0, 0, false
+			return 0, 0, "", "", false
 		}
 		if v > catalogListMaxLimit {
 			v = catalogListMaxLimit
@@ -803,11 +805,124 @@ func parseCatalogPage(w http.ResponseWriter, r *http.Request) (limit, offset int
 		v, err := strconv.Atoi(raw)
 		if err != nil || v < 0 {
 			writeAPIError(w, http.StatusBadRequest, "invalid_offset", "offset must be a non-negative integer")
-			return 0, 0, false
+			return 0, 0, "", "", false
 		}
 		offset = v
 	}
-	return limit, offset, true
+	sortBy = strings.ToLower(strings.TrimSpace(q.Get("sortBy")))
+	sortOrder = strings.ToLower(strings.TrimSpace(q.Get("sortOrder")))
+	return limit, offset, sortBy, sortOrder, true
+}
+
+// normalizeSortOrder returns "asc" or "desc". Empty input → "asc".
+// Returns "", false for any other value.
+func normalizeSortOrder(raw string) (string, bool) {
+	switch raw {
+	case "", catalog.CatalogSortOrderAsc:
+		return catalog.CatalogSortOrderAsc, true
+	case catalog.CatalogSortOrderDesc:
+		return catalog.CatalogSortOrderDesc, true
+	}
+	return "", false
+}
+
+// sortCatalogArtists sorts artists in-place by sortBy/sortOrder.
+// Invalid sortBy is treated as "name" (default).
+func sortCatalogArtists(artists []catalog.Artist, sortBy, sortOrder string) {
+	desc := sortOrder == catalog.CatalogSortOrderDesc
+	sort.SliceStable(artists, func(i, j int) bool {
+		a, b := artists[i], artists[j]
+		var less bool
+		switch sortBy {
+		case catalog.ArtistSortBySortName:
+			less = a.SortName < b.SortName
+		case catalog.ArtistSortByCreatedAt:
+			less = a.CreatedAt.Before(b.CreatedAt)
+		case catalog.ArtistSortByUpdatedAt:
+			less = a.UpdatedAt.Before(b.UpdatedAt)
+		default: // "name"
+			less = a.Name < b.Name
+		}
+		if desc {
+			return !less
+		}
+		return less
+	})
+}
+
+// sortCatalogAlbums sorts albums in-place by sortBy/sortOrder.
+func sortCatalogAlbums(albums []catalog.Album, sortBy, sortOrder string) {
+	desc := sortOrder == catalog.CatalogSortOrderDesc
+	sort.SliceStable(albums, func(i, j int) bool {
+		a, b := albums[i], albums[j]
+		var less bool
+		switch sortBy {
+		case catalog.AlbumSortBySortTitle:
+			less = a.SortTitle < b.SortTitle
+		case catalog.AlbumSortByReleaseYear:
+			less = a.ReleaseYear < b.ReleaseYear
+		case catalog.AlbumSortByCreatedAt:
+			less = a.CreatedAt.Before(b.CreatedAt)
+		case catalog.AlbumSortByUpdatedAt:
+			less = a.UpdatedAt.Before(b.UpdatedAt)
+		default: // "title"
+			less = a.Title < b.Title
+		}
+		if desc {
+			return !less
+		}
+		return less
+	})
+}
+
+// sortCatalogTracks sorts tracks in-place by sortBy/sortOrder.
+func sortCatalogTracks(tracks []catalog.Track, sortBy, sortOrder string) {
+	desc := sortOrder == catalog.CatalogSortOrderDesc
+	sort.SliceStable(tracks, func(i, j int) bool {
+		a, b := tracks[i], tracks[j]
+		var less bool
+		switch sortBy {
+		case catalog.TrackSortBySortTitle:
+			less = a.SortTitle < b.SortTitle
+		case catalog.TrackSortByTrackNumber:
+			less = a.TrackNumber < b.TrackNumber
+		case catalog.TrackSortByDiscNumber:
+			less = a.DiscNumber < b.DiscNumber
+		case catalog.TrackSortByDurationMS:
+			less = a.DurationMS < b.DurationMS
+		case catalog.TrackSortByCreatedAt:
+			less = a.CreatedAt.Before(b.CreatedAt)
+		case catalog.TrackSortByUpdatedAt:
+			less = a.UpdatedAt.Before(b.UpdatedAt)
+		default: // "title"
+			less = a.Title < b.Title
+		}
+		if desc {
+			return !less
+		}
+		return less
+	})
+}
+
+// sortCatalogPlaylists sorts playlists in-place by sortBy/sortOrder.
+func sortCatalogPlaylists(playlists []catalog.Playlist, sortBy, sortOrder string) {
+	desc := sortOrder == catalog.CatalogSortOrderDesc
+	sort.SliceStable(playlists, func(i, j int) bool {
+		a, b := playlists[i], playlists[j]
+		var less bool
+		switch sortBy {
+		case catalog.PlaylistSortByCreatedAt:
+			less = a.CreatedAt.Before(b.CreatedAt)
+		case catalog.PlaylistSortByUpdatedAt:
+			less = a.UpdatedAt.Before(b.UpdatedAt)
+		default: // "name"
+			less = a.Name < b.Name
+		}
+		if desc {
+			return !less
+		}
+		return less
+	})
 }
 
 // paginateCatalog slices items[offset:offset+limit] and returns the page meta.
@@ -840,8 +955,14 @@ func (handler *Handler) listArtists(w http.ResponseWriter, r *http.Request) {
 	if !handler.requireCatalogService(w) {
 		return
 	}
-	limit, offset, ok := parseCatalogPage(w, r)
+	limit, offset, sortBy, sortOrder, ok := parseCatalogPage(w, r)
 	if !ok {
+		return
+	}
+	if so, valid := normalizeSortOrder(sortOrder); valid {
+		sortOrder = so
+	} else {
+		writeAPIError(w, http.StatusBadRequest, "invalid_sort_order", "sortOrder must be asc or desc")
 		return
 	}
 	artists, err := handler.catalogService.ListArtists(r.Context())
@@ -849,6 +970,7 @@ func (handler *Handler) listArtists(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+	sortCatalogArtists(artists, sortBy, sortOrder)
 	page, meta := paginateCatalog(artists, limit, offset)
 	writeJSON(w, http.StatusOK, map[string]any{"artists": page, "pagination": meta})
 }
@@ -933,8 +1055,14 @@ func (handler *Handler) listAlbums(w http.ResponseWriter, r *http.Request) {
 	if !handler.requireCatalogService(w) {
 		return
 	}
-	limit, offset, ok := parseCatalogPage(w, r)
+	limit, offset, sortBy, sortOrder, ok := parseCatalogPage(w, r)
 	if !ok {
+		return
+	}
+	if so, valid := normalizeSortOrder(sortOrder); valid {
+		sortOrder = so
+	} else {
+		writeAPIError(w, http.StatusBadRequest, "invalid_sort_order", "sortOrder must be asc or desc")
 		return
 	}
 	artistID := r.URL.Query().Get("artistId")
@@ -951,6 +1079,7 @@ func (handler *Handler) listAlbums(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+	sortCatalogAlbums(albums, sortBy, sortOrder)
 	page, meta := paginateCatalog(albums, limit, offset)
 	writeJSON(w, http.StatusOK, map[string]any{"albums": page, "pagination": meta})
 }
@@ -1042,8 +1171,14 @@ func (handler *Handler) listTracks(w http.ResponseWriter, r *http.Request) {
 	if !handler.requireCatalogService(w) {
 		return
 	}
-	limit, offset, ok := parseCatalogPage(w, r)
+	limit, offset, sortBy, sortOrder, ok := parseCatalogPage(w, r)
 	if !ok {
+		return
+	}
+	if so, valid := normalizeSortOrder(sortOrder); valid {
+		sortOrder = so
+	} else {
+		writeAPIError(w, http.StatusBadRequest, "invalid_sort_order", "sortOrder must be asc or desc")
 		return
 	}
 	q := r.URL.Query()
@@ -1065,6 +1200,7 @@ func (handler *Handler) listTracks(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+	sortCatalogTracks(tracks, sortBy, sortOrder)
 	page, meta := paginateCatalog(tracks, limit, offset)
 	writeJSON(w, http.StatusOK, map[string]any{"tracks": page, "pagination": meta})
 }
@@ -1260,8 +1396,14 @@ func (handler *Handler) listPlaylists(w http.ResponseWriter, r *http.Request) {
 	if !handler.requireCatalogService(w) {
 		return
 	}
-	limit, offset, ok := parseCatalogPage(w, r)
+	limit, offset, sortBy, sortOrder, ok := parseCatalogPage(w, r)
 	if !ok {
+		return
+	}
+	if so, valid := normalizeSortOrder(sortOrder); valid {
+		sortOrder = so
+	} else {
+		writeAPIError(w, http.StatusBadRequest, "invalid_sort_order", "sortOrder must be asc or desc")
 		return
 	}
 	playlists, err := handler.catalogService.ListPlaylists(r.Context())
@@ -1269,6 +1411,7 @@ func (handler *Handler) listPlaylists(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+	sortCatalogPlaylists(playlists, sortBy, sortOrder)
 	page, meta := paginateCatalog(playlists, limit, offset)
 	writeJSON(w, http.StatusOK, map[string]any{"playlists": page, "pagination": meta})
 }

@@ -3927,3 +3927,128 @@ func TestViewerCatalogListArtistsPagination(t *testing.T) {
 		t.Error("hasMore should be true")
 	}
 }
+
+// ---- catalog list sort tests ----
+
+func TestCatalogListArtistsSortByName(t *testing.T) {
+	h := newCatalogTestHandler()
+	for _, name := range []string{"Zara", "Alice", "Mike"} {
+		performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", fmt.Sprintf(`{"name":%q}`, name))
+	}
+
+	// default asc by name
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/artists?sortBy=name&sortOrder=asc", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d", resp.Code)
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	artists := got["artists"].([]any)
+	if len(artists) != 3 {
+		t.Fatalf("expected 3 artists, got %d", len(artists))
+	}
+	if artists[0].(map[string]any)["name"] != "Alice" {
+		t.Errorf("first artist (asc) = %v, want Alice", artists[0].(map[string]any)["name"])
+	}
+
+	// desc by name
+	resp = performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/artists?sortBy=name&sortOrder=desc", "")
+	decodeResponse(t, resp, &got)
+	artists = got["artists"].([]any)
+	if artists[0].(map[string]any)["name"] != "Zara" {
+		t.Errorf("first artist (desc) = %v, want Zara", artists[0].(map[string]any)["name"])
+	}
+}
+
+func TestCatalogListAlbumsSortByReleaseYear(t *testing.T) {
+	h := newCatalogTestHandler()
+	artistResp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Band"}`)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+	for _, year := range []int{2020, 2015, 2023} {
+		performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/albums",
+			fmt.Sprintf(`{"title":"Album %d","artistId":%q,"releaseYear":%d}`, year, artistID, year))
+	}
+
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/albums?sortBy=releaseYear&sortOrder=asc", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	albums := got["albums"].([]any)
+	first := albums[0].(map[string]any)
+	if int(first["releaseYear"].(float64)) != 2015 {
+		t.Errorf("first album year (asc) = %v, want 2015", first["releaseYear"])
+	}
+	last := albums[2].(map[string]any)
+	if int(last["releaseYear"].(float64)) != 2023 {
+		t.Errorf("last album year (asc) = %v, want 2023", last["releaseYear"])
+	}
+}
+
+func TestCatalogListTracksSortByTitle(t *testing.T) {
+	h := newCatalogTestHandler()
+	artistResp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Band"}`)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+	for _, title := range []string{"Zephyr", "Aura", "Midnight"} {
+		performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+			fmt.Sprintf(`{"title":%q,"artistId":%q,"mediaObjectId":"mo-%s"}`, title, artistID, strings.ToLower(title[:3])))
+	}
+
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/tracks?sortBy=title&sortOrder=asc", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	tracks := got["tracks"].([]any)
+	if tracks[0].(map[string]any)["title"] != "Aura" {
+		t.Errorf("first track (asc) = %v, want Aura", tracks[0].(map[string]any)["title"])
+	}
+}
+
+func TestCatalogListPlaylistsSortByName(t *testing.T) {
+	h := newCatalogTestHandler()
+	for _, name := range []string{"Zen Mix", "Alpha Hits", "Morning Chill"} {
+		performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/playlists", fmt.Sprintf(`{"name":%q}`, name))
+	}
+
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/playlists?sortBy=name&sortOrder=desc", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	playlists := got["playlists"].([]any)
+	if playlists[0].(map[string]any)["name"] != "Zen Mix" {
+		t.Errorf("first playlist (desc) = %v, want Zen Mix", playlists[0].(map[string]any)["name"])
+	}
+}
+
+func TestCatalogListArtistsInvalidSortOrder(t *testing.T) {
+	h := newCatalogTestHandler()
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/artists?sortOrder=random", "")
+	assertAPIError(t, resp, http.StatusBadRequest, "invalid_sort_order")
+}
+
+func TestViewerCatalogListArtistsSort(t *testing.T) {
+	h, viewerToken, adminToken := newViewerTestHandler(t)
+	for _, name := range []string{"Zara", "Alice"} {
+		performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists",
+			fmt.Sprintf(`{"name":%q}`, name), "Bearer "+adminToken)
+	}
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/artists?sortBy=name&sortOrder=asc", "", "Bearer "+viewerToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("viewer sort artists: %d %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	artists := got["artists"].([]any)
+	if artists[0].(map[string]any)["name"] != "Alice" {
+		t.Errorf("viewer first artist (asc) = %v, want Alice", artists[0].(map[string]any)["name"])
+	}
+}

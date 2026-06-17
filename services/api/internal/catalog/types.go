@@ -314,3 +314,36 @@ type CatalogPaginationMeta struct {
 	Total   int  `json:"total"`
 	HasMore bool `json:"hasMore"`
 }
+
+// Catalog sort order constants shared across all entity list endpoints.
+const (
+	CatalogSortOrderAsc  = "asc"
+	CatalogSortOrderDesc = "desc"
+
+	// Artist sortBy fields
+	ArtistSortByName      = "name"
+	ArtistSortBySortName  = "sortName"
+	ArtistSortByCreatedAt = "createdAt"
+	ArtistSortByUpdatedAt = "updatedAt"
+
+	// Album sortBy fields
+	AlbumSortByTitle       = "title"
+	AlbumSortBySortTitle   = "sortTitle"
+	AlbumSortByReleaseYear = "releaseYear"
+	AlbumSortByCreatedAt   = "createdAt"
+	AlbumSortByUpdatedAt   = "updatedAt"
+
+	// Track sortBy fields
+	TrackSortByTitle        = "title"
+	TrackSortBySortTitle    = "sortTitle"
+	TrackSortByTrackNumber  = "trackNumber"
+	TrackSortByDiscNumber   = "discNumber"
+	TrackSortByDurationMS   = "durationMs"
+	TrackSortByCreatedAt    = "createdAt"
+	TrackSortByUpdatedAt    = "updatedAt"
+
+	// Playlist sortBy fields
+	PlaylistSortByName      = "name"
+	PlaylistSortByCreatedAt = "createdAt"
+	PlaylistSortByUpdatedAt = "updatedAt"
+)

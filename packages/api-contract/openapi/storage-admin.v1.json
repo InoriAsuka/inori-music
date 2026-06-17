@@ -376,7 +376,8 @@
                   "validation_error",
                   "invalid_limit",
                   "playback_unavailable",
-                  "invalid_offset"
+                  "invalid_offset",
+                  "invalid_sort_order"
                 ],
                 "type": "string"
               },
@@ -2030,7 +2031,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "0.61.0"
+    "version": "0.62.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -2064,6 +2065,27 @@
               "default": 0
             },
             "description": "Zero-based index of the first item to return."
+          },
+          {
+            "in": "query",
+            "name": "sortBy",
+            "description": "Field to sort by. See endpoint description for valid values.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sortOrder",
+            "description": "Sort direction.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "asc"
+            }
           }
         ],
         "responses": {
@@ -2104,7 +2126,8 @@
             "bearerAuth": []
           }
         ],
-        "summary": "List albums"
+        "summary": "List albums",
+        "description": "List albums. sortBy: title (default), sortTitle, releaseYear, createdAt, updatedAt."
       },
       "post": {
         "responses": {
@@ -2369,8 +2392,30 @@
               "default": 0
             },
             "description": "Zero-based index of the first item to return."
+          },
+          {
+            "in": "query",
+            "name": "sortBy",
+            "description": "Field to sort by. See endpoint description for valid values.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sortOrder",
+            "description": "Sort direction.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "asc"
+            }
           }
-        ]
+        ],
+        "description": "List artists. sortBy: name (default), sortName, createdAt, updatedAt."
       },
       "post": {
         "responses": {
@@ -2682,6 +2727,27 @@
               "default": 0
             },
             "description": "Zero-based index of the first item to return."
+          },
+          {
+            "in": "query",
+            "name": "sortBy",
+            "description": "Field to sort by. See endpoint description for valid values.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sortOrder",
+            "description": "Sort direction.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "asc"
+            }
           }
         ],
         "responses": {
@@ -2722,7 +2788,8 @@
             "bearerAuth": []
           }
         ],
-        "summary": "List tracks"
+        "summary": "List tracks",
+        "description": "List tracks. sortBy: title (default), sortTitle, trackNumber, discNumber, durationMs, createdAt, updatedAt."
       },
       "post": {
         "responses": {
@@ -4932,8 +4999,30 @@
               "default": 0
             },
             "description": "Zero-based index of the first item to return."
+          },
+          {
+            "in": "query",
+            "name": "sortBy",
+            "description": "Field to sort by. See endpoint description for valid values.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sortOrder",
+            "description": "Sort direction.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "asc"
+            }
           }
-        ]
+        ],
+        "description": "List artists. sortBy: name (default), sortName, createdAt, updatedAt."
       }
     },
     "/api/v1/catalog/artists/{id}": {
@@ -5037,6 +5126,27 @@
               "default": 0
             },
             "description": "Zero-based index of the first item to return."
+          },
+          {
+            "in": "query",
+            "name": "sortBy",
+            "description": "Field to sort by. See endpoint description for valid values.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sortOrder",
+            "description": "Sort direction.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "asc"
+            }
           }
         ],
         "responses": {
@@ -5081,7 +5191,8 @@
               }
             }
           }
-        }
+        },
+        "description": "List albums. sortBy: title (default), sortTitle, releaseYear, createdAt, updatedAt."
       }
     },
     "/api/v1/catalog/albums/{id}": {
@@ -5192,6 +5303,27 @@
               "default": 0
             },
             "description": "Zero-based index of the first item to return."
+          },
+          {
+            "in": "query",
+            "name": "sortBy",
+            "description": "Field to sort by. See endpoint description for valid values.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sortOrder",
+            "description": "Sort direction.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "asc"
+            }
           }
         ],
         "responses": {
@@ -5236,7 +5368,8 @@
               }
             }
           }
-        }
+        },
+        "description": "List tracks. sortBy: title (default), sortTitle, trackNumber, discNumber, durationMs, createdAt, updatedAt."
       }
     },
     "/api/v1/catalog/tracks/{id}": {
@@ -5885,8 +6018,30 @@
               "default": 0
             },
             "description": "Zero-based index of the first item to return."
+          },
+          {
+            "in": "query",
+            "name": "sortBy",
+            "description": "Field to sort by. See endpoint description for valid values.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sortOrder",
+            "description": "Sort direction.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "asc"
+            }
           }
-        ]
+        ],
+        "description": "List playlists. sortBy: name (default), createdAt, updatedAt."
       },
       "post": {
         "summary": "Create a playlist",
@@ -6239,8 +6394,30 @@
               "default": 0
             },
             "description": "Zero-based index of the first item to return."
+          },
+          {
+            "in": "query",
+            "name": "sortBy",
+            "description": "Field to sort by. See endpoint description for valid values.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sortOrder",
+            "description": "Sort direction.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "default": "asc"
+            }
           }
-        ]
+        ],
+        "description": "List playlists. sortBy: name (default), createdAt, updatedAt."
       }
     },
     "/api/v1/catalog/playlists/{id}": {

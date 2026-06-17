@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.61.0`
+`0.62.0`
 
 ## Product Goal
 
@@ -520,4 +520,19 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add `CatalogPaginationMeta` schema, `limit`/`offset` params, and `pagination` response property to all 8 catalog list paths in the OpenAPI contract; bump `info.version` to `0.61.0`.
 - Add `invalid_offset` to the OpenAPI error code enum and contract test assertion.
 - Add 5 HTTP-layer tests covering limit, offset, hasMore, invalid params, and viewer-session access.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.62.0 - 2026-06-17
+
+- Add `sortBy` and `sortOrder` query parameters to all four catalog list endpoints (artists, albums, tracks, playlists) on both admin and viewer routes.
+- Artists: `sortBy` accepts `name` (default), `sortName`, `createdAt`, `updatedAt`.
+- Albums: `sortBy` accepts `title` (default), `sortTitle`, `releaseYear`, `createdAt`, `updatedAt`.
+- Tracks: `sortBy` accepts `title` (default), `sortTitle`, `trackNumber`, `discNumber`, `durationMs`, `createdAt`, `updatedAt`.
+- Playlists: `sortBy` accepts `name` (default), `createdAt`, `updatedAt`.
+- `sortOrder` must be `asc` (default) or `desc`; any other value returns `400 invalid_sort_order`.
+- Sort is applied before pagination so `limit`/`offset` windows remain stable.
+- Add sort-field constants to `catalog/types.go`; add `normalizeSortOrder` and per-entity sort functions to the HTTP handler layer; no Repository or Service interface changes.
+- Add `sortBy`/`sortOrder` params and sort descriptions to all 8 catalog list paths in the OpenAPI contract; add `invalid_sort_order` to error enum; bump `info.version` to `0.62.0`.
+- Add `TestStorageAdminOpenAPIContractCatalogListSortParams` asserting sort params on all 8 list paths.
+- Add 6 HTTP-layer tests covering per-entity sort directions, invalid `sortOrder`, and viewer-session sort access.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
