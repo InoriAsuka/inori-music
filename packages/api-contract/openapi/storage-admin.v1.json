@@ -377,7 +377,8 @@
                   "invalid_limit",
                   "playback_unavailable",
                   "invalid_offset",
-                  "invalid_sort_order"
+                  "invalid_sort_order",
+                  "history_not_configured"
                 ],
                 "type": "string"
               },
@@ -2018,6 +2019,59 @@
             "description": "Updated artist, album, track, and playlist entries ordered newest-first."
           }
         }
+      },
+      "PlayEvent": {
+        "type": "object",
+        "description": "A single playback history entry recording that a user played a track.",
+        "required": [
+          "id",
+          "userId",
+          "trackId",
+          "playedAt",
+          "createdAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique event identifier."
+          },
+          "userId": {
+            "type": "string",
+            "description": "User who played the track."
+          },
+          "trackId": {
+            "type": "string",
+            "description": "Track that was played."
+          },
+          "playedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Client-reported play timestamp."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Server-side record creation time."
+          }
+        }
+      },
+      "PlayEventList": {
+        "type": "object",
+        "required": [
+          "events",
+          "pagination"
+        ],
+        "properties": {
+          "events": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/PlayEvent"
+            }
+          },
+          "pagination": {
+            "$ref": "#/components/schemas/CatalogPaginationMeta"
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -2031,7 +2085,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "0.67.0"
+    "version": "0.68.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -7578,6 +7632,198 @@
             }
           },
           "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me/history": {
+      "post": {
+        "summary": "Record a play event",
+        "operationId": "recordPlayEvent",
+        "description": "Records that the authenticated user played a track.",
+        "tags": [
+          "History"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "trackId"
+                ],
+                "properties": {
+                  "trackId": {
+                    "type": "string"
+                  },
+                  "playedAt": {
+                    "type": "string",
+                    "format": "date-time",
+                    "description": "Client-reported play time; defaults to server time when omitted."
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Play event created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayEvent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "List play events",
+        "operationId": "listPlayEvents",
+        "description": "Returns the calling user's play history, newest first.",
+        "tags": [
+          "History"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "trackId",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter to a single track."
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500,
+              "default": 50
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Play event list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayEventList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Clear play history",
+        "operationId": "clearPlayHistory",
+        "description": "Deletes all play events for the calling user.",
+        "tags": [
+          "History"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "History cleared"
+          },
+          "401": {
             "description": "Error",
             "content": {
               "application/json": {

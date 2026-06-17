@@ -18,8 +18,13 @@ import (
 
 	"inori-music/services/api/internal/auth"
 	"inori-music/services/api/internal/catalog"
+	"inori-music/services/api/internal/history"
 	"inori-music/services/api/internal/storage"
 )
+
+func historyNewService() *history.Service {
+	return history.NewService(history.NewMemoryRepository())
+}
 
 const testAdminToken = "test-admin-token"
 
@@ -4368,5 +4373,186 @@ func TestViewerGetPlaylistTracksPagination(t *testing.T) {
 	}
 	if !pagination["hasMore"].(bool) {
 		t.Error("hasMore should be true")
+	}
+}
+
+// ---- playback history tests (Phase 68) ----
+
+func newHistoryTestHandler(t *testing.T) (http.Handler, string, string) {
+	t.Helper()
+	authSvc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
+	storageSvc := storage.NewService(storage.NewMemoryRepository())
+	catalogRepo := catalog.NewMemoryRepository()
+	historySvc := historyNewService()
+
+	h := NewHandler(
+		storageSvc,
+		WithAuthService(authSvc),
+		WithAdminToken(testAdminToken),
+		WithCatalogService(catalog.NewService(catalogRepo)),
+		WithHistoryService(historySvc),
+		WithServiceInfo(ServiceInfo{Name: "inori-api", Version: "test", Commit: "c", BuildTime: "t"}),
+	).Routes()
+
+	if _, err := authSvc.CreateUser(context.Background(), "alice", "viewerpass1", auth.RoleViewer); err != nil {
+		t.Fatalf("create viewer: %v", err)
+	}
+	viewerToken, _, err := authSvc.Login(context.Background(), "alice", "viewerpass1")
+	if err != nil {
+		t.Fatalf("viewer login: %v", err)
+	}
+	if _, err := authSvc.CreateUser(context.Background(), "bob", "adminpass2", auth.RoleAdmin); err != nil {
+		t.Fatalf("create admin: %v", err)
+	}
+	adminToken, _, err := authSvc.Login(context.Background(), "bob", "adminpass2")
+	if err != nil {
+		t.Fatalf("admin login: %v", err)
+	}
+	return h, viewerToken, adminToken
+}
+
+func TestRecordPlayEvent(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	// Seed artist + track via admin
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Band"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackBody := fmt.Sprintf(`{"title":"Song","artistId":%q,"mediaObjectId":"mo-hist-1"}`, artistID)
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks", trackBody, "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	// Record a play
+	body := fmt.Sprintf(`{"trackId":%q}`, trackID)
+	resp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history", body, "Bearer "+viewerToken)
+	if resp.Code != http.StatusCreated {
+		t.Fatalf("record play: %d %s", resp.Code, resp.Body.String())
+	}
+	var event map[string]any
+	decodeResponse(t, resp, &event)
+	if event["id"] == nil || event["trackId"] != trackID {
+		t.Errorf("event = %v", event)
+	}
+	if event["playedAt"] == nil || event["createdAt"] == nil {
+		t.Errorf("missing timestamps in event: %v", event)
+	}
+
+	// Missing trackId → 400
+	resp = performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history", `{}`, "Bearer "+viewerToken)
+	assertAPIError(t, resp, http.StatusBadRequest, "validation_error")
+}
+
+func TestListPlayEvents(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Band"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	var trackIDs []string
+	for i := 1; i <= 3; i++ {
+		tr := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+			fmt.Sprintf(`{"title":"Song %d","artistId":%q,"mediaObjectId":"mo-hist-%d"}`, i, artistID, i), "Bearer "+adminToken)
+		var t2 map[string]any
+		decodeResponse(t, tr, &t2)
+		trackIDs = append(trackIDs, t2["id"].(string))
+	}
+
+	// Record 3 plays
+	for _, tid := range trackIDs {
+		performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+			fmt.Sprintf(`{"trackId":%q}`, tid), "Bearer "+viewerToken)
+	}
+
+	// List all
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/me/history", "", "Bearer "+viewerToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("list history: %d %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	events := got["events"].([]any)
+	if len(events) != 3 {
+		t.Errorf("events count = %d, want 3", len(events))
+	}
+
+	// limit=1
+	resp = performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/me/history?limit=1", "", "Bearer "+viewerToken)
+	decodeResponse(t, resp, &got)
+	events = got["events"].([]any)
+	if len(events) != 1 {
+		t.Errorf("limit=1: events count = %d, want 1", len(events))
+	}
+	pag := got["pagination"].(map[string]any)
+	if int(pag["total"].(float64)) != 3 {
+		t.Errorf("pagination.total = %v, want 3", pag["total"])
+	}
+}
+
+func TestClearHistory(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Band"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"Song","artistId":%q,"mediaObjectId":"mo-clear-1"}`, artistID), "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q}`, trackID), "Bearer "+viewerToken)
+
+	// Verify 1 event
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/me/history", "", "Bearer "+viewerToken)
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	if len(got["events"].([]any)) != 1 {
+		t.Fatalf("want 1 event before clear")
+	}
+
+	// Clear
+	resp = performRequestWithAuthHeader(t, h, http.MethodDelete, "/api/v1/me/history", "", "Bearer "+viewerToken)
+	if resp.Code != http.StatusNoContent {
+		t.Fatalf("clear history: %d %s", resp.Code, resp.Body.String())
+	}
+
+	// Verify 0 events
+	resp = performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/me/history", "", "Bearer "+viewerToken)
+	decodeResponse(t, resp, &got)
+	if len(got["events"].([]any)) != 0 {
+		t.Fatalf("want 0 events after clear, got %v", got["events"])
+	}
+}
+
+func TestHistoryNotConfigured(t *testing.T) {
+	// Handler without history service
+	authSvc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAuthService(authSvc),
+		WithServiceInfo(ServiceInfo{Name: "inori-api", Version: "test"}),
+	).Routes()
+	if _, err := authSvc.CreateUser(context.Background(), "alice", "viewerpass1", auth.RoleViewer); err != nil {
+		t.Fatalf("create viewer: %v", err)
+	}
+	viewerToken, _, _ := authSvc.Login(context.Background(), "alice", "viewerpass1")
+	resp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history", `{"trackId":"x"}`, "Bearer "+viewerToken)
+	assertAPIError(t, resp, http.StatusServiceUnavailable, "history_not_configured")
+}
+
+func TestHistoryMethodNotAllowed(t *testing.T) {
+	h, viewerToken, _ := newHistoryTestHandler(t)
+	resp := performRequestWithAuthHeader(t, h, http.MethodPatch, "/api/v1/me/history", `{}`, "Bearer "+viewerToken)
+	if resp.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", resp.Code)
 	}
 }

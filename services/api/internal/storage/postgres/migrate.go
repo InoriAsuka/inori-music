@@ -189,4 +189,17 @@ CREATE TABLE IF NOT EXISTS playlist_tracks (
 );
 CREATE INDEX IF NOT EXISTS playlist_tracks_playlist_id_idx ON playlist_tracks (playlist_id);`,
 	},
+	{
+		name: "008_play_events",
+		sql: `
+CREATE TABLE IF NOT EXISTS play_events (
+    id         TEXT        NOT NULL PRIMARY KEY,
+    user_id    TEXT        NOT NULL REFERENCES users(id)  ON DELETE CASCADE,
+    track_id   TEXT        NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+    played_at  TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL
+);
+CREATE INDEX IF NOT EXISTS play_events_user_id_played_at_idx ON play_events (user_id, played_at DESC);
+CREATE INDEX IF NOT EXISTS play_events_track_id_idx           ON play_events (track_id);`,
+	},
 }

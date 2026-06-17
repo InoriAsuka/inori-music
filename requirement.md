@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.67.0`
+`0.68.0`
 
 ## Product Goal
 
@@ -584,4 +584,14 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Replace the 4-branch list-and-merge logic in `GetRecentlyAdded` and `GetRecentlyUpdated` (`catalog.Service`) with single delegate calls to the new repo methods; remove unused `sort` import from `service.go`.
 - Add `TestRepositoryRecentlyAdded` PostgreSQL integration test (unified + kind filter + limit).
 - Bump OpenAPI `info.version` to `0.67.0`. No HTTP API shape change.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.68.0 - 2026-06-17
+
+- Add playback history domain: new `history` package with `PlayEvent` type, `Repository` interface, `Service` with `RecordPlay`/`ListPlays`/`ClearHistory` methods, in-memory repository, and PostgreSQL repository.
+- Add migration `008_play_events` (id, user_id, track_id, played_at, created_at; FK cascades, two indexes).
+- Extend `requireViewerAuth` and `requireAdminAuth` to inject the authenticated `auth.User` into the request context for downstream handler use.
+- Add viewer-only `POST/GET/DELETE /api/v1/me/history` endpoints (user-scoped, session-auth required).
+- Add `PlayEvent`, `PlayEventList` schemas and `/api/v1/me/history` path to OpenAPI contract; add `history_not_configured` error code; bump `info.version` to `0.68.0`.
+- Add 5 history service unit tests and 5 HTTP-layer tests (record, list w/ pagination, clear, 503 not-configured, 405).
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

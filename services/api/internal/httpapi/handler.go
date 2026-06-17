@@ -17,10 +17,22 @@ import (
 
 	"inori-music/services/api/internal/auth"
 	"inori-music/services/api/internal/catalog"
+	"inori-music/services/api/internal/history"
 	"inori-music/services/api/internal/storage"
 )
 
 const maxRequestBodyBytes = 1 << 20
+
+// contextKeyUser is the typed context key used to pass the authenticated user into handlers.
+type contextKeyType int
+
+const contextKeyUser contextKeyType = 0
+
+// userFromContext retrieves the authenticated user injected by requireViewerAuth/requireAdminAuth.
+func userFromContext(r *http.Request) (auth.User, bool) {
+	u, ok := r.Context().Value(contextKeyUser).(auth.User)
+	return u, ok
+}
 
 // ServiceInfo describes build metadata exposed by public diagnostic endpoints.
 type ServiceInfo struct {
@@ -91,6 +103,13 @@ func WithCatalogService(catalogSvc *catalog.Service) HandlerOption {
 	}
 }
 
+// WithHistoryService enables user playback history routes.
+func WithHistoryService(svc *history.Service) HandlerOption {
+	return func(handler *Handler) {
+		handler.historyService = svc
+	}
+}
+
 // withCatalogMediaReader wires the media object service into the catalog service
 // as a MediaObjectReader after both have been set via options. Called from Routes().
 func (handler *Handler) withCatalogMediaReader() {
@@ -131,6 +150,7 @@ type Handler struct {
 	mediaObjects   *storage.MediaObjectService
 	authService    *auth.Service
 	catalogService *catalog.Service
+	historyService *history.Service
 	adminToken     string
 	info           ServiceInfo
 	metricsMu      sync.Mutex
@@ -337,6 +357,10 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/catalog/stats/artists", handler.requireViewerAuth(handler.getArtistStatsBreakdown))
 	mux.HandleFunc("GET /api/v1/catalog/stats/albums", handler.requireViewerAuth(handler.getAlbumStatsBreakdown))
 	mux.HandleFunc("GET /api/v1/catalog/stats/playlists", handler.requireViewerAuth(handler.getPlaylistStatsBreakdown))
+	mux.HandleFunc("POST /api/v1/me/history", handler.requireViewerAuth(handler.recordPlayEvent))
+	mux.HandleFunc("GET /api/v1/me/history", handler.requireViewerAuth(handler.listPlayEvents))
+	mux.HandleFunc("DELETE /api/v1/me/history", handler.requireViewerAuth(handler.clearHistory))
+	mux.HandleFunc("/api/v1/me/history", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("GET /api/v1/admin/storage/backends", handler.requireAdminAuth(handler.listStorageBackends))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends", handler.requireAdminAuth(handler.registerStorageBackend))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends/validate", handler.requireAdminAuth(handler.validateStorageBackend))
@@ -1739,6 +1763,121 @@ func (handler *Handler) getPlaylistStatsBreakdown(w http.ResponseWriter, r *http
 	writeJSON(w, http.StatusOK, breakdown)
 }
 
+// ---- playback history handlers ----
+
+func (handler *Handler) requireHistoryService(w http.ResponseWriter) bool {
+	if handler.historyService == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "history_not_configured", "history service is not configured")
+		return false
+	}
+	return true
+}
+
+type recordPlayRequest struct {
+	TrackID  string `json:"trackId"`
+	PlayedAt string `json:"playedAt,omitempty"` // RFC3339; defaults to server now when empty
+}
+
+func (handler *Handler) recordPlayEvent(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireHistoryService(w) {
+		return
+	}
+	user, ok := userFromContext(r)
+	if !ok {
+		writeAPIError(w, http.StatusUnauthorized, "unauthorized", "valid bearer token is required")
+		return
+	}
+	var req recordPlayRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeError(w, err)
+		return
+	}
+	if req.TrackID == "" {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", "trackId is required")
+		return
+	}
+	var playedAt time.Time
+	if req.PlayedAt != "" {
+		t, err := time.Parse(time.RFC3339, req.PlayedAt)
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, "validation_error", "playedAt must be an RFC3339 timestamp")
+			return
+		}
+		playedAt = t
+	}
+	event, err := handler.historyService.RecordPlay(r.Context(), user.ID, req.TrackID, playedAt)
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", err.Error())
+		return
+	}
+	writeJSON(w, http.StatusCreated, event)
+}
+
+func (handler *Handler) listPlayEvents(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireHistoryService(w) {
+		return
+	}
+	user, ok := userFromContext(r)
+	if !ok {
+		writeAPIError(w, http.StatusUnauthorized, "unauthorized", "valid bearer token is required")
+		return
+	}
+	q := r.URL.Query()
+	limit := 0
+	offset := 0
+	if raw := q.Get("limit"); raw != "" {
+		v, err := strconv.Atoi(raw)
+		if err != nil || v < 1 {
+			writeAPIError(w, http.StatusBadRequest, "invalid_limit", "limit must be a positive integer")
+			return
+		}
+		limit = v
+	}
+	if raw := q.Get("offset"); raw != "" {
+		v, err := strconv.Atoi(raw)
+		if err != nil || v < 0 {
+			writeAPIError(w, http.StatusBadRequest, "invalid_offset", "offset must be a non-negative integer")
+			return
+		}
+		offset = v
+	}
+	events, total, err := handler.historyService.ListPlays(r.Context(), history.PlayEventFilter{
+		UserID:  user.ID,
+		TrackID: q.Get("trackId"),
+		Limit:   limit,
+		Offset:  offset,
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"events": events,
+		"pagination": map[string]any{
+			"limit":   limit,
+			"offset":  offset,
+			"total":   total,
+			"hasMore": offset+limit < total && limit > 0,
+		},
+	})
+}
+
+func (handler *Handler) clearHistory(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireHistoryService(w) {
+		return
+	}
+	user, ok := userFromContext(r)
+	if !ok {
+		writeAPIError(w, http.StatusUnauthorized, "unauthorized", "valid bearer token is required")
+		return
+	}
+	if err := handler.historyService.ClearHistory(r.Context(), user.ID); err != nil {
+		writeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (handler *Handler) getRecentlyAdded(w http.ResponseWriter, r *http.Request) {
 	if !handler.requireCatalogService(w) {
 		return
@@ -1802,12 +1941,13 @@ func (handler *Handler) requireViewerAuth(next http.HandlerFunc) http.HandlerFun
 			writeAPIError(w, http.StatusUnauthorized, "unauthorized", "valid bearer token is required")
 			return
 		}
-		if _, err := handler.authService.ValidateToken(r.Context(), token); err != nil {
+		user, err := handler.authService.ValidateToken(r.Context(), token)
+		if err != nil {
 			w.Header().Set("WWW-Authenticate", `Bearer realm="inori"`)
 			writeAPIError(w, http.StatusUnauthorized, "unauthorized", "valid bearer token is required")
 			return
 		}
-		next(w, r)
+		next(w, r.WithContext(context.WithValue(r.Context(), contextKeyUser, user)))
 	}
 }
 
@@ -1834,7 +1974,7 @@ func (handler *Handler) requireAdminAuth(next http.HandlerFunc) http.HandlerFunc
 					writeAPIError(w, http.StatusForbidden, "unauthorized", "administrator role required")
 					return
 				}
-				next(w, r)
+				next(w, r.WithContext(context.WithValue(r.Context(), contextKeyUser, user)))
 				return
 			}
 			// Fall through to static token check to allow bootstrap token.
