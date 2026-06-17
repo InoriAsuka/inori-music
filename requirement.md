@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.60.0`
+`0.61.0`
 
 ## Product Goal
 
@@ -508,4 +508,16 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add `presignedUrl` optional property to `TrackPlaybackDescriptor` OpenAPI schema; bump `info.version` to `0.60.0`.
 - Add 4 `presignS3URL` unit tests, 4 `GetBackend`/`GeneratePresignedURL` service tests, and 1 HTTP-layer presigned URL handler test.
 - Extend `TestStorageAdminOpenAPIContractTrackPlaybackDescriptor` to assert `presignedUrl` is present in properties but absent from `required`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.61.0 - 2026-06-17
+
+- Add `limit`/`offset` pagination to all four catalog list endpoints: artists, albums, tracks, and playlists (both admin and viewer routes).
+- Add `parseCatalogPage` and `paginateCatalog[T]` helpers to the HTTP handler layer; no Repository or Service interface changes required.
+- Add `CatalogPaginationMeta` type with `limit`, `offset`, `total`, and `hasMore` fields; all four list responses now include a `pagination` envelope alongside the existing entity array.
+- `limit` defaults to 50 (max 500); `offset` defaults to 0; invalid values return 400 `invalid_limit` / `invalid_offset`.
+- Existing `artistId` and `albumId` filter params continue to work and are applied before pagination.
+- Add `CatalogPaginationMeta` schema, `limit`/`offset` params, and `pagination` response property to all 8 catalog list paths in the OpenAPI contract; bump `info.version` to `0.61.0`.
+- Add `invalid_offset` to the OpenAPI error code enum and contract test assertion.
+- Add 5 HTTP-layer tests covering limit, offset, hasMore, invalid params, and viewer-session access.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

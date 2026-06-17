@@ -775,6 +775,60 @@ func (handler *Handler) searchCatalog(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, result)
 }
 
+// ---- catalog pagination helpers ----
+
+const (
+	catalogListDefaultLimit = 50
+	catalogListMaxLimit     = 500
+)
+
+// parseCatalogPage parses limit and offset query parameters for catalog list endpoints.
+// limit defaults to catalogListDefaultLimit and is clamped to catalogListMaxLimit.
+// Returns false and writes an error response when either param is invalid.
+func parseCatalogPage(w http.ResponseWriter, r *http.Request) (limit, offset int, ok bool) {
+	q := r.URL.Query()
+	limit = catalogListDefaultLimit
+	if raw := q.Get("limit"); raw != "" {
+		v, err := strconv.Atoi(raw)
+		if err != nil || v < 1 {
+			writeAPIError(w, http.StatusBadRequest, "invalid_limit", "limit must be a positive integer")
+			return 0, 0, false
+		}
+		if v > catalogListMaxLimit {
+			v = catalogListMaxLimit
+		}
+		limit = v
+	}
+	if raw := q.Get("offset"); raw != "" {
+		v, err := strconv.Atoi(raw)
+		if err != nil || v < 0 {
+			writeAPIError(w, http.StatusBadRequest, "invalid_offset", "offset must be a non-negative integer")
+			return 0, 0, false
+		}
+		offset = v
+	}
+	return limit, offset, true
+}
+
+// paginateCatalog slices items[offset:offset+limit] and returns the page meta.
+func paginateCatalog[T any](items []T, limit, offset int) ([]T, catalog.CatalogPaginationMeta) {
+	total := len(items)
+	if offset >= total {
+		return []T{}, catalog.CatalogPaginationMeta{Limit: limit, Offset: offset, Total: total, HasMore: false}
+	}
+	end := offset + limit
+	if end > total {
+		end = total
+	}
+	page := items[offset:end]
+	return page, catalog.CatalogPaginationMeta{
+		Limit:   limit,
+		Offset:  offset,
+		Total:   total,
+		HasMore: end < total,
+	}
+}
+
 // ---- artist handlers ----
 
 type createArtistRequest struct {
@@ -786,12 +840,17 @@ func (handler *Handler) listArtists(w http.ResponseWriter, r *http.Request) {
 	if !handler.requireCatalogService(w) {
 		return
 	}
+	limit, offset, ok := parseCatalogPage(w, r)
+	if !ok {
+		return
+	}
 	artists, err := handler.catalogService.ListArtists(r.Context())
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"artists": artists})
+	page, meta := paginateCatalog(artists, limit, offset)
+	writeJSON(w, http.StatusOK, map[string]any{"artists": page, "pagination": meta})
 }
 
 func (handler *Handler) createArtist(w http.ResponseWriter, r *http.Request) {
@@ -874,6 +933,10 @@ func (handler *Handler) listAlbums(w http.ResponseWriter, r *http.Request) {
 	if !handler.requireCatalogService(w) {
 		return
 	}
+	limit, offset, ok := parseCatalogPage(w, r)
+	if !ok {
+		return
+	}
 	artistID := r.URL.Query().Get("artistId")
 	var (
 		albums []catalog.Album
@@ -888,7 +951,8 @@ func (handler *Handler) listAlbums(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"albums": albums})
+	page, meta := paginateCatalog(albums, limit, offset)
+	writeJSON(w, http.StatusOK, map[string]any{"albums": page, "pagination": meta})
 }
 
 func (handler *Handler) createAlbum(w http.ResponseWriter, r *http.Request) {
@@ -978,6 +1042,10 @@ func (handler *Handler) listTracks(w http.ResponseWriter, r *http.Request) {
 	if !handler.requireCatalogService(w) {
 		return
 	}
+	limit, offset, ok := parseCatalogPage(w, r)
+	if !ok {
+		return
+	}
 	q := r.URL.Query()
 	artistID := q.Get("artistId")
 	albumID := q.Get("albumId")
@@ -997,7 +1065,8 @@ func (handler *Handler) listTracks(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"tracks": tracks})
+	page, meta := paginateCatalog(tracks, limit, offset)
+	writeJSON(w, http.StatusOK, map[string]any{"tracks": page, "pagination": meta})
 }
 
 func (handler *Handler) createTrack(w http.ResponseWriter, r *http.Request) {
@@ -1191,12 +1260,17 @@ func (handler *Handler) listPlaylists(w http.ResponseWriter, r *http.Request) {
 	if !handler.requireCatalogService(w) {
 		return
 	}
+	limit, offset, ok := parseCatalogPage(w, r)
+	if !ok {
+		return
+	}
 	playlists, err := handler.catalogService.ListPlaylists(r.Context())
 	if err != nil {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"playlists": playlists})
+	page, meta := paginateCatalog(playlists, limit, offset)
+	writeJSON(w, http.StatusOK, map[string]any{"playlists": page, "pagination": meta})
 }
 
 func (handler *Handler) createPlaylist(w http.ResponseWriter, r *http.Request) {

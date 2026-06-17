@@ -306,3 +306,11 @@ type UpdatedCatalogItem struct {
 type UpdatedCatalogResult struct {
 	Items []UpdatedCatalogItem `json:"items"`
 }
+
+// CatalogPaginationMeta carries pagination metadata returned alongside paged catalog list results.
+type CatalogPaginationMeta struct {
+	Limit   int  `json:"limit"`
+	Offset  int  `json:"offset"`
+	Total   int  `json:"total"`
+	HasMore bool `json:"hasMore"`
+}

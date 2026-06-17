@@ -3741,3 +3741,189 @@ func TestViewerGetPlaylistStatsBreakdownMethodNotAllowed(t *testing.T) {
 		t.Fatalf("expected 405, got %d", resp.Code)
 	}
 }
+
+// ---- catalog list pagination tests ----
+
+func TestCatalogListArtistsPagination(t *testing.T) {
+	h := newCatalogTestHandler()
+
+	// seed 3 artists
+	for _, name := range []string{"Artist A", "Artist B", "Artist C"} {
+		performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/artists",
+			fmt.Sprintf(`{"name":%q}`, name))
+	}
+
+	// default (no params) — all 3 returned
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/artists", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d", resp.Code)
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	artists := got["artists"].([]any)
+	if len(artists) != 3 {
+		t.Errorf("want 3 artists, got %d", len(artists))
+	}
+	pagination := got["pagination"].(map[string]any)
+	if int(pagination["total"].(float64)) != 3 {
+		t.Errorf("pagination.total = %v, want 3", pagination["total"])
+	}
+	if pagination["hasMore"].(bool) {
+		t.Error("hasMore should be false")
+	}
+
+	// limit=2
+	resp = performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/artists?limit=2", "")
+	decodeResponse(t, resp, &got)
+	artists = got["artists"].([]any)
+	if len(artists) != 2 {
+		t.Errorf("limit=2: want 2 artists, got %d", len(artists))
+	}
+	pagination = got["pagination"].(map[string]any)
+	if !pagination["hasMore"].(bool) {
+		t.Error("hasMore should be true when limit=2 with 3 items")
+	}
+	if int(pagination["total"].(float64)) != 3 {
+		t.Errorf("total = %v, want 3", pagination["total"])
+	}
+
+	// offset=2 — 1 item remains
+	resp = performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/artists?limit=50&offset=2", "")
+	decodeResponse(t, resp, &got)
+	artists = got["artists"].([]any)
+	if len(artists) != 1 {
+		t.Errorf("offset=2: want 1 artist, got %d", len(artists))
+	}
+
+	// offset past end — empty slice
+	resp = performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/artists?limit=50&offset=99", "")
+	decodeResponse(t, resp, &got)
+	artists = got["artists"].([]any)
+	if len(artists) != 0 {
+		t.Errorf("offset=99: want 0 artists, got %d", len(artists))
+	}
+
+	// invalid limit
+	resp = performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/artists?limit=bad", "")
+	assertAPIError(t, resp, http.StatusBadRequest, "invalid_limit")
+
+	// invalid offset
+	resp = performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/artists?offset=-1", "")
+	assertAPIError(t, resp, http.StatusBadRequest, "invalid_offset")
+}
+
+func TestCatalogListAlbumsPagination(t *testing.T) {
+	h := newCatalogTestHandler()
+
+	// seed artist + 3 albums
+	artistResp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Band"}`)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+	for i := 1; i <= 3; i++ {
+		performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/albums",
+			fmt.Sprintf(`{"title":"Album %d","artistId":%q,"releaseYear":2020}`, i, artistID))
+	}
+
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/albums?limit=2", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	albums := got["albums"].([]any)
+	if len(albums) != 2 {
+		t.Errorf("limit=2: want 2 albums, got %d", len(albums))
+	}
+	pagination := got["pagination"].(map[string]any)
+	if int(pagination["total"].(float64)) != 3 {
+		t.Errorf("total = %v, want 3", pagination["total"])
+	}
+	if !pagination["hasMore"].(bool) {
+		t.Error("hasMore should be true")
+	}
+}
+
+func TestCatalogListTracksPagination(t *testing.T) {
+	h := newCatalogTestHandler()
+
+	// seed artist + 3 tracks
+	artistResp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Band"}`)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+	for i := 1; i <= 3; i++ {
+		performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+			fmt.Sprintf(`{"title":"Track %d","artistId":%q,"mediaObjectId":"mo-%d"}`, i, artistID, i))
+	}
+
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/tracks?limit=2&offset=1", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	tracks := got["tracks"].([]any)
+	if len(tracks) != 2 {
+		t.Errorf("limit=2 offset=1: want 2 tracks, got %d", len(tracks))
+	}
+	pagination := got["pagination"].(map[string]any)
+	if int(pagination["total"].(float64)) != 3 {
+		t.Errorf("total = %v, want 3", pagination["total"])
+	}
+	if pagination["hasMore"].(bool) {
+		t.Error("hasMore should be false: offset=1 limit=2 total=3 means we've consumed all")
+	}
+}
+
+func TestCatalogListPlaylistsPagination(t *testing.T) {
+	h := newCatalogTestHandler()
+
+	for _, name := range []string{"Mix A", "Mix B", "Mix C"} {
+		performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/playlists",
+			fmt.Sprintf(`{"name":%q}`, name))
+	}
+
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/playlists?limit=1", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	playlists := got["playlists"].([]any)
+	if len(playlists) != 1 {
+		t.Errorf("limit=1: want 1 playlist, got %d", len(playlists))
+	}
+	pagination := got["pagination"].(map[string]any)
+	if int(pagination["total"].(float64)) != 3 {
+		t.Errorf("total = %v, want 3", pagination["total"])
+	}
+	if !pagination["hasMore"].(bool) {
+		t.Error("hasMore should be true when limit=1 with 3 items")
+	}
+}
+
+func TestViewerCatalogListArtistsPagination(t *testing.T) {
+	h, viewerToken, adminToken := newViewerTestHandler(t)
+
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Artist X"}`, "Bearer "+adminToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Artist Y"}`, "Bearer "+adminToken)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/artists?limit=1", "", "Bearer "+viewerToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("viewer list artists: %d %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	artists := got["artists"].([]any)
+	if len(artists) != 1 {
+		t.Errorf("viewer limit=1: want 1 artist, got %d", len(artists))
+	}
+	pagination := got["pagination"].(map[string]any)
+	if int(pagination["total"].(float64)) != 2 {
+		t.Errorf("total = %v, want 2", pagination["total"])
+	}
+	if !pagination["hasMore"].(bool) {
+		t.Error("hasMore should be true")
+	}
+}
