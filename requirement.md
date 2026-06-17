@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.58.0`
+`0.59.0`
 
 ## Product Goal
 
@@ -487,4 +487,14 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add `TrackPlaybackDescriptor` schema, `GET /api/v1/catalog/tracks/{id}/playback` path, and `playback_unavailable` error code to the OpenAPI contract; bump `info.version` to `0.58.0`.
 - Add 8 HTTP-layer tests covering success, admin-session access, track-not-found, media-object-not-found, non-active lifecycle, wrong asset kind, no-catalog-service, and method-not-allowed.
 - Extend `openapi_contract_test.go` with the new path, schema, error code, and `TestStorageAdminOpenAPIContractTrackPlaybackDescriptor`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.59.0 - 2026-06-17
+
+- Expose viewer-accessible catalog stats endpoints: `GET /api/v1/catalog/stats`, `GET /api/v1/catalog/stats/artists`, `GET /api/v1/catalog/stats/albums`, and `GET /api/v1/catalog/stats/playlists`.
+- Reuse existing `getCatalogStats`, `getArtistStatsBreakdown`, `getAlbumStatsBreakdown`, and `getPlaylistStatsBreakdown` handler functions under `requireViewerAuth`; no new domain logic required.
+- Add 405 fallbacks for all four new viewer stats paths.
+- Add 14 HTTP-layer tests covering empty stats, populated counts, admin session acceptance, no-catalog-service 503, and method-not-allowed for all four endpoints.
+- Add four viewer stats paths to the OpenAPI contract; bump `info.version` to `0.59.0`.
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes` to assert the four new viewer stats paths.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

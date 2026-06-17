@@ -3479,4 +3479,171 @@ func TestGetTrackPlaybackDescriptorMethodNotAllowed(t *testing.T) {
 	}
 }
 
+// ---- viewer catalog stats tests ----
 
+func TestViewerGetCatalogStatsEmpty(t *testing.T) {
+	h, viewerToken, _ := newViewerTestHandler(t)
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/stats", "", "Bearer "+viewerToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	for _, field := range []string{"artists", "albums", "tracks", "playlists"} {
+		if v, ok := got[field]; !ok || int(v.(float64)) != 0 {
+			t.Errorf("field %q = %v, want 0", field, v)
+		}
+	}
+}
+
+func TestViewerGetCatalogStatsPopulated(t *testing.T) {
+	h, viewerToken, adminToken := newViewerTestHandler(t)
+
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Artist A"}`, "Bearer "+adminToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/playlists", `{"name":"Mix"}`, "Bearer "+adminToken)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/stats", "", "Bearer "+viewerToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	if int(got["artists"].(float64)) != 1 {
+		t.Errorf("artists = %v, want 1", got["artists"])
+	}
+	if int(got["playlists"].(float64)) != 1 {
+		t.Errorf("playlists = %v, want 1", got["playlists"])
+	}
+}
+
+func TestViewerGetCatalogStatsAdminSession(t *testing.T) {
+	h, _, adminToken := newViewerTestHandler(t)
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/stats", "", "Bearer "+adminToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("admin session catalog stats: %d %s", resp.Code, resp.Body.String())
+	}
+}
+
+func TestViewerGetCatalogStatsNoCatalogService(t *testing.T) {
+	authSvc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAuthService(authSvc),
+		WithServiceInfo(ServiceInfo{Name: "inori-api", Version: "test"}),
+	).Routes()
+	if _, err := authSvc.CreateUser(context.Background(), "alice", "viewerpass1", auth.RoleViewer); err != nil {
+		t.Fatalf("create viewer: %v", err)
+	}
+	viewerToken, _, err := authSvc.Login(context.Background(), "alice", "viewerpass1")
+	if err != nil {
+		t.Fatalf("viewer login: %v", err)
+	}
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/stats", "", "Bearer "+viewerToken)
+	assertAPIError(t, resp, http.StatusServiceUnavailable, "catalog_not_configured")
+}
+
+func TestViewerGetCatalogStatsMethodNotAllowed(t *testing.T) {
+	h, viewerToken, _ := newViewerTestHandler(t)
+	resp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/catalog/stats", `{}`, "Bearer "+viewerToken)
+	if resp.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", resp.Code)
+	}
+}
+
+func TestViewerGetArtistStatsBreakdown(t *testing.T) {
+	h, viewerToken, adminToken := newViewerTestHandler(t)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Band"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/albums",
+		fmt.Sprintf(`{"title":"Album","artistId":%q,"releaseYear":2024}`, artistID), "Bearer "+adminToken)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/stats/artists", "", "Bearer "+viewerToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	items := got["artists"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("artists = %d, want 1", len(items))
+	}
+	item := items[0].(map[string]any)
+	if int(item["albumCount"].(float64)) != 1 {
+		t.Errorf("albumCount = %v, want 1", item["albumCount"])
+	}
+}
+
+func TestViewerGetArtistStatsBreakdownMethodNotAllowed(t *testing.T) {
+	h, viewerToken, _ := newViewerTestHandler(t)
+	resp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/catalog/stats/artists", `{}`, "Bearer "+viewerToken)
+	if resp.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", resp.Code)
+	}
+}
+
+func TestViewerGetAlbumStatsBreakdown(t *testing.T) {
+	h, viewerToken, adminToken := newViewerTestHandler(t)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Band"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+	albumResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/albums",
+		fmt.Sprintf(`{"title":"Album","artistId":%q,"releaseYear":2024}`, artistID), "Bearer "+adminToken)
+	var album map[string]any
+	decodeResponse(t, albumResp, &album)
+	albumID := album["id"].(string)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"Song","artistId":%q,"albumId":%q,"mediaObjectId":"mo-stat-1"}`, artistID, albumID), "Bearer "+adminToken)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/stats/albums", "", "Bearer "+viewerToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	items := got["albums"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("albums = %d, want 1", len(items))
+	}
+	item := items[0].(map[string]any)
+	if int(item["trackCount"].(float64)) != 1 {
+		t.Errorf("trackCount = %v, want 1", item["trackCount"])
+	}
+}
+
+func TestViewerGetAlbumStatsBreakdownMethodNotAllowed(t *testing.T) {
+	h, viewerToken, _ := newViewerTestHandler(t)
+	resp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/catalog/stats/albums", `{}`, "Bearer "+viewerToken)
+	if resp.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", resp.Code)
+	}
+}
+
+func TestViewerGetPlaylistStatsBreakdown(t *testing.T) {
+	h, viewerToken, adminToken := newViewerTestHandler(t)
+
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/playlists", `{"name":"Mix"}`, "Bearer "+adminToken)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/stats/playlists", "", "Bearer "+viewerToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	items := got["playlists"].([]any)
+	if len(items) != 1 {
+		t.Fatalf("playlists = %d, want 1", len(items))
+	}
+}
+
+func TestViewerGetPlaylistStatsBreakdownMethodNotAllowed(t *testing.T) {
+	h, viewerToken, _ := newViewerTestHandler(t)
+	resp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/catalog/stats/playlists", `{}`, "Bearer "+viewerToken)
+	if resp.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("expected 405, got %d", resp.Code)
+	}
+}

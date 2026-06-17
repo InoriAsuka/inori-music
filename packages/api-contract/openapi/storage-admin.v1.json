@@ -1997,7 +1997,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "0.58.0"
+    "version": "0.59.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -5388,6 +5388,58 @@
           "503": {
             "$ref": "#/components/responses/ServiceUnavailable"
           }
+        }
+      }
+    },
+    "/api/v1/catalog/stats": {
+      "get": {
+        "summary": "Get catalog stats",
+        "operationId": "getViewerCatalogStats",
+        "tags": ["Catalog"],
+        "security": [{"bearerAuth": []}],
+        "responses": {
+          "200": {"description": "Catalog stats", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CatalogStats"}}}},
+          "401": {"description": "Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}},
+          "503": {"description": "Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}}
+        }
+      }
+    },
+    "/api/v1/catalog/stats/artists": {
+      "get": {
+        "summary": "Get per-artist stats breakdown",
+        "operationId": "getViewerCatalogArtistStats",
+        "tags": ["Catalog"],
+        "security": [{"bearerAuth": []}],
+        "responses": {
+          "200": {"description": "Artist stats breakdown", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CatalogArtistStatsBreakdown"}}}},
+          "401": {"description": "Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}},
+          "503": {"description": "Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}}
+        }
+      }
+    },
+    "/api/v1/catalog/stats/albums": {
+      "get": {
+        "summary": "Get per-album stats breakdown",
+        "operationId": "getViewerCatalogAlbumStats",
+        "tags": ["Catalog"],
+        "security": [{"bearerAuth": []}],
+        "responses": {
+          "200": {"description": "Album stats breakdown", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CatalogAlbumStatsBreakdown"}}}},
+          "401": {"description": "Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}},
+          "503": {"description": "Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}}
+        }
+      }
+    },
+    "/api/v1/catalog/stats/playlists": {
+      "get": {
+        "summary": "Get per-playlist stats breakdown",
+        "operationId": "getViewerCatalogPlaylistStats",
+        "tags": ["Catalog"],
+        "security": [{"bearerAuth": []}],
+        "responses": {
+          "200": {"description": "Playlist stats breakdown", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/CatalogPlaylistStatsBreakdown"}}}},
+          "401": {"description": "Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}},
+          "503": {"description": "Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorEnvelope"}}}}
         }
       }
     },
