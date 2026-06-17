@@ -74,6 +74,9 @@ func (r *MemoryRepository) HistoryStats(_ context.Context, f StatsFilter) (Histo
 		if !f.Since.IsZero() && e.PlayedAt.Before(f.Since) {
 			continue
 		}
+		if !f.Until.IsZero() && !e.PlayedAt.Before(f.Until) {
+			continue
+		}
 		users[e.UserID] = struct{}{}
 		tracks[e.TrackID] = struct{}{}
 		total++
@@ -90,6 +93,9 @@ func (r *MemoryRepository) TopTracks(_ context.Context, f StatsFilter, limit int
 	counts := make(map[string]int)
 	for _, e := range r.events {
 		if !f.Since.IsZero() && e.PlayedAt.Before(f.Since) {
+			continue
+		}
+		if !f.Until.IsZero() && !e.PlayedAt.Before(f.Until) {
 			continue
 		}
 		counts[e.TrackID]++
@@ -117,6 +123,9 @@ func (r *MemoryRepository) TopUsers(_ context.Context, f StatsFilter, limit int)
 	counts := make(map[string]int)
 	for _, e := range r.events {
 		if !f.Since.IsZero() && e.PlayedAt.Before(f.Since) {
+			continue
+		}
+		if !f.Until.IsZero() && !e.PlayedAt.Before(f.Until) {
 			continue
 		}
 		counts[e.UserID]++

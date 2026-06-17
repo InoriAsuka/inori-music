@@ -379,7 +379,9 @@
                   "invalid_offset",
                   "invalid_sort_order",
                   "history_not_configured",
-                  "invalid_since"
+                  "invalid_since",
+                  "invalid_until",
+                  "invalid_time_range"
                 ],
                 "type": "string"
               },
@@ -2163,7 +2165,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "0.70.0"
+    "version": "0.71.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -7989,6 +7991,16 @@
               "type": "string",
               "format": "date-time"
             }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": false,
+            "description": "Restrict results to events before this RFC3339 timestamp (exclusive).",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
           }
         ]
       }
@@ -8023,6 +8035,16 @@
             "in": "query",
             "required": false,
             "description": "Restrict results to events on or after this RFC3339 timestamp.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": false,
+            "description": "Restrict results to events before this RFC3339 timestamp (exclusive).",
             "schema": {
               "type": "string",
               "format": "date-time"
@@ -8113,6 +8135,16 @@
             "in": "query",
             "required": false,
             "description": "Restrict results to events on or after this RFC3339 timestamp.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": false,
+            "description": "Restrict results to events before this RFC3339 timestamp (exclusive).",
             "schema": {
               "type": "string",
               "format": "date-time"

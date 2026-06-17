@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.70.0`
+`0.71.0`
 
 ## Product Goal
 
@@ -618,4 +618,16 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add `since` query param (string/date-time, optional) to all three admin history GET paths in the OpenAPI contract; add `invalid_since` to error code enum; bump `info.version` to `0.70.0`.
 - Add `TestStorageAdminOpenAPIContractAdminHistorySinceParam` asserting the `since` param is present and optional on all three paths.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.71.0 - 2026-06-18
+
+- Add optional `?until=<RFC3339>` (exclusive upper bound) query parameter to `GET /api/v1/admin/history/stats`, `GET /api/v1/admin/history/top-tracks`, and `GET /api/v1/admin/history/top-users`; composes with `?since`.
+- Add `Until time.Time` to `StatsFilter` in `history/types.go`.
+- Implement `until` guard (`played_at < until`, exclusive) on `history.MemoryRepository` aggregate methods.
+- Replace four-branch since/no-since logic in `historypg.Repository` with a shared `statsWhere(f)` helper that builds `WHERE played_at >= $N AND played_at < $M` dynamically for any combination of bounds.
+- Extend `parseHistoryAdminFilter` in `handler.go` to parse `?until` (returns `400 invalid_until` if unparseable) and validate `since < until` when both are present (returns `400 invalid_time_range`).
+- Add 3 service unit tests (until-stats, since+until window on top-tracks, until combined) and 4 HTTP-layer tests (until filter, invalid until, invalid time range, updated since test).
+- Add `until` query param (string/date-time, optional) to all three admin history GET paths in OpenAPI; add `invalid_until` and `invalid_time_range` to error code enum; bump `info.version` to `0.71.0`.
+- Add `TestStorageAdminOpenAPIContractAdminHistoryUntilParam`; extend `TestStorageAdminOpenAPIContractSchemasAndErrors` for new error codes.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

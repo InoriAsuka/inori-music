@@ -88,23 +88,13 @@ func (r *Repository) DeletePlayEventsByUser(ctx context.Context, userID string) 
 }
 
 func (r *Repository) HistoryStats(ctx context.Context, f history.StatsFilter) (history.HistoryStats, error) {
-	var row pgx.Row
-	if !f.Since.IsZero() {
-		row = r.pool.QueryRow(ctx, `
-			SELECT
-				COUNT(*)                    AS total_events,
-				COUNT(DISTINCT user_id)     AS unique_users,
-				COUNT(DISTINCT track_id)    AS unique_tracks
-			FROM play_events
-			WHERE played_at >= $1`, f.Since.UTC())
-	} else {
-		row = r.pool.QueryRow(ctx, `
-			SELECT
-				COUNT(*)                    AS total_events,
-				COUNT(DISTINCT user_id)     AS unique_users,
-				COUNT(DISTINCT track_id)    AS unique_tracks
-			FROM play_events`)
-	}
+	where, args := statsWhere(f)
+	row := r.pool.QueryRow(ctx, `
+		SELECT
+			COUNT(*)                    AS total_events,
+			COUNT(DISTINCT user_id)     AS unique_users,
+			COUNT(DISTINCT track_id)    AS unique_tracks
+		FROM play_events`+where, args...)
 	var s history.HistoryStats
 	if err := row.Scan(&s.TotalEvents, &s.UniqueUsers, &s.UniqueTracks); err != nil {
 		return history.HistoryStats{}, err
@@ -116,24 +106,15 @@ func (r *Repository) TopTracks(ctx context.Context, f history.StatsFilter, limit
 	if limit <= 0 {
 		limit = 10
 	}
-	var rows pgx.Rows
-	var err error
-	if !f.Since.IsZero() {
-		rows, err = r.pool.Query(ctx, `
-			SELECT track_id, COUNT(*) AS play_count
-			FROM play_events
-			WHERE played_at >= $2
-			GROUP BY track_id
-			ORDER BY play_count DESC, track_id ASC
-			LIMIT $1`, limit, f.Since.UTC())
-	} else {
-		rows, err = r.pool.Query(ctx, `
-			SELECT track_id, COUNT(*) AS play_count
-			FROM play_events
-			GROUP BY track_id
-			ORDER BY play_count DESC, track_id ASC
-			LIMIT $1`, limit)
-	}
+	where, args := statsWhere(f)
+	nextParam := fmt.Sprintf("$%d", len(args)+1)
+	args = append(args, limit)
+	rows, err := r.pool.Query(ctx, `
+		SELECT track_id, COUNT(*) AS play_count
+		FROM play_events`+where+`
+		GROUP BY track_id
+		ORDER BY play_count DESC, track_id ASC
+		LIMIT `+nextParam, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -160,24 +141,15 @@ func (r *Repository) TopUsers(ctx context.Context, f history.StatsFilter, limit 
 	if limit <= 0 {
 		limit = 10
 	}
-	var rows pgx.Rows
-	var err error
-	if !f.Since.IsZero() {
-		rows, err = r.pool.Query(ctx, `
-			SELECT user_id, COUNT(*) AS play_count
-			FROM play_events
-			WHERE played_at >= $2
-			GROUP BY user_id
-			ORDER BY play_count DESC, user_id ASC
-			LIMIT $1`, limit, f.Since.UTC())
-	} else {
-		rows, err = r.pool.Query(ctx, `
-			SELECT user_id, COUNT(*) AS play_count
-			FROM play_events
-			GROUP BY user_id
-			ORDER BY play_count DESC, user_id ASC
-			LIMIT $1`, limit)
-	}
+	where, args := statsWhere(f)
+	nextParam := fmt.Sprintf("$%d", len(args)+1)
+	args = append(args, limit)
+	rows, err := r.pool.Query(ctx, `
+		SELECT user_id, COUNT(*) AS play_count
+		FROM play_events`+where+`
+		GROUP BY user_id
+		ORDER BY play_count DESC, user_id ASC
+		LIMIT `+nextParam, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -198,4 +170,29 @@ func (r *Repository) TopUsers(ctx context.Context, f history.StatsFilter, limit 
 		result = []history.UserPlayCount{}
 	}
 	return result, nil
+}
+
+// statsWhere builds the optional WHERE clause and args slice for StatsFilter.
+func statsWhere(f history.StatsFilter) (string, []any) {
+	var clauses []string
+	var args []any
+	if !f.Since.IsZero() {
+		args = append(args, f.Since.UTC())
+		clauses = append(clauses, fmt.Sprintf("played_at >= $%d", len(args)))
+	}
+	if !f.Until.IsZero() {
+		args = append(args, f.Until.UTC())
+		clauses = append(clauses, fmt.Sprintf("played_at < $%d", len(args)))
+	}
+	if len(clauses) == 0 {
+		return "", args
+	}
+	where := " WHERE "
+	for i, c := range clauses {
+		if i > 0 {
+			where += " AND "
+		}
+		where += c
+	}
+	return where, args
 }

@@ -241,7 +241,7 @@ func TestStorageAdminOpenAPIContractSchemasAndErrors(t *testing.T) {
 	errorProperty := errorEnvelope["properties"].(map[string]any)["error"].(map[string]any)
 	codeProperty := errorProperty["properties"].(map[string]any)["code"].(map[string]any)
 	enums := codeProperty["enum"].([]any)
-	for _, code := range []string{"invalid_backend", "invalid_media_object", "unauthorized", "not_found", "method_not_allowed", "conflict", "probe_unsupported", "probe_failed", "capacity_unsupported", "internal_error", "admin_auth_not_configured", "media_registry_not_configured", "media_object_verification_unsupported", "media_object_verification_failed", "auth_not_configured", "invalid_user", "user_disabled", "missing_query", "catalog_not_configured", "invalid_catalog_entity", "import_rejected", "relink_rejected", "validation_error", "invalid_limit", "playback_unavailable", "invalid_offset", "invalid_sort_order", "history_not_configured", "invalid_since"} {
+	for _, code := range []string{"invalid_backend", "invalid_media_object", "unauthorized", "not_found", "method_not_allowed", "conflict", "probe_unsupported", "probe_failed", "capacity_unsupported", "internal_error", "admin_auth_not_configured", "media_registry_not_configured", "media_object_verification_unsupported", "media_object_verification_failed", "auth_not_configured", "invalid_user", "user_disabled", "missing_query", "catalog_not_configured", "invalid_catalog_entity", "import_rejected", "relink_rejected", "validation_error", "invalid_limit", "playback_unavailable", "invalid_offset", "invalid_sort_order", "history_not_configured", "invalid_since", "invalid_until", "invalid_time_range"} {
 		if !containsString(enums, code) {
 			t.Fatalf("error code %q is missing from OpenAPI enum %#v", code, enums)
 		}
@@ -459,6 +459,36 @@ func TestStorageAdminOpenAPIContractAdminHistorySinceParam(t *testing.T) {
 		}
 		if !seen {
 			t.Errorf("%s GET is missing 'since' query parameter", path)
+		}
+	}
+}
+
+func TestStorageAdminOpenAPIContractAdminHistoryUntilParam(t *testing.T) {
+	document := loadOpenAPIContract(t)
+	paths := document["paths"].(map[string]any)
+
+	for _, path := range []string{
+		"/api/v1/admin/history/stats",
+		"/api/v1/admin/history/top-tracks",
+		"/api/v1/admin/history/top-users",
+	} {
+		get := operation(t, paths, path, "get")
+		params, _ := get["parameters"].([]any)
+		seen := false
+		for _, p := range params {
+			if m, ok := p.(map[string]any); ok && m["name"] == "until" {
+				seen = true
+				schema, _ := m["schema"].(map[string]any)
+				if schema["type"] != "string" || schema["format"] != "date-time" {
+					t.Errorf("%s until param schema = %#v, want string/date-time", path, schema)
+				}
+				if m["required"] == true {
+					t.Errorf("%s until param must not be required", path)
+				}
+			}
+		}
+		if !seen {
+			t.Errorf("%s GET is missing 'until' query parameter", path)
 		}
 	}
 }

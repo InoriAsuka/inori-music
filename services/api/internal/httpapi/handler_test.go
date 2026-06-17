@@ -4764,3 +4764,57 @@ func TestAdminHistorySinceInvalid(t *testing.T) {
 		assertAPIError(t, resp, http.StatusBadRequest, "invalid_since")
 	}
 }
+
+func TestAdminHistoryUntilFilter(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	// Create artist + track
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Band"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"Song","artistId":%q,"mediaObjectId":"mo-until-1"}`, artistID), "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	// Record event in 2030 (well in the future)
+	futureTime := "2030-06-01T00:00:00Z"
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q,"playedAt":%q}`, trackID, futureTime), "Bearer "+viewerToken)
+
+	// until=2025-01-01 excludes the 2030 event → totalEvents=0
+	until := "2025-01-01T00:00:00Z"
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/admin/history/stats?until="+until, "", "Bearer "+adminToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("stats until: %d %s", resp.Code, resp.Body.String())
+	}
+	var stats map[string]any
+	decodeResponse(t, resp, &stats)
+	if int(stats["totalEvents"].(float64)) != 0 {
+		t.Errorf("windowed totalEvents = %v, want 0", stats["totalEvents"])
+	}
+}
+
+func TestAdminHistoryUntilInvalid(t *testing.T) {
+	h, _, adminToken := newHistoryTestHandler(t)
+	for _, path := range []string{
+		"/api/v1/admin/history/stats?until=not-a-date",
+		"/api/v1/admin/history/top-tracks?until=not-a-date",
+		"/api/v1/admin/history/top-users?until=not-a-date",
+	} {
+		resp := performRequestWithAuthHeader(t, h, http.MethodGet, path, "", "Bearer "+adminToken)
+		assertAPIError(t, resp, http.StatusBadRequest, "invalid_until")
+	}
+}
+
+func TestAdminHistoryInvalidTimeRange(t *testing.T) {
+	h, _, adminToken := newHistoryTestHandler(t)
+	// since >= until → invalid_time_range
+	path := "/api/v1/admin/history/stats?since=2030-01-01T00:00:00Z&until=2020-01-01T00:00:00Z"
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, path, "", "Bearer "+adminToken)
+	assertAPIError(t, resp, http.StatusBadRequest, "invalid_time_range")
+}

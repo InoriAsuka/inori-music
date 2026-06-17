@@ -23,9 +23,10 @@ type PlayEventFilter struct {
 }
 
 // StatsFilter scopes admin aggregate queries.
-// A zero-value Since means "all time".
+// Zero-value Since/Until means no bound on that side.
 type StatsFilter struct {
 	Since time.Time // optional lower bound on played_at (inclusive)
+	Until time.Time // optional upper bound on played_at (exclusive)
 }
 
 // Repository persists play events.

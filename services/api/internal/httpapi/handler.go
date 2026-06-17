@@ -1940,18 +1940,36 @@ func (handler *Handler) getAdminTopUsers(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, map[string]any{"users": users})
 }
 
-// parseHistoryAdminFilter parses the optional ?since query param (RFC3339).
+// parseHistoryAdminFilter parses the optional ?since and ?until query params (RFC3339).
+// Returns 400 if either value is unparseable or if since >= until when both are present.
 func parseHistoryAdminFilter(w http.ResponseWriter, r *http.Request) (history.StatsFilter, bool) {
-	raw := r.URL.Query().Get("since")
-	if raw == "" {
-		return history.StatsFilter{}, true
+	q := r.URL.Query()
+	var f history.StatsFilter
+
+	if raw := q.Get("since"); raw != "" {
+		t, err := time.Parse(time.RFC3339, raw)
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, "invalid_since", "since must be an RFC3339 timestamp")
+			return history.StatsFilter{}, false
+		}
+		f.Since = t.UTC()
 	}
-	t, err := time.Parse(time.RFC3339, raw)
-	if err != nil {
-		writeAPIError(w, http.StatusBadRequest, "invalid_since", "since must be an RFC3339 timestamp")
+
+	if raw := q.Get("until"); raw != "" {
+		t, err := time.Parse(time.RFC3339, raw)
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, "invalid_until", "until must be an RFC3339 timestamp")
+			return history.StatsFilter{}, false
+		}
+		f.Until = t.UTC()
+	}
+
+	if !f.Since.IsZero() && !f.Until.IsZero() && !f.Since.Before(f.Until) {
+		writeAPIError(w, http.StatusBadRequest, "invalid_time_range", "since must be before until")
 		return history.StatsFilter{}, false
 	}
-	return history.StatsFilter{Since: t.UTC()}, true
+
+	return f, true
 }
 
 // parseHistoryAdminLimit parses the optional ?limit query param (default 10, max 100).

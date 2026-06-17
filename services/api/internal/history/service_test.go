@@ -254,3 +254,49 @@ func TestGetTopUsersSinceFilter(t *testing.T) {
 		t.Errorf("windowed user = %+v, want u2/1", windowed[0])
 	}
 }
+
+func TestGetHistoryStatsUntilFilter(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+	base := time.Now().UTC()
+
+	// event at base, event at +5s, event at +10s
+	svc.RecordPlay(ctx, "u1", "t1", base)
+	svc.RecordPlay(ctx, "u2", "t2", base.Add(5*time.Second))
+	svc.RecordPlay(ctx, "u3", "t3", base.Add(10*time.Second))
+
+	// until = base+8s excludes the +10s event (exclusive upper bound)
+	windowed, err := svc.GetHistoryStats(ctx, history.StatsFilter{Until: base.Add(8 * time.Second)})
+	if err != nil {
+		t.Fatalf("GetHistoryStats until: %v", err)
+	}
+	if windowed.TotalEvents != 2 {
+		t.Errorf("windowed TotalEvents = %d, want 2", windowed.TotalEvents)
+	}
+}
+
+func TestGetTopTracksSinceUntilWindow(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+	base := time.Now().UTC()
+
+	// t1 at base (excluded by since), t2 at +5s (inside window), t3 at +20s (excluded by until)
+	svc.RecordPlay(ctx, "u1", "t1", base)
+	svc.RecordPlay(ctx, "u1", "t2", base.Add(5*time.Second))
+	svc.RecordPlay(ctx, "u1", "t3", base.Add(20*time.Second))
+
+	f := history.StatsFilter{
+		Since: base.Add(3 * time.Second),
+		Until: base.Add(10 * time.Second),
+	}
+	tracks, err := svc.GetTopTracks(ctx, f, 0)
+	if err != nil {
+		t.Fatalf("GetTopTracks since+until: %v", err)
+	}
+	if len(tracks) != 1 {
+		t.Fatalf("windowed tracks = %d, want 1", len(tracks))
+	}
+	if tracks[0].TrackID != "t2" {
+		t.Errorf("windowed track = %q, want t2", tracks[0].TrackID)
+	}
+}
