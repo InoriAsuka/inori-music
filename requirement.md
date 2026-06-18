@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.74.0`
+`0.75.0`
 
 ## Product Goal
 
@@ -671,4 +671,17 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add 4 HTTP-layer tests (`TestGetMyHistoryStats`, `TestGetMyTopTracks`, `TestGetMyHistoryStatsTimeWindow`, `TestGetMyHistoryStatsNotConfigured`).
 - Add `UserHistoryStats` schema and 2 new viewer paths to OpenAPI contract; bump `info.version` to `0.74.0`.
 - Extend `TestStorageAdminOpenAPIContractCoversRoutes`; add `TestStorageAdminOpenAPIContractViewerHistoryStatsPaths`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.75.0 - 2026-06-18
+
+- Add `GlobalPlayEventFilter{UserID, TrackID, Since, Until, Limit, Offset}` to `history/types.go`.
+- Add `ListAllPlayEvents(ctx, GlobalPlayEventFilter)` to the `Repository` interface.
+- Implement `ListAllPlayEvents` on `history.MemoryRepository` (in-memory multi-filter + sort + slice) and `historypg.Repository` (dynamic `WHERE` clause construction with `LIMIT`/`OFFSET` + `COUNT(*) OVER()`).
+- Add `GetAllHistory` to `history.Service`; limit clamped to 500, default 50.
+- Add admin route `GET /api/v1/admin/history` (paginated global event list, optional `?userId`, `?trackId`, `?since`, `?until`, `?limit`, `?offset` filters); handler `getAdminAllHistory` reuses `parseHistoryAdminFilter` and `parseHistoryAdminPagination`.
+- Add 3 `history.Service` unit tests (`TestGetAllHistory`, `TestGetAllHistoryUserFilter`, `TestGetAllHistoryTimeWindow`).
+- Add 4 HTTP-layer tests (`TestAdminGetAllHistory`, `TestAdminGetAllHistoryTrackFilter`, `TestAdminGetAllHistoryNotConfigured`, `TestAdminGetAllHistoryMethodNotAllowed`).
+- Add `get` operation to `/api/v1/admin/history` in OpenAPI contract with 6 query params and `PlayEventList` response schema ref; bump `info.version` to `0.75.0`.
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `get` on `/api/v1/admin/history`; add `TestStorageAdminOpenAPIContractAdminHistoryGlobalList`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

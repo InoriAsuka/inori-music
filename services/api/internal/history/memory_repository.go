@@ -134,6 +134,45 @@ func (r *MemoryRepository) ListPlayEventsByTrack(_ context.Context, f AdminPlayE
 	return all[start:end], total, nil
 }
 
+func (r *MemoryRepository) ListAllPlayEvents(_ context.Context, f GlobalPlayEventFilter) ([]PlayEvent, int, error) {
+	r.mu.RLock()
+	var all []PlayEvent
+	for _, e := range r.events {
+		if f.UserID != "" && e.UserID != f.UserID {
+			continue
+		}
+		if f.TrackID != "" && e.TrackID != f.TrackID {
+			continue
+		}
+		if !f.Since.IsZero() && e.PlayedAt.Before(f.Since) {
+			continue
+		}
+		if !f.Until.IsZero() && !e.PlayedAt.Before(f.Until) {
+			continue
+		}
+		all = append(all, e)
+	}
+	r.mu.RUnlock()
+
+	sort.SliceStable(all, func(i, j int) bool {
+		if all[i].PlayedAt.Equal(all[j].PlayedAt) {
+			return all[i].ID < all[j].ID
+		}
+		return all[i].PlayedAt.After(all[j].PlayedAt)
+	})
+
+	total := len(all)
+	start := f.Offset
+	if start >= total {
+		return []PlayEvent{}, total, nil
+	}
+	end := start + f.Limit
+	if end > total {
+		end = total
+	}
+	return all[start:end], total, nil
+}
+
 func (r *MemoryRepository) HistoryStats(_ context.Context, f StatsFilter) (HistoryStats, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

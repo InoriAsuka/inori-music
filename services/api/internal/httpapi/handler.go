@@ -370,6 +370,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/history/top-users", handler.requireAdminAuth(handler.getAdminTopUsers))
 	mux.HandleFunc("GET /api/v1/admin/history/users/{userId}", handler.requireAdminAuth(handler.getAdminUserHistory))
 	mux.HandleFunc("GET /api/v1/admin/history/tracks/{trackId}", handler.requireAdminAuth(handler.getAdminTrackHistory))
+	mux.HandleFunc("GET /api/v1/admin/history", handler.requireAdminAuth(handler.getAdminAllHistory))
 	mux.HandleFunc("DELETE /api/v1/admin/history/users/{userId}", handler.requireAdminAuth(handler.deleteAdminUserHistory))
 	mux.HandleFunc("DELETE /api/v1/admin/history/tracks/{trackId}", handler.requireAdminAuth(handler.deleteAdminTrackHistory))
 	mux.HandleFunc("DELETE /api/v1/admin/history", handler.requireAdminAuth(handler.deleteAdminHistoryWindow))
@@ -2190,6 +2191,41 @@ func (handler *Handler) deleteAdminHistoryWindow(w http.ResponseWriter, r *http.
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (handler *Handler) getAdminAllHistory(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireHistoryService(w) {
+		return
+	}
+	f, ok := parseHistoryAdminFilter(w, r)
+	if !ok {
+		return
+	}
+	limit, offset, ok := parseHistoryAdminPagination(w, r)
+	if !ok {
+		return
+	}
+	events, total, err := handler.historyService.GetAllHistory(r.Context(), history.GlobalPlayEventFilter{
+		UserID:  r.URL.Query().Get("userId"),
+		TrackID: r.URL.Query().Get("trackId"),
+		Since:   f.Since,
+		Until:   f.Until,
+		Limit:   limit,
+		Offset:  offset,
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"events": events,
+		"pagination": map[string]any{
+			"limit":   limit,
+			"offset":  offset,
+			"total":   total,
+			"hasMore": limit > 0 && offset+limit < total,
+		},
+	})
 }
 
 func (handler *Handler) getRecentlyAdded(w http.ResponseWriter, r *http.Request) {

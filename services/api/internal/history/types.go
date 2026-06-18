@@ -30,6 +30,17 @@ type AdminPlayEventFilter struct {
 	Offset  int
 }
 
+// GlobalPlayEventFilter scopes admin queries that list all events across every user and track.
+// All fields are optional filters; zero values mean "no restriction".
+type GlobalPlayEventFilter struct {
+	UserID  string    // optional — filter to a single user
+	TrackID string    // optional — filter to a single track
+	Since   time.Time // optional lower bound on played_at (inclusive)
+	Until   time.Time // optional upper bound on played_at (exclusive)
+	Limit   int       // 0 → default (50); clamped to 500
+	Offset  int
+}
+
 // StatsFilter scopes admin aggregate queries.
 // Zero-value Since/Until means no bound on that side.
 type StatsFilter struct {
@@ -52,6 +63,9 @@ type Repository interface {
 
 	// Admin detail queries — not scoped to the requesting user.
 	ListPlayEventsByTrack(ctx context.Context, f AdminPlayEventFilter) ([]PlayEvent, int, error)
+
+	// Admin global list — unscoped, with optional user/track/time filters.
+	ListAllPlayEvents(ctx context.Context, f GlobalPlayEventFilter) ([]PlayEvent, int, error)
 
 	// Admin bulk-delete queries.
 	DeletePlayEventsByUserAdmin(ctx context.Context, userID string) error

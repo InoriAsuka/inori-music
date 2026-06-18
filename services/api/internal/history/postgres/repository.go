@@ -240,6 +240,71 @@ func (r *Repository) TopUsers(ctx context.Context, f history.StatsFilter, limit 
 	return result, nil
 }
 
+func (r *Repository) ListAllPlayEvents(ctx context.Context, f history.GlobalPlayEventFilter) ([]history.PlayEvent, int, error) {
+	// Build optional WHERE clauses and args starting after limit($1) and offset($2).
+	var clauses []string
+	var filterArgs []any
+
+	if f.UserID != "" {
+		filterArgs = append(filterArgs, f.UserID)
+		clauses = append(clauses, fmt.Sprintf("user_id = $%d", len(filterArgs)+2))
+	}
+	if f.TrackID != "" {
+		filterArgs = append(filterArgs, f.TrackID)
+		clauses = append(clauses, fmt.Sprintf("track_id = $%d", len(filterArgs)+2))
+	}
+	if !f.Since.IsZero() {
+		filterArgs = append(filterArgs, f.Since.UTC())
+		clauses = append(clauses, fmt.Sprintf("played_at >= $%d", len(filterArgs)+2))
+	}
+	if !f.Until.IsZero() {
+		filterArgs = append(filterArgs, f.Until.UTC())
+		clauses = append(clauses, fmt.Sprintf("played_at < $%d", len(filterArgs)+2))
+	}
+
+	where := ""
+	if len(clauses) > 0 {
+		where = " WHERE " + clauses[0]
+		for _, c := range clauses[1:] {
+			where += " AND " + c
+		}
+	}
+
+	// $1 = limit, $2 = offset; filter args are $3...$N
+	args := append([]any{f.Limit, f.Offset}, filterArgs...)
+
+	rows, err := r.pool.Query(ctx, `
+		SELECT id, user_id, track_id, played_at, created_at,
+		       COUNT(*) OVER () AS total_count
+		FROM play_events`+where+`
+		ORDER BY played_at DESC, id DESC
+		LIMIT $1 OFFSET $2`, args...)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return []history.PlayEvent{}, 0, nil
+		}
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var events []history.PlayEvent
+	total := 0
+	for rows.Next() {
+		var e history.PlayEvent
+		if err := rows.Scan(&e.ID, &e.UserID, &e.TrackID, &e.PlayedAt, &e.CreatedAt, &total); err != nil {
+			return nil, 0, err
+		}
+		events = append(events, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	if events == nil {
+		events = []history.PlayEvent{}
+	}
+	return events, total, nil
+}
+
 // statsWhere builds the optional WHERE clause and args slice for StatsFilter.
 func statsWhere(f history.StatsFilter) (string, []any) {
 	var clauses []string

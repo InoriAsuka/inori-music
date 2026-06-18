@@ -551,3 +551,79 @@ func TestGetMyTopTracksTimeWindow(t *testing.T) {
 		t.Errorf("windowed track = %q, want t2", tracks[0].TrackID)
 	}
 }
+
+func TestGetAllHistory(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	// two users, two tracks
+	svc.RecordPlay(ctx, "u1", "t1", now)
+	svc.RecordPlay(ctx, "u1", "t2", now.Add(time.Second))
+	svc.RecordPlay(ctx, "u2", "t1", now.Add(2*time.Second))
+
+	// no filter → all 3 events
+	events, total, err := svc.GetAllHistory(ctx, history.GlobalPlayEventFilter{})
+	if err != nil {
+		t.Fatalf("GetAllHistory: %v", err)
+	}
+	if total != 3 {
+		t.Errorf("total = %d, want 3", total)
+	}
+	if len(events) != 3 {
+		t.Errorf("events len = %d, want 3", len(events))
+	}
+}
+
+func TestGetAllHistoryUserFilter(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	svc.RecordPlay(ctx, "u1", "t1", now)
+	svc.RecordPlay(ctx, "u2", "t1", now.Add(time.Second))
+	svc.RecordPlay(ctx, "u2", "t2", now.Add(2*time.Second))
+
+	// filter by u2 → 2 events
+	events, total, err := svc.GetAllHistory(ctx, history.GlobalPlayEventFilter{UserID: "u2"})
+	if err != nil {
+		t.Fatalf("GetAllHistory user filter: %v", err)
+	}
+	if total != 2 {
+		t.Errorf("total = %d, want 2", total)
+	}
+	if len(events) != 2 {
+		t.Errorf("events len = %d, want 2", len(events))
+	}
+	for _, e := range events {
+		if e.UserID != "u2" {
+			t.Errorf("unexpected userID %q in filtered result", e.UserID)
+		}
+	}
+}
+
+func TestGetAllHistoryTimeWindow(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+	base := time.Now().UTC()
+
+	svc.RecordPlay(ctx, "u1", "t1", base)
+	svc.RecordPlay(ctx, "u1", "t2", base.Add(5*time.Second))
+	svc.RecordPlay(ctx, "u2", "t3", base.Add(20*time.Second))
+
+	// window [+3s, +10s) captures only t2 played at +5s
+	f := history.GlobalPlayEventFilter{
+		Since: base.Add(3 * time.Second),
+		Until: base.Add(10 * time.Second),
+	}
+	events, total, err := svc.GetAllHistory(ctx, f)
+	if err != nil {
+		t.Fatalf("GetAllHistory time window: %v", err)
+	}
+	if total != 1 {
+		t.Errorf("total = %d, want 1", total)
+	}
+	if len(events) != 1 || events[0].TrackID != "t2" {
+		t.Errorf("events = %+v, want single t2 event", events)
+	}
+}

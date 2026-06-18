@@ -5203,3 +5203,104 @@ func TestGetMyHistoryStatsNotConfigured(t *testing.T) {
 		assertAPIError(t, resp, http.StatusServiceUnavailable, "history_not_configured")
 	}
 }
+func TestAdminGetAllHistory(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	// create artist + 2 tracks
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"AllHistBand"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackResp1 := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"AHT1","artistId":%q,"mediaObjectId":"mo-ah-1"}`, artistID), "Bearer "+adminToken)
+	var track1 map[string]any
+	decodeResponse(t, trackResp1, &track1)
+	trackID1 := track1["id"].(string)
+
+	trackResp2 := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"AHT2","artistId":%q,"mediaObjectId":"mo-ah-2"}`, artistID), "Bearer "+adminToken)
+	var track2 map[string]any
+	decodeResponse(t, trackResp2, &track2)
+	trackID2 := track2["id"].(string)
+
+	// viewer plays track1 twice and track2 once
+	for i := 0; i < 2; i++ {
+		performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+			fmt.Sprintf(`{"trackId":%q}`, trackID1), "Bearer "+viewerToken)
+	}
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q}`, trackID2), "Bearer "+viewerToken)
+
+	// admin sees all 3 events
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/admin/history", "", "Bearer "+adminToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/admin/history: %d %s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	decodeResponse(t, resp, &result)
+	pagination := result["pagination"].(map[string]any)
+	if pagination["total"].(float64) != 3 {
+		t.Errorf("total = %v, want 3", pagination["total"])
+	}
+	events := result["events"].([]any)
+	if len(events) != 3 {
+		t.Errorf("events len = %d, want 3", len(events))
+	}
+}
+
+func TestAdminGetAllHistoryTrackFilter(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"FilterBand"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackResp1 := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"FT1","artistId":%q,"mediaObjectId":"mo-flt-1"}`, artistID), "Bearer "+adminToken)
+	var track1 map[string]any
+	decodeResponse(t, trackResp1, &track1)
+	trackID1 := track1["id"].(string)
+
+	trackResp2 := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"FT2","artistId":%q,"mediaObjectId":"mo-flt-2"}`, artistID), "Bearer "+adminToken)
+	var track2 map[string]any
+	decodeResponse(t, trackResp2, &track2)
+	trackID2 := track2["id"].(string)
+	_ = trackID2 // only track1 is filtered for
+
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q}`, trackID1), "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q}`, trackID2), "Bearer "+viewerToken)
+
+	// filter by trackId → only 1 event
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/admin/history?trackId="+trackID1, "", "Bearer "+adminToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/admin/history?trackId: %d %s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	decodeResponse(t, resp, &result)
+	pagination := result["pagination"].(map[string]any)
+	if pagination["total"].(float64) != 1 {
+		t.Errorf("filtered total = %v, want 1", pagination["total"])
+	}
+}
+
+func TestAdminGetAllHistoryNotConfigured(t *testing.T) {
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAdminToken(testAdminToken),
+	).Routes()
+
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/history", "")
+	assertAPIError(t, resp, http.StatusServiceUnavailable, "history_not_configured")
+}
+
+func TestAdminGetAllHistoryMethodNotAllowed(t *testing.T) {
+	h, _, adminToken := newHistoryTestHandler(t)
+	resp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/history", "{}", "Bearer "+adminToken)
+	assertAPIError(t, resp, http.StatusMethodNotAllowed, "method_not_allowed")
+}

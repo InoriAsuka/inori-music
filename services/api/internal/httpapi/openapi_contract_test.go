@@ -84,7 +84,7 @@ func TestStorageAdminOpenAPIContractCoversRoutes(t *testing.T) {
 		"/api/v1/admin/history/top-users":                       {"get"},
 		"/api/v1/admin/history/users/{userId}":                  {"get", "delete"},
 		"/api/v1/admin/history/tracks/{trackId}":                {"get", "delete"},
-		"/api/v1/admin/history":                                 {"delete"},
+		"/api/v1/admin/history":                                 {"get", "delete"},
 	}
 
 	for path, methods := range expected {
@@ -651,5 +651,34 @@ func TestStorageAdminOpenAPIContractViewerHistoryStatsPaths(t *testing.T) {
 		if !topParams[want] {
 			t.Errorf("GET /api/v1/me/history/top-tracks missing param %q", want)
 		}
+	}
+}
+
+func TestStorageAdminOpenAPIContractAdminHistoryGlobalList(t *testing.T) {
+	document := loadOpenAPIContract(t)
+	paths := document["paths"].(map[string]any)
+
+	// GET /api/v1/admin/history must exist
+	get := operation(t, paths, "/api/v1/admin/history", "get")
+
+	// must carry all six query params
+	params := map[string]bool{}
+	for _, p := range get["parameters"].([]any) {
+		if m, ok := p.(map[string]any); ok {
+			params[m["name"].(string)] = true
+		}
+	}
+	for _, want := range []string{"userId", "trackId", "since", "until", "limit", "offset"} {
+		if !params[want] {
+			t.Errorf("GET /api/v1/admin/history missing query param %q", want)
+		}
+	}
+
+	// 200 response must reference PlayEventList
+	resp200 := get["responses"].(map[string]any)["200"].(map[string]any)
+	content := resp200["content"].(map[string]any)["application/json"].(map[string]any)
+	schema := content["schema"].(map[string]any)
+	if schema["$ref"] != "#/components/schemas/PlayEventList" {
+		t.Errorf("GET /api/v1/admin/history 200 schema = %v, want PlayEventList ref", schema)
 	}
 }
