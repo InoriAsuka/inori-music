@@ -372,3 +372,98 @@ func TestGetTrackHistory(t *testing.T) {
 		}
 	}
 }
+
+func TestAdminDeleteUserHistory(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	svc.RecordPlay(ctx, "u1", "t1", now)
+	svc.RecordPlay(ctx, "u1", "t2", now.Add(time.Second))
+	svc.RecordPlay(ctx, "u2", "t1", now)
+
+	if err := svc.AdminDeleteUserHistory(ctx, "u1"); err != nil {
+		t.Fatalf("AdminDeleteUserHistory: %v", err)
+	}
+
+	// u1 events deleted; u2 events intact
+	_, total, err := svc.GetUserHistory(ctx, history.PlayEventFilter{UserID: "u1"})
+	if err != nil {
+		t.Fatalf("GetUserHistory after delete: %v", err)
+	}
+	if total != 0 {
+		t.Errorf("u1 total after delete = %d, want 0", total)
+	}
+
+	_, total2, err := svc.GetUserHistory(ctx, history.PlayEventFilter{UserID: "u2"})
+	if err != nil {
+		t.Fatalf("GetUserHistory u2: %v", err)
+	}
+	if total2 != 1 {
+		t.Errorf("u2 total = %d, want 1", total2)
+	}
+}
+
+func TestAdminDeleteTrackHistory(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	svc.RecordPlay(ctx, "u1", "t1", now)
+	svc.RecordPlay(ctx, "u2", "t1", now.Add(time.Second))
+	svc.RecordPlay(ctx, "u1", "t2", now)
+
+	if err := svc.AdminDeleteTrackHistory(ctx, "t1"); err != nil {
+		t.Fatalf("AdminDeleteTrackHistory: %v", err)
+	}
+
+	_, total, err := svc.GetTrackHistory(ctx, history.AdminPlayEventFilter{TrackID: "t1"})
+	if err != nil {
+		t.Fatalf("GetTrackHistory after delete: %v", err)
+	}
+	if total != 0 {
+		t.Errorf("t1 total after delete = %d, want 0", total)
+	}
+
+	// t2 events intact
+	_, total2, err := svc.GetTrackHistory(ctx, history.AdminPlayEventFilter{TrackID: "t2"})
+	if err != nil {
+		t.Fatalf("GetTrackHistory t2: %v", err)
+	}
+	if total2 != 1 {
+		t.Errorf("t2 total = %d, want 1", total2)
+	}
+}
+
+func TestAdminDeleteHistoryWindow(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+	base := time.Now().UTC()
+
+	// 3 events: base, base+5s, base+15s
+	svc.RecordPlay(ctx, "u1", "t1", base)
+	svc.RecordPlay(ctx, "u1", "t2", base.Add(5*time.Second))
+	svc.RecordPlay(ctx, "u1", "t3", base.Add(15*time.Second))
+
+	// no bounds: expect error
+	if err := svc.AdminDeleteHistoryWindow(ctx, history.StatsFilter{}); err == nil {
+		t.Fatal("expected error for empty StatsFilter, got nil")
+	}
+
+	// delete [base+3s, base+10s) — only t2 (base+5s) is in window
+	f := history.StatsFilter{
+		Since: base.Add(3 * time.Second),
+		Until: base.Add(10 * time.Second),
+	}
+	if err := svc.AdminDeleteHistoryWindow(ctx, f); err != nil {
+		t.Fatalf("AdminDeleteHistoryWindow: %v", err)
+	}
+
+	stats, err := svc.GetHistoryStats(ctx, history.StatsFilter{})
+	if err != nil {
+		t.Fatalf("GetHistoryStats after delete: %v", err)
+	}
+	if stats.TotalEvents != 2 {
+		t.Errorf("TotalEvents after window delete = %d, want 2", stats.TotalEvents)
+	}
+}

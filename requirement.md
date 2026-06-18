@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.72.0`
+`0.73.0`
 
 ## Product Goal
 
@@ -642,4 +642,18 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add 2 service unit tests (`TestGetUserHistory`, `TestGetTrackHistory`) and 4 HTTP-layer tests (user history with pagination, track history, 405, 503 not-configured).
 - Add 2 new paths to the OpenAPI contract with `PlayEventList` response schema ref; bump `info.version` to `0.72.0`.
 - Extend `TestStorageAdminOpenAPIContractCoversRoutes`; add `TestStorageAdminOpenAPIContractAdminHistoryDetailPaths` asserting path params, query filters, pagination params, and response schema ref.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.73.0 - 2026-06-18
+
+- Add `DeletePlayEventsByUserAdmin(ctx, userID)`, `DeletePlayEventsByTrack(ctx, trackID)`, and `DeletePlayEventsInWindow(ctx, StatsFilter)` to the `history.Repository` interface.
+- Implement all three on `history.MemoryRepository` (in-memory guard under lock) and `historypg.Repository` (`DELETE FROM play_events WHERE …`; `DeletePlayEventsInWindow` reuses `statsWhere` helper).
+- Add `AdminDeleteUserHistory`, `AdminDeleteTrackHistory`, and `AdminDeleteHistoryWindow` to `history.Service`; `AdminDeleteHistoryWindow` validates that at least one time bound is set.
+- Add `DELETE /api/v1/admin/history/users/{userId}` and `DELETE /api/v1/admin/history/tracks/{trackId}` to existing paths; add new `DELETE /api/v1/admin/history` path with optional `?since`/`?until` time-window filter (at least one required at runtime).
+- Return 400 `missing_time_filter` when neither `since` nor `until` is supplied to the window endpoint.
+- Add `methodNotAllowed` fallback for `/api/v1/admin/history`.
+- Add 3 `history.Service` unit tests (`TestAdminDeleteUserHistory`, `TestAdminDeleteTrackHistory`, `TestAdminDeleteHistoryWindow`).
+- Add 5 HTTP-layer tests (`TestAdminDeleteUserHistory`, `TestAdminDeleteTrackHistory`, `TestAdminDeleteHistoryWindow`, `TestAdminDeleteHistoryWindowMissingFilter`, `TestAdminBulkDeleteHistoryNotConfigured`).
+- Add `delete` operations to both detail paths and new window path in OpenAPI contract; add `missing_time_filter` to error code enum; bump `info.version` to `0.73.0`.
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `delete` on detail paths and new window path; add `TestStorageAdminOpenAPIContractAdminHistoryBulkDelete`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

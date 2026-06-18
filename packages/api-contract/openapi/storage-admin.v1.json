@@ -381,7 +381,8 @@
                   "history_not_configured",
                   "invalid_since",
                   "invalid_until",
-                  "invalid_time_range"
+                  "invalid_time_range",
+                  "missing_time_filter"
                 ],
                 "type": "string"
               },
@@ -2165,7 +2166,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "0.72.0"
+    "version": "0.73.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -8276,6 +8277,40 @@
             "$ref": "#/components/responses/ServiceUnavailable"
           }
         }
+      },
+      "delete": {
+        "summary": "Delete all play events for a specific user (admin)",
+        "tags": [
+          "admin",
+          "history"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "description": "ID of the user whose history to delete.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Play events deleted."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        }
       }
     },
     "/api/v1/admin/history/tracks/{trackId}": {
@@ -8341,6 +8376,90 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete all play events for a specific track across all users (admin)",
+        "tags": [
+          "admin",
+          "history"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "trackId",
+            "in": "path",
+            "required": true,
+            "description": "ID of the track whose history to delete.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Play events deleted."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/history": {
+      "delete": {
+        "summary": "Bulk-delete play events within a time window (admin)",
+        "tags": [
+          "admin",
+          "history"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "description": "Delete events at or after this time (RFC3339). At least one of since or until is required.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": false,
+            "description": "Delete events before this time (RFC3339, exclusive). At least one of since or until is required.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Matching play events deleted."
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"

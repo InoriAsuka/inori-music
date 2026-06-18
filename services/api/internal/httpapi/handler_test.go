@@ -4936,3 +4936,134 @@ func TestAdminHistoryDetailNotConfigured(t *testing.T) {
 		assertAPIError(t, resp, http.StatusServiceUnavailable, "history_not_configured")
 	}
 }
+
+func TestAdminDeleteUserHistory(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Band"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"Song","artistId":%q,"mediaObjectId":"mo-del-u-1"}`, artistID), "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	// record a play and capture viewer's userID
+	playResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q}`, trackID), "Bearer "+viewerToken)
+	var playEvent map[string]any
+	decodeResponse(t, playResp, &playEvent)
+	viewerID := playEvent["userId"].(string)
+
+	// confirm event is present
+	listResp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/me/history", "", "Bearer "+viewerToken)
+	var listBefore map[string]any
+	decodeResponse(t, listResp, &listBefore)
+	if listBefore["pagination"].(map[string]any)["total"].(float64) != 1 {
+		t.Fatalf("expected 1 event before delete, got %v", listBefore["pagination"].(map[string]any)["total"])
+	}
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodDelete, "/api/v1/admin/history/users/"+viewerID, "", "Bearer "+adminToken)
+	if resp.Code != http.StatusNoContent {
+		t.Fatalf("admin delete user history: expected 204, got %d %s", resp.Code, resp.Body.String())
+	}
+
+	listResp2 := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/me/history", "", "Bearer "+viewerToken)
+	var listAfter map[string]any
+	decodeResponse(t, listResp2, &listAfter)
+	if listAfter["pagination"].(map[string]any)["total"].(float64) != 0 {
+		t.Errorf("expected 0 events after admin delete, got %v", listAfter["pagination"].(map[string]any)["total"])
+	}
+}
+
+func TestAdminDeleteTrackHistory(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Artist"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"Trk","artistId":%q,"mediaObjectId":"mo-del-t-1"}`, artistID), "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q}`, trackID), "Bearer "+viewerToken)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodDelete, "/api/v1/admin/history/tracks/"+trackID, "", "Bearer "+adminToken)
+	if resp.Code != http.StatusNoContent {
+		t.Fatalf("admin delete track history: expected 204, got %d %s", resp.Code, resp.Body.String())
+	}
+
+	statsResp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/admin/history/stats", "", "Bearer "+adminToken)
+	var stats map[string]any
+	decodeResponse(t, statsResp, &stats)
+	if stats["totalEvents"].(float64) != 0 {
+		t.Errorf("expected 0 events after track delete, got %v", stats["totalEvents"])
+	}
+}
+
+func TestAdminDeleteHistoryWindow(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Art"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"T","artistId":%q,"mediaObjectId":"mo-del-w-1"}`, artistID), "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q,"playedAt":"2020-01-01T10:00:00Z"}`, trackID), "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q,"playedAt":"2020-01-01T12:00:00Z"}`, trackID), "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q,"playedAt":"2020-01-01T20:00:00Z"}`, trackID), "Bearer "+viewerToken)
+
+	// delete window [11:00, 15:00) — only the 12:00 event is deleted
+	resp := performRequestWithAuthHeader(t, h, http.MethodDelete,
+		"/api/v1/admin/history?since=2020-01-01T11:00:00Z&until=2020-01-01T15:00:00Z", "", "Bearer "+adminToken)
+	if resp.Code != http.StatusNoContent {
+		t.Fatalf("admin delete history window: expected 204, got %d %s", resp.Code, resp.Body.String())
+	}
+
+	statsResp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/admin/history/stats", "", "Bearer "+adminToken)
+	var stats map[string]any
+	decodeResponse(t, statsResp, &stats)
+	if stats["totalEvents"].(float64) != 2 {
+		t.Errorf("expected 2 events after window delete, got %v", stats["totalEvents"])
+	}
+}
+
+func TestAdminDeleteHistoryWindowMissingFilter(t *testing.T) {
+	h, _, adminToken := newHistoryTestHandler(t)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodDelete, "/api/v1/admin/history", "", "Bearer "+adminToken)
+	assertAPIError(t, resp, http.StatusBadRequest, "missing_time_filter")
+}
+
+func TestAdminBulkDeleteHistoryNotConfigured(t *testing.T) {
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAdminToken(testAdminToken),
+	).Routes()
+
+	for _, path := range []string{
+		"/api/v1/admin/history/users/some-user",
+		"/api/v1/admin/history/tracks/some-track",
+		"/api/v1/admin/history",
+	} {
+		resp := performRequest(t, h, http.MethodDelete, path, "")
+		assertAPIError(t, resp, http.StatusServiceUnavailable, "history_not_configured")
+	}
+}

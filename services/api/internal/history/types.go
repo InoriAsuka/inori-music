@@ -46,6 +46,11 @@ type Repository interface {
 	// Admin detail queries — not scoped to the requesting user.
 	ListPlayEventsByTrack(ctx context.Context, f AdminPlayEventFilter) ([]PlayEvent, int, error)
 
+	// Admin bulk-delete queries.
+	DeletePlayEventsByUserAdmin(ctx context.Context, userID string) error
+	DeletePlayEventsByTrack(ctx context.Context, trackID string) error
+	DeletePlayEventsInWindow(ctx context.Context, f StatsFilter) error
+
 	// Aggregate stats — admin-facing queries.
 	HistoryStats(ctx context.Context, f StatsFilter) (HistoryStats, error)
 	TopTracks(ctx context.Context, f StatsFilter, limit int) ([]TrackPlayCount, error)

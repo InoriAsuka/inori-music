@@ -87,6 +87,22 @@ func (r *Repository) DeletePlayEventsByUser(ctx context.Context, userID string) 
 	return err
 }
 
+func (r *Repository) DeletePlayEventsByUserAdmin(ctx context.Context, userID string) error {
+	_, err := r.pool.Exec(ctx, `DELETE FROM play_events WHERE user_id = $1`, userID)
+	return err
+}
+
+func (r *Repository) DeletePlayEventsByTrack(ctx context.Context, trackID string) error {
+	_, err := r.pool.Exec(ctx, `DELETE FROM play_events WHERE track_id = $1`, trackID)
+	return err
+}
+
+func (r *Repository) DeletePlayEventsInWindow(ctx context.Context, f history.StatsFilter) error {
+	where, args := statsWhere(f)
+	_, err := r.pool.Exec(ctx, `DELETE FROM play_events`+where, args...)
+	return err
+}
+
 func (r *Repository) ListPlayEventsByTrack(ctx context.Context, f history.AdminPlayEventFilter) ([]history.PlayEvent, int, error) {
 	if f.TrackID == "" {
 		return nil, 0, fmt.Errorf("trackID is required")

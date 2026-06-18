@@ -90,6 +90,25 @@ func (s *Service) GetTrackHistory(ctx context.Context, f AdminPlayEventFilter) (
 	return s.repo.ListPlayEventsByTrack(ctx, f)
 }
 
+// AdminDeleteUserHistory deletes all play events for the given user; intended for admin use.
+func (s *Service) AdminDeleteUserHistory(ctx context.Context, userID string) error {
+	return s.repo.DeletePlayEventsByUserAdmin(ctx, userID)
+}
+
+// AdminDeleteTrackHistory deletes all play events for the given track across all users.
+func (s *Service) AdminDeleteTrackHistory(ctx context.Context, trackID string) error {
+	return s.repo.DeletePlayEventsByTrack(ctx, trackID)
+}
+
+// AdminDeleteHistoryWindow deletes play events within the given time bounds.
+// At least one bound (Since or Until) must be set.
+func (s *Service) AdminDeleteHistoryWindow(ctx context.Context, f StatsFilter) error {
+	if f.Since.IsZero() && f.Until.IsZero() {
+		return fmt.Errorf("at least one of since or until is required")
+	}
+	return s.repo.DeletePlayEventsInWindow(ctx, f)
+}
+
 // GetHistoryStats returns system-wide aggregate counts for admin use.
 // f.Since optionally bounds the query to events on or after that time.
 func (s *Service) GetHistoryStats(ctx context.Context, f StatsFilter) (HistoryStats, error) {

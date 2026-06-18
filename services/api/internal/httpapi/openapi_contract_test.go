@@ -80,8 +80,9 @@ func TestStorageAdminOpenAPIContractCoversRoutes(t *testing.T) {
 		"/api/v1/admin/history/stats":                           {"get"},
 		"/api/v1/admin/history/top-tracks":                      {"get"},
 		"/api/v1/admin/history/top-users":                       {"get"},
-		"/api/v1/admin/history/users/{userId}":                  {"get"},
-		"/api/v1/admin/history/tracks/{trackId}":                {"get"},
+		"/api/v1/admin/history/users/{userId}":                  {"get", "delete"},
+		"/api/v1/admin/history/tracks/{trackId}":                {"get", "delete"},
+		"/api/v1/admin/history":                                 {"delete"},
 	}
 
 	for path, methods := range expected {
@@ -544,5 +545,55 @@ func TestStorageAdminOpenAPIContractAdminHistoryDetailPaths(t *testing.T) {
 		if schema["$ref"] != "#/components/schemas/PlayEventList" {
 			t.Errorf("%s 200 response schema = %v, want PlayEventList ref", tc.path, schema)
 		}
+	}
+}
+
+func TestStorageAdminOpenAPIContractAdminHistoryBulkDelete(t *testing.T) {
+	document := loadOpenAPIContract(t)
+	paths := document["paths"].(map[string]any)
+	components := document["components"].(map[string]any)
+	schemas := components["schemas"].(map[string]any)
+
+	// /api/v1/admin/history must have a delete operation with since/until params
+	windowPath, ok := paths["/api/v1/admin/history"].(map[string]any)
+	if !ok {
+		t.Fatal("path /api/v1/admin/history is missing")
+	}
+	del, ok := windowPath["delete"].(map[string]any)
+	if !ok {
+		t.Fatal("DELETE /api/v1/admin/history is missing")
+	}
+	params, _ := del["parameters"].([]any)
+	seen := map[string]bool{}
+	for _, p := range params {
+		if m, ok := p.(map[string]any); ok {
+			seen[m["name"].(string)] = true
+		}
+	}
+	for _, want := range []string{"since", "until"} {
+		if !seen[want] {
+			t.Errorf("DELETE /api/v1/admin/history is missing query param %q", want)
+		}
+	}
+
+	// users/{userId} and tracks/{trackId} must have delete operations
+	for _, path := range []string{
+		"/api/v1/admin/history/users/{userId}",
+		"/api/v1/admin/history/tracks/{trackId}",
+	} {
+		pathItem, ok := paths[path].(map[string]any)
+		if !ok {
+			t.Fatalf("path %q is missing", path)
+		}
+		if _, ok := pathItem["delete"].(map[string]any); !ok {
+			t.Errorf("DELETE %s is missing", path)
+		}
+	}
+
+	// missing_time_filter must be in the error code enum
+	env := schemas["ErrorEnvelope"].(map[string]any)
+	codes, _ := env["properties"].(map[string]any)["error"].(map[string]any)["properties"].(map[string]any)["code"].(map[string]any)["enum"].([]any)
+	if !containsString(codes, "missing_time_filter") {
+		t.Error("error code enum is missing 'missing_time_filter'")
 	}
 }
