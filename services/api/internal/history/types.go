@@ -20,6 +20,7 @@ type PlayEventFilter struct {
 	TrackID string // optional — filter to a single track
 	Limit   int    // 0 → default (50); clamped to 500
 	Offset  int
+	Asc     bool   // false (default) → played_at DESC; true → played_at ASC
 }
 
 // AdminPlayEventFilter scopes admin list queries that are not user-scoped.
@@ -28,6 +29,7 @@ type AdminPlayEventFilter struct {
 	UserID  string // required for ListPlayEventsByUser (admin view)
 	Limit   int    // 0 → default (50); clamped to 500
 	Offset  int
+	Asc     bool   // false (default) → played_at DESC; true → played_at ASC
 }
 
 // GlobalPlayEventFilter scopes admin queries that list all events across every user and track.
@@ -39,6 +41,7 @@ type GlobalPlayEventFilter struct {
 	Until   time.Time // optional upper bound on played_at (exclusive)
 	Limit   int       // 0 → default (50); clamped to 500
 	Offset  int
+	Asc     bool      // false (default) → played_at DESC; true → played_at ASC
 }
 
 // StatsFilter scopes admin aggregate queries.

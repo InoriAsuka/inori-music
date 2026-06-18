@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.75.0`
+`0.76.0`
 
 ## Product Goal
 
@@ -684,4 +684,17 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add 4 HTTP-layer tests (`TestAdminGetAllHistory`, `TestAdminGetAllHistoryTrackFilter`, `TestAdminGetAllHistoryNotConfigured`, `TestAdminGetAllHistoryMethodNotAllowed`).
 - Add `get` operation to `/api/v1/admin/history` in OpenAPI contract with 6 query params and `PlayEventList` response schema ref; bump `info.version` to `0.75.0`.
 - Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `get` on `/api/v1/admin/history`; add `TestStorageAdminOpenAPIContractAdminHistoryGlobalList`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.76.0 - 2026-06-18
+
+- Add `Asc bool` field to `PlayEventFilter`, `AdminPlayEventFilter`, and `GlobalPlayEventFilter` in `history/types.go`; `false` (default) → `played_at DESC`, `true` → `played_at ASC`.
+- Update sort comparators in `history.MemoryRepository` for `ListPlayEvents`, `ListPlayEventsByTrack`, and `ListAllPlayEvents` to respect `f.Asc`.
+- Add `eventOrder(asc bool) string` helper to `historypg.Repository`; replace hard-coded `ORDER BY played_at DESC, id DESC` with `eventOrder(f.Asc)` in `ListPlayEvents`, `ListPlayEventsByTrack`, and `ListAllPlayEvents`.
+- Add `parseHistoryOrder` helper to `httpapi/handler.go`; parses `?order=asc|desc` (default `desc`); returns `400 invalid_order` for any other value.
+- Thread `Asc` through `listPlayEvents`, `getAdminUserHistory`, `getAdminTrackHistory`, and `getAdminAllHistory` handlers.
+- Add 2 `history.Service` unit tests (`TestListPlaysAscOrder`, `TestGetAllHistoryAscOrder`).
+- Add 4 HTTP-layer tests (`TestListPlayEventsAscOrder`, `TestListPlayEventsInvalidOrder`, `TestAdminGetAllHistoryAscOrder`, `TestAdminGetAllHistoryInvalidOrder`).
+- Add `order` query param (string enum `["asc","desc"]`, optional, default `"desc"`) to `GET /api/v1/me/history`, `GET /api/v1/admin/history/users/{userId}`, `GET /api/v1/admin/history/tracks/{trackId}`, and `GET /api/v1/admin/history` in OpenAPI contract; add `invalid_order` to error code enum; bump `info.version` to `0.76.0`.
+- Add `TestStorageAdminOpenAPIContractHistoryOrderParam` asserting `order` param on all four paths and `invalid_order` in the error enum.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

@@ -35,6 +35,7 @@ func (r *Repository) ListPlayEvents(ctx context.Context, f history.PlayEventFilt
 		return nil, 0, fmt.Errorf("userID is required")
 	}
 
+	order := eventOrder(f.Asc)
 	var rows pgx.Rows
 	var err error
 	if f.TrackID != "" {
@@ -43,7 +44,7 @@ func (r *Repository) ListPlayEvents(ctx context.Context, f history.PlayEventFilt
 			       COUNT(*) OVER () AS total_count
 			FROM play_events
 			WHERE user_id = $3 AND track_id = $4
-			ORDER BY played_at DESC, id DESC
+			ORDER BY `+order+`
 			LIMIT $1 OFFSET $2`,
 			f.Limit, f.Offset, f.UserID, f.TrackID)
 	} else {
@@ -52,7 +53,7 @@ func (r *Repository) ListPlayEvents(ctx context.Context, f history.PlayEventFilt
 			       COUNT(*) OVER () AS total_count
 			FROM play_events
 			WHERE user_id = $3
-			ORDER BY played_at DESC, id DESC
+			ORDER BY `+order+`
 			LIMIT $1 OFFSET $2`,
 			f.Limit, f.Offset, f.UserID)
 	}
@@ -108,6 +109,7 @@ func (r *Repository) ListPlayEventsByTrack(ctx context.Context, f history.AdminP
 		return nil, 0, fmt.Errorf("trackID is required")
 	}
 
+	order := eventOrder(f.Asc)
 	var rows pgx.Rows
 	var err error
 	if f.UserID != "" {
@@ -116,7 +118,7 @@ func (r *Repository) ListPlayEventsByTrack(ctx context.Context, f history.AdminP
 			       COUNT(*) OVER () AS total_count
 			FROM play_events
 			WHERE track_id = $3 AND user_id = $4
-			ORDER BY played_at DESC, id DESC
+			ORDER BY `+order+`
 			LIMIT $1 OFFSET $2`,
 			f.Limit, f.Offset, f.TrackID, f.UserID)
 	} else {
@@ -125,7 +127,7 @@ func (r *Repository) ListPlayEventsByTrack(ctx context.Context, f history.AdminP
 			       COUNT(*) OVER () AS total_count
 			FROM play_events
 			WHERE track_id = $3
-			ORDER BY played_at DESC, id DESC
+			ORDER BY `+order+`
 			LIMIT $1 OFFSET $2`,
 			f.Limit, f.Offset, f.TrackID)
 	}
@@ -277,7 +279,7 @@ func (r *Repository) ListAllPlayEvents(ctx context.Context, f history.GlobalPlay
 		SELECT id, user_id, track_id, played_at, created_at,
 		       COUNT(*) OVER () AS total_count
 		FROM play_events`+where+`
-		ORDER BY played_at DESC, id DESC
+		ORDER BY `+eventOrder(f.Asc)+`
 		LIMIT $1 OFFSET $2`, args...)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -303,6 +305,15 @@ func (r *Repository) ListAllPlayEvents(ctx context.Context, f history.GlobalPlay
 		events = []history.PlayEvent{}
 	}
 	return events, total, nil
+}
+
+// eventOrder returns the ORDER BY expression for played_at-sorted event queries.
+// asc=true → oldest-first; asc=false (default) → newest-first.
+func eventOrder(asc bool) string {
+	if asc {
+		return "played_at ASC, id ASC"
+	}
+	return "played_at DESC, id DESC"
 }
 
 // statsWhere builds the optional WHERE clause and args slice for StatsFilter.

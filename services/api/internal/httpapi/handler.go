@@ -1860,11 +1860,16 @@ func (handler *Handler) listPlayEvents(w http.ResponseWriter, r *http.Request) {
 		}
 		offset = v
 	}
+	asc, ok := parseHistoryOrder(w, r)
+	if !ok {
+		return
+	}
 	events, total, err := handler.historyService.ListPlays(r.Context(), history.PlayEventFilter{
 		UserID:  user.ID,
 		TrackID: q.Get("trackId"),
 		Limit:   limit,
 		Offset:  offset,
+		Asc:     asc,
 	})
 	if err != nil {
 		writeError(w, err)
@@ -2066,11 +2071,16 @@ func (handler *Handler) getAdminUserHistory(w http.ResponseWriter, r *http.Reque
 	if !ok {
 		return
 	}
+	asc, ok := parseHistoryOrder(w, r)
+	if !ok {
+		return
+	}
 	events, total, err := handler.historyService.GetUserHistory(r.Context(), history.PlayEventFilter{
 		UserID:  userID,
 		TrackID: r.URL.Query().Get("trackId"),
 		Limit:   limit,
 		Offset:  offset,
+		Asc:     asc,
 	})
 	if err != nil {
 		writeError(w, err)
@@ -2100,11 +2110,16 @@ func (handler *Handler) getAdminTrackHistory(w http.ResponseWriter, r *http.Requ
 	if !ok {
 		return
 	}
+	asc, ok := parseHistoryOrder(w, r)
+	if !ok {
+		return
+	}
 	events, total, err := handler.historyService.GetTrackHistory(r.Context(), history.AdminPlayEventFilter{
 		TrackID: trackID,
 		UserID:  r.URL.Query().Get("userId"),
 		Limit:   limit,
 		Offset:  offset,
+		Asc:     asc,
 	})
 	if err != nil {
 		writeError(w, err)
@@ -2140,6 +2155,22 @@ func parseHistoryAdminPagination(w http.ResponseWriter, r *http.Request) (limit,
 		offset = v
 	}
 	return limit, offset, true
+}
+
+// parseHistoryOrder parses the optional ?order=asc|desc query parameter.
+// Returns true for ascending, false (default) for descending.
+// Writes a 400 and returns ok=false for any value other than "asc" or "desc".
+func parseHistoryOrder(w http.ResponseWriter, r *http.Request) (asc bool, ok bool) {
+	raw := r.URL.Query().Get("order")
+	switch raw {
+	case "", "desc":
+		return false, true
+	case "asc":
+		return true, true
+	default:
+		writeAPIError(w, http.StatusBadRequest, "invalid_order", `order must be "asc" or "desc"`)
+		return false, false
+	}
 }
 
 func (handler *Handler) deleteAdminUserHistory(w http.ResponseWriter, r *http.Request) {
@@ -2205,6 +2236,10 @@ func (handler *Handler) getAdminAllHistory(w http.ResponseWriter, r *http.Reques
 	if !ok {
 		return
 	}
+	asc, ok := parseHistoryOrder(w, r)
+	if !ok {
+		return
+	}
 	events, total, err := handler.historyService.GetAllHistory(r.Context(), history.GlobalPlayEventFilter{
 		UserID:  r.URL.Query().Get("userId"),
 		TrackID: r.URL.Query().Get("trackId"),
@@ -2212,6 +2247,7 @@ func (handler *Handler) getAdminAllHistory(w http.ResponseWriter, r *http.Reques
 		Until:   f.Until,
 		Limit:   limit,
 		Offset:  offset,
+		Asc:     asc,
 	})
 	if err != nil {
 		writeError(w, err)

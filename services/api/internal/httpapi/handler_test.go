@@ -5304,3 +5304,101 @@ func TestAdminGetAllHistoryMethodNotAllowed(t *testing.T) {
 	resp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/history", "{}", "Bearer "+adminToken)
 	assertAPIError(t, resp, http.StatusMethodNotAllowed, "method_not_allowed")
 }
+
+func TestListPlayEventsAscOrder(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"SortBand"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackResp1 := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"ST1","artistId":%q,"mediaObjectId":"mo-sort-1"}`, artistID), "Bearer "+adminToken)
+	var t1 map[string]any
+	decodeResponse(t, trackResp1, &t1)
+	tID1 := t1["id"].(string)
+
+	trackResp2 := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"ST2","artistId":%q,"mediaObjectId":"mo-sort-2"}`, artistID), "Bearer "+adminToken)
+	var t2 map[string]any
+	decodeResponse(t, trackResp2, &t2)
+	tID2 := t2["id"].(string)
+
+	// play t1 first, then t2
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q,"playedAt":"2020-01-01T10:00:00Z"}`, tID1), "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q,"playedAt":"2020-01-01T11:00:00Z"}`, tID2), "Bearer "+viewerToken)
+
+	// default (desc) → t2 first
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/me/history", "", "Bearer "+viewerToken)
+	var result map[string]any
+	decodeResponse(t, resp, &result)
+	events := result["events"].([]any)
+	first := events[0].(map[string]any)["trackId"].(string)
+	if first != tID2 {
+		t.Errorf("desc[0] = %q, want tID2 (%q)", first, tID2)
+	}
+
+	// asc → t1 first
+	respAsc := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/me/history?order=asc", "", "Bearer "+viewerToken)
+	var resultAsc map[string]any
+	decodeResponse(t, respAsc, &resultAsc)
+	eventsAsc := resultAsc["events"].([]any)
+	firstAsc := eventsAsc[0].(map[string]any)["trackId"].(string)
+	if firstAsc != tID1 {
+		t.Errorf("asc[0] = %q, want tID1 (%q)", firstAsc, tID1)
+	}
+}
+
+func TestListPlayEventsInvalidOrder(t *testing.T) {
+	h, viewerToken, _ := newHistoryTestHandler(t)
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/me/history?order=random", "", "Bearer "+viewerToken)
+	assertAPIError(t, resp, http.StatusBadRequest, "invalid_order")
+}
+
+func TestAdminGetAllHistoryAscOrder(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"AscBand"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackResp1 := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"AT1","artistId":%q,"mediaObjectId":"mo-asc-1"}`, artistID), "Bearer "+adminToken)
+	var t1 map[string]any
+	decodeResponse(t, trackResp1, &t1)
+	tID1 := t1["id"].(string)
+
+	trackResp2 := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"AT2","artistId":%q,"mediaObjectId":"mo-asc-2"}`, artistID), "Bearer "+adminToken)
+	var t2 map[string]any
+	decodeResponse(t, trackResp2, &t2)
+	tID2 := t2["id"].(string)
+
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q,"playedAt":"2020-06-01T08:00:00Z"}`, tID1), "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q,"playedAt":"2020-06-01T09:00:00Z"}`, tID2), "Bearer "+viewerToken)
+
+	// asc → tID1 (older) first
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/admin/history?order=asc", "", "Bearer "+adminToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("GET /api/v1/admin/history?order=asc: %d %s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	decodeResponse(t, resp, &result)
+	events := result["events"].([]any)
+	firstTrack := events[0].(map[string]any)["trackId"].(string)
+	if firstTrack != tID1 {
+		t.Errorf("asc[0] trackId = %q, want tID1 (%q)", firstTrack, tID1)
+	}
+}
+
+func TestAdminGetAllHistoryInvalidOrder(t *testing.T) {
+	h, _, adminToken := newHistoryTestHandler(t)
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/admin/history?order=newest", "", "Bearer "+adminToken)
+	assertAPIError(t, resp, http.StatusBadRequest, "invalid_order")
+}

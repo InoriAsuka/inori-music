@@ -682,3 +682,37 @@ func TestStorageAdminOpenAPIContractAdminHistoryGlobalList(t *testing.T) {
 		t.Errorf("GET /api/v1/admin/history 200 schema = %v, want PlayEventList ref", schema)
 	}
 }
+
+func TestStorageAdminOpenAPIContractHistoryOrderParam(t *testing.T) {
+	document := loadOpenAPIContract(t)
+	paths := document["paths"].(map[string]any)
+	components := document["components"].(map[string]any)
+	schemas := components["schemas"].(map[string]any)
+
+	// All four list endpoints must carry the "order" query param
+	listPaths := []string{
+		"/api/v1/me/history",
+		"/api/v1/admin/history/users/{userId}",
+		"/api/v1/admin/history/tracks/{trackId}",
+		"/api/v1/admin/history",
+	}
+	for _, p := range listPaths {
+		get := operation(t, paths, p, "get")
+		seen := map[string]bool{}
+		for _, param := range get["parameters"].([]any) {
+			if m, ok := param.(map[string]any); ok {
+				seen[m["name"].(string)] = true
+			}
+		}
+		if !seen["order"] {
+			t.Errorf("GET %s is missing query param \"order\"", p)
+		}
+	}
+
+	// invalid_order must be in the error code enum
+	env := schemas["ErrorEnvelope"].(map[string]any)
+	codes, _ := env["properties"].(map[string]any)["error"].(map[string]any)["properties"].(map[string]any)["code"].(map[string]any)["enum"].([]any)
+	if !containsString(codes, "invalid_order") {
+		t.Error("error code enum is missing 'invalid_order'")
+	}
+}

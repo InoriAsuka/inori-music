@@ -627,3 +627,51 @@ func TestGetAllHistoryTimeWindow(t *testing.T) {
 		t.Errorf("events = %+v, want single t2 event", events)
 	}
 }
+
+func TestListPlaysAscOrder(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+	base := time.Now().UTC()
+
+	// record 3 events oldest→newest
+	svc.RecordPlay(ctx, "u1", "t1", base)
+	svc.RecordPlay(ctx, "u1", "t2", base.Add(time.Second))
+	svc.RecordPlay(ctx, "u1", "t3", base.Add(2*time.Second))
+
+	// default (desc) → newest first
+	desc, _, _ := svc.ListPlays(ctx, history.PlayEventFilter{UserID: "u1"})
+	if desc[0].TrackID != "t3" || desc[2].TrackID != "t1" {
+		t.Errorf("desc order wrong: got %v %v %v", desc[0].TrackID, desc[1].TrackID, desc[2].TrackID)
+	}
+
+	// asc → oldest first
+	asc, _, _ := svc.ListPlays(ctx, history.PlayEventFilter{UserID: "u1", Asc: true})
+	if asc[0].TrackID != "t1" || asc[2].TrackID != "t3" {
+		t.Errorf("asc order wrong: got %v %v %v", asc[0].TrackID, asc[1].TrackID, asc[2].TrackID)
+	}
+}
+
+func TestGetAllHistoryAscOrder(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+	base := time.Now().UTC()
+
+	svc.RecordPlay(ctx, "u1", "t1", base)
+	svc.RecordPlay(ctx, "u2", "t2", base.Add(time.Second))
+	svc.RecordPlay(ctx, "u1", "t3", base.Add(2*time.Second))
+
+	asc, total, err := svc.GetAllHistory(ctx, history.GlobalPlayEventFilter{Asc: true})
+	if err != nil {
+		t.Fatalf("GetAllHistory asc: %v", err)
+	}
+	if total != 3 {
+		t.Errorf("total = %d, want 3", total)
+	}
+	// oldest event first
+	if asc[0].TrackID != "t1" {
+		t.Errorf("asc[0] = %q, want t1", asc[0].TrackID)
+	}
+	if asc[2].TrackID != "t3" {
+		t.Errorf("asc[2] = %q, want t3", asc[2].TrackID)
+	}
+}

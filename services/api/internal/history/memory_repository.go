@@ -38,6 +38,15 @@ func (r *MemoryRepository) ListPlayEvents(_ context.Context, f PlayEventFilter) 
 	r.mu.RUnlock()
 
 	sort.SliceStable(all, func(i, j int) bool {
+		if all[i].PlayedAt.Equal(all[j].PlayedAt) {
+			if f.Asc {
+				return all[i].ID < all[j].ID
+			}
+			return all[i].ID > all[j].ID
+		}
+		if f.Asc {
+			return all[i].PlayedAt.Before(all[j].PlayedAt)
+		}
 		return all[i].PlayedAt.After(all[j].PlayedAt)
 	})
 
@@ -117,7 +126,13 @@ func (r *MemoryRepository) ListPlayEventsByTrack(_ context.Context, f AdminPlayE
 
 	sort.SliceStable(all, func(i, j int) bool {
 		if all[i].PlayedAt.Equal(all[j].PlayedAt) {
-			return all[i].ID < all[j].ID
+			if f.Asc {
+				return all[i].ID < all[j].ID
+			}
+			return all[i].ID > all[j].ID
+		}
+		if f.Asc {
+			return all[i].PlayedAt.Before(all[j].PlayedAt)
 		}
 		return all[i].PlayedAt.After(all[j].PlayedAt)
 	})
@@ -156,7 +171,13 @@ func (r *MemoryRepository) ListAllPlayEvents(_ context.Context, f GlobalPlayEven
 
 	sort.SliceStable(all, func(i, j int) bool {
 		if all[i].PlayedAt.Equal(all[j].PlayedAt) {
-			return all[i].ID < all[j].ID
+			if f.Asc {
+				return all[i].ID < all[j].ID
+			}
+			return all[i].ID > all[j].ID
+		}
+		if f.Asc {
+			return all[i].PlayedAt.Before(all[j].PlayedAt)
 		}
 		return all[i].PlayedAt.After(all[j].PlayedAt)
 	})
