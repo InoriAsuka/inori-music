@@ -362,6 +362,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/me/history", handler.requireViewerAuth(handler.clearHistory))
 	mux.HandleFunc("GET /api/v1/me/history/stats", handler.requireViewerAuth(handler.getMyHistoryStats))
 	mux.HandleFunc("GET /api/v1/me/history/top-tracks", handler.requireViewerAuth(handler.getMyTopTracks))
+	mux.HandleFunc("POST /api/v1/me/history/batch-delete", handler.requireViewerAuth(handler.batchDeleteMyEvents))
 	mux.HandleFunc("GET /api/v1/me/history/{eventId}", handler.requireViewerAuth(handler.getMyEvent))
 	mux.HandleFunc("PATCH /api/v1/me/history/{eventId}", handler.requireViewerAuth(handler.patchMyEvent))
 	mux.HandleFunc("DELETE /api/v1/me/history/{eventId}", handler.requireViewerAuth(handler.deleteMyEvent))
@@ -377,6 +378,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/admin/history", handler.requireAdminAuth(handler.deleteAdminHistoryWindow))
 	mux.HandleFunc("/api/v1/admin/history/users/{userId}", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/history/tracks/{trackId}", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("POST /api/v1/admin/history/batch-delete", handler.requireAdminAuth(handler.batchDeleteAdminEvents))
 	mux.HandleFunc("GET /api/v1/admin/history/{eventId}", handler.requireAdminAuth(handler.getAdminEvent))
 	mux.HandleFunc("PATCH /api/v1/admin/history/{eventId}", handler.requireAdminAuth(handler.patchAdminEvent))
 	mux.HandleFunc("DELETE /api/v1/admin/history/{eventId}", handler.requireAdminAuth(handler.deleteAdminEvent))
@@ -2412,6 +2414,67 @@ func (handler *Handler) patchMyEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, e)
+}
+
+func (handler *Handler) batchDeleteAdminEvents(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireHistoryService(w) {
+		return
+	}
+	var body struct {
+		IDs []string `json:"ids"`
+	}
+	if err := decodeJSON(w, r, &body); err != nil {
+		writeError(w, err)
+		return
+	}
+	if len(body.IDs) == 0 {
+		writeAPIError(w, http.StatusBadRequest, "invalid_ids", "ids must be a non-empty array")
+		return
+	}
+	if len(body.IDs) > history.MaxBatchDeleteIDs {
+		writeAPIError(w, http.StatusBadRequest, "invalid_ids",
+			fmt.Sprintf("ids must not exceed %d entries", history.MaxBatchDeleteIDs))
+		return
+	}
+	deleted, err := handler.historyService.BatchDeleteEvents(r.Context(), body.IDs)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"deleted": deleted})
+}
+
+func (handler *Handler) batchDeleteMyEvents(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireHistoryService(w) {
+		return
+	}
+	user, ok := userFromContext(r)
+	if !ok {
+		writeAPIError(w, http.StatusUnauthorized, "unauthorized", "valid bearer token is required")
+		return
+	}
+	var body struct {
+		IDs []string `json:"ids"`
+	}
+	if err := decodeJSON(w, r, &body); err != nil {
+		writeError(w, err)
+		return
+	}
+	if len(body.IDs) == 0 {
+		writeAPIError(w, http.StatusBadRequest, "invalid_ids", "ids must be a non-empty array")
+		return
+	}
+	if len(body.IDs) > history.MaxBatchDeleteIDs {
+		writeAPIError(w, http.StatusBadRequest, "invalid_ids",
+			fmt.Sprintf("ids must not exceed %d entries", history.MaxBatchDeleteIDs))
+		return
+	}
+	deleted, err := handler.historyService.BatchDeleteMyEvents(r.Context(), user.ID, body.IDs)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"deleted": deleted})
 }
 
 func (handler *Handler) getRecentlyAdded(w http.ResponseWriter, r *http.Request) {

@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.78.0`
+`0.79.0`
 
 ## Product Goal
 
@@ -727,4 +727,18 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add 3 `history.Service` unit tests (`TestUpdateEventByID`, `TestUpdateEventByIDNotFound`, `TestUpdateMyEvent`).
 - Add 7 HTTP-layer tests (`TestAdminPatchEvent`, `TestAdminPatchEventNotFound`, `TestAdminPatchEventInvalidPlayedAt`, `TestViewerPatchEvent`, `TestViewerPatchEventInvalidPlayedAt`, `TestViewerPatchEventMissingPlayedAt`, `TestPatchEventHistoryNotConfigured`).
 - Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `patch` on both paths; extend `TestStorageAdminOpenAPIContractPerEventPaths` to assert `UpdatePlayEventRequest` requestBody ref and `invalid_played_at` error code.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.79.0 - 2026-06-19
+
+- Add `DeletePlayEventsByIDs(ctx, ids)` and `DeletePlayEventsByIDsForUser(ctx, userID, ids)` to the `Repository` interface.
+- Implement both on `history.MemoryRepository` (lock + range-delete; unknown IDs silently skipped) and `historypg.Repository` (`DELETE … WHERE id = ANY($1)` and `DELETE … WHERE id = ANY($1) AND user_id = $2`).
+- Add `MaxBatchDeleteIDs = 100` constant; add `BatchDeleteEvents(ctx, ids)` (admin) and `BatchDeleteMyEvents(ctx, userID, ids)` (viewer) to `history.Service`; validate non-empty ids and size ≤ 100.
+- Add admin route `POST /api/v1/admin/history/batch-delete` → `batchDeleteAdminEvents`; decodes `{"ids":[…]}`; returns `{"deleted": N}`.
+- Add viewer route `POST /api/v1/me/history/batch-delete` → `batchDeleteMyEvents`; same shape; silently skips IDs not owned by the viewer.
+- Both routes return `400 invalid_ids` for empty or oversized `ids` array.
+- Add `BatchDeleteRequest` schema (`{ids: string[], minItems:1, maxItems:100}`) and `BatchDeleteResult` schema (`{deleted: integer}`) to OpenAPI components; add both new paths; add `invalid_ids` to error code enum; bump `info.version` to `0.79.0`.
+- Add 4 `history.Service` unit tests (`TestBatchDeleteEvents`, `TestBatchDeleteEventsUnknownIDsIgnored`, `TestBatchDeleteMyEvents`, `TestBatchDeleteEventsEmpty`).
+- Add 5 HTTP-layer tests (`TestAdminBatchDeleteEvents`, `TestAdminBatchDeleteEventsEmptyBody`, `TestViewerBatchDeleteMyEvents`, `TestViewerBatchDeleteSkipsOtherUsersEvents`, `TestBatchDeleteHistoryNotConfigured`).
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes` with both batch-delete paths; add `TestStorageAdminOpenAPIContractBatchDelete`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

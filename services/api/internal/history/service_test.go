@@ -804,3 +804,78 @@ func TestUpdateMyEvent(t *testing.T) {
 		t.Errorf("want ErrEventForbidden, got %v", err)
 	}
 }
+
+func TestBatchDeleteEvents(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	e1, _ := svc.RecordPlay(ctx, "u1", "t1", now)
+	e2, _ := svc.RecordPlay(ctx, "u1", "t2", now.Add(time.Second))
+	e3, _ := svc.RecordPlay(ctx, "u2", "t1", now.Add(2*time.Second))
+
+	// delete e1 and e3; e2 survives
+	deleted, err := svc.BatchDeleteEvents(ctx, []string{e1.ID, e3.ID})
+	if err != nil {
+		t.Fatalf("BatchDeleteEvents: %v", err)
+	}
+	if deleted != 2 {
+		t.Errorf("deleted = %d, want 2", deleted)
+	}
+	// e2 still present
+	got, err := svc.GetEventByID(ctx, e2.ID)
+	if err != nil {
+		t.Fatalf("GetEventByID after batch delete: %v", err)
+	}
+	if got.ID != e2.ID {
+		t.Errorf("unexpected id %q", got.ID)
+	}
+}
+
+func TestBatchDeleteEventsUnknownIDsIgnored(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+
+	e, _ := svc.RecordPlay(ctx, "u1", "t1", time.Now().UTC())
+
+	// include one real ID and one unknown
+	deleted, err := svc.BatchDeleteEvents(ctx, []string{e.ID, "no-such-id"})
+	if err != nil {
+		t.Fatalf("BatchDeleteEvents: %v", err)
+	}
+	if deleted != 1 {
+		t.Errorf("deleted = %d, want 1", deleted)
+	}
+}
+
+func TestBatchDeleteMyEvents(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	e1, _ := svc.RecordPlay(ctx, "u1", "t1", now)
+	e2, _ := svc.RecordPlay(ctx, "u2", "t2", now.Add(time.Second))
+
+	// u1 tries to batch-delete both; only e1 is hers
+	deleted, err := svc.BatchDeleteMyEvents(ctx, "u1", []string{e1.ID, e2.ID})
+	if err != nil {
+		t.Fatalf("BatchDeleteMyEvents: %v", err)
+	}
+	if deleted != 1 {
+		t.Errorf("deleted = %d, want 1 (only own event)", deleted)
+	}
+	// e2 (owned by u2) still present
+	if _, err := svc.GetEventByID(ctx, e2.ID); err != nil {
+		t.Errorf("e2 should still exist, got %v", err)
+	}
+}
+
+func TestBatchDeleteEventsEmpty(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	if _, err := svc.BatchDeleteEvents(context.Background(), nil); err == nil {
+		t.Error("expected error for empty ids")
+	}
+	if _, err := svc.BatchDeleteMyEvents(context.Background(), "u1", nil); err == nil {
+		t.Error("expected error for empty ids")
+	}
+}

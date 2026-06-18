@@ -76,6 +76,12 @@ type Repository interface {
 	UpdatePlayEventByID(ctx context.Context, id string, playedAt time.Time) (PlayEvent, error)
 	DeletePlayEventByID(ctx context.Context, id string) error
 
+	// Batch-delete by explicit ID list.
+	DeletePlayEventsByIDs(ctx context.Context, ids []string) (int, error)
+
+	// Viewer-scoped batch-delete — only deletes events that belong to userID.
+	DeletePlayEventsByIDsForUser(ctx context.Context, userID string, ids []string) (int, error)
+
 	// Admin detail queries — not scoped to the requesting user.
 	ListPlayEventsByTrack(ctx context.Context, f AdminPlayEventFilter) ([]PlayEvent, int, error)
 

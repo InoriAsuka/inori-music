@@ -5695,3 +5695,148 @@ func TestPatchEventHistoryNotConfigured(t *testing.T) {
 		assertAPIError(t, resp, http.StatusServiceUnavailable, "history_not_configured")
 	}
 }
+
+func TestAdminBatchDeleteEvents(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"BatchBand"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"BT1","artistId":%q,"mediaObjectId":"mo-bd-1"}`, artistID), "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	// record 3 events
+	var ids []string
+	for range 3 {
+		pr := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+			fmt.Sprintf(`{"trackId":%q}`, trackID), "Bearer "+viewerToken)
+		var evt map[string]any
+		decodeResponse(t, pr, &evt)
+		ids = append(ids, evt["id"].(string))
+	}
+
+	// batch-delete first two
+	body := fmt.Sprintf(`{"ids":[%q,%q]}`, ids[0], ids[1])
+	resp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/history/batch-delete", body, "Bearer "+adminToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("admin batch-delete: %d %s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	decodeResponse(t, resp, &result)
+	if result["deleted"].(float64) != 2 {
+		t.Errorf("deleted = %v, want 2", result["deleted"])
+	}
+
+	// third still present
+	getResp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/admin/history/"+ids[2], "", "Bearer "+adminToken)
+	if getResp.Code != http.StatusOK {
+		t.Errorf("third event should still exist, got %d", getResp.Code)
+	}
+}
+
+func TestAdminBatchDeleteEventsEmptyBody(t *testing.T) {
+	h, _, adminToken := newHistoryTestHandler(t)
+	resp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/history/batch-delete",
+		`{"ids":[]}`, "Bearer "+adminToken)
+	assertAPIError(t, resp, http.StatusBadRequest, "invalid_ids")
+}
+
+func TestViewerBatchDeleteMyEvents(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"VBatchBand"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"VBT1","artistId":%q,"mediaObjectId":"mo-vbd-1"}`, artistID), "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	pr1 := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q}`, trackID), "Bearer "+viewerToken)
+	var evt1 map[string]any
+	decodeResponse(t, pr1, &evt1)
+	id1 := evt1["id"].(string)
+
+	pr2 := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q}`, trackID), "Bearer "+viewerToken)
+	var evt2 map[string]any
+	decodeResponse(t, pr2, &evt2)
+	id2 := evt2["id"].(string)
+
+	// viewer deletes both own events
+	body := fmt.Sprintf(`{"ids":[%q,%q]}`, id1, id2)
+	resp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history/batch-delete", body, "Bearer "+viewerToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("viewer batch-delete: %d %s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	decodeResponse(t, resp, &result)
+	if result["deleted"].(float64) != 2 {
+		t.Errorf("deleted = %v, want 2", result["deleted"])
+	}
+}
+
+func TestViewerBatchDeleteSkipsOtherUsersEvents(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"SkipBand"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"SK1","artistId":%q,"mediaObjectId":"mo-sk-1"}`, artistID), "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	// viewer records an event; then try to batch-delete a foreign ID and own ID
+	pr := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q}`, trackID), "Bearer "+viewerToken)
+	var evt map[string]any
+	decodeResponse(t, pr, &evt)
+	ownID := evt["id"].(string)
+
+	body := fmt.Sprintf(`{"ids":[%q,"foreign-event-id"]}`, ownID)
+	resp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history/batch-delete", body, "Bearer "+viewerToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("viewer batch-delete skip foreign: %d %s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	decodeResponse(t, resp, &result)
+	// only own event deleted; foreign not found → silently ignored
+	if result["deleted"].(float64) != 1 {
+		t.Errorf("deleted = %v, want 1", result["deleted"])
+	}
+}
+
+func TestBatchDeleteHistoryNotConfigured(t *testing.T) {
+	authSvc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAuthService(authSvc),
+		WithAdminToken(testAdminToken),
+	).Routes()
+	if _, err := authSvc.CreateUser(context.Background(), "alice", "viewerpass1", auth.RoleViewer); err != nil {
+		t.Fatalf("create viewer: %v", err)
+	}
+	viewerToken, _, _ := authSvc.Login(context.Background(), "alice", "viewerpass1")
+
+	body := `{"ids":["some-id"]}`
+	for _, tc := range []struct{ path, token string }{
+		{"/api/v1/admin/history/batch-delete", "Bearer " + testAdminToken},
+		{"/api/v1/me/history/batch-delete", "Bearer " + viewerToken},
+	} {
+		resp := performRequestWithAuthHeader(t, h, http.MethodPost, tc.path, body, tc.token)
+		assertAPIError(t, resp, http.StatusServiceUnavailable, "history_not_configured")
+	}
+}

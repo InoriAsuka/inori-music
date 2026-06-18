@@ -56,6 +56,32 @@ func (r *MemoryRepository) DeletePlayEventByID(_ context.Context, id string) err
 	return nil
 }
 
+func (r *MemoryRepository) DeletePlayEventsByIDs(_ context.Context, ids []string) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	deleted := 0
+	for _, id := range ids {
+		if _, ok := r.events[id]; ok {
+			delete(r.events, id)
+			deleted++
+		}
+	}
+	return deleted, nil
+}
+
+func (r *MemoryRepository) DeletePlayEventsByIDsForUser(_ context.Context, userID string, ids []string) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	deleted := 0
+	for _, id := range ids {
+		if e, ok := r.events[id]; ok && e.UserID == userID {
+			delete(r.events, id)
+			deleted++
+		}
+	}
+	return deleted, nil
+}
+
 func (r *MemoryRepository) ListPlayEvents(_ context.Context, f PlayEventFilter) ([]PlayEvent, int, error) {
 	r.mu.RLock()
 	var all []PlayEvent

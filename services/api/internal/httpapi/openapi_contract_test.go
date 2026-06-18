@@ -74,6 +74,7 @@ func TestStorageAdminOpenAPIContractCoversRoutes(t *testing.T) {
 		"/api/v1/me/history/stats":                               {"get"},
 		"/api/v1/me/history/top-tracks":                         {"get"},
 		"/api/v1/me/history/{eventId}":                          {"get", "patch", "delete"},
+		"/api/v1/me/history/batch-delete":                       {"post"},
 		"/api/v1/admin/catalog/stats":                           {"get"},
 		"/api/v1/admin/catalog/stats/artists":                   {"get"},
 		"/api/v1/admin/catalog/stats/albums":                    {"get"},
@@ -87,6 +88,7 @@ func TestStorageAdminOpenAPIContractCoversRoutes(t *testing.T) {
 		"/api/v1/admin/history/tracks/{trackId}":                {"get", "delete"},
 		"/api/v1/admin/history/{eventId}":                       {"get", "patch", "delete"},
 		"/api/v1/admin/history":                                 {"get", "delete"},
+		"/api/v1/admin/history/batch-delete":                    {"post"},
 	}
 
 	for path, methods := range expected {
@@ -786,5 +788,55 @@ func TestStorageAdminOpenAPIContractPerEventPaths(t *testing.T) {
 		if !containsString(codes2, want) {
 			t.Errorf("error code enum is missing %q", want)
 		}
+	}
+}
+
+func TestStorageAdminOpenAPIContractBatchDelete(t *testing.T) {
+	document := loadOpenAPIContract(t)
+	paths := document["paths"].(map[string]any)
+	components := document["components"].(map[string]any)
+	schemas := components["schemas"].(map[string]any)
+
+	for _, p := range []string{
+		"/api/v1/admin/history/batch-delete",
+		"/api/v1/me/history/batch-delete",
+	} {
+		post := operation(t, paths, p, "post")
+
+		rb, _ := post["requestBody"].(map[string]any)
+		rbContent, _ := rb["content"].(map[string]any)
+		rbSchema, _ := rbContent["application/json"].(map[string]any)["schema"].(map[string]any)
+		if rbSchema["$ref"] != "#/components/schemas/BatchDeleteRequest" {
+			t.Errorf("POST %s requestBody schema = %v, want BatchDeleteRequest ref", p, rbSchema)
+		}
+
+		resp200 := post["responses"].(map[string]any)["200"].(map[string]any)
+		content := resp200["content"].(map[string]any)["application/json"].(map[string]any)
+		schema := content["schema"].(map[string]any)
+		if schema["$ref"] != "#/components/schemas/BatchDeleteResult" {
+			t.Errorf("POST %s 200 schema = %v, want BatchDeleteResult ref", p, schema)
+		}
+	}
+
+	bdr, ok := schemas["BatchDeleteRequest"].(map[string]any)
+	if !ok {
+		t.Fatal("schema BatchDeleteRequest is missing")
+	}
+	if _, ok := bdr["properties"].(map[string]any)["ids"]; !ok {
+		t.Error("BatchDeleteRequest missing property \"ids\"")
+	}
+
+	bdrResult, ok := schemas["BatchDeleteResult"].(map[string]any)
+	if !ok {
+		t.Fatal("schema BatchDeleteResult is missing")
+	}
+	if _, ok := bdrResult["properties"].(map[string]any)["deleted"]; !ok {
+		t.Error("BatchDeleteResult missing property \"deleted\"")
+	}
+
+	env := schemas["ErrorEnvelope"].(map[string]any)
+	codes, _ := env["properties"].(map[string]any)["error"].(map[string]any)["properties"].(map[string]any)["code"].(map[string]any)["enum"].([]any)
+	if !containsString(codes, "invalid_ids") {
+		t.Error("error code enum is missing 'invalid_ids'")
 	}
 }

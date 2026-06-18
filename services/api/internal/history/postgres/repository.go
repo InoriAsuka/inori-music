@@ -74,6 +74,28 @@ func (r *Repository) DeletePlayEventByID(ctx context.Context, id string) error {
 	return nil
 }
 
+func (r *Repository) DeletePlayEventsByIDs(ctx context.Context, ids []string) (int, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	tag, err := r.pool.Exec(ctx, `DELETE FROM play_events WHERE id = ANY($1)`, ids)
+	if err != nil {
+		return 0, err
+	}
+	return int(tag.RowsAffected()), nil
+}
+
+func (r *Repository) DeletePlayEventsByIDsForUser(ctx context.Context, userID string, ids []string) (int, error) {
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	tag, err := r.pool.Exec(ctx, `DELETE FROM play_events WHERE id = ANY($1) AND user_id = $2`, ids, userID)
+	if err != nil {
+		return 0, err
+	}
+	return int(tag.RowsAffected()), nil
+}
+
 func (r *Repository) ListPlayEvents(ctx context.Context, f history.PlayEventFilter) ([]history.PlayEvent, int, error) {
 	if f.UserID == "" {
 		return nil, 0, fmt.Errorf("userID is required")

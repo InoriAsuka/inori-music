@@ -68,6 +68,36 @@ func (s *Service) ClearHistory(ctx context.Context, userID string) error {
 	return s.repo.DeletePlayEventsByUser(ctx, userID)
 }
 
+const MaxBatchDeleteIDs = 100
+
+// BatchDeleteEvents deletes a set of play events by ID; intended for admin use.
+// Returns the count of actually deleted events. Duplicate or unknown IDs are silently ignored.
+// Returns an error if ids is empty or exceeds MaxBatchDeleteIDs.
+func (s *Service) BatchDeleteEvents(ctx context.Context, ids []string) (int, error) {
+	if len(ids) == 0 {
+		return 0, fmt.Errorf("at least one id is required")
+	}
+	if len(ids) > MaxBatchDeleteIDs {
+		return 0, fmt.Errorf("batch size must not exceed %d", MaxBatchDeleteIDs)
+	}
+	return s.repo.DeletePlayEventsByIDs(ctx, ids)
+}
+
+// BatchDeleteMyEvents deletes own play events by ID; intended for viewer use.
+// Events not owned by userID are silently skipped. Returns deleted count.
+func (s *Service) BatchDeleteMyEvents(ctx context.Context, userID string, ids []string) (int, error) {
+	if userID == "" {
+		return 0, fmt.Errorf("userID is required")
+	}
+	if len(ids) == 0 {
+		return 0, fmt.Errorf("at least one id is required")
+	}
+	if len(ids) > MaxBatchDeleteIDs {
+		return 0, fmt.Errorf("batch size must not exceed %d", MaxBatchDeleteIDs)
+	}
+	return s.repo.DeletePlayEventsByIDsForUser(ctx, userID, ids)
+}
+
 // GetEventByID returns any play event by ID; intended for admin use.
 func (s *Service) GetEventByID(ctx context.Context, id string) (PlayEvent, error) {
 	if id == "" {
