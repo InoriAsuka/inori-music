@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -35,6 +36,23 @@ func (r *Repository) GetPlayEventByID(ctx context.Context, id string) (history.P
 		SELECT id, user_id, track_id, played_at, created_at
 		FROM play_events
 		WHERE id = $1`, id)
+	var e history.PlayEvent
+	if err := row.Scan(&e.ID, &e.UserID, &e.TrackID, &e.PlayedAt, &e.CreatedAt); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return history.PlayEvent{}, history.ErrEventNotFound
+		}
+		return history.PlayEvent{}, err
+	}
+	return e, nil
+}
+
+func (r *Repository) UpdatePlayEventByID(ctx context.Context, id string, playedAt time.Time) (history.PlayEvent, error) {
+	row := r.pool.QueryRow(ctx, `
+		UPDATE play_events
+		SET played_at = $2
+		WHERE id = $1
+		RETURNING id, user_id, track_id, played_at, created_at`,
+		id, playedAt.UTC())
 	var e history.PlayEvent
 	if err := row.Scan(&e.ID, &e.UserID, &e.TrackID, &e.PlayedAt, &e.CreatedAt); err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

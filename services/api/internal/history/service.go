@@ -84,6 +84,17 @@ func (s *Service) DeleteEventByID(ctx context.Context, id string) error {
 	return s.repo.DeletePlayEventByID(ctx, id)
 }
 
+// UpdateEventByID updates the playedAt timestamp of any play event; intended for admin use.
+func (s *Service) UpdateEventByID(ctx context.Context, id string, playedAt time.Time) (PlayEvent, error) {
+	if id == "" {
+		return PlayEvent{}, fmt.Errorf("eventID is required")
+	}
+	if playedAt.IsZero() {
+		return PlayEvent{}, fmt.Errorf("playedAt is required")
+	}
+	return s.repo.UpdatePlayEventByID(ctx, id, playedAt)
+}
+
 // GetMyEvent returns a play event by ID only if it belongs to userID; for viewer use.
 func (s *Service) GetMyEvent(ctx context.Context, userID, id string) (PlayEvent, error) {
 	if id == "" {
@@ -112,6 +123,24 @@ func (s *Service) DeleteMyEvent(ctx context.Context, userID, id string) error {
 		return ErrEventForbidden
 	}
 	return s.repo.DeletePlayEventByID(ctx, id)
+}
+
+// UpdateMyEvent updates the playedAt timestamp of a play event owned by userID; for viewer use.
+func (s *Service) UpdateMyEvent(ctx context.Context, userID, id string, playedAt time.Time) (PlayEvent, error) {
+	if id == "" {
+		return PlayEvent{}, fmt.Errorf("eventID is required")
+	}
+	if playedAt.IsZero() {
+		return PlayEvent{}, fmt.Errorf("playedAt is required")
+	}
+	e, err := s.repo.GetPlayEventByID(ctx, id)
+	if err != nil {
+		return PlayEvent{}, err
+	}
+	if e.UserID != userID {
+		return PlayEvent{}, ErrEventForbidden
+	}
+	return s.repo.UpdatePlayEventByID(ctx, id, playedAt)
 }
 
 // GetUserHistory returns paginated play events for any user; intended for admin use.

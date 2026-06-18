@@ -384,7 +384,8 @@
                   "invalid_time_range",
                   "missing_time_filter",
                   "invalid_order",
-                  "event_forbidden"
+                  "event_forbidden",
+                  "invalid_played_at"
                 ],
                 "type": "string"
               },
@@ -2173,6 +2174,19 @@
             "description": "Number of distinct tracks played by this user."
           }
         }
+      },
+      "UpdatePlayEventRequest": {
+        "type": "object",
+        "required": [
+          "playedAt"
+        ],
+        "properties": {
+          "playedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "New client-reported play timestamp (RFC3339)."
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -2186,7 +2200,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "0.77.0"
+    "version": "0.78.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -8892,6 +8906,92 @@
             }
           }
         }
+      },
+      "patch": {
+        "summary": "Update a play event's playedAt timestamp (admin)",
+        "tags": [
+          "admin",
+          "history"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "eventId",
+            "in": "path",
+            "required": true,
+            "description": "The play event ID.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Fields to update on the play event.",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePlayEventRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated play event.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayEvent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body or playedAt format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "History not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/me/history/{eventId}": {
@@ -8993,6 +9093,101 @@
         "responses": {
           "204": {
             "description": "Play event deleted."
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Event belongs to another user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "History not configured",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update a play event's playedAt timestamp (viewer, own events only)",
+        "tags": [
+          "history"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "eventId",
+            "in": "path",
+            "required": true,
+            "description": "The play event ID.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Fields to update on the play event.",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePlayEventRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated play event.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayEvent"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request body or playedAt format",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
           },
           "401": {
             "description": "Unauthorized",

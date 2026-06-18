@@ -5579,3 +5579,119 @@ func TestPerEventHistoryNotConfigured(t *testing.T) {
 		assertAPIError(t, resp, http.StatusServiceUnavailable, "history_not_configured")
 	}
 }
+
+func TestAdminPatchEvent(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"PatchBand"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"PT1","artistId":%q,"mediaObjectId":"mo-pa-1"}`, artistID), "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	playResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q}`, trackID), "Bearer "+viewerToken)
+	var evt map[string]any
+	decodeResponse(t, playResp, &evt)
+	eventID := evt["id"].(string)
+
+	newTime := "2020-01-01T12:00:00Z"
+	resp := performRequestWithAuthHeader(t, h, http.MethodPatch, "/api/v1/admin/history/"+eventID,
+		fmt.Sprintf(`{"playedAt":%q}`, newTime), "Bearer "+adminToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("admin PATCH event: %d %s", resp.Code, resp.Body.String())
+	}
+	var updated map[string]any
+	decodeResponse(t, resp, &updated)
+	if updated["playedAt"].(string) != newTime {
+		t.Errorf("playedAt = %q, want %q", updated["playedAt"], newTime)
+	}
+}
+
+func TestAdminPatchEventNotFound(t *testing.T) {
+	h, _, adminToken := newHistoryTestHandler(t)
+	resp := performRequestWithAuthHeader(t, h, http.MethodPatch, "/api/v1/admin/history/no-such",
+		`{"playedAt":"2020-01-01T00:00:00Z"}`, "Bearer "+adminToken)
+	assertAPIError(t, resp, http.StatusNotFound, "not_found")
+}
+
+func TestAdminPatchEventInvalidPlayedAt(t *testing.T) {
+	h, _, adminToken := newHistoryTestHandler(t)
+	resp := performRequestWithAuthHeader(t, h, http.MethodPatch, "/api/v1/admin/history/some-id",
+		`{"playedAt":"not-a-date"}`, "Bearer "+adminToken)
+	assertAPIError(t, resp, http.StatusBadRequest, "invalid_played_at")
+}
+
+func TestViewerPatchEvent(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"VPatchBand"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"VP1","artistId":%q,"mediaObjectId":"mo-vpa-1"}`, artistID), "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	playResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q}`, trackID), "Bearer "+viewerToken)
+	var evt map[string]any
+	decodeResponse(t, playResp, &evt)
+	eventID := evt["id"].(string)
+
+	newTime := "2021-06-15T09:30:00Z"
+	resp := performRequestWithAuthHeader(t, h, http.MethodPatch, "/api/v1/me/history/"+eventID,
+		fmt.Sprintf(`{"playedAt":%q}`, newTime), "Bearer "+viewerToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("viewer PATCH event: %d %s", resp.Code, resp.Body.String())
+	}
+	var updated map[string]any
+	decodeResponse(t, resp, &updated)
+	if updated["playedAt"].(string) != newTime {
+		t.Errorf("playedAt = %q, want %q", updated["playedAt"], newTime)
+	}
+}
+
+func TestViewerPatchEventInvalidPlayedAt(t *testing.T) {
+	h, viewerToken, _ := newHistoryTestHandler(t)
+	resp := performRequestWithAuthHeader(t, h, http.MethodPatch, "/api/v1/me/history/some-id",
+		`{"playedAt":"bad"}`, "Bearer "+viewerToken)
+	assertAPIError(t, resp, http.StatusBadRequest, "invalid_played_at")
+}
+
+func TestViewerPatchEventMissingPlayedAt(t *testing.T) {
+	h, viewerToken, _ := newHistoryTestHandler(t)
+	resp := performRequestWithAuthHeader(t, h, http.MethodPatch, "/api/v1/me/history/some-id",
+		`{}`, "Bearer "+viewerToken)
+	assertAPIError(t, resp, http.StatusBadRequest, "invalid_played_at")
+}
+
+func TestPatchEventHistoryNotConfigured(t *testing.T) {
+	authSvc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAuthService(authSvc),
+		WithAdminToken(testAdminToken),
+	).Routes()
+	if _, err := authSvc.CreateUser(context.Background(), "alice", "viewerpass1", auth.RoleViewer); err != nil {
+		t.Fatalf("create viewer: %v", err)
+	}
+	viewerToken, _, _ := authSvc.Login(context.Background(), "alice", "viewerpass1")
+
+	body := `{"playedAt":"2020-01-01T00:00:00Z"}`
+	for _, tc := range []struct{ path, token string }{
+		{"/api/v1/admin/history/some-id", "Bearer " + testAdminToken},
+		{"/api/v1/me/history/some-id", "Bearer " + viewerToken},
+	} {
+		resp := performRequestWithAuthHeader(t, h, http.MethodPatch, tc.path, body, tc.token)
+		assertAPIError(t, resp, http.StatusServiceUnavailable, "history_not_configured")
+	}
+}

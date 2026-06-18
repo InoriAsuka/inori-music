@@ -73,6 +73,7 @@ type Repository interface {
 
 	// Per-event operations — used by both admin and viewer single-event endpoints.
 	GetPlayEventByID(ctx context.Context, id string) (PlayEvent, error)
+	UpdatePlayEventByID(ctx context.Context, id string, playedAt time.Time) (PlayEvent, error)
 	DeletePlayEventByID(ctx context.Context, id string) error
 
 	// Admin detail queries — not scoped to the requesting user.

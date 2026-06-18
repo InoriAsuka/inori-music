@@ -756,3 +756,51 @@ func TestDeleteMyEvent(t *testing.T) {
 		t.Errorf("expected ErrEventNotFound after delete, got %v", err)
 	}
 }
+
+func TestUpdateEventByID(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+
+	e, _ := svc.RecordPlay(ctx, "u1", "t1", time.Now().UTC())
+	newTime := time.Date(2020, 6, 1, 10, 0, 0, 0, time.UTC)
+
+	got, err := svc.UpdateEventByID(ctx, e.ID, newTime)
+	if err != nil {
+		t.Fatalf("UpdateEventByID: %v", err)
+	}
+	if !got.PlayedAt.Equal(newTime) {
+		t.Errorf("playedAt = %v, want %v", got.PlayedAt, newTime)
+	}
+	if got.ID != e.ID {
+		t.Errorf("id = %q, want %q", got.ID, e.ID)
+	}
+}
+
+func TestUpdateEventByIDNotFound(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	newTime := time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
+	if _, err := svc.UpdateEventByID(context.Background(), "no-such", newTime); !errors.Is(err, history.ErrEventNotFound) {
+		t.Errorf("want ErrEventNotFound, got %v", err)
+	}
+}
+
+func TestUpdateMyEvent(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+
+	e, _ := svc.RecordPlay(ctx, "u1", "t1", time.Now().UTC())
+	newTime := time.Date(2021, 3, 15, 8, 0, 0, 0, time.UTC)
+
+	got, err := svc.UpdateMyEvent(ctx, "u1", e.ID, newTime)
+	if err != nil {
+		t.Fatalf("UpdateMyEvent: %v", err)
+	}
+	if !got.PlayedAt.Equal(newTime) {
+		t.Errorf("playedAt = %v, want %v", got.PlayedAt, newTime)
+	}
+
+	// wrong owner → forbidden
+	if _, err := svc.UpdateMyEvent(ctx, "u2", e.ID, newTime); !errors.Is(err, history.ErrEventForbidden) {
+		t.Errorf("want ErrEventForbidden, got %v", err)
+	}
+}

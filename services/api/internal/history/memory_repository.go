@@ -4,6 +4,7 @@ import (
 	"context"
 	"sort"
 	"sync"
+	"time"
 )
 
 // MemoryRepository is a thread-safe in-memory history repository for tests and development.
@@ -30,6 +31,18 @@ func (r *MemoryRepository) GetPlayEventByID(_ context.Context, id string) (PlayE
 	if !ok {
 		return PlayEvent{}, ErrEventNotFound
 	}
+	return e, nil
+}
+
+func (r *MemoryRepository) UpdatePlayEventByID(_ context.Context, id string, playedAt time.Time) (PlayEvent, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	e, ok := r.events[id]
+	if !ok {
+		return PlayEvent{}, ErrEventNotFound
+	}
+	e.PlayedAt = playedAt.UTC()
+	r.events[id] = e
 	return e, nil
 }
 

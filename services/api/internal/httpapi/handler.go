@@ -363,6 +363,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/me/history/stats", handler.requireViewerAuth(handler.getMyHistoryStats))
 	mux.HandleFunc("GET /api/v1/me/history/top-tracks", handler.requireViewerAuth(handler.getMyTopTracks))
 	mux.HandleFunc("GET /api/v1/me/history/{eventId}", handler.requireViewerAuth(handler.getMyEvent))
+	mux.HandleFunc("PATCH /api/v1/me/history/{eventId}", handler.requireViewerAuth(handler.patchMyEvent))
 	mux.HandleFunc("DELETE /api/v1/me/history/{eventId}", handler.requireViewerAuth(handler.deleteMyEvent))
 	mux.HandleFunc("/api/v1/me/history/{eventId}", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/me/history", handler.requireViewerAuth(handler.methodNotAllowed))
@@ -377,6 +378,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("/api/v1/admin/history/users/{userId}", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/history/tracks/{trackId}", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("GET /api/v1/admin/history/{eventId}", handler.requireAdminAuth(handler.getAdminEvent))
+	mux.HandleFunc("PATCH /api/v1/admin/history/{eventId}", handler.requireAdminAuth(handler.patchAdminEvent))
 	mux.HandleFunc("DELETE /api/v1/admin/history/{eventId}", handler.requireAdminAuth(handler.deleteAdminEvent))
 	mux.HandleFunc("GET /api/v1/admin/history", handler.requireAdminAuth(handler.getAdminAllHistory))
 	mux.HandleFunc("/api/v1/admin/history/{eventId}", handler.requireAdminAuth(handler.methodNotAllowed))
@@ -2339,6 +2341,77 @@ func (handler *Handler) deleteMyEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (handler *Handler) patchAdminEvent(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireHistoryService(w) {
+		return
+	}
+	eventID := r.PathValue("eventId")
+	if eventID == "" {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", "eventId is required")
+		return
+	}
+	var body struct {
+		PlayedAt string `json:"playedAt"`
+	}
+	if err := decodeJSON(w, r, &body); err != nil {
+		writeError(w, err)
+		return
+	}
+	if body.PlayedAt == "" {
+		writeAPIError(w, http.StatusBadRequest, "invalid_played_at", "playedAt is required")
+		return
+	}
+	t, err := time.Parse(time.RFC3339, body.PlayedAt)
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid_played_at", "playedAt must be an RFC3339 timestamp")
+		return
+	}
+	e, err := handler.historyService.UpdateEventByID(r.Context(), eventID, t)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, e)
+}
+
+func (handler *Handler) patchMyEvent(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireHistoryService(w) {
+		return
+	}
+	user, ok := userFromContext(r)
+	if !ok {
+		writeAPIError(w, http.StatusUnauthorized, "unauthorized", "valid bearer token is required")
+		return
+	}
+	eventID := r.PathValue("eventId")
+	if eventID == "" {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", "eventId is required")
+		return
+	}
+	var body struct {
+		PlayedAt string `json:"playedAt"`
+	}
+	if err := decodeJSON(w, r, &body); err != nil {
+		writeError(w, err)
+		return
+	}
+	if body.PlayedAt == "" {
+		writeAPIError(w, http.StatusBadRequest, "invalid_played_at", "playedAt is required")
+		return
+	}
+	t, err := time.Parse(time.RFC3339, body.PlayedAt)
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid_played_at", "playedAt must be an RFC3339 timestamp")
+		return
+	}
+	e, err := handler.historyService.UpdateMyEvent(r.Context(), user.ID, eventID, t)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, e)
 }
 
 func (handler *Handler) getRecentlyAdded(w http.ResponseWriter, r *http.Request) {

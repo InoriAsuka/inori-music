@@ -73,7 +73,7 @@ func TestStorageAdminOpenAPIContractCoversRoutes(t *testing.T) {
 		"/api/v1/me/history":                                     {"get", "post", "delete"},
 		"/api/v1/me/history/stats":                               {"get"},
 		"/api/v1/me/history/top-tracks":                         {"get"},
-		"/api/v1/me/history/{eventId}":                          {"get", "delete"},
+		"/api/v1/me/history/{eventId}":                          {"get", "patch", "delete"},
 		"/api/v1/admin/catalog/stats":                           {"get"},
 		"/api/v1/admin/catalog/stats/artists":                   {"get"},
 		"/api/v1/admin/catalog/stats/albums":                    {"get"},
@@ -85,7 +85,7 @@ func TestStorageAdminOpenAPIContractCoversRoutes(t *testing.T) {
 		"/api/v1/admin/history/top-users":                       {"get"},
 		"/api/v1/admin/history/users/{userId}":                  {"get", "delete"},
 		"/api/v1/admin/history/tracks/{trackId}":                {"get", "delete"},
-		"/api/v1/admin/history/{eventId}":                       {"get", "delete"},
+		"/api/v1/admin/history/{eventId}":                       {"get", "patch", "delete"},
 		"/api/v1/admin/history":                                 {"get", "delete"},
 	}
 
@@ -734,7 +734,7 @@ func TestStorageAdminOpenAPIContractPerEventPaths(t *testing.T) {
 		if !ok {
 			t.Fatalf("path %q is missing", p)
 		}
-		for _, method := range []string{"get", "delete"} {
+		for _, method := range []string{"get", "patch", "delete"} {
 			if _, ok := pathItem[method].(map[string]any); !ok {
 				t.Errorf("%s %s is missing", method, p)
 			}
@@ -746,6 +746,14 @@ func TestStorageAdminOpenAPIContractPerEventPaths(t *testing.T) {
 		schema := content["schema"].(map[string]any)
 		if schema["$ref"] != "#/components/schemas/PlayEvent" {
 			t.Errorf("GET %s 200 schema = %v, want PlayEvent ref", p, schema)
+		}
+		// PATCH must have a requestBody referencing UpdatePlayEventRequest
+		patch := pathItem["patch"].(map[string]any)
+		rb, _ := patch["requestBody"].(map[string]any)
+		rbContent, _ := rb["content"].(map[string]any)
+		rbSchema, _ := rbContent["application/json"].(map[string]any)["schema"].(map[string]any)
+		if rbSchema["$ref"] != "#/components/schemas/UpdatePlayEventRequest" {
+			t.Errorf("PATCH %s requestBody schema = %v, want UpdatePlayEventRequest ref", p, rbSchema)
 		}
 	}
 
@@ -761,10 +769,22 @@ func TestStorageAdminOpenAPIContractPerEventPaths(t *testing.T) {
 		}
 	}
 
-	// event_forbidden must be in error code enum
+	// UpdatePlayEventRequest schema must exist with playedAt
+	upr, ok := schemas["UpdatePlayEventRequest"].(map[string]any)
+	if !ok {
+		t.Fatal("schema UpdatePlayEventRequest is missing")
+	}
+	uprProps, _ := upr["properties"].(map[string]any)
+	if _, ok := uprProps["playedAt"]; !ok {
+		t.Error("UpdatePlayEventRequest missing property \"playedAt\"")
+	}
+
+	// event_forbidden and invalid_played_at must be in error code enum
 	env2 := schemas["ErrorEnvelope"].(map[string]any)
 	codes2, _ := env2["properties"].(map[string]any)["error"].(map[string]any)["properties"].(map[string]any)["code"].(map[string]any)["enum"].([]any)
-	if !containsString(codes2, "event_forbidden") {
-		t.Error("error code enum is missing 'event_forbidden'")
+	for _, want := range []string{"event_forbidden", "invalid_played_at"} {
+		if !containsString(codes2, want) {
+			t.Errorf("error code enum is missing %q", want)
+		}
 	}
 }

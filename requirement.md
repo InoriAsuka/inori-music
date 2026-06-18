@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.77.0`
+`0.78.0`
 
 ## Product Goal
 
@@ -712,4 +712,19 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add 7 HTTP-layer tests (`TestAdminGetEvent`, `TestAdminGetEventNotFound`, `TestAdminDeleteEvent`, `TestViewerGetEvent`, `TestViewerGetEventNotOwned`, `TestViewerDeleteEvent`, `TestPerEventHistoryNotConfigured`).
 - Add `GET`/`DELETE` operations to `/api/v1/admin/history/{eventId}` and `/api/v1/me/history/{eventId}` in OpenAPI; add `event_forbidden` to error code enum; `PlayEvent` schema ref as 200 response; bump `info.version` to `0.77.0`.
 - Extend `TestStorageAdminOpenAPIContractCoversRoutes` with both new paths; add `TestStorageAdminOpenAPIContractPerEventPaths`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.78.0 - 2026-06-19
+
+- Add `UpdatePlayEventByID(ctx, id, playedAt)` to the `Repository` interface.
+- Implement on `history.MemoryRepository` (lock + map update; `ErrEventNotFound` on miss) and `historypg.Repository` (`UPDATE … SET played_at = $2 … RETURNING …`; `ErrEventNotFound` on `ErrNoRows`).
+- Add `UpdateEventByID(ctx, id, playedAt)` to `history.Service` (admin; validates non-zero `playedAt`).
+- Add `UpdateMyEvent(ctx, userID, id, playedAt)` to `history.Service` (viewer; ownership-checked; returns `ErrEventForbidden` for non-owners).
+- Add admin route `PATCH /api/v1/admin/history/{eventId}` → `patchAdminEvent`; decodes `{"playedAt": "<RFC3339>"}` request body; returns `400 invalid_played_at` for missing or unparseable timestamp.
+- Add viewer route `PATCH /api/v1/me/history/{eventId}` → `patchMyEvent`; same validation; returns `403 event_forbidden` for non-owners.
+- Add `UpdatePlayEventRequest` schema (`{playedAt: string/date-time}`) to OpenAPI components.
+- Add `patch` operation to `/api/v1/admin/history/{eventId}` and `/api/v1/me/history/{eventId}` in OpenAPI contract; 200 response refs `PlayEvent`; `requestBody` refs `UpdatePlayEventRequest`; add `invalid_played_at` to error code enum; bump `info.version` to `0.78.0`.
+- Add 3 `history.Service` unit tests (`TestUpdateEventByID`, `TestUpdateEventByIDNotFound`, `TestUpdateMyEvent`).
+- Add 7 HTTP-layer tests (`TestAdminPatchEvent`, `TestAdminPatchEventNotFound`, `TestAdminPatchEventInvalidPlayedAt`, `TestViewerPatchEvent`, `TestViewerPatchEventInvalidPlayedAt`, `TestViewerPatchEventMissingPlayedAt`, `TestPatchEventHistoryNotConfigured`).
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `patch` on both paths; extend `TestStorageAdminOpenAPIContractPerEventPaths` to assert `UpdatePlayEventRequest` requestBody ref and `invalid_played_at` error code.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
