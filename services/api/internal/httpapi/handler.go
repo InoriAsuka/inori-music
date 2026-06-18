@@ -362,23 +362,24 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/me/history", handler.requireViewerAuth(handler.clearHistory))
 	mux.HandleFunc("GET /api/v1/me/history/stats", handler.requireViewerAuth(handler.getMyHistoryStats))
 	mux.HandleFunc("GET /api/v1/me/history/top-tracks", handler.requireViewerAuth(handler.getMyTopTracks))
-	mux.HandleFunc("/api/v1/me/history/stats", handler.requireViewerAuth(handler.methodNotAllowed))
-	mux.HandleFunc("/api/v1/me/history/top-tracks", handler.requireViewerAuth(handler.methodNotAllowed))
+	mux.HandleFunc("GET /api/v1/me/history/{eventId}", handler.requireViewerAuth(handler.getMyEvent))
+	mux.HandleFunc("DELETE /api/v1/me/history/{eventId}", handler.requireViewerAuth(handler.deleteMyEvent))
+	mux.HandleFunc("/api/v1/me/history/{eventId}", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/me/history", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("GET /api/v1/admin/history/stats", handler.requireAdminAuth(handler.getAdminHistoryStats))
 	mux.HandleFunc("GET /api/v1/admin/history/top-tracks", handler.requireAdminAuth(handler.getAdminTopTracks))
 	mux.HandleFunc("GET /api/v1/admin/history/top-users", handler.requireAdminAuth(handler.getAdminTopUsers))
 	mux.HandleFunc("GET /api/v1/admin/history/users/{userId}", handler.requireAdminAuth(handler.getAdminUserHistory))
 	mux.HandleFunc("GET /api/v1/admin/history/tracks/{trackId}", handler.requireAdminAuth(handler.getAdminTrackHistory))
-	mux.HandleFunc("GET /api/v1/admin/history", handler.requireAdminAuth(handler.getAdminAllHistory))
 	mux.HandleFunc("DELETE /api/v1/admin/history/users/{userId}", handler.requireAdminAuth(handler.deleteAdminUserHistory))
 	mux.HandleFunc("DELETE /api/v1/admin/history/tracks/{trackId}", handler.requireAdminAuth(handler.deleteAdminTrackHistory))
 	mux.HandleFunc("DELETE /api/v1/admin/history", handler.requireAdminAuth(handler.deleteAdminHistoryWindow))
-	mux.HandleFunc("/api/v1/admin/history/stats", handler.requireAdminAuth(handler.methodNotAllowed))
-	mux.HandleFunc("/api/v1/admin/history/top-tracks", handler.requireAdminAuth(handler.methodNotAllowed))
-	mux.HandleFunc("/api/v1/admin/history/top-users", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/history/users/{userId}", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/history/tracks/{trackId}", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("GET /api/v1/admin/history/{eventId}", handler.requireAdminAuth(handler.getAdminEvent))
+	mux.HandleFunc("DELETE /api/v1/admin/history/{eventId}", handler.requireAdminAuth(handler.deleteAdminEvent))
+	mux.HandleFunc("GET /api/v1/admin/history", handler.requireAdminAuth(handler.getAdminAllHistory))
+	mux.HandleFunc("/api/v1/admin/history/{eventId}", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/history", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("GET /api/v1/admin/storage/backends", handler.requireAdminAuth(handler.listStorageBackends))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends", handler.requireAdminAuth(handler.registerStorageBackend))
@@ -2264,6 +2265,82 @@ func (handler *Handler) getAdminAllHistory(w http.ResponseWriter, r *http.Reques
 	})
 }
 
+func (handler *Handler) getAdminEvent(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireHistoryService(w) {
+		return
+	}
+	eventID := r.PathValue("eventId")
+	if eventID == "" {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", "eventId is required")
+		return
+	}
+	e, err := handler.historyService.GetEventByID(r.Context(), eventID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, e)
+}
+
+func (handler *Handler) deleteAdminEvent(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireHistoryService(w) {
+		return
+	}
+	eventID := r.PathValue("eventId")
+	if eventID == "" {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", "eventId is required")
+		return
+	}
+	if err := handler.historyService.DeleteEventByID(r.Context(), eventID); err != nil {
+		writeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (handler *Handler) getMyEvent(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireHistoryService(w) {
+		return
+	}
+	user, ok := userFromContext(r)
+	if !ok {
+		writeAPIError(w, http.StatusUnauthorized, "unauthorized", "valid bearer token is required")
+		return
+	}
+	eventID := r.PathValue("eventId")
+	if eventID == "" {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", "eventId is required")
+		return
+	}
+	e, err := handler.historyService.GetMyEvent(r.Context(), user.ID, eventID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, e)
+}
+
+func (handler *Handler) deleteMyEvent(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireHistoryService(w) {
+		return
+	}
+	user, ok := userFromContext(r)
+	if !ok {
+		writeAPIError(w, http.StatusUnauthorized, "unauthorized", "valid bearer token is required")
+		return
+	}
+	eventID := r.PathValue("eventId")
+	if eventID == "" {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", "eventId is required")
+		return
+	}
+	if err := handler.historyService.DeleteMyEvent(r.Context(), user.ID, eventID); err != nil {
+		writeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (handler *Handler) getRecentlyAdded(w http.ResponseWriter, r *http.Request) {
 	if !handler.requireCatalogService(w) {
 		return
@@ -2785,6 +2862,12 @@ func writeError(w http.ResponseWriter, err error) {
 	case errors.Is(err, storage.ErrCapacityUnsupported):
 		status = http.StatusUnprocessableEntity
 		code = "capacity_unsupported"
+	case errors.Is(err, history.ErrEventNotFound):
+		status = http.StatusNotFound
+		code = "not_found"
+	case errors.Is(err, history.ErrEventForbidden):
+		status = http.StatusForbidden
+		code = "event_forbidden"
 	}
 	writeAPIError(w, status, code, strings.TrimSpace(err.Error()))
 }

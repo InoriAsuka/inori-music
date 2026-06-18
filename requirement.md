@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.76.0`
+`0.77.0`
 
 ## Product Goal
 
@@ -697,4 +697,19 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add 4 HTTP-layer tests (`TestListPlayEventsAscOrder`, `TestListPlayEventsInvalidOrder`, `TestAdminGetAllHistoryAscOrder`, `TestAdminGetAllHistoryInvalidOrder`).
 - Add `order` query param (string enum `["asc","desc"]`, optional, default `"desc"`) to `GET /api/v1/me/history`, `GET /api/v1/admin/history/users/{userId}`, `GET /api/v1/admin/history/tracks/{trackId}`, and `GET /api/v1/admin/history` in OpenAPI contract; add `invalid_order` to error code enum; bump `info.version` to `0.76.0`.
 - Add `TestStorageAdminOpenAPIContractHistoryOrderParam` asserting `order` param on all four paths and `invalid_order` in the error enum.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.77.0 - 2026-06-18
+
+- Add `ErrEventNotFound` and `ErrEventForbidden` sentinel errors to `history/types.go`.
+- Add `GetPlayEventByID(ctx, id)` and `DeletePlayEventByID(ctx, id)` to the `Repository` interface.
+- Implement both on `history.MemoryRepository` (map lookup; `ErrEventNotFound` on miss) and `historypg.Repository` (`SELECT`/`DELETE` by primary key; `ErrEventNotFound` on `ErrNoRows` or zero `RowsAffected`).
+- Add 4 `history.Service` methods: `GetEventByID` (admin), `DeleteEventByID` (admin), `GetMyEvent` (viewer, ownership-checked), `DeleteMyEvent` (viewer, ownership-checked).
+- Add admin routes `GET /api/v1/admin/history/{eventId}` and `DELETE /api/v1/admin/history/{eventId}`.
+- Add viewer routes `GET /api/v1/me/history/{eventId}` and `DELETE /api/v1/me/history/{eventId}`; ownership check returns `403 event_forbidden` when the authenticated user does not own the event.
+- Map `ErrEventNotFound` → `404 not_found` and `ErrEventForbidden` → `403 event_forbidden` in `writeError`.
+- Add 5 `history.Service` unit tests (`TestGetEventByID`, `TestGetEventByIDNotFound`, `TestDeleteEventByID`, `TestGetMyEvent`, `TestDeleteMyEvent`).
+- Add 7 HTTP-layer tests (`TestAdminGetEvent`, `TestAdminGetEventNotFound`, `TestAdminDeleteEvent`, `TestViewerGetEvent`, `TestViewerGetEventNotOwned`, `TestViewerDeleteEvent`, `TestPerEventHistoryNotConfigured`).
+- Add `GET`/`DELETE` operations to `/api/v1/admin/history/{eventId}` and `/api/v1/me/history/{eventId}` in OpenAPI; add `event_forbidden` to error code enum; `PlayEvent` schema ref as 200 response; bump `info.version` to `0.77.0`.
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes` with both new paths; add `TestStorageAdminOpenAPIContractPerEventPaths`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

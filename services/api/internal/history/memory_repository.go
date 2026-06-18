@@ -23,6 +23,26 @@ func (r *MemoryRepository) SavePlayEvent(_ context.Context, e PlayEvent) error {
 	return nil
 }
 
+func (r *MemoryRepository) GetPlayEventByID(_ context.Context, id string) (PlayEvent, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	e, ok := r.events[id]
+	if !ok {
+		return PlayEvent{}, ErrEventNotFound
+	}
+	return e, nil
+}
+
+func (r *MemoryRepository) DeletePlayEventByID(_ context.Context, id string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.events[id]; !ok {
+		return ErrEventNotFound
+	}
+	delete(r.events, id)
+	return nil
+}
+
 func (r *MemoryRepository) ListPlayEvents(_ context.Context, f PlayEventFilter) ([]PlayEvent, int, error) {
 	r.mu.RLock()
 	var all []PlayEvent

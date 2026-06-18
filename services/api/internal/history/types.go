@@ -2,8 +2,15 @@ package history
 
 import (
 	"context"
+	"errors"
 	"time"
 )
+
+// ErrEventNotFound is returned when a play event with the requested ID does not exist.
+var ErrEventNotFound = errors.New("play event not found")
+
+// ErrEventForbidden is returned when a viewer tries to access an event they do not own.
+var ErrEventForbidden = errors.New("play event belongs to another user")
 
 // PlayEvent records one listening event: a user played a track at a point in time.
 type PlayEvent struct {
@@ -63,6 +70,10 @@ type Repository interface {
 	SavePlayEvent(ctx context.Context, e PlayEvent) error
 	ListPlayEvents(ctx context.Context, f PlayEventFilter) ([]PlayEvent, int, error)
 	DeletePlayEventsByUser(ctx context.Context, userID string) error
+
+	// Per-event operations — used by both admin and viewer single-event endpoints.
+	GetPlayEventByID(ctx context.Context, id string) (PlayEvent, error)
+	DeletePlayEventByID(ctx context.Context, id string) error
 
 	// Admin detail queries — not scoped to the requesting user.
 	ListPlayEventsByTrack(ctx context.Context, f AdminPlayEventFilter) ([]PlayEvent, int, error)

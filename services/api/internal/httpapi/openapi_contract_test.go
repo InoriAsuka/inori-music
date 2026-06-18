@@ -73,6 +73,7 @@ func TestStorageAdminOpenAPIContractCoversRoutes(t *testing.T) {
 		"/api/v1/me/history":                                     {"get", "post", "delete"},
 		"/api/v1/me/history/stats":                               {"get"},
 		"/api/v1/me/history/top-tracks":                         {"get"},
+		"/api/v1/me/history/{eventId}":                          {"get", "delete"},
 		"/api/v1/admin/catalog/stats":                           {"get"},
 		"/api/v1/admin/catalog/stats/artists":                   {"get"},
 		"/api/v1/admin/catalog/stats/albums":                    {"get"},
@@ -84,6 +85,7 @@ func TestStorageAdminOpenAPIContractCoversRoutes(t *testing.T) {
 		"/api/v1/admin/history/top-users":                       {"get"},
 		"/api/v1/admin/history/users/{userId}":                  {"get", "delete"},
 		"/api/v1/admin/history/tracks/{trackId}":                {"get", "delete"},
+		"/api/v1/admin/history/{eventId}":                       {"get", "delete"},
 		"/api/v1/admin/history":                                 {"get", "delete"},
 	}
 
@@ -714,5 +716,55 @@ func TestStorageAdminOpenAPIContractHistoryOrderParam(t *testing.T) {
 	codes, _ := env["properties"].(map[string]any)["error"].(map[string]any)["properties"].(map[string]any)["code"].(map[string]any)["enum"].([]any)
 	if !containsString(codes, "invalid_order") {
 		t.Error("error code enum is missing 'invalid_order'")
+	}
+}
+
+func TestStorageAdminOpenAPIContractPerEventPaths(t *testing.T) {
+	document := loadOpenAPIContract(t)
+	paths := document["paths"].(map[string]any)
+	components := document["components"].(map[string]any)
+	schemas := components["schemas"].(map[string]any)
+
+	// Both per-event paths must carry get and delete operations
+	for _, p := range []string{
+		"/api/v1/admin/history/{eventId}",
+		"/api/v1/me/history/{eventId}",
+	} {
+		pathItem, ok := paths[p].(map[string]any)
+		if !ok {
+			t.Fatalf("path %q is missing", p)
+		}
+		for _, method := range []string{"get", "delete"} {
+			if _, ok := pathItem[method].(map[string]any); !ok {
+				t.Errorf("%s %s is missing", method, p)
+			}
+		}
+		// GET must return a PlayEvent
+		get := pathItem["get"].(map[string]any)
+		resp200 := get["responses"].(map[string]any)["200"].(map[string]any)
+		content := resp200["content"].(map[string]any)["application/json"].(map[string]any)
+		schema := content["schema"].(map[string]any)
+		if schema["$ref"] != "#/components/schemas/PlayEvent" {
+			t.Errorf("GET %s 200 schema = %v, want PlayEvent ref", p, schema)
+		}
+	}
+
+	// PlayEvent schema must have required fields
+	pe, ok := schemas["PlayEvent"].(map[string]any)
+	if !ok {
+		t.Fatal("schema PlayEvent is missing")
+	}
+	props, _ := pe["properties"].(map[string]any)
+	for _, want := range []string{"id", "userId", "trackId", "playedAt"} {
+		if _, ok := props[want]; !ok {
+			t.Errorf("PlayEvent missing property %q", want)
+		}
+	}
+
+	// event_forbidden must be in error code enum
+	env2 := schemas["ErrorEnvelope"].(map[string]any)
+	codes2, _ := env2["properties"].(map[string]any)["error"].(map[string]any)["properties"].(map[string]any)["code"].(map[string]any)["enum"].([]any)
+	if !containsString(codes2, "event_forbidden") {
+		t.Error("error code enum is missing 'event_forbidden'")
 	}
 }

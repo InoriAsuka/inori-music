@@ -30,6 +30,32 @@ func (r *Repository) SavePlayEvent(ctx context.Context, e history.PlayEvent) err
 	return err
 }
 
+func (r *Repository) GetPlayEventByID(ctx context.Context, id string) (history.PlayEvent, error) {
+	row := r.pool.QueryRow(ctx, `
+		SELECT id, user_id, track_id, played_at, created_at
+		FROM play_events
+		WHERE id = $1`, id)
+	var e history.PlayEvent
+	if err := row.Scan(&e.ID, &e.UserID, &e.TrackID, &e.PlayedAt, &e.CreatedAt); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return history.PlayEvent{}, history.ErrEventNotFound
+		}
+		return history.PlayEvent{}, err
+	}
+	return e, nil
+}
+
+func (r *Repository) DeletePlayEventByID(ctx context.Context, id string) error {
+	tag, err := r.pool.Exec(ctx, `DELETE FROM play_events WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+	if tag.RowsAffected() == 0 {
+		return history.ErrEventNotFound
+	}
+	return nil
+}
+
 func (r *Repository) ListPlayEvents(ctx context.Context, f history.PlayEventFilter) ([]history.PlayEvent, int, error) {
 	if f.UserID == "" {
 		return nil, 0, fmt.Errorf("userID is required")

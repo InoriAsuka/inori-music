@@ -2,6 +2,7 @@ package history_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -673,5 +674,85 @@ func TestGetAllHistoryAscOrder(t *testing.T) {
 	}
 	if asc[2].TrackID != "t3" {
 		t.Errorf("asc[2] = %q, want t3", asc[2].TrackID)
+	}
+}
+
+func TestGetEventByID(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+
+	e, err := svc.RecordPlay(ctx, "u1", "t1", time.Now().UTC())
+	if err != nil {
+		t.Fatalf("RecordPlay: %v", err)
+	}
+
+	got, err := svc.GetEventByID(ctx, e.ID)
+	if err != nil {
+		t.Fatalf("GetEventByID: %v", err)
+	}
+	if got.ID != e.ID || got.TrackID != "t1" || got.UserID != "u1" {
+		t.Errorf("GetEventByID returned %+v, want id=%s user=u1 track=t1", got, e.ID)
+	}
+}
+
+func TestGetEventByIDNotFound(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	if _, err := svc.GetEventByID(context.Background(), "no-such-id"); !errors.Is(err, history.ErrEventNotFound) {
+		t.Errorf("want ErrEventNotFound, got %v", err)
+	}
+}
+
+func TestDeleteEventByID(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+
+	e, _ := svc.RecordPlay(ctx, "u1", "t1", time.Now().UTC())
+	if err := svc.DeleteEventByID(ctx, e.ID); err != nil {
+		t.Fatalf("DeleteEventByID: %v", err)
+	}
+	// should be gone
+	if _, err := svc.GetEventByID(ctx, e.ID); !errors.Is(err, history.ErrEventNotFound) {
+		t.Errorf("expected ErrEventNotFound after delete, got %v", err)
+	}
+}
+
+func TestGetMyEvent(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+
+	e, _ := svc.RecordPlay(ctx, "u1", "t1", time.Now().UTC())
+
+	// owner can fetch
+	got, err := svc.GetMyEvent(ctx, "u1", e.ID)
+	if err != nil {
+		t.Fatalf("GetMyEvent: %v", err)
+	}
+	if got.ID != e.ID {
+		t.Errorf("GetMyEvent id = %q, want %q", got.ID, e.ID)
+	}
+
+	// different user gets forbidden
+	if _, err := svc.GetMyEvent(ctx, "u2", e.ID); !errors.Is(err, history.ErrEventForbidden) {
+		t.Errorf("want ErrEventForbidden, got %v", err)
+	}
+}
+
+func TestDeleteMyEvent(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+
+	e, _ := svc.RecordPlay(ctx, "u1", "t1", time.Now().UTC())
+
+	// wrong user → forbidden
+	if err := svc.DeleteMyEvent(ctx, "u2", e.ID); !errors.Is(err, history.ErrEventForbidden) {
+		t.Errorf("want ErrEventForbidden, got %v", err)
+	}
+
+	// owner can delete
+	if err := svc.DeleteMyEvent(ctx, "u1", e.ID); err != nil {
+		t.Fatalf("DeleteMyEvent: %v", err)
+	}
+	if _, err := svc.GetEventByID(ctx, e.ID); !errors.Is(err, history.ErrEventNotFound) {
+		t.Errorf("expected ErrEventNotFound after delete, got %v", err)
 	}
 }

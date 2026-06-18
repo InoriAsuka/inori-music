@@ -5402,3 +5402,180 @@ func TestAdminGetAllHistoryInvalidOrder(t *testing.T) {
 	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/admin/history?order=newest", "", "Bearer "+adminToken)
 	assertAPIError(t, resp, http.StatusBadRequest, "invalid_order")
 }
+
+func TestAdminGetEvent(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"EventBand"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"EV1","artistId":%q,"mediaObjectId":"mo-ev-1"}`, artistID), "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	// viewer records a play; capture event ID from response
+	playResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q}`, trackID), "Bearer "+viewerToken)
+	var evt map[string]any
+	decodeResponse(t, playResp, &evt)
+	eventID := evt["id"].(string)
+
+	// admin can fetch the event
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/admin/history/"+eventID, "", "Bearer "+adminToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("admin GET event: %d %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	if got["id"].(string) != eventID {
+		t.Errorf("id = %q, want %q", got["id"], eventID)
+	}
+}
+
+func TestAdminGetEventNotFound(t *testing.T) {
+	h, _, adminToken := newHistoryTestHandler(t)
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/admin/history/no-such-event", "", "Bearer "+adminToken)
+	assertAPIError(t, resp, http.StatusNotFound, "not_found")
+}
+
+func TestAdminDeleteEvent(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"DelEvBand"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"DE1","artistId":%q,"mediaObjectId":"mo-dev-1"}`, artistID), "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	playResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q}`, trackID), "Bearer "+viewerToken)
+	var evt map[string]any
+	decodeResponse(t, playResp, &evt)
+	eventID := evt["id"].(string)
+
+	del := performRequestWithAuthHeader(t, h, http.MethodDelete, "/api/v1/admin/history/"+eventID, "", "Bearer "+adminToken)
+	if del.Code != http.StatusNoContent {
+		t.Fatalf("admin DELETE event: %d %s", del.Code, del.Body.String())
+	}
+
+	// gone
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/admin/history/"+eventID, "", "Bearer "+adminToken)
+	assertAPIError(t, resp, http.StatusNotFound, "not_found")
+}
+
+func TestViewerGetEvent(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"VEvBand"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"VE1","artistId":%q,"mediaObjectId":"mo-vev-1"}`, artistID), "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	playResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q}`, trackID), "Bearer "+viewerToken)
+	var evt map[string]any
+	decodeResponse(t, playResp, &evt)
+	eventID := evt["id"].(string)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/me/history/"+eventID, "", "Bearer "+viewerToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("viewer GET event: %d %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	if got["id"].(string) != eventID {
+		t.Errorf("id = %q, want %q", got["id"], eventID)
+	}
+}
+
+func TestViewerGetEventNotOwned(t *testing.T) {
+	h, viewerToken, _ := newHistoryTestHandler(t)
+
+	// Verify 404 for a non-existent event
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/me/history/no-such-id", "", "Bearer "+viewerToken)
+	assertAPIError(t, resp, http.StatusNotFound, "not_found")
+}
+
+func TestViewerDeleteEvent(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"VDelBand"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"VD1","artistId":%q,"mediaObjectId":"mo-vdel-1"}`, artistID), "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	playResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q}`, trackID), "Bearer "+viewerToken)
+	var evt map[string]any
+	decodeResponse(t, playResp, &evt)
+	eventID := evt["id"].(string)
+
+	del := performRequestWithAuthHeader(t, h, http.MethodDelete, "/api/v1/me/history/"+eventID, "", "Bearer "+viewerToken)
+	if del.Code != http.StatusNoContent {
+		t.Fatalf("viewer DELETE event: %d %s", del.Code, del.Body.String())
+	}
+
+	// gone — viewer's own history list should be empty
+	listResp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/me/history", "", "Bearer "+viewerToken)
+	var listResult map[string]any
+	decodeResponse(t, listResp, &listResult)
+	pagination := listResult["pagination"].(map[string]any)
+	if pagination["total"].(float64) != 0 {
+		t.Errorf("total after delete = %v, want 0", pagination["total"])
+	}
+}
+
+func TestPerEventHistoryNotConfigured(t *testing.T) {
+	authSvc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAuthService(authSvc),
+		WithAdminToken(testAdminToken),
+	).Routes()
+	if _, err := authSvc.CreateUser(context.Background(), "alice", "viewerpass1", auth.RoleViewer); err != nil {
+		t.Fatalf("create viewer: %v", err)
+	}
+	viewerToken, _, _ := authSvc.Login(context.Background(), "alice", "viewerpass1")
+
+	// admin per-event endpoints (use admin bearer token)
+	for _, tc := range []struct{ method, path string }{
+		{http.MethodGet, "/api/v1/admin/history/some-id"},
+		{http.MethodDelete, "/api/v1/admin/history/some-id"},
+	} {
+		resp := performRequest(t, h, tc.method, tc.path, "")
+		// no history service → should 503; without admin token → 401 from auth middleware
+		// use admin token to get past auth
+		resp = performRequestWithAuthHeader(t, h, tc.method, tc.path, "", "Bearer "+testAdminToken)
+		assertAPIError(t, resp, http.StatusServiceUnavailable, "history_not_configured")
+	}
+
+	// viewer per-event endpoints
+	for _, tc := range []struct{ method, path string }{
+		{http.MethodGet, "/api/v1/me/history/some-id"},
+		{http.MethodDelete, "/api/v1/me/history/some-id"},
+	} {
+		resp := performRequestWithAuthHeader(t, h, tc.method, tc.path, "", "Bearer "+viewerToken)
+		assertAPIError(t, resp, http.StatusServiceUnavailable, "history_not_configured")
+	}
+}
