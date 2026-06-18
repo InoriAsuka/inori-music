@@ -87,6 +87,58 @@ func (r *Repository) DeletePlayEventsByUser(ctx context.Context, userID string) 
 	return err
 }
 
+func (r *Repository) ListPlayEventsByTrack(ctx context.Context, f history.AdminPlayEventFilter) ([]history.PlayEvent, int, error) {
+	if f.TrackID == "" {
+		return nil, 0, fmt.Errorf("trackID is required")
+	}
+
+	var rows pgx.Rows
+	var err error
+	if f.UserID != "" {
+		rows, err = r.pool.Query(ctx, `
+			SELECT id, user_id, track_id, played_at, created_at,
+			       COUNT(*) OVER () AS total_count
+			FROM play_events
+			WHERE track_id = $3 AND user_id = $4
+			ORDER BY played_at DESC, id DESC
+			LIMIT $1 OFFSET $2`,
+			f.Limit, f.Offset, f.TrackID, f.UserID)
+	} else {
+		rows, err = r.pool.Query(ctx, `
+			SELECT id, user_id, track_id, played_at, created_at,
+			       COUNT(*) OVER () AS total_count
+			FROM play_events
+			WHERE track_id = $3
+			ORDER BY played_at DESC, id DESC
+			LIMIT $1 OFFSET $2`,
+			f.Limit, f.Offset, f.TrackID)
+	}
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return []history.PlayEvent{}, 0, nil
+		}
+		return nil, 0, err
+	}
+	defer rows.Close()
+
+	var events []history.PlayEvent
+	total := 0
+	for rows.Next() {
+		var e history.PlayEvent
+		if err := rows.Scan(&e.ID, &e.UserID, &e.TrackID, &e.PlayedAt, &e.CreatedAt, &total); err != nil {
+			return nil, 0, err
+		}
+		events = append(events, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	if events == nil {
+		events = []history.PlayEvent{}
+	}
+	return events, total, nil
+}
+
 func (r *Repository) HistoryStats(ctx context.Context, f history.StatsFilter) (history.HistoryStats, error) {
 	where, args := statsWhere(f)
 	row := r.pool.QueryRow(ctx, `

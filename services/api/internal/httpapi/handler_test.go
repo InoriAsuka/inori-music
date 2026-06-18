@@ -4818,3 +4818,121 @@ func TestAdminHistoryInvalidTimeRange(t *testing.T) {
 	resp := performRequestWithAuthHeader(t, h, http.MethodGet, path, "", "Bearer "+adminToken)
 	assertAPIError(t, resp, http.StatusBadRequest, "invalid_time_range")
 }
+
+func TestAdminGetUserHistory(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	// Create artist + track
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Band"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"Song","artistId":%q,"mediaObjectId":"mo-uhistory-1"}`, artistID), "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	// Record a play event and capture userId from the response
+	playResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q}`, trackID), "Bearer "+viewerToken)
+	var playEvent map[string]any
+	decodeResponse(t, playResp, &playEvent)
+	viewerID := playEvent["userId"].(string)
+
+	// Record one more
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q}`, trackID), "Bearer "+viewerToken)
+
+	// Admin fetches viewer's history
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/admin/history/users/"+viewerID, "", "Bearer "+adminToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("user history: %d %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	events := got["events"].([]any)
+	if len(events) != 2 {
+		t.Errorf("events = %d, want 2", len(events))
+	}
+	pagination := got["pagination"].(map[string]any)
+	if int(pagination["total"].(float64)) != 2 {
+		t.Errorf("total = %v, want 2", pagination["total"])
+	}
+
+	// limit=1
+	resp = performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/admin/history/users/"+viewerID+"?limit=1", "", "Bearer "+adminToken)
+	decodeResponse(t, resp, &got)
+	if len(got["events"].([]any)) != 1 {
+		t.Errorf("limit=1: events = %d, want 1", len(got["events"].([]any)))
+	}
+}
+
+func TestAdminGetTrackHistory(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	// Create artist + track
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Band"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"Song","artistId":%q,"mediaObjectId":"mo-thistory-1"}`, artistID), "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	// Record 3 plays for the track
+	for i := 0; i < 3; i++ {
+		performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+			fmt.Sprintf(`{"trackId":%q}`, trackID), "Bearer "+viewerToken)
+	}
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/admin/history/tracks/"+trackID, "", "Bearer "+adminToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("track history: %d %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	events := got["events"].([]any)
+	if len(events) != 3 {
+		t.Errorf("events = %d, want 3", len(events))
+	}
+	pagination := got["pagination"].(map[string]any)
+	if int(pagination["total"].(float64)) != 3 {
+		t.Errorf("total = %v, want 3", pagination["total"])
+	}
+}
+
+func TestAdminHistoryDetailMethodNotAllowed(t *testing.T) {
+	h, _, adminToken := newHistoryTestHandler(t)
+	for _, path := range []string{
+		"/api/v1/admin/history/users/some-user",
+		"/api/v1/admin/history/tracks/some-track",
+	} {
+		resp := performRequestWithAuthHeader(t, h, http.MethodPost, path, `{}`, "Bearer "+adminToken)
+		if resp.Code != http.StatusMethodNotAllowed {
+			t.Errorf("POST %s: expected 405, got %d", path, resp.Code)
+		}
+	}
+}
+
+func TestAdminHistoryDetailNotConfigured(t *testing.T) {
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAdminToken(testAdminToken),
+	).Routes()
+
+	for _, path := range []string{
+		"/api/v1/admin/history/users/some-user",
+		"/api/v1/admin/history/tracks/some-track",
+	} {
+		resp := performRequest(t, h, http.MethodGet, path, "")
+		assertAPIError(t, resp, http.StatusServiceUnavailable, "history_not_configured")
+	}
+}

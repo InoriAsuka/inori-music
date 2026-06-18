@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.71.0`
+`0.72.0`
 
 ## Product Goal
 
@@ -630,4 +630,16 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add 3 service unit tests (until-stats, since+until window on top-tracks, until combined) and 4 HTTP-layer tests (until filter, invalid until, invalid time range, updated since test).
 - Add `until` query param (string/date-time, optional) to all three admin history GET paths in OpenAPI; add `invalid_until` and `invalid_time_range` to error code enum; bump `info.version` to `0.71.0`.
 - Add `TestStorageAdminOpenAPIContractAdminHistoryUntilParam`; extend `TestStorageAdminOpenAPIContractSchemasAndErrors` for new error codes.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.72.0 - 2026-06-18
+
+- Add `AdminPlayEventFilter{TrackID, UserID, Limit, Offset}` to `history/types.go`; add `ListPlayEventsByTrack(ctx, AdminPlayEventFilter)` to the `Repository` interface.
+- Implement `ListPlayEventsByTrack` on `history.MemoryRepository` (in-memory filter + sort + slice) and `historypg.Repository` (`WHERE track_id = $3 [AND user_id = $4] … COUNT(*) OVER()`).
+- Add `GetUserHistory` (admin-facing reuse of `ListPlayEvents` without user-scope restriction) and `GetTrackHistory` to `history.Service`.
+- Add 2 admin routes: `GET /api/v1/admin/history/users/{userId}` (paginated events for any user, optional `?trackId` filter) and `GET /api/v1/admin/history/tracks/{trackId}` (paginated events for any track, optional `?userId` filter); add `methodNotAllowed` fallbacks for both.
+- Add `getAdminUserHistory`, `getAdminTrackHistory` handler functions and `parseHistoryAdminPagination` helper; response shape is `{events, pagination}` identical to `GET /api/v1/me/history`.
+- Add 2 service unit tests (`TestGetUserHistory`, `TestGetTrackHistory`) and 4 HTTP-layer tests (user history with pagination, track history, 405, 503 not-configured).
+- Add 2 new paths to the OpenAPI contract with `PlayEventList` response schema ref; bump `info.version` to `0.72.0`.
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes`; add `TestStorageAdminOpenAPIContractAdminHistoryDetailPaths` asserting path params, query filters, pagination params, and response schema ref.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

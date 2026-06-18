@@ -14,10 +14,18 @@ type PlayEvent struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
-// PlayEventFilter scopes a list of play events.
+// PlayEventFilter scopes a list of play events for a specific user.
 type PlayEventFilter struct {
 	UserID  string // required
 	TrackID string // optional — filter to a single track
+	Limit   int    // 0 → default (50); clamped to 500
+	Offset  int
+}
+
+// AdminPlayEventFilter scopes admin list queries that are not user-scoped.
+type AdminPlayEventFilter struct {
+	TrackID string // required for ListPlayEventsByTrack
+	UserID  string // required for ListPlayEventsByUser (admin view)
 	Limit   int    // 0 → default (50); clamped to 500
 	Offset  int
 }
@@ -34,6 +42,9 @@ type Repository interface {
 	SavePlayEvent(ctx context.Context, e PlayEvent) error
 	ListPlayEvents(ctx context.Context, f PlayEventFilter) ([]PlayEvent, int, error)
 	DeletePlayEventsByUser(ctx context.Context, userID string) error
+
+	// Admin detail queries — not scoped to the requesting user.
+	ListPlayEventsByTrack(ctx context.Context, f AdminPlayEventFilter) ([]PlayEvent, int, error)
 
 	// Aggregate stats — admin-facing queries.
 	HistoryStats(ctx context.Context, f StatsFilter) (HistoryStats, error)

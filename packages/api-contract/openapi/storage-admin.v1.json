@@ -2165,7 +2165,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "0.71.0"
+    "version": "0.72.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -8201,6 +8201,152 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/history/users/{userId}": {
+      "get": {
+        "summary": "Get play history for a specific user (admin)",
+        "tags": [
+          "admin",
+          "history"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "userId",
+            "in": "path",
+            "required": true,
+            "description": "ID of the user whose history to retrieve.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "trackId",
+            "in": "query",
+            "required": false,
+            "description": "Optional: filter to a specific track.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of events to return (1\u2013500, default 50).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "description": "Number of events to skip.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated play event list for the user.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayEventList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/history/tracks/{trackId}": {
+      "get": {
+        "summary": "Get play history for a specific track across all users (admin)",
+        "tags": [
+          "admin",
+          "history"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "trackId",
+            "in": "path",
+            "required": true,
+            "description": "ID of the track whose history to retrieve.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "query",
+            "required": false,
+            "description": "Optional: filter to a specific user.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of events to return (1\u2013500, default 50).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 500
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "description": "Number of events to skip.",
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Paginated play event list for the track.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayEventList"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
           }
         }
       }

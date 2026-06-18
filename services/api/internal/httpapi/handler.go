@@ -364,9 +364,13 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/history/stats", handler.requireAdminAuth(handler.getAdminHistoryStats))
 	mux.HandleFunc("GET /api/v1/admin/history/top-tracks", handler.requireAdminAuth(handler.getAdminTopTracks))
 	mux.HandleFunc("GET /api/v1/admin/history/top-users", handler.requireAdminAuth(handler.getAdminTopUsers))
+	mux.HandleFunc("GET /api/v1/admin/history/users/{userId}", handler.requireAdminAuth(handler.getAdminUserHistory))
+	mux.HandleFunc("GET /api/v1/admin/history/tracks/{trackId}", handler.requireAdminAuth(handler.getAdminTrackHistory))
 	mux.HandleFunc("/api/v1/admin/history/stats", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/history/top-tracks", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/history/top-users", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/history/users/{userId}", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/history/tracks/{trackId}", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("GET /api/v1/admin/storage/backends", handler.requireAdminAuth(handler.listStorageBackends))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends", handler.requireAdminAuth(handler.registerStorageBackend))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends/validate", handler.requireAdminAuth(handler.validateStorageBackend))
@@ -1984,6 +1988,95 @@ func parseHistoryAdminLimit(w http.ResponseWriter, r *http.Request) (int, bool) 
 		return 0, false
 	}
 	return v, true
+}
+
+func (handler *Handler) getAdminUserHistory(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireHistoryService(w) {
+		return
+	}
+	userID := r.PathValue("userId")
+	if userID == "" {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", "userId is required")
+		return
+	}
+	limit, offset, ok := parseHistoryAdminPagination(w, r)
+	if !ok {
+		return
+	}
+	events, total, err := handler.historyService.GetUserHistory(r.Context(), history.PlayEventFilter{
+		UserID:  userID,
+		TrackID: r.URL.Query().Get("trackId"),
+		Limit:   limit,
+		Offset:  offset,
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"events": events,
+		"pagination": map[string]any{
+			"limit":   limit,
+			"offset":  offset,
+			"total":   total,
+			"hasMore": limit > 0 && offset+limit < total,
+		},
+	})
+}
+
+func (handler *Handler) getAdminTrackHistory(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireHistoryService(w) {
+		return
+	}
+	trackID := r.PathValue("trackId")
+	if trackID == "" {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", "trackId is required")
+		return
+	}
+	limit, offset, ok := parseHistoryAdminPagination(w, r)
+	if !ok {
+		return
+	}
+	events, total, err := handler.historyService.GetTrackHistory(r.Context(), history.AdminPlayEventFilter{
+		TrackID: trackID,
+		UserID:  r.URL.Query().Get("userId"),
+		Limit:   limit,
+		Offset:  offset,
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"events": events,
+		"pagination": map[string]any{
+			"limit":   limit,
+			"offset":  offset,
+			"total":   total,
+			"hasMore": limit > 0 && offset+limit < total,
+		},
+	})
+}
+
+func parseHistoryAdminPagination(w http.ResponseWriter, r *http.Request) (limit, offset int, ok bool) {
+	q := r.URL.Query()
+	if raw := q.Get("limit"); raw != "" {
+		v, err := strconv.Atoi(raw)
+		if err != nil || v < 1 {
+			writeAPIError(w, http.StatusBadRequest, "invalid_limit", "limit must be a positive integer")
+			return 0, 0, false
+		}
+		limit = v
+	}
+	if raw := q.Get("offset"); raw != "" {
+		v, err := strconv.Atoi(raw)
+		if err != nil || v < 0 {
+			writeAPIError(w, http.StatusBadRequest, "invalid_offset", "offset must be a non-negative integer")
+			return 0, 0, false
+		}
+		offset = v
+	}
+	return limit, offset, true
 }
 
 func (handler *Handler) getRecentlyAdded(w http.ResponseWriter, r *http.Request) {

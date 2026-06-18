@@ -80,6 +80,8 @@ func TestStorageAdminOpenAPIContractCoversRoutes(t *testing.T) {
 		"/api/v1/admin/history/stats":                           {"get"},
 		"/api/v1/admin/history/top-tracks":                      {"get"},
 		"/api/v1/admin/history/top-users":                       {"get"},
+		"/api/v1/admin/history/users/{userId}":                  {"get"},
+		"/api/v1/admin/history/tracks/{trackId}":                {"get"},
 	}
 
 	for path, methods := range expected {
@@ -489,6 +491,58 @@ func TestStorageAdminOpenAPIContractAdminHistoryUntilParam(t *testing.T) {
 		}
 		if !seen {
 			t.Errorf("%s GET is missing 'until' query parameter", path)
+		}
+	}
+}
+
+func TestStorageAdminOpenAPIContractAdminHistoryDetailPaths(t *testing.T) {
+	document := loadOpenAPIContract(t)
+	paths := document["paths"].(map[string]any)
+
+	cases := []struct {
+		path        string
+		pathParam   string
+		queryFilter string
+	}{
+		{"/api/v1/admin/history/users/{userId}", "userId", "trackId"},
+		{"/api/v1/admin/history/tracks/{trackId}", "trackId", "userId"},
+	}
+
+	for _, tc := range cases {
+		pathItem, ok := paths[tc.path].(map[string]any)
+		if !ok {
+			t.Fatalf("OpenAPI path %q is missing", tc.path)
+		}
+		get, ok := pathItem["get"].(map[string]any)
+		if !ok {
+			t.Fatalf("OpenAPI GET %s is missing", tc.path)
+		}
+
+		params, _ := get["parameters"].([]any)
+		paramNames := map[string]bool{}
+		for _, p := range params {
+			if m, ok := p.(map[string]any); ok {
+				paramNames[m["name"].(string)] = true
+			}
+		}
+
+		for _, want := range []string{tc.pathParam, tc.queryFilter, "limit", "offset"} {
+			if !paramNames[want] {
+				t.Errorf("%s GET is missing parameter %q", tc.path, want)
+			}
+		}
+
+		// Response must reference PlayEventList
+		resp200, _ := get["responses"].(map[string]any)["200"].(map[string]any)
+		if resp200 == nil {
+			t.Errorf("%s GET missing 200 response", tc.path)
+			continue
+		}
+		content, _ := resp200["content"].(map[string]any)
+		appJSON, _ := content["application/json"].(map[string]any)
+		schema, _ := appJSON["schema"].(map[string]any)
+		if schema["$ref"] != "#/components/schemas/PlayEventList" {
+			t.Errorf("%s 200 response schema = %v, want PlayEventList ref", tc.path, schema)
 		}
 	}
 }

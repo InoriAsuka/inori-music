@@ -68,6 +68,28 @@ func (s *Service) ClearHistory(ctx context.Context, userID string) error {
 	return s.repo.DeletePlayEventsByUser(ctx, userID)
 }
 
+// GetUserHistory returns paginated play events for any user; intended for admin use.
+func (s *Service) GetUserHistory(ctx context.Context, f PlayEventFilter) ([]PlayEvent, int, error) {
+	if f.Limit <= 0 {
+		f.Limit = DefaultListLimit
+	}
+	if f.Limit > MaxListLimit {
+		f.Limit = MaxListLimit
+	}
+	return s.repo.ListPlayEvents(ctx, f)
+}
+
+// GetTrackHistory returns paginated play events for a specific track across all users; intended for admin use.
+func (s *Service) GetTrackHistory(ctx context.Context, f AdminPlayEventFilter) ([]PlayEvent, int, error) {
+	if f.Limit <= 0 {
+		f.Limit = DefaultListLimit
+	}
+	if f.Limit > MaxListLimit {
+		f.Limit = MaxListLimit
+	}
+	return s.repo.ListPlayEventsByTrack(ctx, f)
+}
+
 // GetHistoryStats returns system-wide aggregate counts for admin use.
 // f.Since optionally bounds the query to events on or after that time.
 func (s *Service) GetHistoryStats(ctx context.Context, f StatsFilter) (HistoryStats, error) {

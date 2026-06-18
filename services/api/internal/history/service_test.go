@@ -300,3 +300,75 @@ func TestGetTopTracksSinceUntilWindow(t *testing.T) {
 		t.Errorf("windowed track = %q, want t2", tracks[0].TrackID)
 	}
 }
+
+func TestGetUserHistory(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	// u1 plays t1 and t2; u2 plays t1
+	svc.RecordPlay(ctx, "u1", "t1", now)
+	svc.RecordPlay(ctx, "u1", "t2", now.Add(time.Second))
+	svc.RecordPlay(ctx, "u2", "t1", now)
+
+	events, total, err := svc.GetUserHistory(ctx, history.PlayEventFilter{UserID: "u1"})
+	if err != nil {
+		t.Fatalf("GetUserHistory: %v", err)
+	}
+	if total != 2 {
+		t.Errorf("total = %d, want 2", total)
+	}
+	for _, e := range events {
+		if e.UserID != "u1" {
+			t.Errorf("event userID = %q, want u1", e.UserID)
+		}
+	}
+
+	// pagination: limit=1 returns 1 event, total still 2
+	paged, total2, err := svc.GetUserHistory(ctx, history.PlayEventFilter{UserID: "u1", Limit: 1, Offset: 0})
+	if err != nil {
+		t.Fatalf("GetUserHistory paged: %v", err)
+	}
+	if len(paged) != 1 || total2 != 2 {
+		t.Errorf("paged: len=%d total=%d, want 1/2", len(paged), total2)
+	}
+}
+
+func TestGetTrackHistory(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	// t1 played by u1 (twice) and u2 (once); t2 played by u1
+	svc.RecordPlay(ctx, "u1", "t1", now)
+	svc.RecordPlay(ctx, "u1", "t1", now.Add(time.Second))
+	svc.RecordPlay(ctx, "u2", "t1", now.Add(2*time.Second))
+	svc.RecordPlay(ctx, "u1", "t2", now)
+
+	events, total, err := svc.GetTrackHistory(ctx, history.AdminPlayEventFilter{TrackID: "t1"})
+	if err != nil {
+		t.Fatalf("GetTrackHistory: %v", err)
+	}
+	if total != 3 {
+		t.Errorf("total = %d, want 3", total)
+	}
+	for _, e := range events {
+		if e.TrackID != "t1" {
+			t.Errorf("event trackID = %q, want t1", e.TrackID)
+		}
+	}
+
+	// filter by user: only u1 events for t1 (2 events)
+	filtered, total2, err := svc.GetTrackHistory(ctx, history.AdminPlayEventFilter{TrackID: "t1", UserID: "u1"})
+	if err != nil {
+		t.Fatalf("GetTrackHistory filtered: %v", err)
+	}
+	if total2 != 2 {
+		t.Errorf("filtered total = %d, want 2", total2)
+	}
+	for _, e := range filtered {
+		if e.UserID != "u1" {
+			t.Errorf("filtered event userID = %q, want u1", e.UserID)
+		}
+	}
+}
