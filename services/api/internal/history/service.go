@@ -232,6 +232,29 @@ func (s *Service) GetHistoryStats(ctx context.Context, f StatsFilter) (HistorySt
 	return s.repo.HistoryStats(ctx, f)
 }
 
+// GetAdminUserStats returns per-user aggregate counts for any user; intended for admin use.
+func (s *Service) GetAdminUserStats(ctx context.Context, f UserStatsFilter) (UserHistoryStats, error) {
+	if f.UserID == "" {
+		return UserHistoryStats{}, fmt.Errorf("userID is required")
+	}
+	return s.repo.UserHistoryStats(ctx, f)
+}
+
+// GetAdminUserTopTracks returns the most-played tracks for any user; intended for admin use.
+// limit ≤ 0 defaults to 10 and is clamped to 100.
+func (s *Service) GetAdminUserTopTracks(ctx context.Context, f UserStatsFilter, limit int) ([]TrackPlayCount, error) {
+	if f.UserID == "" {
+		return nil, fmt.Errorf("userID is required")
+	}
+	if limit <= 0 {
+		limit = 10
+	}
+	if limit > 100 {
+		limit = 100
+	}
+	return s.repo.UserTopTracks(ctx, f, limit)
+}
+
 // GetMyStats returns per-user aggregate counts for the authenticated viewer.
 func (s *Service) GetMyStats(ctx context.Context, f UserStatsFilter) (UserHistoryStats, error) {
 	if f.UserID == "" {

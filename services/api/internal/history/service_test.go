@@ -553,6 +553,90 @@ func TestGetMyTopTracksTimeWindow(t *testing.T) {
 	}
 }
 
+func TestGetAdminUserStats(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	// u1 plays t1 twice and t2 once; u2 plays t3 — u2 must not affect u1's stats
+	svc.RecordPlay(ctx, "u1", "t1", now)
+	svc.RecordPlay(ctx, "u1", "t1", now.Add(time.Second))
+	svc.RecordPlay(ctx, "u1", "t2", now.Add(2*time.Second))
+	svc.RecordPlay(ctx, "u2", "t3", now)
+
+	stats, err := svc.GetAdminUserStats(ctx, history.UserStatsFilter{UserID: "u1"})
+	if err != nil {
+		t.Fatalf("GetAdminUserStats: %v", err)
+	}
+	if stats.TotalEvents != 3 {
+		t.Errorf("TotalEvents = %d, want 3", stats.TotalEvents)
+	}
+	if stats.UniqueTracks != 2 {
+		t.Errorf("UniqueTracks = %d, want 2", stats.UniqueTracks)
+	}
+
+	// empty userID → error
+	if _, err := svc.GetAdminUserStats(ctx, history.UserStatsFilter{}); err == nil {
+		t.Fatal("expected error for empty UserID, got nil")
+	}
+}
+
+func TestGetAdminUserTopTracks(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	// u1: t1×3, t2×1; u2: t2×10 (must NOT appear in u1's results)
+	for i := 0; i < 3; i++ {
+		svc.RecordPlay(ctx, "u1", "t1", now.Add(time.Duration(i)*time.Second))
+	}
+	svc.RecordPlay(ctx, "u1", "t2", now.Add(10*time.Second))
+	for i := 0; i < 10; i++ {
+		svc.RecordPlay(ctx, "u2", "t2", now.Add(time.Duration(i)*time.Second))
+	}
+
+	tracks, err := svc.GetAdminUserTopTracks(ctx, history.UserStatsFilter{UserID: "u1"}, 0)
+	if err != nil {
+		t.Fatalf("GetAdminUserTopTracks: %v", err)
+	}
+	if len(tracks) != 2 {
+		t.Fatalf("len = %d, want 2", len(tracks))
+	}
+	if tracks[0].TrackID != "t1" || tracks[0].PlayCount != 3 {
+		t.Errorf("top track = %+v, want t1/3", tracks[0])
+	}
+	if tracks[1].TrackID != "t2" || tracks[1].PlayCount != 1 {
+		t.Errorf("second track = %+v, want t2/1", tracks[1])
+	}
+}
+
+func TestGetAdminUserTopTracksTimeWindow(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+	base := time.Now().UTC()
+
+	// u1 plays t1 at base (before window), t2 at +5s (inside), t3 at +20s (after)
+	svc.RecordPlay(ctx, "u1", "t1", base)
+	svc.RecordPlay(ctx, "u1", "t2", base.Add(5*time.Second))
+	svc.RecordPlay(ctx, "u1", "t3", base.Add(20*time.Second))
+
+	f := history.UserStatsFilter{
+		UserID: "u1",
+		Since:  base.Add(3 * time.Second),
+		Until:  base.Add(10 * time.Second),
+	}
+	tracks, err := svc.GetAdminUserTopTracks(ctx, f, 0)
+	if err != nil {
+		t.Fatalf("GetAdminUserTopTracks windowed: %v", err)
+	}
+	if len(tracks) != 1 {
+		t.Fatalf("windowed tracks = %d, want 1", len(tracks))
+	}
+	if tracks[0].TrackID != "t2" {
+		t.Errorf("windowed track = %q, want t2", tracks[0].TrackID)
+	}
+}
+
 func TestGetAllHistory(t *testing.T) {
 	svc := history.NewService(history.NewMemoryRepository())
 	ctx := context.Background()

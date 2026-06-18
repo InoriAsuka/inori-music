@@ -754,3 +754,14 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add 4 HTTP-layer tests (`TestListPlayEventsSinceFilter`, `TestListPlayEventsUntilFilter`, `TestAdminUserHistorySinceUntilFilter`, `TestAdminTrackHistorySinceFilter`).
 - Add `TestStorageAdminOpenAPIContractListSinceUntilParams` asserting `since`/`until` on all three paths.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.81.0 - 2026-06-19
+
+- Add `GetAdminUserStats(ctx, UserStatsFilter)` and `GetAdminUserTopTracks(ctx, UserStatsFilter, limit)` to `history.Service` (admin-facing; delegate to `UserHistoryStats` and `UserTopTracks` on the repository; require non-empty `UserID`).
+- Add admin routes `GET /api/v1/admin/history/users/{userId}/stats` → `getAdminUserStats` and `GET /api/v1/admin/history/users/{userId}/top-tracks` → `getAdminUserTopTracks`; reuse `parseHistoryAdminFilter` and `parseHistoryAdminLimit`; respond with the same shapes as their `/me/history/stats` and `/me/history/top-tracks` counterparts.
+- Add `methodNotAllowed` fallbacks for `GET /api/v1/admin/history/users/{userId}/stats` and `GET /api/v1/admin/history/users/{userId}/top-tracks`.
+- Add 3 `history.Service` unit tests (`TestGetAdminUserStats`, `TestGetAdminUserTopTracks`, `TestGetAdminUserTopTracksTimeWindow`).
+- Add 4 HTTP-layer tests (`TestAdminGetUserStats`, `TestAdminGetUserTopTracks`, `TestAdminGetUserStatsNotConfigured`, `TestAdminGetUserTopTracksTimeWindow`).
+- Add `get` operation to `/api/v1/admin/history/users/{userId}/stats` and `/api/v1/admin/history/users/{userId}/top-tracks` in OpenAPI contract; both accept optional `?since`, `?until`; top-tracks also accepts `?limit`; stats refs `UserHistoryStats` schema; top-tracks refs `TrackPlayCountList` schema (matching the viewer path); bump `info.version` to `0.81.0`.
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes` with both new paths; add `TestStorageAdminOpenAPIContractAdminUserStatsPaths`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.

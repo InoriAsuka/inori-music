@@ -371,6 +371,10 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/history/stats", handler.requireAdminAuth(handler.getAdminHistoryStats))
 	mux.HandleFunc("GET /api/v1/admin/history/top-tracks", handler.requireAdminAuth(handler.getAdminTopTracks))
 	mux.HandleFunc("GET /api/v1/admin/history/top-users", handler.requireAdminAuth(handler.getAdminTopUsers))
+	mux.HandleFunc("GET /api/v1/admin/history/users/{userId}/stats", handler.requireAdminAuth(handler.getAdminUserStats))
+	mux.HandleFunc("GET /api/v1/admin/history/users/{userId}/top-tracks", handler.requireAdminAuth(handler.getAdminUserTopTracks))
+	mux.HandleFunc("/api/v1/admin/history/users/{userId}/stats", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/history/users/{userId}/top-tracks", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("GET /api/v1/admin/history/users/{userId}", handler.requireAdminAuth(handler.getAdminUserHistory))
 	mux.HandleFunc("GET /api/v1/admin/history/tracks/{trackId}", handler.requireAdminAuth(handler.getAdminTrackHistory))
 	mux.HandleFunc("DELETE /api/v1/admin/history/users/{userId}", handler.requireAdminAuth(handler.deleteAdminUserHistory))
@@ -1981,6 +1985,60 @@ func (handler *Handler) getAdminHistoryStats(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	writeJSON(w, http.StatusOK, stats)
+}
+
+func (handler *Handler) getAdminUserStats(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireHistoryService(w) {
+		return
+	}
+	userID := r.PathValue("userId")
+	if userID == "" {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", "userId is required")
+		return
+	}
+	f, ok := parseHistoryAdminFilter(w, r)
+	if !ok {
+		return
+	}
+	stats, err := handler.historyService.GetAdminUserStats(r.Context(), history.UserStatsFilter{
+		UserID: userID,
+		Since:  f.Since,
+		Until:  f.Until,
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, stats)
+}
+
+func (handler *Handler) getAdminUserTopTracks(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireHistoryService(w) {
+		return
+	}
+	userID := r.PathValue("userId")
+	if userID == "" {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", "userId is required")
+		return
+	}
+	f, ok := parseHistoryAdminFilter(w, r)
+	if !ok {
+		return
+	}
+	limit, ok := parseHistoryAdminLimit(w, r)
+	if !ok {
+		return
+	}
+	tracks, err := handler.historyService.GetAdminUserTopTracks(r.Context(), history.UserStatsFilter{
+		UserID: userID,
+		Since:  f.Since,
+		Until:  f.Until,
+	}, limit)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"tracks": tracks})
 }
 
 func (handler *Handler) getAdminTopTracks(w http.ResponseWriter, r *http.Request) {

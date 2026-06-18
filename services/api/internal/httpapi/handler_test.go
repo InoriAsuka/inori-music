@@ -5203,6 +5203,166 @@ func TestGetMyHistoryStatsNotConfigured(t *testing.T) {
 		assertAPIError(t, resp, http.StatusServiceUnavailable, "history_not_configured")
 	}
 }
+
+func TestAdminGetUserStats(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"StatsBand"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"S1","artistId":%q,"mediaObjectId":"mo-aus-1"}`, artistID), "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID1 := track["id"].(string)
+
+	trackResp2 := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"S2","artistId":%q,"mediaObjectId":"mo-aus-2"}`, artistID), "Bearer "+adminToken)
+	var track2 map[string]any
+	decodeResponse(t, trackResp2, &track2)
+	trackID2 := track2["id"].(string)
+
+	// viewer plays t1 once and capture the play event to get viewerID
+	firstPlayResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q}`, trackID1), "Bearer "+viewerToken)
+	var firstPlay map[string]any
+	decodeResponse(t, firstPlayResp, &firstPlay)
+	viewerID := firstPlay["userId"].(string)
+
+	// viewer plays t1 once more and t2 once
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q}`, trackID1), "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q}`, trackID2), "Bearer "+viewerToken)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/admin/history/users/"+viewerID+"/stats", "", "Bearer "+adminToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("getAdminUserStats: %d %s", resp.Code, resp.Body.String())
+	}
+	var stats map[string]any
+	decodeResponse(t, resp, &stats)
+	if stats["totalEvents"].(float64) != 3 {
+		t.Errorf("totalEvents = %v, want 3", stats["totalEvents"])
+	}
+	if stats["uniqueTracks"].(float64) != 2 {
+		t.Errorf("uniqueTracks = %v, want 2", stats["uniqueTracks"])
+	}
+}
+
+func TestAdminGetUserTopTracks(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"TopArt"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"TT1","artistId":%q,"mediaObjectId":"mo-autt-1"}`, artistID), "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	// viewer plays the track — capture first event to get viewerID
+	firstPlayResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q}`, trackID), "Bearer "+viewerToken)
+	var firstPlay map[string]any
+	decodeResponse(t, firstPlayResp, &firstPlay)
+	viewerID := firstPlay["userId"].(string)
+
+	// play 2 more times (3 total)
+	for i := 0; i < 2; i++ {
+		performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+			fmt.Sprintf(`{"trackId":%q}`, trackID), "Bearer "+viewerToken)
+	}
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/admin/history/users/"+viewerID+"/top-tracks", "", "Bearer "+adminToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("getAdminUserTopTracks: %d %s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	decodeResponse(t, resp, &result)
+	tracks := result["tracks"].([]any)
+	if len(tracks) != 1 {
+		t.Fatalf("tracks len = %d, want 1", len(tracks))
+	}
+	top := tracks[0].(map[string]any)
+	if top["trackId"].(string) != trackID {
+		t.Errorf("top trackId = %q, want %q", top["trackId"], trackID)
+	}
+	if top["playCount"].(float64) != 3 {
+		t.Errorf("playCount = %v, want 3", top["playCount"])
+	}
+}
+
+func TestAdminGetUserTopTracksTimeWindow(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"TWBand"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"TW1","artistId":%q,"mediaObjectId":"mo-auttw-1"}`, artistID), "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	// 3 events at different fixed times; capture first event to get viewerID
+	firstPlayResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q,"playedAt":"2021-03-01T08:00:00Z"}`, trackID), "Bearer "+viewerToken)
+	var firstPlay map[string]any
+	decodeResponse(t, firstPlayResp, &firstPlay)
+	viewerID := firstPlay["userId"].(string)
+
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q,"playedAt":"2021-03-01T12:00:00Z"}`, trackID), "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q,"playedAt":"2021-03-01T20:00:00Z"}`, trackID), "Bearer "+viewerToken)
+
+	// window [10:00, 15:00) captures only the 12:00 event
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/admin/history/users/"+viewerID+"/top-tracks?since=2021-03-01T10:00:00Z&until=2021-03-01T15:00:00Z",
+		"", "Bearer "+adminToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("admin user top-tracks windowed: %d %s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	decodeResponse(t, resp, &result)
+	tracks := result["tracks"].([]any)
+	if len(tracks) != 1 {
+		t.Fatalf("windowed tracks len = %d, want 1", len(tracks))
+	}
+	if tracks[0].(map[string]any)["playCount"].(float64) != 1 {
+		t.Errorf("playCount = %v, want 1", tracks[0].(map[string]any)["playCount"])
+	}
+}
+
+func TestAdminGetUserStatsNotConfigured(t *testing.T) {
+	authSvc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAuthService(authSvc),
+	).Routes()
+	if _, err := authSvc.CreateUser(context.Background(), "adminnc", "adminpassNC1", auth.RoleAdmin); err != nil {
+		t.Fatalf("create admin: %v", err)
+	}
+	adminToken, _, _ := authSvc.Login(context.Background(), "adminnc", "adminpassNC1")
+
+	for _, path := range []string{
+		"/api/v1/admin/history/users/someuser/stats",
+		"/api/v1/admin/history/users/someuser/top-tracks",
+	} {
+		resp := performRequestWithAuthHeader(t, h, http.MethodGet, path, "", "Bearer "+adminToken)
+		assertAPIError(t, resp, http.StatusServiceUnavailable, "history_not_configured")
+	}
+}
+
 func TestAdminGetAllHistory(t *testing.T) {
 	h, viewerToken, adminToken := newHistoryTestHandler(t)
 
