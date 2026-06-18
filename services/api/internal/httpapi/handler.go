@@ -360,6 +360,10 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/me/history", handler.requireViewerAuth(handler.recordPlayEvent))
 	mux.HandleFunc("GET /api/v1/me/history", handler.requireViewerAuth(handler.listPlayEvents))
 	mux.HandleFunc("DELETE /api/v1/me/history", handler.requireViewerAuth(handler.clearHistory))
+	mux.HandleFunc("GET /api/v1/me/history/stats", handler.requireViewerAuth(handler.getMyHistoryStats))
+	mux.HandleFunc("GET /api/v1/me/history/top-tracks", handler.requireViewerAuth(handler.getMyTopTracks))
+	mux.HandleFunc("/api/v1/me/history/stats", handler.requireViewerAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/me/history/top-tracks", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/me/history", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("GET /api/v1/admin/history/stats", handler.requireAdminAuth(handler.getAdminHistoryStats))
 	mux.HandleFunc("GET /api/v1/admin/history/top-tracks", handler.requireAdminAuth(handler.getAdminTopTracks))
@@ -1890,6 +1894,60 @@ func (handler *Handler) clearHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (handler *Handler) getMyHistoryStats(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireHistoryService(w) {
+		return
+	}
+	user, ok := userFromContext(r)
+	if !ok {
+		writeAPIError(w, http.StatusUnauthorized, "unauthorized", "valid bearer token is required")
+		return
+	}
+	f, ok := parseHistoryAdminFilter(w, r)
+	if !ok {
+		return
+	}
+	stats, err := handler.historyService.GetMyStats(r.Context(), history.UserStatsFilter{
+		UserID: user.ID,
+		Since:  f.Since,
+		Until:  f.Until,
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, stats)
+}
+
+func (handler *Handler) getMyTopTracks(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireHistoryService(w) {
+		return
+	}
+	user, ok := userFromContext(r)
+	if !ok {
+		writeAPIError(w, http.StatusUnauthorized, "unauthorized", "valid bearer token is required")
+		return
+	}
+	f, ok := parseHistoryAdminFilter(w, r)
+	if !ok {
+		return
+	}
+	limit, ok := parseHistoryAdminLimit(w, r)
+	if !ok {
+		return
+	}
+	tracks, err := handler.historyService.GetMyTopTracks(r.Context(), history.UserStatsFilter{
+		UserID: user.ID,
+		Since:  f.Since,
+		Until:  f.Until,
+	}, limit)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"tracks": tracks})
 }
 
 func (handler *Handler) getAdminHistoryStats(w http.ResponseWriter, r *http.Request) {

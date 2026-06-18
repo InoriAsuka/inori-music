@@ -2153,6 +2153,24 @@
             }
           }
         }
+      },
+      "UserHistoryStats": {
+        "description": "Per-user playback aggregate counts.",
+        "type": "object",
+        "required": [
+          "totalEvents",
+          "uniqueTracks"
+        ],
+        "properties": {
+          "totalEvents": {
+            "type": "integer",
+            "description": "Total play events recorded by this user."
+          },
+          "uniqueTracks": {
+            "type": "integer",
+            "description": "Number of distinct tracks played by this user."
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -2166,7 +2184,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "0.73.0"
+    "version": "0.74.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -8460,6 +8478,134 @@
           },
           "400": {
             "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/me/history/stats": {
+      "get": {
+        "summary": "Get personal play history statistics for the authenticated user",
+        "tags": [
+          "history"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "description": "Count events at or after this time (RFC3339).",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": false,
+            "description": "Count events before this time (RFC3339, exclusive).",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Personal history stats.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserHistoryStats"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/me/history/top-tracks": {
+      "get": {
+        "summary": "Get top tracks for the authenticated user by play count",
+        "tags": [
+          "history"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of tracks to return (1\u2013100, default 10).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "description": "Count events at or after this time (RFC3339).",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": false,
+            "description": "Count events before this time (RFC3339, exclusive).",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Top tracks for the authenticated user.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "tracks"
+                  ],
+                  "properties": {
+                    "tracks": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/TrackPlayCount"
+                      }
+                    }
+                  }
+                }
+              }
+            }
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"

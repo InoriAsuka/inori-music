@@ -264,3 +264,71 @@ func statsWhere(f history.StatsFilter) (string, []any) {
 	}
 	return where, args
 }
+
+// userStatsWhere builds a mandatory user_id clause plus optional time bounds.
+func userStatsWhere(f history.UserStatsFilter) (string, []any) {
+	args := []any{f.UserID}
+	clauses := []string{"user_id = $1"}
+	if !f.Since.IsZero() {
+		args = append(args, f.Since.UTC())
+		clauses = append(clauses, fmt.Sprintf("played_at >= $%d", len(args)))
+	}
+	if !f.Until.IsZero() {
+		args = append(args, f.Until.UTC())
+		clauses = append(clauses, fmt.Sprintf("played_at < $%d", len(args)))
+	}
+	where := " WHERE " + clauses[0]
+	for _, c := range clauses[1:] {
+		where += " AND " + c
+	}
+	return where, args
+}
+
+func (r *Repository) UserTopTracks(ctx context.Context, f history.UserStatsFilter, limit int) ([]history.TrackPlayCount, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	where, args := userStatsWhere(f)
+	nextParam := fmt.Sprintf("$%d", len(args)+1)
+	args = append(args, limit)
+	rows, err := r.pool.Query(ctx, `
+		SELECT track_id, COUNT(*) AS play_count
+		FROM play_events`+where+`
+		GROUP BY track_id
+		ORDER BY play_count DESC, track_id ASC
+		LIMIT `+nextParam, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []history.TrackPlayCount
+	for rows.Next() {
+		var item history.TrackPlayCount
+		if err := rows.Scan(&item.TrackID, &item.PlayCount); err != nil {
+			return nil, err
+		}
+		result = append(result, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if result == nil {
+		result = []history.TrackPlayCount{}
+	}
+	return result, nil
+}
+
+func (r *Repository) UserHistoryStats(ctx context.Context, f history.UserStatsFilter) (history.UserHistoryStats, error) {
+	where, args := userStatsWhere(f)
+	row := r.pool.QueryRow(ctx, `
+		SELECT
+			COUNT(*)                AS total_events,
+			COUNT(DISTINCT track_id) AS unique_tracks
+		FROM play_events`+where, args...)
+	var s history.UserHistoryStats
+	if err := row.Scan(&s.TotalEvents, &s.UniqueTracks); err != nil {
+		return history.UserHistoryStats{}, err
+	}
+	return s, nil
+}

@@ -37,6 +37,13 @@ type StatsFilter struct {
 	Until time.Time // optional upper bound on played_at (exclusive)
 }
 
+// UserStatsFilter scopes viewer aggregate queries to a single authenticated user.
+type UserStatsFilter struct {
+	UserID string    // required — injected from auth context
+	Since  time.Time // optional lower bound on played_at (inclusive)
+	Until  time.Time // optional upper bound on played_at (exclusive)
+}
+
 // Repository persists play events.
 type Repository interface {
 	SavePlayEvent(ctx context.Context, e PlayEvent) error
@@ -55,12 +62,23 @@ type Repository interface {
 	HistoryStats(ctx context.Context, f StatsFilter) (HistoryStats, error)
 	TopTracks(ctx context.Context, f StatsFilter, limit int) ([]TrackPlayCount, error)
 	TopUsers(ctx context.Context, f StatsFilter, limit int) ([]UserPlayCount, error)
+
+	// Viewer-scoped aggregate stats — restricted to the authenticated user.
+	UserTopTracks(ctx context.Context, f UserStatsFilter, limit int) ([]TrackPlayCount, error)
+	UserHistoryStats(ctx context.Context, f UserStatsFilter) (UserHistoryStats, error)
 }
 
 // HistoryStats holds system-wide playback aggregate counts.
 type HistoryStats struct {
 	TotalEvents  int `json:"totalEvents"`
 	UniqueUsers  int `json:"uniqueUsers"`
+	UniqueTracks int `json:"uniqueTracks"`
+}
+
+// UserHistoryStats holds per-user playback aggregate counts.
+// UniqueUsers is always 1 for a single user, so it is omitted.
+type UserHistoryStats struct {
+	TotalEvents  int `json:"totalEvents"`
 	UniqueTracks int `json:"uniqueTracks"`
 }
 

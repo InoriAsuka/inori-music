@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.73.0`
+`0.74.0`
 
 ## Product Goal
 
@@ -656,4 +656,19 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add 5 HTTP-layer tests (`TestAdminDeleteUserHistory`, `TestAdminDeleteTrackHistory`, `TestAdminDeleteHistoryWindow`, `TestAdminDeleteHistoryWindowMissingFilter`, `TestAdminBulkDeleteHistoryNotConfigured`).
 - Add `delete` operations to both detail paths and new window path in OpenAPI contract; add `missing_time_filter` to error code enum; bump `info.version` to `0.73.0`.
 - Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `delete` on detail paths and new window path; add `TestStorageAdminOpenAPIContractAdminHistoryBulkDelete`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.74.0 - 2026-06-18
+
+- Add `UserStatsFilter{UserID, Since, Until}` and `UserHistoryStats{TotalEvents, UniqueTracks}` types to `history/types.go`.
+- Add `UserTopTracks(ctx, UserStatsFilter, limit)` and `UserHistoryStats(ctx, UserStatsFilter)` methods to the `Repository` interface.
+- Implement both on `history.MemoryRepository` (user-scoped in-memory filter + sort) and `historypg.Repository` (new `userStatsWhere` helper that mandates `user_id = $1`).
+- Add `GetMyStats` and `GetMyTopTracks` to `history.Service`; validate `UserID != ""`.
+- Add viewer-only `GET /api/v1/me/history/stats` and `GET /api/v1/me/history/top-tracks` endpoints; both accept optional `?since`, `?until`; top-tracks also accepts `?limit` (default 10, max 100).
+- Reuse `parseHistoryAdminFilter` and `parseHistoryAdminLimit` in the new handlers; inject `UserID` from auth context.
+- Add `methodNotAllowed` fallbacks for both new viewer paths.
+- Add 3 `history.Service` unit tests (`TestGetMyStats`, `TestGetMyTopTracks`, `TestGetMyTopTracksTimeWindow`).
+- Add 4 HTTP-layer tests (`TestGetMyHistoryStats`, `TestGetMyTopTracks`, `TestGetMyHistoryStatsTimeWindow`, `TestGetMyHistoryStatsNotConfigured`).
+- Add `UserHistoryStats` schema and 2 new viewer paths to OpenAPI contract; bump `info.version` to `0.74.0`.
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes`; add `TestStorageAdminOpenAPIContractViewerHistoryStatsPaths`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
