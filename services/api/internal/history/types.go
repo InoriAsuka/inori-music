@@ -23,20 +23,24 @@ type PlayEvent struct {
 
 // PlayEventFilter scopes a list of play events for a specific user.
 type PlayEventFilter struct {
-	UserID  string // required
-	TrackID string // optional — filter to a single track
-	Limit   int    // 0 → default (50); clamped to 500
+	UserID  string    // required
+	TrackID string    // optional — filter to a single track
+	Since   time.Time // optional lower bound on played_at (inclusive)
+	Until   time.Time // optional upper bound on played_at (exclusive)
+	Limit   int       // 0 → default (50); clamped to 500
 	Offset  int
-	Asc     bool   // false (default) → played_at DESC; true → played_at ASC
+	Asc     bool      // false (default) → played_at DESC; true → played_at ASC
 }
 
 // AdminPlayEventFilter scopes admin list queries that are not user-scoped.
 type AdminPlayEventFilter struct {
-	TrackID string // required for ListPlayEventsByTrack
-	UserID  string // required for ListPlayEventsByUser (admin view)
-	Limit   int    // 0 → default (50); clamped to 500
+	TrackID string    // required for ListPlayEventsByTrack
+	UserID  string    // required for ListPlayEventsByUser (admin view)
+	Since   time.Time // optional lower bound on played_at (inclusive)
+	Until   time.Time // optional upper bound on played_at (exclusive)
+	Limit   int       // 0 → default (50); clamped to 500
 	Offset  int
-	Asc     bool   // false (default) → played_at DESC; true → played_at ASC
+	Asc     bool      // false (default) → played_at DESC; true → played_at ASC
 }
 
 // GlobalPlayEventFilter scopes admin queries that list all events across every user and track.

@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.79.0`
+`0.80.0`
 
 ## Product Goal
 
@@ -741,4 +741,16 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add 4 `history.Service` unit tests (`TestBatchDeleteEvents`, `TestBatchDeleteEventsUnknownIDsIgnored`, `TestBatchDeleteMyEvents`, `TestBatchDeleteEventsEmpty`).
 - Add 5 HTTP-layer tests (`TestAdminBatchDeleteEvents`, `TestAdminBatchDeleteEventsEmptyBody`, `TestViewerBatchDeleteMyEvents`, `TestViewerBatchDeleteSkipsOtherUsersEvents`, `TestBatchDeleteHistoryNotConfigured`).
 - Extend `TestStorageAdminOpenAPIContractCoversRoutes` with both batch-delete paths; add `TestStorageAdminOpenAPIContractBatchDelete`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.80.0 - 2026-06-19
+
+- Add `Since time.Time` and `Until time.Time` fields to `PlayEventFilter` and `AdminPlayEventFilter` in `history/types.go`.
+- Update `history.MemoryRepository.ListPlayEvents` and `ListPlayEventsByTrack` to apply `Since`/`Until` guards matching the existing pattern in `ListAllPlayEvents`.
+- Replace two-branch (TrackID/no-TrackID) SQL logic in `historypg.Repository.ListPlayEvents` and `ListPlayEventsByTrack` with a unified dynamic `WHERE` clause builder that handles all combinations of `user_id`, `track_id`, `since`, and `until` in a single query path.
+- Thread `Since`/`Until` from `parseHistoryAdminFilter` into `listPlayEvents`, `getAdminUserHistory`, and `getAdminTrackHistory` handlers.
+- Add `since` and `until` query params (string/date-time, optional) to `GET /api/v1/me/history`, `GET /api/v1/admin/history/users/{userId}`, and `GET /api/v1/admin/history/tracks/{trackId}` in OpenAPI; bump `info.version` to `0.80.0`.
+- Add 3 `history.Service` unit tests (`TestListPlaysSinceFilter`, `TestListPlaysUntilFilter`, `TestGetUserHistorySinceFilter`).
+- Add 4 HTTP-layer tests (`TestListPlayEventsSinceFilter`, `TestListPlayEventsUntilFilter`, `TestAdminUserHistorySinceUntilFilter`, `TestAdminTrackHistorySinceFilter`).
+- Add `TestStorageAdminOpenAPIContractListSinceUntilParams` asserting `since`/`until` on all three paths.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

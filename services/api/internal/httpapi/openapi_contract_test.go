@@ -840,3 +840,27 @@ func TestStorageAdminOpenAPIContractBatchDelete(t *testing.T) {
 		t.Error("error code enum is missing 'invalid_ids'")
 	}
 }
+
+func TestStorageAdminOpenAPIContractListSinceUntilParams(t *testing.T) {
+	document := loadOpenAPIContract(t)
+	paths := document["paths"].(map[string]any)
+
+	for _, p := range []string{
+		"/api/v1/me/history",
+		"/api/v1/admin/history/users/{userId}",
+		"/api/v1/admin/history/tracks/{trackId}",
+	} {
+		get := operation(t, paths, p, "get")
+		seen := map[string]bool{}
+		for _, param := range get["parameters"].([]any) {
+			if m, ok := param.(map[string]any); ok {
+				seen[m["name"].(string)] = true
+			}
+		}
+		for _, want := range []string{"since", "until"} {
+			if !seen[want] {
+				t.Errorf("GET %s is missing query param %q", p, want)
+			}
+		}
+	}
+}

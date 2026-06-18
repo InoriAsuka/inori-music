@@ -1865,6 +1865,10 @@ func (handler *Handler) listPlayEvents(w http.ResponseWriter, r *http.Request) {
 		}
 		offset = v
 	}
+	tf, ok := parseHistoryAdminFilter(w, r)
+	if !ok {
+		return
+	}
 	asc, ok := parseHistoryOrder(w, r)
 	if !ok {
 		return
@@ -1872,6 +1876,8 @@ func (handler *Handler) listPlayEvents(w http.ResponseWriter, r *http.Request) {
 	events, total, err := handler.historyService.ListPlays(r.Context(), history.PlayEventFilter{
 		UserID:  user.ID,
 		TrackID: q.Get("trackId"),
+		Since:   tf.Since,
+		Until:   tf.Until,
 		Limit:   limit,
 		Offset:  offset,
 		Asc:     asc,
@@ -2076,6 +2082,10 @@ func (handler *Handler) getAdminUserHistory(w http.ResponseWriter, r *http.Reque
 	if !ok {
 		return
 	}
+	tf, ok := parseHistoryAdminFilter(w, r)
+	if !ok {
+		return
+	}
 	asc, ok := parseHistoryOrder(w, r)
 	if !ok {
 		return
@@ -2083,6 +2093,8 @@ func (handler *Handler) getAdminUserHistory(w http.ResponseWriter, r *http.Reque
 	events, total, err := handler.historyService.GetUserHistory(r.Context(), history.PlayEventFilter{
 		UserID:  userID,
 		TrackID: r.URL.Query().Get("trackId"),
+		Since:   tf.Since,
+		Until:   tf.Until,
 		Limit:   limit,
 		Offset:  offset,
 		Asc:     asc,
@@ -2115,6 +2127,10 @@ func (handler *Handler) getAdminTrackHistory(w http.ResponseWriter, r *http.Requ
 	if !ok {
 		return
 	}
+	tf, ok := parseHistoryAdminFilter(w, r)
+	if !ok {
+		return
+	}
 	asc, ok := parseHistoryOrder(w, r)
 	if !ok {
 		return
@@ -2122,6 +2138,8 @@ func (handler *Handler) getAdminTrackHistory(w http.ResponseWriter, r *http.Requ
 	events, total, err := handler.historyService.GetTrackHistory(r.Context(), history.AdminPlayEventFilter{
 		TrackID: trackID,
 		UserID:  r.URL.Query().Get("userId"),
+		Since:   tf.Since,
+		Until:   tf.Until,
 		Limit:   limit,
 		Offset:  offset,
 		Asc:     asc,

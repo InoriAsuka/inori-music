@@ -879,3 +879,74 @@ func TestBatchDeleteEventsEmpty(t *testing.T) {
 		t.Error("expected error for empty ids")
 	}
 }
+
+func TestListPlaysSinceFilter(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+	base := time.Now().UTC()
+
+	svc.RecordPlay(ctx, "u1", "t1", base)
+	svc.RecordPlay(ctx, "u1", "t2", base.Add(5*time.Second))
+	svc.RecordPlay(ctx, "u1", "t3", base.Add(20*time.Second))
+
+	// since +10s: only t3
+	events, total, err := svc.ListPlays(ctx, history.PlayEventFilter{
+		UserID: "u1",
+		Since:  base.Add(10 * time.Second),
+	})
+	if err != nil {
+		t.Fatalf("ListPlays since: %v", err)
+	}
+	if total != 1 || len(events) != 1 || events[0].TrackID != "t3" {
+		t.Errorf("since filter: total=%d events=%v, want 1/t3", total, events)
+	}
+}
+
+func TestListPlaysUntilFilter(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+	base := time.Now().UTC()
+
+	svc.RecordPlay(ctx, "u1", "t1", base)
+	svc.RecordPlay(ctx, "u1", "t2", base.Add(5*time.Second))
+	svc.RecordPlay(ctx, "u1", "t3", base.Add(20*time.Second))
+
+	// until +10s (exclusive): t1 and t2
+	events, total, err := svc.ListPlays(ctx, history.PlayEventFilter{
+		UserID: "u1",
+		Until:  base.Add(10 * time.Second),
+	})
+	if err != nil {
+		t.Fatalf("ListPlays until: %v", err)
+	}
+	if total != 2 {
+		t.Errorf("until filter: total=%d, want 2", total)
+	}
+	for _, e := range events {
+		if e.TrackID == "t3" {
+			t.Error("t3 should be excluded by until filter")
+		}
+	}
+}
+
+func TestGetUserHistorySinceFilter(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+	base := time.Now().UTC()
+
+	svc.RecordPlay(ctx, "u1", "t1", base)
+	svc.RecordPlay(ctx, "u1", "t2", base.Add(5*time.Second))
+	svc.RecordPlay(ctx, "u1", "t3", base.Add(20*time.Second))
+
+	events, total, err := svc.GetUserHistory(ctx, history.PlayEventFilter{
+		UserID: "u1",
+		Since:  base.Add(3 * time.Second),
+		Until:  base.Add(15 * time.Second),
+	})
+	if err != nil {
+		t.Fatalf("GetUserHistory since/until: %v", err)
+	}
+	if total != 1 || len(events) != 1 || events[0].TrackID != "t2" {
+		t.Errorf("user history window: total=%d, want 1/t2; got %v", total, events)
+	}
+}

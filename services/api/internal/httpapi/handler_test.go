@@ -5840,3 +5840,141 @@ func TestBatchDeleteHistoryNotConfigured(t *testing.T) {
 		assertAPIError(t, resp, http.StatusServiceUnavailable, "history_not_configured")
 	}
 }
+
+func TestListPlayEventsSinceFilter(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"SinceBand"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"ST1","artistId":%q,"mediaObjectId":"mo-sf-1"}`, artistID), "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	// 3 events at distinct times
+	for _, ts := range []string{"2020-01-01T08:00:00Z", "2020-01-01T12:00:00Z", "2020-01-01T18:00:00Z"} {
+		performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+			fmt.Sprintf(`{"trackId":%q,"playedAt":%q}`, trackID, ts), "Bearer "+viewerToken)
+	}
+
+	// since=10:00 → only 12:00 and 18:00 events
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/me/history?since=2020-01-01T10:00:00Z", "", "Bearer "+viewerToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("GET /me/history?since: %d %s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	decodeResponse(t, resp, &result)
+	if result["pagination"].(map[string]any)["total"].(float64) != 2 {
+		t.Errorf("total = %v, want 2", result["pagination"].(map[string]any)["total"])
+	}
+}
+
+func TestListPlayEventsUntilFilter(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"UntilBand"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"UT1","artistId":%q,"mediaObjectId":"mo-uf-1"}`, artistID), "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	for _, ts := range []string{"2020-06-01T08:00:00Z", "2020-06-01T12:00:00Z", "2020-06-01T20:00:00Z"} {
+		performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+			fmt.Sprintf(`{"trackId":%q,"playedAt":%q}`, trackID, ts), "Bearer "+viewerToken)
+	}
+
+	// until=15:00 (exclusive) → 08:00 and 12:00
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/me/history?until=2020-06-01T15:00:00Z", "", "Bearer "+viewerToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("GET /me/history?until: %d %s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	decodeResponse(t, resp, &result)
+	if result["pagination"].(map[string]any)["total"].(float64) != 2 {
+		t.Errorf("total = %v, want 2", result["pagination"].(map[string]any)["total"])
+	}
+}
+
+func TestAdminUserHistorySinceUntilFilter(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"AUSBand"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"AU1","artistId":%q,"mediaObjectId":"mo-aus-1"}`, artistID), "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	playResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q}`, trackID), "Bearer "+viewerToken)
+	var evt map[string]any
+	decodeResponse(t, playResp, &evt)
+	viewerID := evt["userId"].(string)
+
+	for _, ts := range []string{"2021-01-01T06:00:00Z", "2021-01-01T10:00:00Z", "2021-01-01T22:00:00Z"} {
+		performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+			fmt.Sprintf(`{"trackId":%q,"playedAt":%q}`, trackID, ts), "Bearer "+viewerToken)
+	}
+
+	// window [08:00, 12:00) → only 10:00; total from all above = 1 matching window (plus the one without timestamp)
+	// Just verify since filter narrows results
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/admin/history/users/"+viewerID+"?since=2021-01-01T08:00:00Z&until=2021-01-01T12:00:00Z",
+		"", "Bearer "+adminToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("admin user history since/until: %d %s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	decodeResponse(t, resp, &result)
+	if result["pagination"].(map[string]any)["total"].(float64) != 1 {
+		t.Errorf("total = %v, want 1", result["pagination"].(map[string]any)["total"])
+	}
+}
+
+func TestAdminTrackHistorySinceFilter(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"ATSBand"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"ATS1","artistId":%q,"mediaObjectId":"mo-ats-1"}`, artistID), "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	for _, ts := range []string{"2022-03-01T07:00:00Z", "2022-03-01T14:00:00Z"} {
+		performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+			fmt.Sprintf(`{"trackId":%q,"playedAt":%q}`, trackID, ts), "Bearer "+viewerToken)
+	}
+
+	// since=10:00 → only 14:00
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/admin/history/tracks/"+trackID+"?since=2022-03-01T10:00:00Z",
+		"", "Bearer "+adminToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("admin track history since: %d %s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	decodeResponse(t, resp, &result)
+	if result["pagination"].(map[string]any)["total"].(float64) != 1 {
+		t.Errorf("total = %v, want 1", result["pagination"].(map[string]any)["total"])
+	}
+}

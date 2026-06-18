@@ -92,6 +92,12 @@ func (r *MemoryRepository) ListPlayEvents(_ context.Context, f PlayEventFilter) 
 		if f.TrackID != "" && e.TrackID != f.TrackID {
 			continue
 		}
+		if !f.Since.IsZero() && e.PlayedAt.Before(f.Since) {
+			continue
+		}
+		if !f.Until.IsZero() && !e.PlayedAt.Before(f.Until) {
+			continue
+		}
 		all = append(all, e)
 	}
 	r.mu.RUnlock()
@@ -177,6 +183,12 @@ func (r *MemoryRepository) ListPlayEventsByTrack(_ context.Context, f AdminPlayE
 			continue
 		}
 		if f.UserID != "" && e.UserID != f.UserID {
+			continue
+		}
+		if !f.Since.IsZero() && e.PlayedAt.Before(f.Since) {
+			continue
+		}
+		if !f.Until.IsZero() && !e.PlayedAt.Before(f.Until) {
 			continue
 		}
 		all = append(all, e)

@@ -101,28 +101,33 @@ func (r *Repository) ListPlayEvents(ctx context.Context, f history.PlayEventFilt
 		return nil, 0, fmt.Errorf("userID is required")
 	}
 
-	order := eventOrder(f.Asc)
-	var rows pgx.Rows
-	var err error
+	// Build WHERE: user_id required, then optional track_id, since, until.
+	clauses := []string{"user_id = $3"}
+	args := []any{f.Limit, f.Offset, f.UserID}
 	if f.TrackID != "" {
-		rows, err = r.pool.Query(ctx, `
-			SELECT id, user_id, track_id, played_at, created_at,
-			       COUNT(*) OVER () AS total_count
-			FROM play_events
-			WHERE user_id = $3 AND track_id = $4
-			ORDER BY `+order+`
-			LIMIT $1 OFFSET $2`,
-			f.Limit, f.Offset, f.UserID, f.TrackID)
-	} else {
-		rows, err = r.pool.Query(ctx, `
-			SELECT id, user_id, track_id, played_at, created_at,
-			       COUNT(*) OVER () AS total_count
-			FROM play_events
-			WHERE user_id = $3
-			ORDER BY `+order+`
-			LIMIT $1 OFFSET $2`,
-			f.Limit, f.Offset, f.UserID)
+		args = append(args, f.TrackID)
+		clauses = append(clauses, fmt.Sprintf("track_id = $%d", len(args)))
 	}
+	if !f.Since.IsZero() {
+		args = append(args, f.Since.UTC())
+		clauses = append(clauses, fmt.Sprintf("played_at >= $%d", len(args)))
+	}
+	if !f.Until.IsZero() {
+		args = append(args, f.Until.UTC())
+		clauses = append(clauses, fmt.Sprintf("played_at < $%d", len(args)))
+	}
+	where := clauses[0]
+	for _, c := range clauses[1:] {
+		where += " AND " + c
+	}
+
+	rows, err := r.pool.Query(ctx, `
+		SELECT id, user_id, track_id, played_at, created_at,
+		       COUNT(*) OVER () AS total_count
+		FROM play_events
+		WHERE `+where+`
+		ORDER BY `+eventOrder(f.Asc)+`
+		LIMIT $1 OFFSET $2`, args...)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return []history.PlayEvent{}, 0, nil
@@ -175,28 +180,33 @@ func (r *Repository) ListPlayEventsByTrack(ctx context.Context, f history.AdminP
 		return nil, 0, fmt.Errorf("trackID is required")
 	}
 
-	order := eventOrder(f.Asc)
-	var rows pgx.Rows
-	var err error
+	// Build WHERE: track_id required, then optional user_id, since, until.
+	clauses := []string{"track_id = $3"}
+	args := []any{f.Limit, f.Offset, f.TrackID}
 	if f.UserID != "" {
-		rows, err = r.pool.Query(ctx, `
-			SELECT id, user_id, track_id, played_at, created_at,
-			       COUNT(*) OVER () AS total_count
-			FROM play_events
-			WHERE track_id = $3 AND user_id = $4
-			ORDER BY `+order+`
-			LIMIT $1 OFFSET $2`,
-			f.Limit, f.Offset, f.TrackID, f.UserID)
-	} else {
-		rows, err = r.pool.Query(ctx, `
-			SELECT id, user_id, track_id, played_at, created_at,
-			       COUNT(*) OVER () AS total_count
-			FROM play_events
-			WHERE track_id = $3
-			ORDER BY `+order+`
-			LIMIT $1 OFFSET $2`,
-			f.Limit, f.Offset, f.TrackID)
+		args = append(args, f.UserID)
+		clauses = append(clauses, fmt.Sprintf("user_id = $%d", len(args)))
 	}
+	if !f.Since.IsZero() {
+		args = append(args, f.Since.UTC())
+		clauses = append(clauses, fmt.Sprintf("played_at >= $%d", len(args)))
+	}
+	if !f.Until.IsZero() {
+		args = append(args, f.Until.UTC())
+		clauses = append(clauses, fmt.Sprintf("played_at < $%d", len(args)))
+	}
+	where := clauses[0]
+	for _, c := range clauses[1:] {
+		where += " AND " + c
+	}
+
+	rows, err := r.pool.Query(ctx, `
+		SELECT id, user_id, track_id, played_at, created_at,
+		       COUNT(*) OVER () AS total_count
+		FROM play_events
+		WHERE `+where+`
+		ORDER BY `+eventOrder(f.Asc)+`
+		LIMIT $1 OFFSET $2`, args...)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return []history.PlayEvent{}, 0, nil
