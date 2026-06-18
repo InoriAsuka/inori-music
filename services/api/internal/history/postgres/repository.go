@@ -484,3 +484,71 @@ func (r *Repository) UserHistoryStats(ctx context.Context, f history.UserStatsFi
 	}
 	return s, nil
 }
+
+// trackStatsWhere builds a mandatory track_id clause plus optional time bounds.
+func trackStatsWhere(f history.TrackStatsFilter) (string, []any) {
+	args := []any{f.TrackID}
+	clauses := []string{"track_id = $1"}
+	if !f.Since.IsZero() {
+		args = append(args, f.Since.UTC())
+		clauses = append(clauses, fmt.Sprintf("played_at >= $%d", len(args)))
+	}
+	if !f.Until.IsZero() {
+		args = append(args, f.Until.UTC())
+		clauses = append(clauses, fmt.Sprintf("played_at < $%d", len(args)))
+	}
+	where := " WHERE " + clauses[0]
+	for _, c := range clauses[1:] {
+		where += " AND " + c
+	}
+	return where, args
+}
+
+func (r *Repository) TrackHistoryStats(ctx context.Context, f history.TrackStatsFilter) (history.TrackHistoryStatsResult, error) {
+	where, args := trackStatsWhere(f)
+	row := r.pool.QueryRow(ctx, `
+		SELECT
+			COUNT(*)                AS total_events,
+			COUNT(DISTINCT user_id) AS unique_listeners
+		FROM play_events`+where, args...)
+	var s history.TrackHistoryStatsResult
+	if err := row.Scan(&s.TotalEvents, &s.UniqueListeners); err != nil {
+		return history.TrackHistoryStatsResult{}, err
+	}
+	return s, nil
+}
+
+func (r *Repository) TrackTopListeners(ctx context.Context, f history.TrackStatsFilter, limit int) ([]history.UserPlayCount, error) {
+	if limit <= 0 {
+		limit = 10
+	}
+	where, args := trackStatsWhere(f)
+	nextParam := fmt.Sprintf("$%d", len(args)+1)
+	args = append(args, limit)
+	rows, err := r.pool.Query(ctx, `
+		SELECT user_id, COUNT(*) AS play_count
+		FROM play_events`+where+`
+		GROUP BY user_id
+		ORDER BY play_count DESC, user_id ASC
+		LIMIT `+nextParam, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []history.UserPlayCount
+	for rows.Next() {
+		var item history.UserPlayCount
+		if err := rows.Scan(&item.UserID, &item.PlayCount); err != nil {
+			return nil, err
+		}
+		result = append(result, item)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if result == nil {
+		result = []history.UserPlayCount{}
+	}
+	return result, nil
+}

@@ -405,3 +405,60 @@ func (r *MemoryRepository) UserHistoryStats(_ context.Context, f UserStatsFilter
 		UniqueTracks: len(tracks),
 	}, nil
 }
+
+func (r *MemoryRepository) TrackHistoryStats(_ context.Context, f TrackStatsFilter) (TrackHistoryStatsResult, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	listeners := make(map[string]struct{})
+	total := 0
+	for _, e := range r.events {
+		if e.TrackID != f.TrackID {
+			continue
+		}
+		if !f.Since.IsZero() && e.PlayedAt.Before(f.Since) {
+			continue
+		}
+		if !f.Until.IsZero() && !e.PlayedAt.Before(f.Until) {
+			continue
+		}
+		listeners[e.UserID] = struct{}{}
+		total++
+	}
+	return TrackHistoryStatsResult{
+		TotalEvents:     total,
+		UniqueListeners: len(listeners),
+	}, nil
+}
+
+func (r *MemoryRepository) TrackTopListeners(_ context.Context, f TrackStatsFilter, limit int) ([]UserPlayCount, error) {
+	r.mu.RLock()
+	counts := make(map[string]int)
+	for _, e := range r.events {
+		if e.TrackID != f.TrackID {
+			continue
+		}
+		if !f.Since.IsZero() && e.PlayedAt.Before(f.Since) {
+			continue
+		}
+		if !f.Until.IsZero() && !e.PlayedAt.Before(f.Until) {
+			continue
+		}
+		counts[e.UserID]++
+	}
+	r.mu.RUnlock()
+
+	result := make([]UserPlayCount, 0, len(counts))
+	for userID, n := range counts {
+		result = append(result, UserPlayCount{UserID: userID, PlayCount: n})
+	}
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].PlayCount != result[j].PlayCount {
+			return result[i].PlayCount > result[j].PlayCount
+		}
+		return result[i].UserID < result[j].UserID
+	})
+	if limit > 0 && len(result) > limit {
+		result = result[:limit]
+	}
+	return result, nil
+}

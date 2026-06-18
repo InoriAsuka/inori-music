@@ -765,3 +765,17 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add `get` operation to `/api/v1/admin/history/users/{userId}/stats` and `/api/v1/admin/history/users/{userId}/top-tracks` in OpenAPI contract; both accept optional `?since`, `?until`; top-tracks also accepts `?limit`; stats refs `UserHistoryStats` schema; top-tracks refs `TrackPlayCountList` schema (matching the viewer path); bump `info.version` to `0.81.0`.
 - Extend `TestStorageAdminOpenAPIContractCoversRoutes` with both new paths; add `TestStorageAdminOpenAPIContractAdminUserStatsPaths`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.82.0 - 2026-06-19
+
+- Add `TrackHistoryStats{TotalEvents int, UniqueListeners int}` and `TrackStatsFilter{TrackID string, Since time.Time, Until time.Time}` types to `history/types.go`.
+- Add `TrackHistoryStats(ctx, TrackStatsFilter)` and `TrackTopListeners(ctx, TrackStatsFilter, limit)` methods to the `Repository` interface.
+- Implement both on `history.MemoryRepository` (track-scoped in-memory filter + sort) and `historypg.Repository` (new `trackStatsWhere` helper that mandates `track_id = $1`; `TrackTopListeners` returns `UserPlayCount` rows ordered by `play_count DESC, user_id ASC`).
+- Add `GetTrackStats(ctx, TrackStatsFilter)` and `GetTrackTopListeners(ctx, TrackStatsFilter, limit)` to `history.Service` (admin; validate non-empty `TrackID`; limit clamp 1–100 default 10).
+- Add admin routes `GET /api/v1/admin/history/tracks/{trackId}/stats` → `getAdminTrackStats` and `GET /api/v1/admin/history/tracks/{trackId}/top-listeners` → `getAdminTrackTopListeners`; reuse `parseHistoryAdminFilter` and `parseHistoryAdminLimit`; extract `trackId` from path.
+- Add `methodNotAllowed` fallbacks for both new sub-paths.
+- Add 3 `history.Service` unit tests (`TestGetTrackStats`, `TestGetTrackTopListeners`, `TestGetTrackTopListenersTimeWindow`).
+- Add 4 HTTP-layer tests (`TestAdminGetTrackStats`, `TestAdminGetTrackTopListeners`, `TestAdminGetTrackTopListenersTimeWindow`, `TestAdminGetTrackStatsNotConfigured`).
+- Add `TrackHistoryStats` schema to OpenAPI components; add `get` operation to `/api/v1/admin/history/tracks/{trackId}/stats` (refs `TrackHistoryStats`) and `/api/v1/admin/history/tracks/{trackId}/top-listeners` (refs `TopUsersResult`); both accept optional `?since`, `?until`; top-listeners also accepts `?limit`; bump `info.version` to `0.82.0`.
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes` with both new paths; add `TestStorageAdminOpenAPIContractAdminTrackStatsPaths`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.

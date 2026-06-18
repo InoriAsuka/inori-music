@@ -637,6 +637,90 @@ func TestGetAdminUserTopTracksTimeWindow(t *testing.T) {
 	}
 }
 
+func TestGetTrackStats(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	// u1 and u2 play t1; u3 plays t2 — t2 must not affect t1's stats
+	svc.RecordPlay(ctx, "u1", "t1", now)
+	svc.RecordPlay(ctx, "u1", "t1", now.Add(time.Second))
+	svc.RecordPlay(ctx, "u2", "t1", now.Add(2*time.Second))
+	svc.RecordPlay(ctx, "u3", "t2", now)
+
+	stats, err := svc.GetTrackStats(ctx, history.TrackStatsFilter{TrackID: "t1"})
+	if err != nil {
+		t.Fatalf("GetTrackStats: %v", err)
+	}
+	if stats.TotalEvents != 3 {
+		t.Errorf("TotalEvents = %d, want 3", stats.TotalEvents)
+	}
+	if stats.UniqueListeners != 2 {
+		t.Errorf("UniqueListeners = %d, want 2", stats.UniqueListeners)
+	}
+
+	// empty trackID → error
+	if _, err := svc.GetTrackStats(ctx, history.TrackStatsFilter{}); err == nil {
+		t.Fatal("expected error for empty TrackID, got nil")
+	}
+}
+
+func TestGetTrackTopListeners(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+	now := time.Now().UTC()
+
+	// u1 plays t1×3, u2 plays t1×1; u2 also plays t2×10 (must NOT appear in t1's results)
+	for i := 0; i < 3; i++ {
+		svc.RecordPlay(ctx, "u1", "t1", now.Add(time.Duration(i)*time.Second))
+	}
+	svc.RecordPlay(ctx, "u2", "t1", now.Add(10*time.Second))
+	for i := 0; i < 10; i++ {
+		svc.RecordPlay(ctx, "u2", "t2", now.Add(time.Duration(i)*time.Second))
+	}
+
+	listeners, err := svc.GetTrackTopListeners(ctx, history.TrackStatsFilter{TrackID: "t1"}, 0)
+	if err != nil {
+		t.Fatalf("GetTrackTopListeners: %v", err)
+	}
+	if len(listeners) != 2 {
+		t.Fatalf("len = %d, want 2", len(listeners))
+	}
+	if listeners[0].UserID != "u1" || listeners[0].PlayCount != 3 {
+		t.Errorf("top listener = %+v, want u1/3", listeners[0])
+	}
+	if listeners[1].UserID != "u2" || listeners[1].PlayCount != 1 {
+		t.Errorf("second listener = %+v, want u2/1", listeners[1])
+	}
+}
+
+func TestGetTrackTopListenersTimeWindow(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+	base := time.Now().UTC()
+
+	// u1 plays t1 at base (before window), +5s (inside), +20s (after)
+	svc.RecordPlay(ctx, "u1", "t1", base)
+	svc.RecordPlay(ctx, "u2", "t1", base.Add(5*time.Second))
+	svc.RecordPlay(ctx, "u3", "t1", base.Add(20*time.Second))
+
+	f := history.TrackStatsFilter{
+		TrackID: "t1",
+		Since:   base.Add(3 * time.Second),
+		Until:   base.Add(10 * time.Second),
+	}
+	listeners, err := svc.GetTrackTopListeners(ctx, f, 0)
+	if err != nil {
+		t.Fatalf("GetTrackTopListeners windowed: %v", err)
+	}
+	if len(listeners) != 1 {
+		t.Fatalf("windowed listeners = %d, want 1", len(listeners))
+	}
+	if listeners[0].UserID != "u2" {
+		t.Errorf("windowed listener = %q, want u2", listeners[0].UserID)
+	}
+}
+
 func TestGetAllHistory(t *testing.T) {
 	svc := history.NewService(history.NewMemoryRepository())
 	ctx := context.Background()

@@ -69,6 +69,13 @@ type UserStatsFilter struct {
 	Until  time.Time // optional upper bound on played_at (exclusive)
 }
 
+// TrackStatsFilter scopes admin aggregate queries to a single track.
+type TrackStatsFilter struct {
+	TrackID string    // required
+	Since   time.Time // optional lower bound on played_at (inclusive)
+	Until   time.Time // optional upper bound on played_at (exclusive)
+}
+
 // Repository persists play events.
 type Repository interface {
 	SavePlayEvent(ctx context.Context, e PlayEvent) error
@@ -105,6 +112,10 @@ type Repository interface {
 	// Viewer-scoped aggregate stats — restricted to the authenticated user.
 	UserTopTracks(ctx context.Context, f UserStatsFilter, limit int) ([]TrackPlayCount, error)
 	UserHistoryStats(ctx context.Context, f UserStatsFilter) (UserHistoryStats, error)
+
+	// Track-scoped aggregate stats — admin-facing queries for a single track.
+	TrackHistoryStats(ctx context.Context, f TrackStatsFilter) (TrackHistoryStatsResult, error)
+	TrackTopListeners(ctx context.Context, f TrackStatsFilter, limit int) ([]UserPlayCount, error)
 }
 
 // HistoryStats holds system-wide playback aggregate counts.
@@ -119,6 +130,12 @@ type HistoryStats struct {
 type UserHistoryStats struct {
 	TotalEvents  int `json:"totalEvents"`
 	UniqueTracks int `json:"uniqueTracks"`
+}
+
+// TrackHistoryStatsResult holds per-track playback aggregate counts.
+type TrackHistoryStatsResult struct {
+	TotalEvents     int `json:"totalEvents"`
+	UniqueListeners int `json:"uniqueListeners"`
 }
 
 // TrackPlayCount holds a track's total play count across all users.

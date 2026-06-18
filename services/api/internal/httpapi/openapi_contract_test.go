@@ -88,6 +88,8 @@ func TestStorageAdminOpenAPIContractCoversRoutes(t *testing.T) {
 		"/api/v1/admin/history/users/{userId}/stats":            {"get"},
 		"/api/v1/admin/history/users/{userId}/top-tracks":       {"get"},
 		"/api/v1/admin/history/tracks/{trackId}":                {"get", "delete"},
+		"/api/v1/admin/history/tracks/{trackId}/stats":          {"get"},
+		"/api/v1/admin/history/tracks/{trackId}/top-listeners":  {"get"},
 		"/api/v1/admin/history/{eventId}":                       {"get", "patch", "delete"},
 		"/api/v1/admin/history":                                 {"get", "delete"},
 		"/api/v1/admin/history/batch-delete":                    {"post"},
@@ -911,5 +913,66 @@ func TestStorageAdminOpenAPIContractAdminUserStatsPaths(t *testing.T) {
 		if !topParams[want] {
 			t.Errorf("GET /api/v1/admin/history/users/{userId}/top-tracks missing param %q", want)
 		}
+	}
+}
+
+func TestStorageAdminOpenAPIContractAdminTrackStatsPaths(t *testing.T) {
+	document := loadOpenAPIContract(t)
+	paths := document["paths"].(map[string]any)
+	components := document["components"].(map[string]any)
+	schemas := components["schemas"].(map[string]any)
+
+	// TrackHistoryStats schema must exist with required fields
+	ts, ok := schemas["TrackHistoryStats"].(map[string]any)
+	if !ok {
+		t.Fatal("schema TrackHistoryStats is missing")
+	}
+	props, _ := ts["properties"].(map[string]any)
+	for _, want := range []string{"totalEvents", "uniqueListeners"} {
+		if _, ok := props[want]; !ok {
+			t.Errorf("TrackHistoryStats is missing property %q", want)
+		}
+	}
+
+	// GET /api/v1/admin/history/tracks/{trackId}/stats must exist with since/until params
+	statsGet := operation(t, paths, "/api/v1/admin/history/tracks/{trackId}/stats", "get")
+	statsParams := map[string]bool{}
+	for _, p := range statsGet["parameters"].([]any) {
+		if m, ok := p.(map[string]any); ok {
+			statsParams[m["name"].(string)] = true
+		}
+	}
+	for _, want := range []string{"since", "until"} {
+		if !statsParams[want] {
+			t.Errorf("GET /api/v1/admin/history/tracks/{trackId}/stats missing param %q", want)
+		}
+	}
+	// 200 response must reference TrackHistoryStats
+	resp200 := statsGet["responses"].(map[string]any)["200"].(map[string]any)
+	content := resp200["content"].(map[string]any)["application/json"].(map[string]any)
+	schema := content["schema"].(map[string]any)
+	if schema["$ref"] != "#/components/schemas/TrackHistoryStats" {
+		t.Errorf("GET /api/v1/admin/history/tracks/{trackId}/stats 200 schema = %v, want TrackHistoryStats ref", schema)
+	}
+
+	// GET /api/v1/admin/history/tracks/{trackId}/top-listeners must exist with limit/since/until params
+	topGet := operation(t, paths, "/api/v1/admin/history/tracks/{trackId}/top-listeners", "get")
+	topParams := map[string]bool{}
+	for _, p := range topGet["parameters"].([]any) {
+		if m, ok := p.(map[string]any); ok {
+			topParams[m["name"].(string)] = true
+		}
+	}
+	for _, want := range []string{"limit", "since", "until"} {
+		if !topParams[want] {
+			t.Errorf("GET /api/v1/admin/history/tracks/{trackId}/top-listeners missing param %q", want)
+		}
+	}
+	// 200 response must reference TopUsersResult
+	topResp200 := topGet["responses"].(map[string]any)["200"].(map[string]any)
+	topContent := topResp200["content"].(map[string]any)["application/json"].(map[string]any)
+	topSchema := topContent["schema"].(map[string]any)
+	if topSchema["$ref"] != "#/components/schemas/TopUsersResult" {
+		t.Errorf("GET /api/v1/admin/history/tracks/{trackId}/top-listeners 200 schema = %v, want TopUsersResult ref", topSchema)
 	}
 }

@@ -2176,6 +2176,24 @@
           }
         }
       },
+      "TrackHistoryStats": {
+        "description": "Per-track playback aggregate counts.",
+        "type": "object",
+        "required": [
+          "totalEvents",
+          "uniqueListeners"
+        ],
+        "properties": {
+          "totalEvents": {
+            "type": "integer",
+            "description": "Total play events recorded for this track."
+          },
+          "uniqueListeners": {
+            "type": "integer",
+            "description": "Number of distinct users who have played this track."
+          }
+        }
+      },
       "UpdatePlayEventRequest": {
         "type": "object",
         "required": [
@@ -2230,7 +2248,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "0.81.0"
+    "version": "0.82.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -8730,6 +8748,157 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/history/tracks/{trackId}/stats": {
+      "get": {
+        "summary": "Get play history stats for a specific track (admin)",
+        "operationId": "getAdminTrackStats",
+        "description": "Returns aggregate play counts (total events, unique listeners) for any track. Admin only.",
+        "tags": [
+          "AdminHistory"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "trackId",
+            "in": "path",
+            "required": true,
+            "description": "ID of the track whose stats to retrieve.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "description": "Restrict stats to events on or after this RFC3339 timestamp.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": false,
+            "description": "Restrict stats to events before this RFC3339 timestamp (exclusive).",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Track history stats",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrackHistoryStats"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/history/tracks/{trackId}/top-listeners": {
+      "get": {
+        "summary": "Get top listeners for a specific track (admin)",
+        "operationId": "getAdminTrackTopListeners",
+        "description": "Returns the users who have played a track the most. Admin only.",
+        "tags": [
+          "AdminHistory"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "trackId",
+            "in": "path",
+            "required": true,
+            "description": "ID of the track whose top listeners to retrieve.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 10
+            },
+            "description": "Maximum number of results (default 10, max 100)."
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "description": "Restrict results to events on or after this RFC3339 timestamp.",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": false,
+            "description": "Restrict results to events before this RFC3339 timestamp (exclusive).",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Top listeners for the track",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TopUsersResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
           },
           "503": {
             "$ref": "#/components/responses/ServiceUnavailable"
