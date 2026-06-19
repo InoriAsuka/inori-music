@@ -339,6 +339,26 @@ func (s *Service) ChangePassword(ctx context.Context, userID, currentPassword, n
 	return s.users.SaveUser(ctx, user)
 }
 
+// ForceChangePassword replaces a user's password without verifying the current one.
+// Returns ErrUserNotFound when the user does not exist.
+// Returns ErrInvalidUser when newPassword is fewer than 8 characters.
+func (s *Service) ForceChangePassword(ctx context.Context, userID, newPassword string) error {
+	user, err := s.users.GetUser(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if len(newPassword) < 8 {
+		return fmt.Errorf("%w: password must be at least 8 characters", ErrInvalidUser)
+	}
+	hash, err := HashPassword(newPassword)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
+	user.PasswordHash = hash
+	user.UpdatedAt = s.now().UTC()
+	return s.users.SaveUser(ctx, user)
+}
+
 func toView(u User) UserView {
 	return UserView{
 		ID:        u.ID,

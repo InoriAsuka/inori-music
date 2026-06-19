@@ -104,6 +104,7 @@ func TestStorageAdminOpenAPIContractCoversRoutes(t *testing.T) {
 		"/api/v1/admin/users/{id}/disable":                      {"post"},
 		"/api/v1/admin/users/{id}/enable":                       {"post"},
 		"/api/v1/admin/users/{id}/sessions":                     {"get", "delete"},
+		"/api/v1/admin/users/{id}/change-password":              {"post"},
 	}
 
 	for path, methods := range expected {
@@ -1195,5 +1196,31 @@ func TestStorageAdminOpenAPIContractAdminPatchUser(t *testing.T) {
 	roleSchema, _ := props["role"].(map[string]any)
 	if !containsString(roleSchema["enum"].([]any), "admin") || !containsString(roleSchema["enum"].([]any), "viewer") {
 		t.Error("PatchUserRequest role schema missing admin/viewer enum values")
+	}
+}
+
+func TestStorageAdminOpenAPIContractAdminForceChangePassword(t *testing.T) {
+	document := loadOpenAPIContract(t)
+	paths := document["paths"].(map[string]any)
+	components := document["components"].(map[string]any)
+	schemas := components["schemas"].(map[string]any)
+
+	// POST /api/v1/admin/users/{id}/change-password must exist with 204 response
+	post := operation(t, paths, "/api/v1/admin/users/{id}/change-password", "post")
+	if _, ok := post["responses"].(map[string]any)["204"]; !ok {
+		t.Error("POST /api/v1/admin/users/{id}/change-password missing 204 response")
+	}
+	if _, ok := post["responses"].(map[string]any)["404"]; !ok {
+		t.Error("POST /api/v1/admin/users/{id}/change-password missing 404 response")
+	}
+
+	// ForceChangePasswordRequest schema must exist with newPassword
+	schema, ok := schemas["ForceChangePasswordRequest"].(map[string]any)
+	if !ok {
+		t.Fatal("schema ForceChangePasswordRequest is missing")
+	}
+	props, _ := schema["properties"].(map[string]any)
+	if _, ok := props["newPassword"]; !ok {
+		t.Error("ForceChangePasswordRequest missing property newPassword")
 	}
 }

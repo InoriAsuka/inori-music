@@ -309,6 +309,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/admin/users/{id}", handler.requireAdminAuth(handler.deleteUser))
 	mux.HandleFunc("GET /api/v1/admin/users/{id}/sessions", handler.requireAdminAuth(handler.getAdminUserSessions))
 	mux.HandleFunc("DELETE /api/v1/admin/users/{id}/sessions", handler.requireAdminAuth(handler.deleteAdminUserSessions))
+	mux.HandleFunc("POST /api/v1/admin/users/{id}/change-password", handler.requireAdminAuth(handler.forceChangePassword))
 	mux.HandleFunc("GET /api/v1/admin/catalog/artists", handler.requireAdminAuth(handler.listArtists))
 	mux.HandleFunc("POST /api/v1/admin/catalog/artists", handler.requireAdminAuth(handler.createArtist))
 	mux.HandleFunc("GET /api/v1/admin/catalog/artists/{id}", handler.requireAdminAuth(handler.getArtist))
@@ -437,6 +438,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("/api/v1/admin/users/{id}/disable", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/users/{id}/enable", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/users/{id}/sessions", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/users/{id}/change-password", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/users/{id}", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/catalog/artists", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/catalog/artists/{id}", handler.requireAdminAuth(handler.methodNotAllowed))
@@ -781,6 +783,28 @@ func (handler *Handler) changePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := handler.authService.ChangePassword(r.Context(), user.ID, body.CurrentPassword, body.NewPassword); err != nil {
+		writeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (handler *Handler) forceChangePassword(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireAuthService(w) {
+		return
+	}
+	var body struct {
+		NewPassword string `json:"newPassword"`
+	}
+	if err := decodeJSONWithSentinel(w, r, &body, auth.ErrInvalidUser); err != nil {
+		writeError(w, err)
+		return
+	}
+	if body.NewPassword == "" {
+		writeAPIError(w, http.StatusBadRequest, "invalid_user", "newPassword is required")
+		return
+	}
+	if err := handler.authService.ForceChangePassword(r.Context(), r.PathValue("id"), body.NewPassword); err != nil {
 		writeError(w, err)
 		return
 	}

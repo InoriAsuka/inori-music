@@ -927,3 +927,15 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add 5 HTTP-layer tests: `TestAdminListUsersFilterByRole`, `TestAdminListUsersFilterByEnabled`, `TestAdminListUsersFilterByUsername`, `TestAdminListUsersFilterInvalidRole`, `TestAdminListUsersFilterInvalidEnabled`.
 - Extend `GET /api/v1/admin/users` in OpenAPI contract with `username`, `role`, and `enabled` query params; bump `info.version` to `0.96.0`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.97.0 - 2026-06-19
+
+- Add `ForceChangePassword(ctx, userID, newPassword string) error` to `auth.Service`: retrieves user by ID, validates new password (≥ 8 chars), hashes, and saves without verifying the current password.
+- Add `forceChangePassword` handler: `POST /api/v1/admin/users/{id}/change-password`; requires admin auth; decodes `{newPassword}`; returns `204 No Content` on success; `400 invalid_user` for weak/missing password; `404` for unknown user; `503` when auth not configured.
+- Register `POST /api/v1/admin/users/{id}/change-password` (admin-auth) and its `methodNotAllowed` fallback.
+- Add `ForceChangePasswordRequest` schema to OpenAPI components (`newPassword: string, minLength: 8`).
+- Add 3 `auth.Service` unit tests: `TestForceChangePassword`, `TestForceChangePassword_WeakNew`, `TestForceChangePassword_NotFound`.
+- Add 4 HTTP-layer tests: `TestAdminForceChangePassword`, `TestAdminForceChangePasswordWeakPassword`, `TestAdminForceChangePasswordNotFound`, `TestAdminForceChangePasswordNotConfigured`.
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `post` on `/api/v1/admin/users/{id}/change-password`; add `TestStorageAdminOpenAPIContractAdminForceChangePassword`.
+- Bump `info.version` to `0.97.0`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.

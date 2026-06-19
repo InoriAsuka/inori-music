@@ -7196,3 +7196,58 @@ func TestAdminListUsersFilterInvalidEnabled(t *testing.T) {
 	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/users?enabled=yes", "")
 	assertAPIError(t, resp, http.StatusBadRequest, "invalid_enabled")
 }
+
+// ---- Phase 97: POST /api/v1/admin/users/{id}/change-password ----
+
+func TestAdminForceChangePassword(t *testing.T) {
+	authSvc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAuthService(authSvc),
+		WithAdminToken(testAdminToken),
+	).Routes()
+	view, err := authSvc.CreateUser(context.Background(), "forcepw_user", "oldpass1234", auth.RoleViewer)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	body := `{"newPassword":"newSecurePass9"}`
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/users/"+view.ID+"/change-password", body)
+	if resp.Code != http.StatusNoContent {
+		t.Fatalf("POST /admin/users/{id}/change-password: %d %s", resp.Code, resp.Body.String())
+	}
+}
+
+func TestAdminForceChangePasswordWeakPassword(t *testing.T) {
+	authSvc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAuthService(authSvc),
+		WithAdminToken(testAdminToken),
+	).Routes()
+	view, err := authSvc.CreateUser(context.Background(), "forcepw_weak", "oldpass1234", auth.RoleViewer)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/users/"+view.ID+"/change-password", `{"newPassword":"short"}`)
+	assertAPIError(t, resp, http.StatusBadRequest, "invalid_user")
+}
+
+func TestAdminForceChangePasswordNotFound(t *testing.T) {
+	authSvc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAuthService(authSvc),
+		WithAdminToken(testAdminToken),
+	).Routes()
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/users/no-such-user/change-password", `{"newPassword":"newSecurePass9"}`)
+	assertAPIError(t, resp, http.StatusNotFound, "not_found")
+}
+
+func TestAdminForceChangePasswordNotConfigured(t *testing.T) {
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAdminToken(testAdminToken),
+	).Routes()
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/users/any-id/change-password", `{"newPassword":"newSecurePass9"}`)
+	assertAPIError(t, resp, http.StatusServiceUnavailable, "auth_not_configured")
+}

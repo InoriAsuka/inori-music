@@ -546,3 +546,40 @@ func TestListActiveSessionsFiltersExpired(t *testing.T) {
 		t.Errorf("expected 0 sessions after expiry, got %d", len(sessions))
 	}
 }
+
+func TestForceChangePassword(t *testing.T) {
+	svc := newTestService(time.Hour)
+	view, err := svc.CreateUser(context.Background(), "forcepw", "oldpass1234", auth.RoleViewer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.ForceChangePassword(context.Background(), view.ID, "newpass5678"); err != nil {
+		t.Fatalf("ForceChangePassword: %v", err)
+	}
+	// Old password should no longer work.
+	if _, _, err := svc.Login(context.Background(), "forcepw", "oldpass1234"); err == nil {
+		t.Error("login with old password should have failed")
+	}
+	// New password must work.
+	if _, _, err := svc.Login(context.Background(), "forcepw", "newpass5678"); err != nil {
+		t.Errorf("login with new password failed: %v", err)
+	}
+}
+
+func TestForceChangePassword_WeakNew(t *testing.T) {
+	svc := newTestService(time.Hour)
+	view, err := svc.CreateUser(context.Background(), "forcepw_weak", "goodpass1234", auth.RoleViewer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.ForceChangePassword(context.Background(), view.ID, "short"); err == nil {
+		t.Error("expected error for weak new password")
+	}
+}
+
+func TestForceChangePassword_NotFound(t *testing.T) {
+	svc := newTestService(time.Hour)
+	if err := svc.ForceChangePassword(context.Background(), "no-such-id", "newpass5678"); err == nil {
+		t.Error("expected error for unknown user")
+	}
+}
