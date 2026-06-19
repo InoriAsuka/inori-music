@@ -384,3 +384,34 @@ func TestChangePassword_WeakNew(t *testing.T) {
 		t.Errorf("expected ErrInvalidUser for short new password, got %v", err)
 	}
 }
+
+func TestEnableUser(t *testing.T) {
+	svc := newTestService(time.Hour)
+	view, err := svc.CreateUser(context.Background(), "toggled", "pass1234", auth.RoleViewer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// disable then enable
+	if _, err := svc.DisableUser(context.Background(), view.ID); err != nil {
+		t.Fatalf("DisableUser: %v", err)
+	}
+	enabled, err := svc.EnableUser(context.Background(), view.ID)
+	if err != nil {
+		t.Fatalf("EnableUser: %v", err)
+	}
+	if !enabled.Enabled {
+		t.Error("EnableUser: user.Enabled should be true after EnableUser")
+	}
+	// should be able to log in again
+	if _, _, err := svc.Login(context.Background(), "toggled", "pass1234"); err != nil {
+		t.Errorf("Login after EnableUser: %v", err)
+	}
+}
+
+func TestEnableUser_NotFound(t *testing.T) {
+	svc := newTestService(time.Hour)
+	_, err := svc.EnableUser(context.Background(), "no-such-id")
+	if !errors.Is(err, auth.ErrUserNotFound) {
+		t.Errorf("expected ErrUserNotFound, got %v", err)
+	}
+}

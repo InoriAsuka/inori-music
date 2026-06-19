@@ -193,6 +193,20 @@ func (s *Service) DisableUser(ctx context.Context, id string) (UserView, error) 
 	return toView(user), nil
 }
 
+// EnableUser marks a previously disabled user as enabled, restoring login access.
+func (s *Service) EnableUser(ctx context.Context, id string) (UserView, error) {
+	user, err := s.users.GetUser(ctx, id)
+	if err != nil {
+		return UserView{}, err
+	}
+	user.Enabled = true
+	user.UpdatedAt = s.now().UTC()
+	if err := s.users.SaveUser(ctx, user); err != nil {
+		return UserView{}, err
+	}
+	return toView(user), nil
+}
+
 // DeleteUser removes a user record permanently.
 func (s *Service) DeleteUser(ctx context.Context, id string) error {
 	if _, err := s.users.GetUser(ctx, id); err != nil {

@@ -837,3 +837,14 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add `POST /api/v1/me/change-password` to OpenAPI contract; bump `info.version` to `0.87.0`.
 - Extend `TestStorageAdminOpenAPIContractCoversRoutes`; add `TestStorageAdminOpenAPIContractChangePassword`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.88.0 - 2026-06-19
+
+- Add `EnableUser(ctx, id string) (UserView, error)` to `auth.Service`: mirrors `DisableUser`; sets `Enabled = true`, updates `UpdatedAt`, saves.
+- Add `enableUser` handler: `POST /api/v1/admin/users/{id}/enable`; returns `UserView` of the re-enabled user.
+- Register `POST /api/v1/admin/users/{id}/enable` (admin-auth); add `/api/v1/admin/users/{id}/enable` methodNotAllowed catch-all.
+- Add 2 `auth.Service` unit tests (`TestEnableUser`, `TestEnableUser_NotFound`).
+- Add 3 HTTP-layer tests (`TestEnableUser`, `TestEnableUserNotFound`, `TestEnableUserNotConfigured`).
+- Add `POST /api/v1/admin/users/{id}/enable` to OpenAPI contract (with `UserId` path parameter); bump `info.version` to `0.88.0`.
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes`; add `TestStorageAdminOpenAPIContractEnableUser`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.

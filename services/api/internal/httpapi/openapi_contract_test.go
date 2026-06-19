@@ -100,6 +100,7 @@ func TestStorageAdminOpenAPIContractCoversRoutes(t *testing.T) {
 		"/api/v1/admin/users":                                    {"get", "post"},
 		"/api/v1/admin/users/{id}":                              {"get", "delete"},
 		"/api/v1/admin/users/{id}/disable":                      {"post"},
+		"/api/v1/admin/users/{id}/enable":                       {"post"},
 	}
 
 	for path, methods := range expected {
@@ -1139,5 +1140,24 @@ func TestStorageAdminOpenAPIContractChangePassword(t *testing.T) {
 		if _, ok := props[want]; !ok {
 			t.Errorf("ChangePasswordRequest missing property %q", want)
 		}
+	}
+}
+
+func TestStorageAdminOpenAPIContractEnableUser(t *testing.T) {
+	document := loadOpenAPIContract(t)
+	paths := document["paths"].(map[string]any)
+
+	// POST /api/v1/admin/users/{id}/enable must exist and return UserView
+	post := operation(t, paths, "/api/v1/admin/users/{id}/enable", "post")
+	resp200 := post["responses"].(map[string]any)["200"].(map[string]any)
+	content := resp200["content"].(map[string]any)["application/json"].(map[string]any)
+	schema := content["schema"].(map[string]any)
+	if schema["$ref"] != "#/components/schemas/UserView" {
+		t.Errorf("POST /api/v1/admin/users/{id}/enable 200 schema = %v, want UserView ref", schema)
+	}
+
+	// must have a 404 response
+	if _, ok := post["responses"].(map[string]any)["404"]; !ok {
+		t.Error("POST /api/v1/admin/users/{id}/enable missing 404 response")
 	}
 }

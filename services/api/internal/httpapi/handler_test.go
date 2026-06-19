@@ -1194,6 +1194,44 @@ func TestChangePasswordNotConfigured(t *testing.T) {
 	assertAPIError(t, resp, http.StatusServiceUnavailable, "auth_not_configured")
 }
 
+func TestEnableUser(t *testing.T) {
+	h, svc := newAuthTestHandler()
+	token := loginAdminToken(t, h)
+	// create and disable a viewer
+	view, err := svc.CreateUser(context.Background(), "reenable_usr", "pass1234", auth.RoleViewer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	disableResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/users/"+view.ID+"/disable", "", "Bearer "+token)
+	if disableResp.Code != http.StatusOK {
+		t.Fatalf("disable status = %d", disableResp.Code)
+	}
+	// enable again
+	enableResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/users/"+view.ID+"/enable", "", "Bearer "+token)
+	if enableResp.Code != http.StatusOK {
+		t.Fatalf("enable status = %d, body = %s", enableResp.Code, enableResp.Body.String())
+	}
+	var enabled auth.UserView
+	decodeResponse(t, enableResp, &enabled)
+	if !enabled.Enabled {
+		t.Errorf("enable response: Enabled = false, want true")
+	}
+}
+
+func TestEnableUserNotFound(t *testing.T) {
+	h, _ := newAuthTestHandler()
+	token := loginAdminToken(t, h)
+	resp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/users/no-such-id/enable", "", "Bearer "+token)
+	assertAPIError(t, resp, http.StatusNotFound, "not_found")
+}
+
+func TestEnableUserNotConfigured(t *testing.T) {
+	repo := storage.NewMemoryRepository()
+	h := NewHandler(storage.NewService(repo), WithAdminToken(testAdminToken)).Routes()
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/users/some-id/enable", "")
+	assertAPIError(t, resp, http.StatusServiceUnavailable, "auth_not_configured")
+}
+
 func loginAdminToken(t *testing.T, h http.Handler) string {
 	t.Helper()
 	loginResp := performRequestWithoutAuth(t, h, http.MethodPost, "/api/v1/auth/login", `{"username":"admin","password":"adminpass1"}`)
