@@ -11,26 +11,26 @@ a time window (e.g. "how many times did I play this track this month?").
 
 ## Tasks
 
-- [ ] Rename `UserTrackPlayStats(ctx, userID, trackID string) (UserTrackStats, error)`
+- [x] Rename `UserTrackPlayStats(ctx, userID, trackID string) (UserTrackStats, error)`
       to `UserTrackPlayStats(ctx, userID, trackID string, f UserStatsFilter)
       (UserTrackStats, error)` in `history.Repository`; `f.Since` and `f.Until`
       bound the query when non-zero. (The `UserStatsFilter.UserID` field is
       ignored; caller passes `userID` directly.)
-- [ ] Update `history.MemoryRepository.UserTrackPlayStats` to apply `f.Since`
+- [x] Update `history.MemoryRepository.UserTrackPlayStats` to apply `f.Since`
       and `f.Until` bounds when non-zero.
-- [ ] Update `historypg.Repository.UserTrackPlayStats` to inject
+- [x] Update `historypg.Repository.UserTrackPlayStats` to inject
       `AND played_at >= $3` / `AND played_at < $4` clauses when non-zero.
-- [ ] Update `history.Service.GetMyTrackStats(ctx, userID, trackID string,
+- [x] Update `history.Service.GetMyTrackStats(ctx, userID, trackID string,
       f UserStatsFilter) (UserTrackStats, error)` signature to forward `f`.
-- [ ] Update `getMyTrackStats` handler to parse optional `?since` / `?until`
+- [x] Update `getMyTrackStats` handler to parse optional `?since` / `?until`
       query params (RFC3339); return `400 invalid_since` / `400 invalid_until`
       on parse failure; pass them via `UserStatsFilter` to `GetMyTrackStats`.
-- [ ] Update `GET /api/v1/me/history/tracks/{trackId}/stats` in OpenAPI to
+- [x] Update `GET /api/v1/me/history/tracks/{trackId}/stats` in OpenAPI to
       declare `since` and `until` query parameters; bump `info.version` to
       `1.9.0`.
-- [ ] Update `history.Service` unit tests for `GetMyTrackStats` to cover the
+- [x] Update `history.Service` unit tests for `GetMyTrackStats` to cover the
       time-filtered path: `TestGetMyTrackStatsTimeWindow`.
-- [ ] Add 2 HTTP-layer tests: `TestViewerGetMyTrackStatsSince`,
+- [x] Add 2 HTTP-layer tests: `TestViewerGetMyTrackStatsSince`,
       `TestViewerGetMyTrackStatsUntil`.
 
 ## Non-goals

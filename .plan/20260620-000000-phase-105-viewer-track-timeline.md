@@ -13,19 +13,19 @@ authenticated user's events only.
 
 ## Tasks
 
-- [ ] Add `getMyTrackTimeline` handler: reads `{trackId}` from path; requires
+- [x] Add `getMyTrackTimeline` handler: reads `{trackId}` from path; requires
       viewer auth; accepts `since` (required), `until` (required),
       `granularity` (optional; day/week/month) query params; calls
       `history.Service.GetMyTimeline` with both `UserID` (from auth context)
       and `TrackID` (from path) set; returns `{buckets}`;
       `503` when history service not configured.
-- [ ] Register `GET /api/v1/me/history/tracks/{trackId}/timeline` (viewer-auth)
+- [x] Register `GET /api/v1/me/history/tracks/{trackId}/timeline` (viewer-auth)
       before the existing wildcard fallback `/api/v1/me/history/tracks/{trackId}`.
-- [ ] Add `get` operation to `/api/v1/me/history/tracks/{trackId}/timeline` in
+- [x] Add `get` operation to `/api/v1/me/history/tracks/{trackId}/timeline` in
       OpenAPI contract; bump `info.version` to `1.5.0`.
-- [ ] Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `get` on
+- [x] Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `get` on
       `/api/v1/me/history/tracks/{trackId}/timeline`.
-- [ ] Add 3 HTTP-layer tests: `TestViewerGetMyTrackTimeline`,
+- [x] Add 3 HTTP-layer tests: `TestViewerGetMyTrackTimeline`,
       `TestViewerGetMyTrackTimelineMissingBounds`,
       `TestViewerGetMyTrackTimelineMethodNotAllowed`.
 

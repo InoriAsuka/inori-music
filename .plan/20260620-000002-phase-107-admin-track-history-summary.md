@@ -11,28 +11,28 @@ in a single request. Mirrors Phase 106's user history-summary for tracks.
 
 ## Tasks
 
-- [ ] Add `TrackHistorySummary{Stats TrackHistoryStatsResult, TopListeners []UserPlayCount}`
+- [x] Add `TrackHistorySummary{Stats TrackHistoryStatsResult, TopListeners []UserPlayCount}`
       type to the `history` package.
-- [ ] Add `GetTrackSummary(ctx, trackID string, f TrackStatsFilter, topN int)
+- [x] Add `GetTrackSummary(ctx, trackID string, f TrackStatsFilter, topN int)
       (TrackHistorySummary, error)` to `history.Service`: calls `GetTrackStats`
       and `GetTrackTopListeners`, returns the combined struct.
-- [ ] Add `getAdminTrackHistorySummary` handler:
+- [x] Add `getAdminTrackHistorySummary` handler:
       `GET /api/v1/admin/history/tracks/{trackId}/history-summary`; requires
       admin auth; reads `{trackId}` from path; accepts optional `since`, `until`
       query params (RFC3339); accepts optional `?topN` (int; default 10;
       clamped 1–100); returns `TrackHistorySummary`; `503` when history service
       not configured.
-- [ ] Register `GET /api/v1/admin/history/tracks/{trackId}/history-summary`
+- [x] Register `GET /api/v1/admin/history/tracks/{trackId}/history-summary`
       (admin-auth) before the existing `{trackId}` catch-all fallback; add
       `methodNotAllowed` fallback for the new path.
-- [ ] Add `TrackHistorySummary` schema to OpenAPI components; add `get` operation
+- [x] Add `TrackHistorySummary` schema to OpenAPI components; add `get` operation
       to `/api/v1/admin/history/tracks/{trackId}/history-summary`; bump
       `info.version` to `1.7.0`.
-- [ ] Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `get` on
+- [x] Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `get` on
       `/api/v1/admin/history/tracks/{trackId}/history-summary`.
-- [ ] Add 2 `history.Service` unit tests: `TestGetTrackSummary`,
+- [x] Add 2 `history.Service` unit tests: `TestGetTrackSummary`,
       `TestGetTrackSummaryEmpty`.
-- [ ] Add 3 HTTP-layer tests: `TestAdminGetTrackHistorySummary`,
+- [x] Add 3 HTTP-layer tests: `TestAdminGetTrackHistorySummary`,
       `TestAdminGetTrackHistorySummaryWithTopN`,
       `TestAdminGetTrackHistorySummaryNotConfigured`.
 
