@@ -389,8 +389,10 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/history/top-users", handler.requireAdminAuth(handler.getAdminTopUsers))
 	mux.HandleFunc("GET /api/v1/admin/history/users/{userId}/stats", handler.requireAdminAuth(handler.getAdminUserStats))
 	mux.HandleFunc("GET /api/v1/admin/history/users/{userId}/top-tracks", handler.requireAdminAuth(handler.getAdminUserTopTracks))
+	mux.HandleFunc("GET /api/v1/admin/history/users/{userId}/timeline", handler.requireAdminAuth(handler.getAdminUserTimeline))
 	mux.HandleFunc("/api/v1/admin/history/users/{userId}/stats", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/history/users/{userId}/top-tracks", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/history/users/{userId}/timeline", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("GET /api/v1/admin/history/users/{userId}", handler.requireAdminAuth(handler.getAdminUserHistory))
 	mux.HandleFunc("GET /api/v1/admin/history/tracks/{trackId}/stats", handler.requireAdminAuth(handler.getAdminTrackStats))
 	mux.HandleFunc("GET /api/v1/admin/history/tracks/{trackId}/top-listeners", handler.requireAdminAuth(handler.getAdminTrackTopListeners))
@@ -2948,6 +2950,62 @@ func (handler *Handler) getAdminHistoryTimeline(w http.ResponseWriter, r *http.R
 		Granularity: gran,
 		UserID:      q.Get("userId"),
 		TrackID:     q.Get("trackId"),
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"buckets": buckets})
+}
+
+// getAdminUserTimeline returns play-event counts for a specific user grouped by
+// time bucket. {userId} is required in the path; since and until are required
+// query params; granularity defaults to "day".
+func (handler *Handler) getAdminUserTimeline(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireHistoryService(w) {
+		return
+	}
+	userID := r.PathValue("userId")
+	if userID == "" {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", "userId is required")
+		return
+	}
+	q := r.URL.Query()
+
+	sinceRaw := q.Get("since")
+	untilRaw := q.Get("until")
+	if sinceRaw == "" || untilRaw == "" {
+		writeAPIError(w, http.StatusBadRequest, "missing_time_bounds", "both since and until are required for timeline queries")
+		return
+	}
+	since, err := time.Parse(time.RFC3339, sinceRaw)
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid_since", "since must be an RFC3339 timestamp")
+		return
+	}
+	until, err := time.Parse(time.RFC3339, untilRaw)
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid_until", "until must be an RFC3339 timestamp")
+		return
+	}
+
+	gran := history.TimelineGranularity(q.Get("granularity"))
+	if gran == "" {
+		gran = history.GranularityDay
+	}
+	switch gran {
+	case history.GranularityDay, history.GranularityWeek, history.GranularityMonth:
+		// valid
+	default:
+		writeAPIError(w, http.StatusBadRequest, "invalid_granularity", "granularity must be day, week, or month")
+		return
+	}
+
+	buckets, err := handler.historyService.GetHistoryTimeline(r.Context(), history.TimelineFilter{
+		Since:       since.UTC(),
+		Until:       until.UTC(),
+		Granularity: gran,
+		UserID:      userID,
 	})
 	if err != nil {
 		writeError(w, err)
