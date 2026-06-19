@@ -207,6 +207,42 @@ func (s *Service) EnableUser(ctx context.Context, id string) (UserView, error) {
 	return toView(user), nil
 }
 
+// PatchUser partially updates a user's role and/or username.
+// Nil pointers for role or username mean "leave unchanged".
+// Returns ErrInvalidUser for invalid values, ErrUserConflict if the new username is taken.
+func (s *Service) PatchUser(ctx context.Context, id string, role *Role, username *string) (UserView, error) {
+	user, err := s.users.GetUser(ctx, id)
+	if err != nil {
+		return UserView{}, err
+	}
+	if role != nil {
+		if *role != RoleAdmin && *role != RoleViewer {
+			return UserView{}, fmt.Errorf("%w: role must be admin or viewer", ErrInvalidUser)
+		}
+		user.Role = *role
+	}
+	if username != nil {
+		newUsername := strings.TrimSpace(*username)
+		if !usernameRe.MatchString(newUsername) {
+			return UserView{}, fmt.Errorf("%w: username must be 3-64 characters, letters/digits/underscore only", ErrInvalidUser)
+		}
+		// Check conflict only if username changed.
+		if newUsername != user.Username {
+			if _, err := s.users.GetUserByUsername(ctx, newUsername); err == nil {
+				return UserView{}, fmt.Errorf("%w: username %q already exists", ErrUserConflict, newUsername)
+			} else if !errors.Is(err, ErrUserNotFound) {
+				return UserView{}, err
+			}
+		}
+		user.Username = newUsername
+	}
+	user.UpdatedAt = s.now().UTC()
+	if err := s.users.SaveUser(ctx, user); err != nil {
+		return UserView{}, err
+	}
+	return toView(user), nil
+}
+
 // DeleteUser removes a user record permanently.
 func (s *Service) DeleteUser(ctx context.Context, id string) error {
 	if _, err := s.users.GetUser(ctx, id); err != nil {

@@ -415,3 +415,51 @@ func TestEnableUser_NotFound(t *testing.T) {
 		t.Errorf("expected ErrUserNotFound, got %v", err)
 	}
 }
+
+func TestPatchUserRole(t *testing.T) {
+	svc := newTestService(time.Hour)
+	view, err := svc.CreateUser(context.Background(), "patchy", "pass1234", auth.RoleViewer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	role := auth.RoleAdmin
+	updated, err := svc.PatchUser(context.Background(), view.ID, &role, nil)
+	if err != nil {
+		t.Fatalf("PatchUser: %v", err)
+	}
+	if updated.Role != auth.RoleAdmin {
+		t.Errorf("PatchUser role: got %q, want admin", updated.Role)
+	}
+}
+
+func TestPatchUserUsername(t *testing.T) {
+	svc := newTestService(time.Hour)
+	view, err := svc.CreateUser(context.Background(), "oldname", "pass1234", auth.RoleViewer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	newName := "newname2"
+	updated, err := svc.PatchUser(context.Background(), view.ID, nil, &newName)
+	if err != nil {
+		t.Fatalf("PatchUser username: %v", err)
+	}
+	if updated.Username != "newname2" {
+		t.Errorf("PatchUser username: got %q, want newname2", updated.Username)
+	}
+}
+
+func TestPatchUserConflict(t *testing.T) {
+	svc := newTestService(time.Hour)
+	if _, err := svc.CreateUser(context.Background(), "taken", "pass1234", auth.RoleViewer); err != nil {
+		t.Fatal(err)
+	}
+	view2, err := svc.CreateUser(context.Background(), "other1", "pass1234", auth.RoleViewer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	conflict := "taken"
+	_, err = svc.PatchUser(context.Background(), view2.ID, nil, &conflict)
+	if !errors.Is(err, auth.ErrUserConflict) {
+		t.Errorf("expected ErrUserConflict, got %v", err)
+	}
+}

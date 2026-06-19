@@ -98,7 +98,7 @@ func TestStorageAdminOpenAPIContractCoversRoutes(t *testing.T) {
 		"/api/v1/admin/history/batch-delete":                    {"post"},
 		"/api/v1/admin/history/timeline":                        {"get"},
 		"/api/v1/admin/users":                                    {"get", "post"},
-		"/api/v1/admin/users/{id}":                              {"get", "delete"},
+		"/api/v1/admin/users/{id}":                              {"get", "delete", "patch"},
 		"/api/v1/admin/users/{id}/disable":                      {"post"},
 		"/api/v1/admin/users/{id}/enable":                       {"post"},
 	}
@@ -1159,5 +1159,38 @@ func TestStorageAdminOpenAPIContractEnableUser(t *testing.T) {
 	// must have a 404 response
 	if _, ok := post["responses"].(map[string]any)["404"]; !ok {
 		t.Error("POST /api/v1/admin/users/{id}/enable missing 404 response")
+	}
+}
+
+func TestStorageAdminOpenAPIContractAdminPatchUser(t *testing.T) {
+	document := loadOpenAPIContract(t)
+	paths := document["paths"].(map[string]any)
+	components := document["components"].(map[string]any)
+	schemas := components["schemas"].(map[string]any)
+
+	// PATCH /api/v1/admin/users/{id} must exist and return UserView
+	patch := operation(t, paths, "/api/v1/admin/users/{id}", "patch")
+	resp200 := patch["responses"].(map[string]any)["200"].(map[string]any)
+	content := resp200["content"].(map[string]any)["application/json"].(map[string]any)
+	schema := content["schema"].(map[string]any)
+	if schema["$ref"] != "#/components/schemas/UserView" {
+		t.Errorf("PATCH /api/v1/admin/users/{id} 200 schema = %v, want UserView ref", schema)
+	}
+
+	// PatchUserRequest schema must exist with optional role and username
+	pr, ok := schemas["PatchUserRequest"].(map[string]any)
+	if !ok {
+		t.Fatal("schema PatchUserRequest is missing")
+	}
+	props, _ := pr["properties"].(map[string]any)
+	for _, want := range []string{"role", "username"} {
+		if _, ok := props[want]; !ok {
+			t.Errorf("PatchUserRequest missing property %q", want)
+		}
+	}
+	// role must be an enum
+	roleSchema, _ := props["role"].(map[string]any)
+	if !containsString(roleSchema["enum"].([]any), "admin") || !containsString(roleSchema["enum"].([]any), "viewer") {
+		t.Error("PatchUserRequest role schema missing admin/viewer enum values")
 	}
 }

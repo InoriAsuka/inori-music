@@ -302,6 +302,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/admin/users", handler.requireAdminAuth(handler.createUser))
 	mux.HandleFunc("POST /api/v1/admin/users/{id}/disable", handler.requireAdminAuth(handler.disableUser))
 	mux.HandleFunc("POST /api/v1/admin/users/{id}/enable", handler.requireAdminAuth(handler.enableUser))
+	mux.HandleFunc("PATCH /api/v1/admin/users/{id}", handler.requireAdminAuth(handler.patchAdminUser))
 	mux.HandleFunc("GET /api/v1/admin/users/{id}", handler.requireAdminAuth(handler.getAdminUser))
 	mux.HandleFunc("DELETE /api/v1/admin/users/{id}", handler.requireAdminAuth(handler.deleteUser))
 	mux.HandleFunc("GET /api/v1/admin/catalog/artists", handler.requireAdminAuth(handler.listArtists))
@@ -801,6 +802,41 @@ func (handler *Handler) enableUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	view, err := handler.authService.EnableUser(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
+}
+
+type patchUserRequest struct {
+	Role     string `json:"role"`
+	Username string `json:"username"`
+}
+
+func (handler *Handler) patchAdminUser(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireAuthService(w) {
+		return
+	}
+	var req patchUserRequest
+	if err := decodeJSONWithSentinel(w, r, &req, auth.ErrInvalidUser); err != nil {
+		writeError(w, err)
+		return
+	}
+	if req.Role == "" && req.Username == "" {
+		writeAPIError(w, http.StatusBadRequest, "invalid_user", "at least one of role or username must be set")
+		return
+	}
+	var role *auth.Role
+	if req.Role != "" {
+		r_ := auth.Role(req.Role)
+		role = &r_
+	}
+	var username *string
+	if req.Username != "" {
+		username = &req.Username
+	}
+	view, err := handler.authService.PatchUser(r.Context(), r.PathValue("id"), role, username)
 	if err != nil {
 		writeError(w, err)
 		return

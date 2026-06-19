@@ -848,3 +848,15 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add `POST /api/v1/admin/users/{id}/enable` to OpenAPI contract (with `UserId` path parameter); bump `info.version` to `0.88.0`.
 - Extend `TestStorageAdminOpenAPIContractCoversRoutes`; add `TestStorageAdminOpenAPIContractEnableUser`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.89.0 - 2026-06-19
+
+- Add `PatchUser(ctx, id string, role *Role, username *string) (UserView, error)` to `auth.Service`: validates and applies non-nil role/username fields; checks username uniqueness on change; updates `UpdatedAt`; returns `UserView`.
+- Add `patchAdminUser` handler: `PATCH /api/v1/admin/users/{id}`; decodes `{role?, username?}`; rejects empty patch (`400 invalid_user`); returns `UserView` on success; propagates `ErrInvalidUser` (400) and `ErrUserConflict` (409).
+- Register `PATCH /api/v1/admin/users/{id}` (admin-auth).
+- Add `PatchUserRequest` schema to OpenAPI components (`role?: enum[admin,viewer], username?: string`).
+- Add 3 `auth.Service` unit tests (`TestPatchUserRole`, `TestPatchUserUsername`, `TestPatchUserConflict`).
+- Add 4 HTTP-layer tests (`TestAdminPatchUserRole`, `TestAdminPatchUserUsernameConflict`, `TestAdminPatchUserEmpty`, `TestAdminPatchUserNotConfigured`).
+- Add `patch` operation to `/api/v1/admin/users/{id}` in OpenAPI contract; bump `info.version` to `0.89.0`.
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `patch` on `/api/v1/admin/users/{id}`; add `TestStorageAdminOpenAPIContractAdminPatchUser`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.

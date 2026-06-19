@@ -1232,6 +1232,59 @@ func TestEnableUserNotConfigured(t *testing.T) {
 	assertAPIError(t, resp, http.StatusServiceUnavailable, "auth_not_configured")
 }
 
+func TestAdminPatchUserRole(t *testing.T) {
+	h, svc := newAuthTestHandler()
+	token := loginAdminToken(t, h)
+	view, err := svc.CreateUser(context.Background(), "patchrole", "pass1234", auth.RoleViewer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp := performRequestWithAuthHeader(t, h, http.MethodPatch, "/api/v1/admin/users/"+view.ID,
+		`{"role":"admin"}`, "Bearer "+token)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("PATCH /admin/users/{id} status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var got auth.UserView
+	decodeResponse(t, resp, &got)
+	if got.Role != auth.RoleAdmin {
+		t.Errorf("PATCH role: got %q, want admin", got.Role)
+	}
+}
+
+func TestAdminPatchUserUsernameConflict(t *testing.T) {
+	h, svc := newAuthTestHandler()
+	token := loginAdminToken(t, h)
+	if _, err := svc.CreateUser(context.Background(), "takenname", "pass1234", auth.RoleViewer); err != nil {
+		t.Fatal(err)
+	}
+	view2, err := svc.CreateUser(context.Background(), "other2", "pass1234", auth.RoleViewer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp := performRequestWithAuthHeader(t, h, http.MethodPatch, "/api/v1/admin/users/"+view2.ID,
+		`{"username":"takenname"}`, "Bearer "+token)
+	assertAPIError(t, resp, http.StatusConflict, "conflict")
+}
+
+func TestAdminPatchUserEmpty(t *testing.T) {
+	h, svc := newAuthTestHandler()
+	token := loginAdminToken(t, h)
+	view, err := svc.CreateUser(context.Background(), "nopatch", "pass1234", auth.RoleViewer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp := performRequestWithAuthHeader(t, h, http.MethodPatch, "/api/v1/admin/users/"+view.ID,
+		`{}`, "Bearer "+token)
+	assertAPIError(t, resp, http.StatusBadRequest, "invalid_user")
+}
+
+func TestAdminPatchUserNotConfigured(t *testing.T) {
+	repo := storage.NewMemoryRepository()
+	h := NewHandler(storage.NewService(repo), WithAdminToken(testAdminToken)).Routes()
+	resp := performRequest(t, h, http.MethodPatch, "/api/v1/admin/users/some-id", `{"role":"admin"}`)
+	assertAPIError(t, resp, http.StatusServiceUnavailable, "auth_not_configured")
+}
+
 func loginAdminToken(t *testing.T, h http.Handler) string {
 	t.Helper()
 	loginResp := performRequestWithoutAuth(t, h, http.MethodPost, "/api/v1/auth/login", `{"username":"admin","password":"adminpass1"}`)
