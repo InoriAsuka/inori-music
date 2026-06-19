@@ -7768,3 +7768,86 @@ func TestViewerGetMyTrackTimelineMethodNotAllowed(t *testing.T) {
 		"", "Bearer "+viewerToken)
 	assertAPIError(t, resp, http.StatusMethodNotAllowed, "method_not_allowed")
 }
+
+func TestAdminGetUserHistorySummary(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	// record 3 plays for track-sum-1, 1 play for track-sum-2 under viewerToken's user
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		`{"trackId":"track-sum-1","playedAt":"2025-08-01T10:00:00Z"}`, "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		`{"trackId":"track-sum-1","playedAt":"2025-08-01T11:00:00Z"}`, "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		`{"trackId":"track-sum-1","playedAt":"2025-08-01T12:00:00Z"}`, "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		`{"trackId":"track-sum-2","playedAt":"2025-08-01T13:00:00Z"}`, "Bearer "+viewerToken)
+
+	// get viewer's userID
+	meResp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/me", "", "Bearer "+viewerToken)
+	var meBody map[string]any
+	decodeResponse(t, meResp, &meBody)
+	userID := meBody["id"].(string)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/admin/history/users/"+userID+"/history-summary",
+		"", "Bearer "+adminToken)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", resp.Code, resp.Body.String())
+	}
+	var body map[string]any
+	decodeResponse(t, resp, &body)
+	stats, ok := body["stats"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected stats object, got %T", body["stats"])
+	}
+	if int(stats["totalEvents"].(float64)) != 4 {
+		t.Errorf("stats.totalEvents = %v, want 4", stats["totalEvents"])
+	}
+	topTracks, ok := body["topTracks"].([]any)
+	if !ok {
+		t.Fatalf("expected topTracks array, got %T", body["topTracks"])
+	}
+	if len(topTracks) == 0 {
+		t.Error("expected at least one top track")
+	}
+}
+
+func TestAdminGetUserHistorySummaryWithTopN(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	for _, tid := range []string{"ts-a", "ts-b", "ts-c"} {
+		performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+			fmt.Sprintf(`{"trackId":%q,"playedAt":"2025-08-02T10:00:00Z"}`, tid), "Bearer "+viewerToken)
+	}
+
+	meResp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/me", "", "Bearer "+viewerToken)
+	var meBody map[string]any
+	decodeResponse(t, meResp, &meBody)
+	userID := meBody["id"].(string)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/admin/history/users/"+userID+"/history-summary?limit=1",
+		"", "Bearer "+adminToken)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", resp.Code, resp.Body.String())
+	}
+	var body map[string]any
+	decodeResponse(t, resp, &body)
+	topTracks := body["topTracks"].([]any)
+	if len(topTracks) != 1 {
+		t.Errorf("expected 1 top track with limit=1, got %d", len(topTracks))
+	}
+}
+
+func TestAdminGetUserHistorySummaryNotConfigured(t *testing.T) {
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAdminToken(testAdminToken),
+	).Routes()
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/admin/history/users/some-user/history-summary",
+		"", "Bearer "+testAdminToken)
+	assertAPIError(t, resp, http.StatusServiceUnavailable, "history_not_configured")
+}

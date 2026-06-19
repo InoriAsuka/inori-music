@@ -276,6 +276,24 @@ func (s *Service) GetAdminUserTopTracks(ctx context.Context, f UserStatsFilter, 
 	return s.repo.UserTopTracks(ctx, f, limit)
 }
 
+// GetAdminUserSummary returns a combined stats + top-tracks summary for any user;
+// intended for admin use. topN ≤ 0 defaults to 10 and is clamped to 100.
+func (s *Service) GetAdminUserSummary(ctx context.Context, userID string, f UserStatsFilter, topN int) (UserHistorySummary, error) {
+	if userID == "" {
+		return UserHistorySummary{}, fmt.Errorf("userID is required")
+	}
+	f.UserID = userID
+	stats, err := s.GetAdminUserStats(ctx, f)
+	if err != nil {
+		return UserHistorySummary{}, err
+	}
+	tracks, err := s.GetAdminUserTopTracks(ctx, f, topN)
+	if err != nil {
+		return UserHistorySummary{}, err
+	}
+	return UserHistorySummary{Stats: stats, TopTracks: tracks}, nil
+}
+
 // GetTrackStats returns per-track aggregate counts; intended for admin use.
 func (s *Service) GetTrackStats(ctx context.Context, f TrackStatsFilter) (TrackHistoryStatsResult, error) {
 	if f.TrackID == "" {

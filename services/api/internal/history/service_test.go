@@ -1365,3 +1365,48 @@ func TestGetMyTrackStatsMissingArgs(t *testing.T) {
 		t.Error("expected error for empty trackID")
 	}
 }
+
+func TestGetAdminUserSummary(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+
+	now := time.Now().UTC()
+	for i := 0; i < 3; i++ {
+		if _, err := svc.RecordPlay(ctx, "u-sum-1", "t-sum-1", now.Add(-time.Duration(i)*time.Hour)); err != nil {
+			t.Fatalf("RecordPlay: %v", err)
+		}
+	}
+	if _, err := svc.RecordPlay(ctx, "u-sum-1", "t-sum-2", now.Add(-4*time.Hour)); err != nil {
+		t.Fatalf("RecordPlay: %v", err)
+	}
+
+	summary, err := svc.GetAdminUserSummary(ctx, "u-sum-1", history.UserStatsFilter{}, 10)
+	if err != nil {
+		t.Fatalf("GetAdminUserSummary: %v", err)
+	}
+	if summary.Stats.TotalEvents != 4 {
+		t.Errorf("Stats.TotalEvents = %d, want 4", summary.Stats.TotalEvents)
+	}
+	if len(summary.TopTracks) == 0 {
+		t.Error("TopTracks should not be empty")
+	}
+	if summary.TopTracks[0].TrackID != "t-sum-1" {
+		t.Errorf("TopTracks[0].TrackID = %q, want t-sum-1", summary.TopTracks[0].TrackID)
+	}
+}
+
+func TestGetAdminUserSummaryEmpty(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+
+	summary, err := svc.GetAdminUserSummary(ctx, "u-nobody", history.UserStatsFilter{}, 10)
+	if err != nil {
+		t.Fatalf("GetAdminUserSummary empty: %v", err)
+	}
+	if summary.Stats.TotalEvents != 0 {
+		t.Errorf("expected 0 total events, got %d", summary.Stats.TotalEvents)
+	}
+	if len(summary.TopTracks) != 0 {
+		t.Errorf("expected no top tracks, got %d", len(summary.TopTracks))
+	}
+}

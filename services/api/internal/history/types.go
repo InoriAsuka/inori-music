@@ -190,3 +190,10 @@ type UserTrackStats struct {
 	FirstPlayedAt time.Time `json:"firstPlayedAt,omitempty"`
 	LastPlayedAt  time.Time `json:"lastPlayedAt,omitempty"`
 }
+
+// UserHistorySummary combines per-user aggregate stats and the user's most-played
+// tracks into a single response for dashboard use.
+type UserHistorySummary struct {
+	Stats     UserHistoryStats `json:"stats"`
+	TopTracks []TrackPlayCount `json:"topTracks"`
+}

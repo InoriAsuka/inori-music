@@ -392,9 +392,11 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/history/users/{userId}/stats", handler.requireAdminAuth(handler.getAdminUserStats))
 	mux.HandleFunc("GET /api/v1/admin/history/users/{userId}/top-tracks", handler.requireAdminAuth(handler.getAdminUserTopTracks))
 	mux.HandleFunc("GET /api/v1/admin/history/users/{userId}/timeline", handler.requireAdminAuth(handler.getAdminUserTimeline))
+	mux.HandleFunc("GET /api/v1/admin/history/users/{userId}/history-summary", handler.requireAdminAuth(handler.getAdminUserHistorySummary))
 	mux.HandleFunc("/api/v1/admin/history/users/{userId}/stats", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/history/users/{userId}/top-tracks", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/history/users/{userId}/timeline", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/history/users/{userId}/history-summary", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("GET /api/v1/admin/history/users/{userId}", handler.requireAdminAuth(handler.getAdminUserHistory))
 	mux.HandleFunc("GET /api/v1/admin/history/tracks/{trackId}/stats", handler.requireAdminAuth(handler.getAdminTrackStats))
 	mux.HandleFunc("GET /api/v1/admin/history/tracks/{trackId}/top-listeners", handler.requireAdminAuth(handler.getAdminTrackTopListeners))
@@ -2612,6 +2614,36 @@ func (handler *Handler) getAdminUserTopTracks(w http.ResponseWriter, r *http.Req
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"tracks": tracks})
+}
+
+// getAdminUserHistorySummary returns combined stats and top-tracks for a specific
+// user in one request; intended for admin dashboard use.
+func (handler *Handler) getAdminUserHistorySummary(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireHistoryService(w) {
+		return
+	}
+	userID := r.PathValue("userId")
+	if userID == "" {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", "userId is required")
+		return
+	}
+	f, ok := parseHistoryAdminFilter(w, r)
+	if !ok {
+		return
+	}
+	topN, ok := parseHistoryAdminLimit(w, r)
+	if !ok {
+		return
+	}
+	summary, err := handler.historyService.GetAdminUserSummary(r.Context(), userID, history.UserStatsFilter{
+		Since: f.Since,
+		Until: f.Until,
+	}, topN)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, summary)
 }
 
 func (handler *Handler) getAdminTrackStats(w http.ResponseWriter, r *http.Request) {
