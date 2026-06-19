@@ -6968,3 +6968,118 @@ func TestViewerRevokeMyOtherSessionsNotConfigured(t *testing.T) {
 	resp := performRequest(t, h, http.MethodPost, "/api/v1/me/sessions/revoke-all", "")
 	assertAPIError(t, resp, http.StatusServiceUnavailable, "auth_not_configured")
 }
+
+// ---- Phase 95: GET /api/v1/admin/users pagination + sorting ----
+
+func TestAdminListUsersPagination(t *testing.T) {
+	authSvc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAuthService(authSvc),
+		WithAdminToken(testAdminToken),
+	).Routes()
+	for _, u := range []struct{ name, pass string }{
+		{"alice_pag", "pass1234!"}, {"bob_pag", "pass1234!"}, {"carol_pag", "pass1234!"},
+	} {
+		if _, err := authSvc.CreateUser(context.Background(), u.name, u.pass, auth.RoleViewer); err != nil {
+			t.Fatalf("create user %s: %v", u.name, err)
+		}
+	}
+	// limit=2, offset=0 → first 2 of 4 (admin + 3 viewers)
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/users?limit=2&offset=0", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("GET /admin/users?limit=2: %d %s", resp.Code, resp.Body.String())
+	}
+	var body map[string]any
+	decodeResponse(t, resp, &body)
+	users := body["users"].([]any)
+	if len(users) != 2 {
+		t.Errorf("users len = %d, want 2", len(users))
+	}
+	pg := body["pagination"].(map[string]any)
+	if pg["total"].(float64) < 3 {
+		t.Errorf("total = %v, want >= 3", pg["total"])
+	}
+	if !pg["hasMore"].(bool) {
+		t.Error("hasMore should be true")
+	}
+}
+
+func TestAdminListUsersSortByUsername(t *testing.T) {
+	authSvc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAuthService(authSvc),
+		WithAdminToken(testAdminToken),
+	).Routes()
+	for _, u := range []string{"zorro_sort", "alpha_sort", "middle_sort"} {
+		if _, err := authSvc.CreateUser(context.Background(), u, "pass1234!", auth.RoleViewer); err != nil {
+			t.Fatalf("create %s: %v", u, err)
+		}
+	}
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/users?sortBy=username&sortOrder=asc", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d", resp.Code)
+	}
+	var body map[string]any
+	decodeResponse(t, resp, &body)
+	users := body["users"].([]any)
+	// Verify ascending order across the returned slice
+	for i := 1; i < len(users); i++ {
+		prev := users[i-1].(map[string]any)["username"].(string)
+		cur := users[i].(map[string]any)["username"].(string)
+		if prev > cur {
+			t.Errorf("users not sorted asc at index %d: %q > %q", i, prev, cur)
+		}
+	}
+}
+
+func TestAdminListUsersSortDesc(t *testing.T) {
+	authSvc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAuthService(authSvc),
+		WithAdminToken(testAdminToken),
+	).Routes()
+	for _, u := range []string{"aaa_desc", "bbb_desc", "ccc_desc"} {
+		if _, err := authSvc.CreateUser(context.Background(), u, "pass1234!", auth.RoleViewer); err != nil {
+			t.Fatalf("create %s: %v", u, err)
+		}
+	}
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/users?sortBy=username&sortOrder=desc", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d", resp.Code)
+	}
+	var body map[string]any
+	decodeResponse(t, resp, &body)
+	users := body["users"].([]any)
+	for i := 1; i < len(users); i++ {
+		prev := users[i-1].(map[string]any)["username"].(string)
+		cur := users[i].(map[string]any)["username"].(string)
+		if prev < cur {
+			t.Errorf("users not sorted desc at index %d: %q < %q", i, prev, cur)
+		}
+	}
+}
+
+func TestAdminListUsersInvalidSortOrder(t *testing.T) {
+	authSvc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAuthService(authSvc),
+		WithAdminToken(testAdminToken),
+	).Routes()
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/users?sortOrder=invalid", "")
+	assertAPIError(t, resp, http.StatusBadRequest, "invalid_sort_order")
+}
+
+func TestAdminListUsersInvalidLimit(t *testing.T) {
+	authSvc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAuthService(authSvc),
+		WithAdminToken(testAdminToken),
+	).Routes()
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/users?limit=0", "")
+	assertAPIError(t, resp, http.StatusBadRequest, "invalid_limit")
+}

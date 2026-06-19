@@ -796,7 +796,92 @@ func (handler *Handler) listUsers(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"users": users})
+
+	q := r.URL.Query()
+
+	// -- sort --
+	sortBy := strings.ToLower(strings.TrimSpace(q.Get("sortBy")))
+	sortOrder := strings.ToLower(strings.TrimSpace(q.Get("sortOrder")))
+	if sortOrder == "" {
+		sortOrder = "asc"
+	}
+	if sortOrder != "asc" && sortOrder != "desc" {
+		writeAPIError(w, http.StatusBadRequest, "invalid_sort_order", "sortOrder must be asc or desc")
+		return
+	}
+	desc := sortOrder == "desc"
+	sort.SliceStable(users, func(i, j int) bool {
+		a, b := users[i], users[j]
+		var less bool
+		switch sortBy {
+		case "role":
+			less = string(a.Role) < string(b.Role)
+		case "createdat":
+			less = a.CreatedAt.Before(b.CreatedAt)
+		case "updatedat":
+			less = a.UpdatedAt.Before(b.UpdatedAt)
+		default: // "username"
+			less = a.Username < b.Username
+		}
+		if desc {
+			return !less
+		}
+		return less
+	})
+
+	// -- paginate --
+	total := len(users)
+	limit := 0
+	offset := 0
+	if raw := q.Get("limit"); raw != "" {
+		v, err2 := strconv.Atoi(raw)
+		if err2 != nil || v < 1 {
+			writeAPIError(w, http.StatusBadRequest, "invalid_limit", "limit must be a positive integer")
+			return
+		}
+		limit = v
+	}
+	if raw := q.Get("offset"); raw != "" {
+		v, err2 := strconv.Atoi(raw)
+		if err2 != nil || v < 0 {
+			writeAPIError(w, http.StatusBadRequest, "invalid_offset", "offset must be a non-negative integer")
+			return
+		}
+		offset = v
+	}
+
+	var page []auth.UserView
+	if limit > 0 {
+		if offset >= total {
+			page = []auth.UserView{}
+		} else {
+			end := offset + limit
+			if end > total {
+				end = total
+			}
+			page = users[offset:end]
+		}
+	} else {
+		if offset >= total {
+			page = []auth.UserView{}
+		} else {
+			page = users[offset:]
+		}
+	}
+
+	hasMore := false
+	if limit > 0 {
+		hasMore = offset+limit < total
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"users": page,
+		"pagination": map[string]any{
+			"limit":   limit,
+			"offset":  offset,
+			"total":   total,
+			"hasMore": hasMore,
+		},
+	})
 }
 
 func (handler *Handler) getAdminUser(w http.ResponseWriter, r *http.Request) {

@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.80.0`
+`0.95.0`
 
 ## Product Goal
 
@@ -907,4 +907,15 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add `post` operation to `/api/v1/me/sessions/revoke-all` in OpenAPI contract; bump `info.version` to `0.94.0`.
 - Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `post` on `/api/v1/me/sessions/revoke-all`.
 - Add 3 HTTP-layer tests: `TestViewerRevokeMyOtherSessions`, `TestViewerRevokeMyOtherSessionsNoneOther`, `TestViewerRevokeMyOtherSessionsNotConfigured`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.95.0 - 2026-06-19
+
+- Add `?limit`, `?offset`, `?sortBy` (username/role/createdAt/updatedAt), and `?sortOrder` (asc/desc) query parameters to `GET /api/v1/admin/users`.
+- Sort and paginate over the full `[]UserView` slice in the `listUsers` handler; no new repository interface methods required.
+- `limit=0` (absent) returns all users from `offset`; `limit > 0` pages the result; `hasMore` reflects whether more items follow.
+- Response is `{"users":[...],"pagination":{"limit":N,"offset":N,"total":N,"hasMore":bool}}`.
+- Invalid `sortOrder` returns `400 invalid_sort_order`; invalid `limit` or `offset` returns `400`.
+- Add 5 HTTP-layer tests: `TestAdminListUsersPagination`, `TestAdminListUsersSortByUsername`, `TestAdminListUsersSortDesc`, `TestAdminListUsersInvalidSortOrder`, `TestAdminListUsersInvalidLimit`.
+- Update `GET /api/v1/admin/users` in OpenAPI contract with `limit`, `offset`, `sortBy`, `sortOrder` query params and updated 200 response schema including `pagination`; bump `info.version` to `0.95.0`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
