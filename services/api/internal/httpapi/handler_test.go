@@ -8277,3 +8277,53 @@ func TestAdminGetHistoryStatsUntil(t *testing.T) {
 		t.Errorf("totalEvents with until=day2 = %v, want 2", body3["totalEvents"])
 	}
 }
+
+func TestViewerGetMyTopTracksSince(t *testing.T) {
+	h, viewerToken, _ := newHistoryTestHandler(t)
+
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		`{"trackId":"mtt-a","playedAt":"2025-05-01T10:00:00Z"}`, "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		`{"trackId":"mtt-a","playedAt":"2025-05-01T12:00:00Z"}`, "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		`{"trackId":"mtt-b","playedAt":"2025-05-03T10:00:00Z"}`, "Bearer "+viewerToken)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/me/history/top-tracks?since=2025-05-02T00:00:00Z",
+		"", "Bearer "+viewerToken)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", resp.Code, resp.Body.String())
+	}
+	var body map[string]any
+	decodeResponse(t, resp, &body)
+	tracks := body["tracks"].([]any)
+	if len(tracks) != 1 {
+		t.Errorf("len(tracks) with since=day2 = %d, want 1", len(tracks))
+	}
+}
+
+func TestViewerGetMyTopTracksUntil(t *testing.T) {
+	h, viewerToken, _ := newHistoryTestHandler(t)
+
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		`{"trackId":"mtu-a","playedAt":"2025-06-01T10:00:00Z"}`, "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		`{"trackId":"mtu-a","playedAt":"2025-06-01T12:00:00Z"}`, "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		`{"trackId":"mtu-b","playedAt":"2025-06-03T10:00:00Z"}`, "Bearer "+viewerToken)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/me/history/top-tracks?until=2025-06-02T00:00:00Z",
+		"", "Bearer "+viewerToken)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", resp.Code, resp.Body.String())
+	}
+	var body map[string]any
+	decodeResponse(t, resp, &body)
+	tracks := body["tracks"].([]any)
+	if len(tracks) != 1 {
+		t.Errorf("len(tracks) with until=day2 = %d, want 1", len(tracks))
+	}
+}

@@ -1681,3 +1681,45 @@ func TestGetHistoryStatsTimeWindow(t *testing.T) {
 		t.Errorf("TotalEvents all = %d, want 3", all.TotalEvents)
 	}
 }
+
+func TestGetMyTopTracksTimeWindowPhase114(t *testing.T) {
+	ctx := context.Background()
+	svc := history.NewService(history.NewMemoryRepository())
+
+	day1 := time.Date(2025, 5, 1, 12, 0, 0, 0, time.UTC)
+	day2 := time.Date(2025, 5, 2, 12, 0, 0, 0, time.UTC)
+	day3 := time.Date(2025, 5, 3, 12, 0, 0, 0, time.UTC)
+
+	// 2 plays for t-a on day1, 1 play for t-b on day3
+	if _, err := svc.RecordPlay(ctx, "u-mtt", "t-a", day1); err != nil {
+		t.Fatalf("RecordPlay t-a day1: %v", err)
+	}
+	if _, err := svc.RecordPlay(ctx, "u-mtt", "t-a", day1.Add(time.Hour)); err != nil {
+		t.Fatalf("RecordPlay t-a day1+1h: %v", err)
+	}
+	if _, err := svc.RecordPlay(ctx, "u-mtt", "t-b", day3); err != nil {
+		t.Fatalf("RecordPlay t-b day3: %v", err)
+	}
+
+	// Window [day1, day2) — only t-a should appear
+	tracks, err := svc.GetMyTopTracks(ctx, history.UserStatsFilter{
+		UserID: "u-mtt",
+		Since:  day1,
+		Until:  day2,
+	}, 10)
+	if err != nil {
+		t.Fatalf("GetMyTopTracks with window: %v", err)
+	}
+	if len(tracks) != 1 || tracks[0].TrackID != "t-a" {
+		t.Errorf("GetMyTopTracks [day1,day2) = %v, want [{t-a 2}]", tracks)
+	}
+
+	// No window — both tracks should appear
+	allTracks, err := svc.GetMyTopTracks(ctx, history.UserStatsFilter{UserID: "u-mtt"}, 10)
+	if err != nil {
+		t.Fatalf("GetMyTopTracks no window: %v", err)
+	}
+	if len(allTracks) != 2 {
+		t.Errorf("GetMyTopTracks all = %d tracks, want 2", len(allTracks))
+	}
+}
