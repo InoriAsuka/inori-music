@@ -8181,3 +8181,51 @@ func TestViewerGetMyTrackSummaryNotConfigured(t *testing.T) {
 		"", "Bearer "+viewerToken)
 	assertAPIError(t, resp, http.StatusServiceUnavailable, "history_not_configured")
 }
+
+func TestAdminGetTrackStatsSince(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		`{"trackId":"ts-tw","playedAt":"2025-01-01T10:00:00Z"}`, "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		`{"trackId":"ts-tw","playedAt":"2025-01-01T12:00:00Z"}`, "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		`{"trackId":"ts-tw","playedAt":"2025-01-03T10:00:00Z"}`, "Bearer "+viewerToken)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/admin/history/tracks/ts-tw/stats?since=2025-01-02T00:00:00Z",
+		"", "Bearer "+adminToken)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", resp.Code, resp.Body.String())
+	}
+	var body map[string]any
+	decodeResponse(t, resp, &body)
+	if int(body["totalEvents"].(float64)) != 1 {
+		t.Errorf("totalEvents with since=day2 = %v, want 1", body["totalEvents"])
+	}
+}
+
+func TestAdminGetTrackStatsUntil(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		`{"trackId":"ts-tw2","playedAt":"2025-02-01T10:00:00Z"}`, "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		`{"trackId":"ts-tw2","playedAt":"2025-02-01T12:00:00Z"}`, "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		`{"trackId":"ts-tw2","playedAt":"2025-02-03T10:00:00Z"}`, "Bearer "+viewerToken)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/admin/history/tracks/ts-tw2/stats?until=2025-02-02T00:00:00Z",
+		"", "Bearer "+adminToken)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", resp.Code, resp.Body.String())
+	}
+	var body map[string]any
+	decodeResponse(t, resp, &body)
+	if int(body["totalEvents"].(float64)) != 2 {
+		t.Errorf("totalEvents with until=day2 = %v, want 2", body["totalEvents"])
+	}
+}

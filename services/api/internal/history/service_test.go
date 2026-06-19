@@ -1606,3 +1606,41 @@ func TestGetMyTrackSummaryEmpty(t *testing.T) {
 		t.Error("RecentTracks is nil, want empty slice")
 	}
 }
+
+func TestGetAdminTrackStatsTimeWindow(t *testing.T) {
+	ctx := context.Background()
+	svc := history.NewService(history.NewMemoryRepository())
+
+	day1 := time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC)
+	day2 := time.Date(2025, 1, 2, 12, 0, 0, 0, time.UTC)
+	day3 := time.Date(2025, 1, 3, 12, 0, 0, 0, time.UTC)
+
+	// 2 plays on day1, 1 play on day3 — all for track t-atw
+	for _, ts := range []time.Time{day1, day1.Add(time.Hour), day3} {
+		if _, err := svc.RecordPlay(ctx, "u-atw", "t-atw", ts); err != nil {
+			t.Fatalf("RecordPlay: %v", err)
+		}
+	}
+
+	// Window [day1, day2) — should see 2 plays
+	stats, err := svc.GetTrackStats(ctx, history.TrackStatsFilter{
+		TrackID: "t-atw",
+		Since:   day1,
+		Until:   day2,
+	})
+	if err != nil {
+		t.Fatalf("GetTrackStats with window: %v", err)
+	}
+	if stats.TotalEvents != 2 {
+		t.Errorf("TotalEvents in [day1,day2) = %d, want 2", stats.TotalEvents)
+	}
+
+	// No window — should see all 3
+	all, err := svc.GetTrackStats(ctx, history.TrackStatsFilter{TrackID: "t-atw"})
+	if err != nil {
+		t.Fatalf("GetTrackStats no window: %v", err)
+	}
+	if all.TotalEvents != 3 {
+		t.Errorf("TotalEvents all = %d, want 3", all.TotalEvents)
+	}
+}
