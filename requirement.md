@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`1.1.0`
+`1.2.0`
 
 ## Product Goal
 
@@ -979,4 +979,13 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `get` on `/api/v1/me/history/tracks/{trackId}/stats`.
 - Add 3 `history.Service` unit tests: `TestGetMyTrackStatsNoPlays`, `TestGetMyTrackStatsWithPlays`, `TestGetMyTrackStatsMissingArgs`.
 - Add 3 HTTP-layer tests: `TestViewerGetMyTrackStats`, `TestViewerGetMyTrackStatsNoPlays`, `TestViewerGetMyTrackStatsMethodNotAllowed`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v1.2.0 - 2026-06-19
+
+- Add `getAdminTrackTimeline` handler: `GET /api/v1/admin/history/tracks/{trackId}/timeline`; requires admin auth; reads `{trackId}` from path; accepts `since` (required), `until` (required), `granularity` (optional; day/week/month) query params; calls `history.Service.GetHistoryTimeline` with `TrackID`; returns `{buckets}`; `503` when history service not configured.
+- Register `GET /api/v1/admin/history/tracks/{trackId}/timeline` (admin-auth) and its `methodNotAllowed` fallback.
+- Add `get` operation to `/api/v1/admin/history/tracks/{trackId}/timeline` in OpenAPI contract; bump `info.version` to `1.2.0`.
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `get` on `/api/v1/admin/history/tracks/{trackId}/timeline`.
+- Add 3 HTTP-layer tests: `TestAdminGetTrackTimeline`, `TestAdminGetTrackTimelineMissingBounds`, `TestAdminGetTrackTimelineMethodNotAllowed`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

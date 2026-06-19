@@ -5695,6 +5695,65 @@ func TestViewerGetHistoryTimelineNotConfigured(t *testing.T) {
 	assertAPIError(t, resp, http.StatusServiceUnavailable, "history_not_configured")
 }
 
+func TestAdminGetTrackTimeline(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"TLTrackBand"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"TLTrk1","artistId":%q,"mediaObjectId":"mo-tltk-1"}`, artistID), "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	// 2 events on day1, 1 on day2
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q,"playedAt":"2025-06-01T10:00:00Z"}`, trackID), "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q,"playedAt":"2025-06-01T15:00:00Z"}`, trackID), "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q,"playedAt":"2025-06-02T09:00:00Z"}`, trackID), "Bearer "+viewerToken)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/admin/history/tracks/"+trackID+"/timeline?since=2025-06-01T00:00:00Z&until=2025-06-03T00:00:00Z&granularity=day",
+		"", "Bearer "+adminToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("getAdminTrackTimeline: %d %s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	decodeResponse(t, resp, &result)
+	buckets := result["buckets"].([]any)
+	if len(buckets) != 2 {
+		t.Fatalf("buckets = %d, want 2", len(buckets))
+	}
+	b0 := buckets[0].(map[string]any)
+	if int(b0["eventCount"].(float64)) != 2 {
+		t.Errorf("day1 eventCount = %v, want 2", b0["eventCount"])
+	}
+}
+
+func TestAdminGetTrackTimelineMissingBounds(t *testing.T) {
+	h, _, adminToken := newHistoryTestHandler(t)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/admin/history/tracks/some-track/timeline?until=2025-06-03T00:00:00Z",
+		"", "Bearer "+adminToken)
+	assertAPIError(t, resp, http.StatusBadRequest, "missing_time_bounds")
+}
+
+func TestAdminGetTrackTimelineMethodNotAllowed(t *testing.T) {
+	h, _, adminToken := newHistoryTestHandler(t)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodPost,
+		"/api/v1/admin/history/tracks/some-track/timeline", "", "Bearer "+adminToken)
+	if resp.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405, got %d", resp.Code)
+	}
+}
+
 func TestAdminGetUserStats(t *testing.T) {
 	h, viewerToken, adminToken := newHistoryTestHandler(t)
 
