@@ -306,6 +306,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/users/{id}", handler.requireAdminAuth(handler.getAdminUser))
 	mux.HandleFunc("DELETE /api/v1/admin/users/{id}", handler.requireAdminAuth(handler.deleteUser))
 	mux.HandleFunc("GET /api/v1/admin/users/{id}/sessions", handler.requireAdminAuth(handler.getAdminUserSessions))
+	mux.HandleFunc("DELETE /api/v1/admin/users/{id}/sessions", handler.requireAdminAuth(handler.deleteAdminUserSessions))
 	mux.HandleFunc("GET /api/v1/admin/catalog/artists", handler.requireAdminAuth(handler.listArtists))
 	mux.HandleFunc("POST /api/v1/admin/catalog/artists", handler.requireAdminAuth(handler.createArtist))
 	mux.HandleFunc("GET /api/v1/admin/catalog/artists/{id}", handler.requireAdminAuth(handler.getArtist))
@@ -867,6 +868,18 @@ func (handler *Handler) getAdminUserSessions(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"sessions": sessions, "count": len(sessions)})
+}
+
+func (handler *Handler) deleteAdminUserSessions(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireAuthService(w) {
+		return
+	}
+	revoked, err := handler.authService.RevokeAllSessionsForUser(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"revoked": revoked})
 }
 
 // ---- catalog helpers ----

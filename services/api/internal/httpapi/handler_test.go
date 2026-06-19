@@ -6764,3 +6764,58 @@ func TestAdminGetUserSessionsNotConfigured(t *testing.T) {
 	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/users/any-id/sessions", "")
 	assertAPIError(t, resp, http.StatusServiceUnavailable, "auth_not_configured")
 }
+
+// ---- Phase 92: DELETE /api/v1/admin/users/{id}/sessions ----
+
+func TestAdminDeleteUserSessionsRevokeActive(t *testing.T) {
+	authSvc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAuthService(authSvc),
+		WithAdminToken(testAdminToken),
+	).Routes()
+	view, err := authSvc.CreateUser(context.Background(), "revoke_alice", "pass1234!", auth.RoleViewer)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	// Login twice → 2 active sessions.
+	for range 2 {
+		if _, _, err := authSvc.Login(context.Background(), "revoke_alice", "pass1234!"); err != nil {
+			t.Fatalf("login: %v", err)
+		}
+	}
+	resp := performRequest(t, h, http.MethodDelete, "/api/v1/admin/users/"+view.ID+"/sessions", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("DELETE sessions: %d %s", resp.Code, resp.Body.String())
+	}
+	var body map[string]any
+	decodeResponse(t, resp, &body)
+	if body["revoked"].(float64) != 2 {
+		t.Errorf("revoked = %v, want 2", body["revoked"])
+	}
+	// Verify sessions are gone.
+	sessions, _ := authSvc.ListActiveSessions(context.Background(), view.ID)
+	if len(sessions) != 0 {
+		t.Errorf("expected 0 active sessions after revoke-all, got %d", len(sessions))
+	}
+}
+
+func TestAdminDeleteUserSessionsNotFound(t *testing.T) {
+	authSvc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAuthService(authSvc),
+		WithAdminToken(testAdminToken),
+	).Routes()
+	resp := performRequest(t, h, http.MethodDelete, "/api/v1/admin/users/no-such-user/sessions", "")
+	assertAPIError(t, resp, http.StatusNotFound, "not_found")
+}
+
+func TestAdminDeleteUserSessionsNotConfigured(t *testing.T) {
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAdminToken(testAdminToken),
+	).Routes()
+	resp := performRequest(t, h, http.MethodDelete, "/api/v1/admin/users/any-id/sessions", "")
+	assertAPIError(t, resp, http.StatusServiceUnavailable, "auth_not_configured")
+}

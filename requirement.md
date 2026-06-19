@@ -880,3 +880,12 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `get` on `/api/v1/admin/users/{id}/sessions`.
 - Add 4 HTTP-layer tests: `TestAdminGetUserSessionsEmpty`, `TestAdminGetUserSessionsActive`, `TestAdminGetUserSessionsNotFound`, `TestAdminGetUserSessionsNotConfigured`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.92.0 - 2026-06-19
+
+- Add `deleteAdminUserSessions` handler: `DELETE /api/v1/admin/users/{id}/sessions`; requires admin auth; calls `auth.Service.RevokeAllSessionsForUser`; returns `{"revoked": N}`; propagates `ErrUserNotFound` (404) and auth not configured (503).
+- Register `DELETE /api/v1/admin/users/{id}/sessions` (admin-auth).
+- Add `delete` operation to `/api/v1/admin/users/{id}/sessions` in OpenAPI contract; bump `info.version` to `0.92.0`.
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `delete` on `/api/v1/admin/users/{id}/sessions`.
+- Add 3 HTTP-layer tests: `TestAdminDeleteUserSessionsRevokeActive`, `TestAdminDeleteUserSessionsNotFound`, `TestAdminDeleteUserSessionsNotConfigured`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
