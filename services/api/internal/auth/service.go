@@ -280,6 +280,34 @@ func (s *Service) RevokeAllSessionsForUser(ctx context.Context, userID string) (
 	return s.sessions.RevokeAllSessionsByUser(ctx, userID, s.now().UTC())
 }
 
+// RevokeAllExcept revokes all active sessions for the user except the session
+// identified by exceptTokenHash. Returns the count of revoked sessions.
+func (s *Service) RevokeAllExcept(ctx context.Context, userID, exceptTokenHash string) (int, error) {
+	all, err := s.sessions.ListSessionsByUser(ctx, userID)
+	if err != nil {
+		return 0, err
+	}
+	now := s.now().UTC()
+	count := 0
+	for _, sess := range all {
+		if sess.TokenHash == exceptTokenHash {
+			continue
+		}
+		if sess.RevokedAt != nil {
+			continue
+		}
+		if now.After(sess.ExpiresAt) {
+			continue
+		}
+		if err := s.sessions.RevokeSession(ctx, sess.TokenHash, now); err != nil {
+			// Session may have just expired or been revoked concurrently; skip.
+			continue
+		}
+		count++
+	}
+	return count, nil
+}
+
 // DeleteUser removes a user record permanently.
 func (s *Service) DeleteUser(ctx context.Context, id string) error {
 	if _, err := s.users.GetUser(ctx, id); err != nil {

@@ -898,3 +898,13 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `get` on `/api/v1/me/sessions`.
 - Add 3 HTTP-layer tests: `TestViewerGetMySessionsFiltersRevoked`, `TestViewerGetMySessionsActive`, `TestViewerGetMySessionsNotConfigured`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.94.0 - 2026-06-19
+
+- Add `RevokeAllExcept(ctx, userID, exceptTokenHash string) (int, error)` to `auth.Service`: lists all sessions for the user via `ListSessionsByUser`, skips the session matching `exceptTokenHash`, revokes every other active non-expired session via `RevokeSession`; returns revoked count.
+- Add `revokeMyOtherSessions` handler: `POST /api/v1/me/sessions/revoke-all`; requires viewer auth; extracts current bearer token hash with `auth.HashToken`; calls `RevokeAllExcept`; returns `{"revoked": N}`; 503 when auth not configured.
+- Register `POST /api/v1/me/sessions/revoke-all` (viewer-auth) and its `methodNotAllowed` fallback.
+- Add `post` operation to `/api/v1/me/sessions/revoke-all` in OpenAPI contract; bump `info.version` to `0.94.0`.
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `post` on `/api/v1/me/sessions/revoke-all`.
+- Add 3 HTTP-layer tests: `TestViewerRevokeMyOtherSessions`, `TestViewerRevokeMyOtherSessionsNoneOther`, `TestViewerRevokeMyOtherSessionsNotConfigured`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.

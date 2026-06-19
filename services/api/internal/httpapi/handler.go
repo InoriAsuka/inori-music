@@ -299,6 +299,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/me", handler.requireViewerAuth(handler.getMe))
 	mux.HandleFunc("POST /api/v1/me/change-password", handler.requireViewerAuth(handler.changePassword))
 	mux.HandleFunc("GET /api/v1/me/sessions", handler.requireViewerAuth(handler.getMyActiveSessions))
+	mux.HandleFunc("POST /api/v1/me/sessions/revoke-all", handler.requireViewerAuth(handler.revokeMyOtherSessions))
 	mux.HandleFunc("GET /api/v1/admin/users", handler.requireAdminAuth(handler.listUsers))
 	mux.HandleFunc("POST /api/v1/admin/users", handler.requireAdminAuth(handler.createUser))
 	mux.HandleFunc("POST /api/v1/admin/users/{id}/disable", handler.requireAdminAuth(handler.disableUser))
@@ -431,6 +432,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("/api/v1/me", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/me/change-password", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/me/sessions", handler.requireViewerAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/me/sessions/revoke-all", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/users", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/users/{id}/disable", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/users/{id}/enable", handler.requireAdminAuth(handler.methodNotAllowed))
@@ -732,6 +734,25 @@ func (handler *Handler) getMyActiveSessions(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"sessions": sessions, "count": len(sessions)})
+}
+
+func (handler *Handler) revokeMyOtherSessions(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireAuthService(w) {
+		return
+	}
+	user, ok := userFromContext(r)
+	if !ok {
+		writeAPIError(w, http.StatusUnauthorized, "unauthorized", "valid bearer token is required")
+		return
+	}
+	token, _ := bearerToken(r.Header.Get("Authorization"))
+	exceptHash := auth.HashToken(token)
+	revoked, err := handler.authService.RevokeAllExcept(r.Context(), user.ID, exceptHash)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"revoked": revoked})
 }
 
 func (handler *Handler) changePassword(w http.ResponseWriter, r *http.Request) {

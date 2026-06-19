@@ -6892,3 +6892,79 @@ func TestViewerGetMySessionsNotConfigured(t *testing.T) {
 	resp := performRequest(t, h, http.MethodGet, "/api/v1/me/sessions", "")
 	assertAPIError(t, resp, http.StatusServiceUnavailable, "auth_not_configured")
 }
+
+// ---- Phase 94: POST /api/v1/me/sessions/revoke-all ----
+
+func TestViewerRevokeMyOtherSessions(t *testing.T) {
+	authSvc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAuthService(authSvc),
+		WithAdminToken(testAdminToken),
+	).Routes()
+	if _, err := authSvc.CreateUser(context.Background(), "revoke_me", "pass1234!", auth.RoleViewer); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	var tokens []string
+	for range 3 {
+		tok, _, err := authSvc.Login(context.Background(), "revoke_me", "pass1234!")
+		if err != nil {
+			t.Fatalf("login: %v", err)
+		}
+		tokens = append(tokens, tok)
+	}
+	// Use token[0] as current — should revoke token[1] and token[2].
+	resp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/sessions/revoke-all", "", "Bearer "+tokens[0])
+	if resp.Code != http.StatusOK {
+		t.Fatalf("POST /me/sessions/revoke-all: %d %s", resp.Code, resp.Body.String())
+	}
+	var body map[string]any
+	decodeResponse(t, resp, &body)
+	if body["revoked"].(float64) != 2 {
+		t.Errorf("revoked = %v, want 2", body["revoked"])
+	}
+	// Verify only token[0] remains active.
+	view, _ := authSvc.ValidateToken(context.Background(), tokens[0])
+	if view.Username != "revoke_me" {
+		t.Errorf("current session should still be valid after revoke-all")
+	}
+	for _, tok := range tokens[1:] {
+		if _, err := authSvc.ValidateToken(context.Background(), tok); err == nil {
+			t.Error("other session should have been revoked")
+		}
+	}
+}
+
+func TestViewerRevokeMyOtherSessionsNoneOther(t *testing.T) {
+	authSvc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAuthService(authSvc),
+		WithAdminToken(testAdminToken),
+	).Routes()
+	if _, err := authSvc.CreateUser(context.Background(), "revoke_solo", "pass1234!", auth.RoleViewer); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	tok, _, err := authSvc.Login(context.Background(), "revoke_solo", "pass1234!")
+	if err != nil {
+		t.Fatalf("login: %v", err)
+	}
+	resp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/sessions/revoke-all", "", "Bearer "+tok)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("POST /me/sessions/revoke-all: %d %s", resp.Code, resp.Body.String())
+	}
+	var body map[string]any
+	decodeResponse(t, resp, &body)
+	if body["revoked"].(float64) != 0 {
+		t.Errorf("revoked = %v, want 0 (only current session exists)", body["revoked"])
+	}
+}
+
+func TestViewerRevokeMyOtherSessionsNotConfigured(t *testing.T) {
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAdminToken(testAdminToken),
+	).Routes()
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/me/sessions/revoke-all", "")
+	assertAPIError(t, resp, http.StatusServiceUnavailable, "auth_not_configured")
+}
