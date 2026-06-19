@@ -1005,3 +1005,57 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add HTTP-layer test `TestViewerGetHistoryTimelineTrackIdFilter` confirming that `?trackId` correctly scopes the viewer's timeline to a single track.
 - Bump `info.version` to `1.4.0`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v1.5.0 - 2026-06-20
+
+- Add `getMyTrackTimeline` handler: `GET /api/v1/me/history/tracks/{trackId}/timeline`; requires viewer auth; reads `{trackId}` from path; accepts `since` (required), `until` (required), `granularity` (optional; day/week/month) query params; calls `history.Service.GetMyTimeline` with both `UserID` (from auth context) and `TrackID` (from path); returns `{buckets}`; `503` when history service not configured.
+- Register `GET /api/v1/me/history/tracks/{trackId}/timeline` (viewer-auth) before the existing `{trackId}` wildcard fallback.
+- Add `get` operation to `/api/v1/me/history/tracks/{trackId}/timeline` in OpenAPI contract; bump `info.version` to `1.5.0`.
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `get` on `/api/v1/me/history/tracks/{trackId}/timeline`.
+- Add 3 HTTP-layer tests: `TestViewerGetMyTrackTimeline`, `TestViewerGetMyTrackTimelineMissingBounds`, `TestViewerGetMyTrackTimelineMethodNotAllowed`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v1.6.0 - 2026-06-20
+
+- Add `UserHistorySummary{Stats UserHistoryStats, TopTracks []TrackPlayCount}` type to the `history` package.
+- Add `GetAdminUserSummary(ctx, userID string, f UserStatsFilter, topN int) (UserHistorySummary, error)` to `history.Service`: calls `GetAdminUserStats` and `GetAdminUserTopTracks` in sequence and returns the combined struct.
+- Add `getAdminUserHistorySummary` handler: `GET /api/v1/admin/history/users/{userId}/history-summary`; requires admin auth; reads `{userId}` from path; accepts optional `since`, `until` (RFC3339) and optional `?topN` (int; default 10; clamped 1–100) query params; returns `UserHistorySummary`; `503` when history service not configured.
+- Register `GET /api/v1/admin/history/users/{userId}/history-summary` (admin-auth) before the existing `{userId}` wildcard; add `methodNotAllowed` fallback.
+- Add `UserHistorySummary` schema to OpenAPI components; add `get` operation to `/api/v1/admin/history/users/{userId}/history-summary`; bump `info.version` to `1.6.0`.
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `get` on `/api/v1/admin/history/users/{userId}/history-summary`.
+- Add 2 `history.Service` unit tests: `TestGetAdminUserSummary`, `TestGetAdminUserSummaryEmpty`.
+- Add 3 HTTP-layer tests: `TestAdminGetUserHistorySummary`, `TestAdminGetUserHistorySummaryWithTopN`, `TestAdminGetUserHistorySummaryNotConfigured`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v1.7.0 - 2026-06-20
+
+- Add `TrackHistorySummary{Stats TrackHistoryStatsResult, TopListeners []UserPlayCount}` type to the `history` package.
+- Add `GetTrackSummary(ctx, trackID string, f TrackStatsFilter, topN int) (TrackHistorySummary, error)` to `history.Service`: calls `GetTrackStats` and `GetTrackTopListeners` in sequence and returns the combined struct.
+- Add `getAdminTrackHistorySummary` handler: `GET /api/v1/admin/history/tracks/{trackId}/history-summary`; requires admin auth; reads `{trackId}` from path; accepts optional `since`, `until` (RFC3339) and optional `?topN` (int; default 10; clamped 1–100) query params; returns `TrackHistorySummary`; `503` when history service not configured.
+- Register `GET /api/v1/admin/history/tracks/{trackId}/history-summary` (admin-auth) before the existing `{trackId}` wildcard; add `methodNotAllowed` fallback.
+- Add `TrackHistorySummary` schema to OpenAPI components; add `get` operation to `/api/v1/admin/history/tracks/{trackId}/history-summary`; bump `info.version` to `1.7.0`.
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `get` on `/api/v1/admin/history/tracks/{trackId}/history-summary`.
+- Add 2 `history.Service` unit tests: `TestGetTrackSummary`, `TestGetTrackSummaryEmpty`.
+- Add 3 HTTP-layer tests: `TestAdminGetTrackHistorySummary`, `TestAdminGetTrackHistorySummaryWithTopN`, `TestAdminGetTrackHistorySummaryNotConfigured`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v1.8.0 - 2026-06-20
+
+- Add `getMyHistorySummary` handler: `GET /api/v1/me/history/summary`; requires viewer auth; accepts optional `since`, `until` (RFC3339) and optional `?topN` (int; default 10; clamped 1–100) query params; calls `history.Service.GetMyStats` and `history.Service.GetMyTopTracks` with `UserID` from auth context; returns `{"stats": UserHistoryStats, "topTracks": []TrackPlayCount}`; `503` when history service not configured.
+- Register `GET /api/v1/me/history/summary` (viewer-auth) before the `/api/v1/me/history/{eventId}` wildcard; add `methodNotAllowed` fallback.
+- Add `get` operation to `/api/v1/me/history/summary` in OpenAPI contract; response: `stats` (`UserHistoryStats` ref) and `topTracks` (array of `TrackPlayCount`); bump `info.version` to `1.8.0`.
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `get` on `/api/v1/me/history/summary`.
+- Add 3 HTTP-layer tests: `TestViewerGetMyHistorySummary`, `TestViewerGetMyHistorySummaryWithTopN`, `TestViewerGetMyHistorySummaryNotConfigured`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v1.9.0 - 2026-06-20
+
+- Extend `history.Repository.UserTrackPlayStats` signature to accept a `UserStatsFilter` for optional `Since`/`Until` time bounds; `UserStatsFilter.UserID` is ignored — caller passes `userID` directly.
+- Implement time-bound filtering in `history.MemoryRepository.UserTrackPlayStats`: skip events outside `[f.Since, f.Until)` when the bounds are non-zero.
+- Implement time-bound filtering in `historypg.Repository.UserTrackPlayStats`: inject `AND played_at >= $3` / `AND played_at < $4` clauses when non-zero.
+- Update `history.Service.GetMyTrackStats(ctx, userID, trackID string, f UserStatsFilter) (UserTrackStats, error)` to forward `f` to the repository.
+- Update `getMyTrackStats` handler to parse optional `?since` / `?until` query params (RFC3339); return `400 invalid_since` / `400 invalid_until` on parse failure; pass them via `UserStatsFilter`.
+- Update `GET /api/v1/me/history/tracks/{trackId}/stats` in OpenAPI to declare `since` and `until` query parameters; bump `info.version` to `1.9.0`.
+- Add 1 `history.Service` unit test: `TestGetMyTrackStatsTimeWindow`.
+- Add 2 HTTP-layer tests: `TestViewerGetMyTrackStatsSince`, `TestViewerGetMyTrackStatsUntil`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.

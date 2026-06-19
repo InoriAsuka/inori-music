@@ -7702,3 +7702,69 @@ func TestViewerRevokeAllMySessionsNotConfigured(t *testing.T) {
 	resp := performRequest(t, h, http.MethodPost, "/api/v1/me/sessions/revoke-all-devices", "")
 	assertAPIError(t, resp, http.StatusServiceUnavailable, "auth_not_configured")
 }
+
+func TestViewerGetMyTrackTimeline(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"TLMyTrackBand"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"TLMyTrk1","artistId":%q,"mediaObjectId":"mo-tlmytk-1"}`, artistID), "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	// 2 events on day1, 1 on day2 — all same viewer, same track
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q,"playedAt":"2025-07-01T10:00:00Z"}`, trackID), "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q,"playedAt":"2025-07-01T15:00:00Z"}`, trackID), "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q,"playedAt":"2025-07-02T09:00:00Z"}`, trackID), "Bearer "+viewerToken)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/me/history/tracks/"+trackID+"/timeline?since=2025-07-01T00:00:00Z&until=2025-07-03T00:00:00Z&granularity=day",
+		"", "Bearer "+viewerToken)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", resp.Code, resp.Body.String())
+	}
+	var body map[string]any
+	decodeResponse(t, resp, &body)
+	buckets, ok := body["buckets"].([]any)
+	if !ok {
+		t.Fatalf("expected buckets array, got %T", body["buckets"])
+	}
+	if len(buckets) != 2 {
+		t.Fatalf("expected 2 day buckets, got %d", len(buckets))
+	}
+	b0 := buckets[0].(map[string]any)
+	if int(b0["eventCount"].(float64)) != 2 {
+		t.Errorf("day1 bucket: expected 2 events, got %v", b0["eventCount"])
+	}
+	b1 := buckets[1].(map[string]any)
+	if int(b1["eventCount"].(float64)) != 1 {
+		t.Errorf("day2 bucket: expected 1 event, got %v", b1["eventCount"])
+	}
+}
+
+func TestViewerGetMyTrackTimelineMissingBounds(t *testing.T) {
+	h, viewerToken, _ := newHistoryTestHandler(t)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/me/history/tracks/some-track/timeline?since=2025-07-01T00:00:00Z",
+		"", "Bearer "+viewerToken)
+	assertAPIError(t, resp, http.StatusBadRequest, "missing_time_bounds")
+}
+
+func TestViewerGetMyTrackTimelineMethodNotAllowed(t *testing.T) {
+	h, viewerToken, _ := newHistoryTestHandler(t)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodPost,
+		"/api/v1/me/history/tracks/some-track/timeline",
+		"", "Bearer "+viewerToken)
+	assertAPIError(t, resp, http.StatusMethodNotAllowed, "method_not_allowed")
+}

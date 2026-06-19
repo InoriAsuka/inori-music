@@ -2376,7 +2376,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "1.4.0"
+    "version": "1.5.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -11110,6 +11110,88 @@
           },
           "503": {
             "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/me/history/tracks/{trackId}/timeline": {
+      "get": {
+        "summary": "Get viewer track play timeline",
+        "operationId": "getMyTrackTimeline",
+        "description": "Returns the calling user's play-event counts for a specific track grouped by time bucket (day/week/month). Both `since` and `until` are required.",
+        "tags": [
+          "History"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "trackId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "The track ID."
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "required": true,
+            "description": "Start of the time window (RFC3339, inclusive).",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": true,
+            "description": "End of the time window (RFC3339, exclusive).",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "granularity",
+            "in": "query",
+            "required": false,
+            "description": "Bucket size: day (default), week, or month.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "day",
+                "week",
+                "month"
+              ],
+              "default": "day"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Timeline buckets for the track scoped to the viewer",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimelineResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "503": {
+            "$ref": "#/components/responses/HistoryNotConfigured"
           }
         }
       }
