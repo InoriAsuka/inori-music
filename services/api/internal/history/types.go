@@ -12,6 +12,18 @@ var ErrEventNotFound = errors.New("play event not found")
 // ErrEventForbidden is returned when a viewer tries to access an event they do not own.
 var ErrEventForbidden = errors.New("play event belongs to another user")
 
+// ErrInvalidTimeRange is returned when Since >= Until or a required time bound is missing.
+var ErrInvalidTimeRange = errors.New("invalid time range")
+
+// TimelineGranularity controls how play events are bucketed in a timeline query.
+type TimelineGranularity string
+
+const (
+	GranularityDay   TimelineGranularity = "day"
+	GranularityWeek  TimelineGranularity = "week"
+	GranularityMonth TimelineGranularity = "month"
+)
+
 // PlayEvent records one listening event: a user played a track at a point in time.
 type PlayEvent struct {
 	ID        string    `json:"id"`
@@ -29,7 +41,7 @@ type PlayEventFilter struct {
 	Until   time.Time // optional upper bound on played_at (exclusive)
 	Limit   int       // 0 → default (50); clamped to 500
 	Offset  int
-	Asc     bool      // false (default) → played_at DESC; true → played_at ASC
+	Asc     bool // false (default) → played_at DESC; true → played_at ASC
 }
 
 // AdminPlayEventFilter scopes admin list queries that are not user-scoped.
@@ -40,7 +52,7 @@ type AdminPlayEventFilter struct {
 	Until   time.Time // optional upper bound on played_at (exclusive)
 	Limit   int       // 0 → default (50); clamped to 500
 	Offset  int
-	Asc     bool      // false (default) → played_at DESC; true → played_at ASC
+	Asc     bool // false (default) → played_at DESC; true → played_at ASC
 }
 
 // GlobalPlayEventFilter scopes admin queries that list all events across every user and track.
@@ -52,7 +64,7 @@ type GlobalPlayEventFilter struct {
 	Until   time.Time // optional upper bound on played_at (exclusive)
 	Limit   int       // 0 → default (50); clamped to 500
 	Offset  int
-	Asc     bool      // false (default) → played_at DESC; true → played_at ASC
+	Asc     bool // false (default) → played_at DESC; true → played_at ASC
 }
 
 // StatsFilter scopes admin aggregate queries.
@@ -74,6 +86,22 @@ type TrackStatsFilter struct {
 	TrackID string    // required
 	Since   time.Time // optional lower bound on played_at (inclusive)
 	Until   time.Time // optional upper bound on played_at (exclusive)
+}
+
+// TimelineFilter scopes a timeline (bucket) query.
+// Since and Until are both required; Granularity defaults to GranularityDay.
+type TimelineFilter struct {
+	Since       time.Time           // required lower bound (inclusive)
+	Until       time.Time           // required upper bound (exclusive)
+	Granularity TimelineGranularity // day | week | month; default day
+	UserID      string              // optional — restrict to a single user
+	TrackID     string              // optional — restrict to a single track
+}
+
+// TimelineBucket holds the event count for a single time bucket.
+type TimelineBucket struct {
+	BucketStart time.Time `json:"bucketStart"`
+	EventCount  int       `json:"eventCount"`
 }
 
 // Repository persists play events.
@@ -116,6 +144,9 @@ type Repository interface {
 	// Track-scoped aggregate stats — admin-facing queries for a single track.
 	TrackHistoryStats(ctx context.Context, f TrackStatsFilter) (TrackHistoryStatsResult, error)
 	TrackTopListeners(ctx context.Context, f TrackStatsFilter, limit int) ([]UserPlayCount, error)
+
+	// Timeline — group event counts by time bucket (day/week/month).
+	HistoryTimeline(ctx context.Context, f TimelineFilter) ([]TimelineBucket, error)
 }
 
 // HistoryStats holds system-wide playback aggregate counts.

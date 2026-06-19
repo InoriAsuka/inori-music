@@ -462,3 +462,56 @@ func (r *MemoryRepository) TrackTopListeners(_ context.Context, f TrackStatsFilt
 	}
 	return result, nil
 }
+
+// truncateToBucket returns the start of the bucket containing t for the given granularity.
+func truncateToBucket(t time.Time, g TimelineGranularity) time.Time {
+	t = t.UTC()
+	switch g {
+	case GranularityMonth:
+		return time.Date(t.Year(), t.Month(), 1, 0, 0, 0, 0, time.UTC)
+	case GranularityWeek:
+		// ISO week: anchor to Monday
+		weekday := int(t.Weekday())
+		if weekday == 0 {
+			weekday = 7 // Sunday → 7
+		}
+		monday := t.AddDate(0, 0, -(weekday - 1))
+		return time.Date(monday.Year(), monday.Month(), monday.Day(), 0, 0, 0, 0, time.UTC)
+	default: // GranularityDay
+		return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC)
+	}
+}
+
+func (r *MemoryRepository) HistoryTimeline(_ context.Context, f TimelineFilter) ([]TimelineBucket, error) {
+	r.mu.RLock()
+	counts := make(map[time.Time]int)
+	for _, e := range r.events {
+		if f.UserID != "" && e.UserID != f.UserID {
+			continue
+		}
+		if f.TrackID != "" && e.TrackID != f.TrackID {
+			continue
+		}
+		if !f.Since.IsZero() && e.PlayedAt.Before(f.Since) {
+			continue
+		}
+		if !f.Until.IsZero() && !e.PlayedAt.Before(f.Until) {
+			continue
+		}
+		bucket := truncateToBucket(e.PlayedAt, f.Granularity)
+		counts[bucket]++
+	}
+	r.mu.RUnlock()
+
+	result := make([]TimelineBucket, 0, len(counts))
+	for start, n := range counts {
+		result = append(result, TimelineBucket{BucketStart: start, EventCount: n})
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].BucketStart.Before(result[j].BucketStart)
+	})
+	if result == nil {
+		result = []TimelineBucket{}
+	}
+	return result, nil
+}

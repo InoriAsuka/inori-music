@@ -93,6 +93,7 @@ func TestStorageAdminOpenAPIContractCoversRoutes(t *testing.T) {
 		"/api/v1/admin/history/{eventId}":                       {"get", "patch", "delete"},
 		"/api/v1/admin/history":                                 {"get", "delete"},
 		"/api/v1/admin/history/batch-delete":                    {"post"},
+		"/api/v1/admin/history/timeline":                        {"get"},
 	}
 
 	for path, methods := range expected {
@@ -974,5 +975,62 @@ func TestStorageAdminOpenAPIContractAdminTrackStatsPaths(t *testing.T) {
 	topSchema := topContent["schema"].(map[string]any)
 	if topSchema["$ref"] != "#/components/schemas/TopUsersResult" {
 		t.Errorf("GET /api/v1/admin/history/tracks/{trackId}/top-listeners 200 schema = %v, want TopUsersResult ref", topSchema)
+	}
+}
+
+func TestStorageAdminOpenAPIContractHistoryTimeline(t *testing.T) {
+	document := loadOpenAPIContract(t)
+	paths := document["paths"].(map[string]any)
+	components := document["components"].(map[string]any)
+	schemas := components["schemas"].(map[string]any)
+
+	// TimelineBucket schema must exist
+	tb, ok := schemas["TimelineBucket"].(map[string]any)
+	if !ok {
+		t.Fatal("schema TimelineBucket is missing")
+	}
+	tbProps, _ := tb["properties"].(map[string]any)
+	for _, want := range []string{"bucketStart", "eventCount"} {
+		if _, ok := tbProps[want]; !ok {
+			t.Errorf("TimelineBucket missing property %q", want)
+		}
+	}
+
+	// TimelineResult schema must exist and reference TimelineBucket
+	if _, ok := schemas["TimelineResult"].(map[string]any); !ok {
+		t.Fatal("schema TimelineResult is missing")
+	}
+
+	// GET /api/v1/admin/history/timeline must exist
+	get := operation(t, paths, "/api/v1/admin/history/timeline", "get")
+
+	// required params: since, until
+	params := map[string]bool{}
+	for _, p := range get["parameters"].([]any) {
+		if m, ok := p.(map[string]any); ok {
+			params[m["name"].(string)] = true
+		}
+	}
+	for _, want := range []string{"since", "until", "granularity", "userId", "trackId"} {
+		if !params[want] {
+			t.Errorf("GET /api/v1/admin/history/timeline missing param %q", want)
+		}
+	}
+
+	// 200 response must reference TimelineResult
+	resp200 := get["responses"].(map[string]any)["200"].(map[string]any)
+	content := resp200["content"].(map[string]any)["application/json"].(map[string]any)
+	schema := content["schema"].(map[string]any)
+	if schema["$ref"] != "#/components/schemas/TimelineResult" {
+		t.Errorf("GET /api/v1/admin/history/timeline 200 schema = %v, want TimelineResult ref", schema)
+	}
+
+	// error code enum must include missing_time_bounds and invalid_granularity
+	env := schemas["ErrorEnvelope"].(map[string]any)
+	codes, _ := env["properties"].(map[string]any)["error"].(map[string]any)["properties"].(map[string]any)["code"].(map[string]any)["enum"].([]any)
+	for _, want := range []string{"missing_time_bounds", "invalid_granularity"} {
+		if !containsString(codes, want) {
+			t.Errorf("error code enum is missing %q", want)
+		}
 	}
 }

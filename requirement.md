@@ -779,3 +779,19 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add `TrackHistoryStats` schema to OpenAPI components; add `get` operation to `/api/v1/admin/history/tracks/{trackId}/stats` (refs `TrackHistoryStats`) and `/api/v1/admin/history/tracks/{trackId}/top-listeners` (refs `TopUsersResult`); both accept optional `?since`, `?until`; top-listeners also accepts `?limit`; bump `info.version` to `0.82.0`.
 - Extend `TestStorageAdminOpenAPIContractCoversRoutes` with both new paths; add `TestStorageAdminOpenAPIContractAdminTrackStatsPaths`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.83.0 - 2026-06-19
+
+- Add `TimelineGranularity` string type with constants `GranularityDay`, `GranularityWeek`, `GranularityMonth` to `history/types.go`.
+- Add `TimelineFilter{Since time.Time, Until time.Time, Granularity TimelineGranularity, UserID string, TrackID string}` and `TimelineBucket{BucketStart time.Time (json:"bucketStart"), EventCount int (json:"eventCount")}` to `history/types.go`.
+- Add `HistoryTimeline(ctx, TimelineFilter) ([]TimelineBucket, error)` to the `Repository` interface.
+- Implement on `history.MemoryRepository`: iterate events, apply `UserID`/`TrackID`/`Since`/`Until` guards, truncate `played_at` to the bucket boundary (day=UTC day, week=Monday-anchored UTC week, month=UTC month), accumulate counts into a `map[time.Time]int`, then emit sorted `[]TimelineBucket` (empty bucket list is `[]TimelineBucket{}`).
+- Implement on `historypg.Repository`: use `DATE_TRUNC($granularity, played_at AT TIME ZONE 'UTC')` in a dynamic `WHERE` clause built from `timelineWhere` helper (extends `statsWhere` with optional `user_id` and `track_id`); `GROUP BY bucket` order by `bucket ASC`; return `[]TimelineBucket` (empty → `[]TimelineBucket{}`).
+- Add `GetHistoryTimeline(ctx, TimelineFilter)` to `history.Service`; validate `Since` and `Until` are both non-zero and `Since` < `Until`; validate `Granularity` is one of `day`/`week`/`month` (default `day`); return `ErrInvalidTimeRange` sentinel on bad range.
+- Add `ErrInvalidTimeRange` sentinel to `history/types.go`.
+- Add admin route `GET /api/v1/admin/history/timeline` → `getAdminHistoryTimeline`; parses `?since`, `?until` (both required, `400 missing_time_bounds` if absent), `?granularity` (optional, default `day`, `400 invalid_granularity` for other values), optional `?userId` and `?trackId`; returns `{"buckets":[{"bucketStart":"...","eventCount":N},...]}`; add `methodNotAllowed` fallback.
+- Add 4 `history.Service` unit tests (`TestGetHistoryTimelineDay`, `TestGetHistoryTimelineWeek`, `TestGetHistoryTimelineUserFilter`, `TestGetHistoryTimelineInvalidRange`).
+- Add 4 HTTP-layer tests (`TestAdminGetHistoryTimeline`, `TestAdminGetHistoryTimelineMissingSince`, `TestAdminGetHistoryTimelineInvalidGranularity`, `TestAdminGetHistoryTimelineNotConfigured`).
+- Add `TimelineBucket` schema and `TimelineResult` schema (`{buckets: [TimelineBucket]}`) to OpenAPI components; add `get` operation to `/api/v1/admin/history/timeline` with `since`(required), `until`(required), `granularity`(enum day/week/month, default day), `userId`(optional), `trackId`(optional) params; 200 refs `TimelineResult`; add `missing_time_bounds` and `invalid_granularity` to error code enum; bump `info.version` to `0.83.0`.
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `get` on `/api/v1/admin/history/timeline`; add `TestStorageAdminOpenAPIContractHistoryTimeline`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.

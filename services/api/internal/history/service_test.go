@@ -721,6 +721,117 @@ func TestGetTrackTopListenersTimeWindow(t *testing.T) {
 	}
 }
 
+func TestGetHistoryTimelineDay(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+
+	// 2 events on day 1, 3 events on day 2
+	day1 := time.Date(2024, 1, 10, 12, 0, 0, 0, time.UTC)
+	day2 := time.Date(2024, 1, 11, 9, 0, 0, 0, time.UTC)
+	svc.RecordPlay(ctx, "u1", "t1", day1)
+	svc.RecordPlay(ctx, "u1", "t2", day1.Add(time.Hour))
+	svc.RecordPlay(ctx, "u2", "t1", day2)
+	svc.RecordPlay(ctx, "u1", "t1", day2.Add(time.Hour))
+	svc.RecordPlay(ctx, "u2", "t2", day2.Add(2*time.Hour))
+
+	f := history.TimelineFilter{
+		Since:       time.Date(2024, 1, 10, 0, 0, 0, 0, time.UTC),
+		Until:       time.Date(2024, 1, 12, 0, 0, 0, 0, time.UTC),
+		Granularity: history.GranularityDay,
+	}
+	buckets, err := svc.GetHistoryTimeline(ctx, f)
+	if err != nil {
+		t.Fatalf("GetHistoryTimeline: %v", err)
+	}
+	if len(buckets) != 2 {
+		t.Fatalf("buckets = %d, want 2", len(buckets))
+	}
+	if buckets[0].EventCount != 2 {
+		t.Errorf("day1 count = %d, want 2", buckets[0].EventCount)
+	}
+	if buckets[1].EventCount != 3 {
+		t.Errorf("day2 count = %d, want 3", buckets[1].EventCount)
+	}
+}
+
+func TestGetHistoryTimelineWeek(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+
+	// 2024-01-08 is Monday (week 1); 2024-01-15 is Monday (week 2)
+	week1mon := time.Date(2024, 1, 8, 10, 0, 0, 0, time.UTC)
+	week2wed := time.Date(2024, 1, 17, 10, 0, 0, 0, time.UTC)
+	svc.RecordPlay(ctx, "u1", "t1", week1mon)
+	svc.RecordPlay(ctx, "u1", "t1", week1mon.Add(24*time.Hour)) // still week 1
+	svc.RecordPlay(ctx, "u2", "t2", week2wed)
+
+	f := history.TimelineFilter{
+		Since:       time.Date(2024, 1, 8, 0, 0, 0, 0, time.UTC),
+		Until:       time.Date(2024, 1, 22, 0, 0, 0, 0, time.UTC),
+		Granularity: history.GranularityWeek,
+	}
+	buckets, err := svc.GetHistoryTimeline(ctx, f)
+	if err != nil {
+		t.Fatalf("GetHistoryTimeline week: %v", err)
+	}
+	if len(buckets) != 2 {
+		t.Fatalf("buckets = %d, want 2", len(buckets))
+	}
+	if buckets[0].EventCount != 2 {
+		t.Errorf("week1 count = %d, want 2", buckets[0].EventCount)
+	}
+	if buckets[1].EventCount != 1 {
+		t.Errorf("week2 count = %d, want 1", buckets[1].EventCount)
+	}
+}
+
+func TestGetHistoryTimelineUserFilter(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+
+	day := time.Date(2024, 3, 5, 8, 0, 0, 0, time.UTC)
+	svc.RecordPlay(ctx, "u1", "t1", day)
+	svc.RecordPlay(ctx, "u1", "t1", day.Add(time.Hour))
+	svc.RecordPlay(ctx, "u2", "t2", day.Add(2*time.Hour)) // different user — must be excluded
+
+	f := history.TimelineFilter{
+		Since:       time.Date(2024, 3, 5, 0, 0, 0, 0, time.UTC),
+		Until:       time.Date(2024, 3, 6, 0, 0, 0, 0, time.UTC),
+		Granularity: history.GranularityDay,
+		UserID:      "u1",
+	}
+	buckets, err := svc.GetHistoryTimeline(ctx, f)
+	if err != nil {
+		t.Fatalf("GetHistoryTimeline user filter: %v", err)
+	}
+	if len(buckets) != 1 {
+		t.Fatalf("buckets = %d, want 1", len(buckets))
+	}
+	if buckets[0].EventCount != 2 {
+		t.Errorf("u1 count = %d, want 2", buckets[0].EventCount)
+	}
+}
+
+func TestGetHistoryTimelineInvalidRange(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+
+	base := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	// both zero
+	if _, err := svc.GetHistoryTimeline(ctx, history.TimelineFilter{}); !errors.Is(err, history.ErrInvalidTimeRange) {
+		t.Errorf("zero bounds: want ErrInvalidTimeRange, got %v", err)
+	}
+	// since == until
+	if _, err := svc.GetHistoryTimeline(ctx, history.TimelineFilter{Since: base, Until: base}); !errors.Is(err, history.ErrInvalidTimeRange) {
+		t.Errorf("equal bounds: want ErrInvalidTimeRange, got %v", err)
+	}
+	// since > until
+	if _, err := svc.GetHistoryTimeline(ctx, history.TimelineFilter{Since: base.Add(time.Hour), Until: base}); !errors.Is(err, history.ErrInvalidTimeRange) {
+		t.Errorf("inverted bounds: want ErrInvalidTimeRange, got %v", err)
+	}
+}
+
 func TestGetAllHistory(t *testing.T) {
 	svc := history.NewService(history.NewMemoryRepository())
 	ctx := context.Background()

@@ -232,6 +232,27 @@ func (s *Service) GetHistoryStats(ctx context.Context, f StatsFilter) (HistorySt
 	return s.repo.HistoryStats(ctx, f)
 }
 
+// GetHistoryTimeline returns play-event counts grouped by time bucket (day/week/month).
+// Both Since and Until must be non-zero and Since must be before Until.
+// Granularity defaults to GranularityDay when not set.
+func (s *Service) GetHistoryTimeline(ctx context.Context, f TimelineFilter) ([]TimelineBucket, error) {
+	if f.Since.IsZero() || f.Until.IsZero() {
+		return nil, ErrInvalidTimeRange
+	}
+	if !f.Since.Before(f.Until) {
+		return nil, ErrInvalidTimeRange
+	}
+	switch f.Granularity {
+	case GranularityDay, GranularityWeek, GranularityMonth:
+		// valid
+	case "":
+		f.Granularity = GranularityDay
+	default:
+		return nil, fmt.Errorf("invalid granularity %q: must be day, week, or month", f.Granularity)
+	}
+	return s.repo.HistoryTimeline(ctx, f)
+}
+
 // GetAdminUserStats returns per-user aggregate counts for any user; intended for admin use.
 func (s *Service) GetAdminUserStats(ctx context.Context, f UserStatsFilter) (UserHistoryStats, error) {
 	if f.UserID == "" {

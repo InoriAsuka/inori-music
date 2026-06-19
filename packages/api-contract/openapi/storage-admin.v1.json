@@ -386,7 +386,9 @@
                   "invalid_order",
                   "event_forbidden",
                   "invalid_played_at",
-                  "invalid_ids"
+                  "invalid_ids",
+                  "missing_time_bounds",
+                  "invalid_granularity"
                 ],
                 "type": "string"
               },
@@ -2194,6 +2196,41 @@
           }
         }
       },
+      "TimelineBucket": {
+        "description": "A single time bucket in a history timeline.",
+        "type": "object",
+        "required": [
+          "bucketStart",
+          "eventCount"
+        ],
+        "properties": {
+          "bucketStart": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC start of the bucket (day/week/month boundary)."
+          },
+          "eventCount": {
+            "type": "integer",
+            "description": "Number of play events in this bucket."
+          }
+        }
+      },
+      "TimelineResult": {
+        "description": "A history timeline response containing an ordered list of time buckets.",
+        "type": "object",
+        "required": [
+          "buckets"
+        ],
+        "properties": {
+          "buckets": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TimelineBucket"
+            },
+            "description": "Ordered list of time buckets (oldest first)."
+          }
+        }
+      },
       "UpdatePlayEventRequest": {
         "type": "object",
         "required": [
@@ -2248,7 +2285,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "0.82.0"
+    "version": "0.83.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -9638,6 +9675,100 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/history/timeline": {
+      "get": {
+        "summary": "Get play history grouped by time bucket (admin)",
+        "operationId": "getAdminHistoryTimeline",
+        "description": "Returns play event counts grouped by day, week, or month within the specified time window. Both since and until are required. Admin only.",
+        "tags": [
+          "AdminHistory"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "since",
+            "in": "query",
+            "required": true,
+            "description": "Start of the time window (RFC3339, inclusive).",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": true,
+            "description": "End of the time window (RFC3339, exclusive).",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "granularity",
+            "in": "query",
+            "required": false,
+            "description": "Bucket size: day (default), week, or month.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "day",
+                "week",
+                "month"
+              ],
+              "default": "day"
+            }
+          },
+          {
+            "name": "userId",
+            "in": "query",
+            "required": false,
+            "description": "Optional: restrict to a specific user's events.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "trackId",
+            "in": "query",
+            "required": false,
+            "description": "Optional: restrict to events for a specific track.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Timeline buckets",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimelineResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
           }
         }
       }

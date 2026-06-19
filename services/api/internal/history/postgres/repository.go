@@ -552,3 +552,58 @@ func (r *Repository) TrackTopListeners(ctx context.Context, f history.TrackStats
 	}
 	return result, nil
 }
+
+// timelineWhere builds a WHERE clause for a TimelineFilter.
+// Since and Until are expected to be non-zero (validated by the service layer).
+func timelineWhere(f history.TimelineFilter) (string, []any) {
+	args := []any{f.Since.UTC(), f.Until.UTC()}
+	clauses := []string{"played_at >= $1", "played_at < $2"}
+	if f.UserID != "" {
+		args = append(args, f.UserID)
+		clauses = append(clauses, fmt.Sprintf("user_id = $%d", len(args)))
+	}
+	if f.TrackID != "" {
+		args = append(args, f.TrackID)
+		clauses = append(clauses, fmt.Sprintf("track_id = $%d", len(args)))
+	}
+	where := " WHERE " + clauses[0]
+	for _, c := range clauses[1:] {
+		where += " AND " + c
+	}
+	return where, args
+}
+
+func (r *Repository) HistoryTimeline(ctx context.Context, f history.TimelineFilter) ([]history.TimelineBucket, error) {
+	gran := string(f.Granularity)
+	if gran == "" {
+		gran = string(history.GranularityDay)
+	}
+	where, args := timelineWhere(f)
+	// Pass the granularity as a plain string literal; the service already validated it.
+	rows, err := r.pool.Query(ctx, `
+		SELECT DATE_TRUNC('`+gran+`', played_at AT TIME ZONE 'UTC') AS bucket,
+		       COUNT(*) AS event_count
+		FROM play_events`+where+`
+		GROUP BY bucket
+		ORDER BY bucket ASC`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []history.TimelineBucket
+	for rows.Next() {
+		var b history.TimelineBucket
+		if err := rows.Scan(&b.BucketStart, &b.EventCount); err != nil {
+			return nil, err
+		}
+		result = append(result, b)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if result == nil {
+		result = []history.TimelineBucket{}
+	}
+	return result, nil
+}
