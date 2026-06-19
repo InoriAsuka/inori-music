@@ -300,6 +300,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/me/change-password", handler.requireViewerAuth(handler.changePassword))
 	mux.HandleFunc("GET /api/v1/me/sessions", handler.requireViewerAuth(handler.getMyActiveSessions))
 	mux.HandleFunc("POST /api/v1/me/sessions/revoke-all", handler.requireViewerAuth(handler.revokeMyOtherSessions))
+	mux.HandleFunc("POST /api/v1/me/sessions/revoke-all-devices", handler.requireViewerAuth(handler.revokeAllMySessions))
 	mux.HandleFunc("GET /api/v1/admin/users", handler.requireAdminAuth(handler.listUsers))
 	mux.HandleFunc("POST /api/v1/admin/users", handler.requireAdminAuth(handler.createUser))
 	mux.HandleFunc("POST /api/v1/admin/users/{id}/disable", handler.requireAdminAuth(handler.disableUser))
@@ -434,6 +435,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("/api/v1/me/change-password", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/me/sessions", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/me/sessions/revoke-all", handler.requireViewerAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/me/sessions/revoke-all-devices", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/users", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/users/{id}/disable", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/users/{id}/enable", handler.requireAdminAuth(handler.methodNotAllowed))
@@ -750,6 +752,23 @@ func (handler *Handler) revokeMyOtherSessions(w http.ResponseWriter, r *http.Req
 	token, _ := bearerToken(r.Header.Get("Authorization"))
 	exceptHash := auth.HashToken(token)
 	revoked, err := handler.authService.RevokeAllExcept(r.Context(), user.ID, exceptHash)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"revoked": revoked})
+}
+
+func (handler *Handler) revokeAllMySessions(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireAuthService(w) {
+		return
+	}
+	user, ok := userFromContext(r)
+	if !ok {
+		writeAPIError(w, http.StatusUnauthorized, "unauthorized", "valid bearer token is required")
+		return
+	}
+	revoked, err := handler.authService.RevokeAllSessionsForUser(r.Context(), user.ID)
 	if err != nil {
 		writeError(w, err)
 		return

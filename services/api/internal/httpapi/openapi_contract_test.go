@@ -74,6 +74,7 @@ func TestStorageAdminOpenAPIContractCoversRoutes(t *testing.T) {
 		"/api/v1/me/change-password":                             {"post"},
 		"/api/v1/me/sessions":                                    {"get"},
 		"/api/v1/me/sessions/revoke-all":                         {"post"},
+		"/api/v1/me/sessions/revoke-all-devices":                 {"post"},
 		"/api/v1/me/history":                                     {"get", "post", "delete"},
 		"/api/v1/me/history/stats":                               {"get"},
 		"/api/v1/me/history/top-tracks":                         {"get"},

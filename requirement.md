@@ -948,3 +948,12 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add 1 HTTP-layer test: `TestAdminDeleteUserRevokesSessionsFirst`.
 - Bump `info.version` to `0.98.0`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.99.0 - 2026-06-19
+
+- Add `revokeAllMySessions` handler: `POST /api/v1/me/sessions/revoke-all-devices`; requires viewer auth; calls `auth.Service.RevokeAllSessionsForUser` with the authenticated user's ID; revokes ALL sessions including the current one; returns `{"revoked": N}`; `503` when auth not configured.
+- Register `POST /api/v1/me/sessions/revoke-all-devices` (viewer-auth) and its `methodNotAllowed` fallback.
+- Add `post` operation to `/api/v1/me/sessions/revoke-all-devices` in OpenAPI contract; bump `info.version` to `0.99.0`.
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `post` on `/api/v1/me/sessions/revoke-all-devices`.
+- Add 3 HTTP-layer tests: `TestViewerRevokeAllMySessions`, `TestViewerRevokeAllMySessionsIncludesCurrent`, `TestViewerRevokeAllMySessionsNotConfigured`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
