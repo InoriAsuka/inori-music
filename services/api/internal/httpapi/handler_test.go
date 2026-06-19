@@ -1104,6 +1104,39 @@ func TestGetMeNotConfigured(t *testing.T) {
 	assertAPIError(t, resp, http.StatusServiceUnavailable, "auth_not_configured")
 }
 
+func TestAdminGetUser(t *testing.T) {
+	h, svc := newAuthTestHandler()
+	token := loginAdminToken(t, h)
+	// create a viewer
+	view, err := svc.CreateUser(context.Background(), "target_user", "tpass1234", auth.RoleViewer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/admin/users/"+view.ID, "", "Bearer "+token)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("GET /admin/users/{id} status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var got auth.UserView
+	decodeResponse(t, resp, &got)
+	if got.ID != view.ID || got.Username != "target_user" || got.Role != auth.RoleViewer {
+		t.Errorf("GET /admin/users/{id}: got %+v", got)
+	}
+}
+
+func TestAdminGetUserNotFound(t *testing.T) {
+	h, _ := newAuthTestHandler()
+	token := loginAdminToken(t, h)
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/admin/users/no-such-id", "", "Bearer "+token)
+	assertAPIError(t, resp, http.StatusNotFound, "not_found")
+}
+
+func TestAdminGetUserNotConfigured(t *testing.T) {
+	repo := storage.NewMemoryRepository()
+	h := NewHandler(storage.NewService(repo), WithAdminToken(testAdminToken)).Routes()
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/users/some-id", "")
+	assertAPIError(t, resp, http.StatusServiceUnavailable, "auth_not_configured")
+}
+
 func loginAdminToken(t *testing.T, h http.Handler) string {
 	t.Helper()
 	loginResp := performRequestWithoutAuth(t, h, http.MethodPost, "/api/v1/auth/login", `{"username":"admin","password":"adminpass1"}`)

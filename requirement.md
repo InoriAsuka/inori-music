@@ -816,3 +816,12 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add `GET /api/v1/me` to OpenAPI contract; 200 refs `UserView`; bump `info.version` to `0.85.0`.
 - Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `get` on `/api/v1/me`; add `TestStorageAdminOpenAPIContractGetMe`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.86.0 - 2026-06-19
+
+- Add `getAdminUser` handler: reads path value `id`, calls `authService.GetUser(ctx, id)`, writes `UserView` at `GET /api/v1/admin/users/{id}`.
+- Register `GET /api/v1/admin/users/{id}` route (admin-auth); add `/api/v1/admin/users/{id}` to `TestStorageAdminOpenAPIContractCoversRoutes` expected map alongside `admin/users` and `admin/users/{id}/disable`.
+- Add 3 HTTP-layer tests (`TestAdminGetUser`, `TestAdminGetUserNotFound`, `TestAdminGetUserNotConfigured`).
+- Add `get` operation to `/api/v1/admin/users/{id}` in OpenAPI contract; 200 refs `UserView`, 404 ErrorEnvelope; bump `info.version` to `0.86.0`.
+- Add `TestStorageAdminOpenAPIContractAdminGetUser`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.

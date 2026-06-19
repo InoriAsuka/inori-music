@@ -300,6 +300,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/admin/users", handler.requireAdminAuth(handler.listUsers))
 	mux.HandleFunc("POST /api/v1/admin/users", handler.requireAdminAuth(handler.createUser))
 	mux.HandleFunc("POST /api/v1/admin/users/{id}/disable", handler.requireAdminAuth(handler.disableUser))
+	mux.HandleFunc("GET /api/v1/admin/users/{id}", handler.requireAdminAuth(handler.getAdminUser))
 	mux.HandleFunc("DELETE /api/v1/admin/users/{id}", handler.requireAdminAuth(handler.deleteUser))
 	mux.HandleFunc("GET /api/v1/admin/catalog/artists", handler.requireAdminAuth(handler.listArtists))
 	mux.HandleFunc("POST /api/v1/admin/catalog/artists", handler.requireAdminAuth(handler.createArtist))
@@ -716,6 +717,18 @@ func (handler *Handler) listUsers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"users": users})
+}
+
+func (handler *Handler) getAdminUser(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireAuthService(w) {
+		return
+	}
+	view, err := handler.authService.GetUser(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
 }
 
 func (handler *Handler) createUser(w http.ResponseWriter, r *http.Request) {

@@ -96,6 +96,9 @@ func TestStorageAdminOpenAPIContractCoversRoutes(t *testing.T) {
 		"/api/v1/admin/history":                                 {"get", "delete"},
 		"/api/v1/admin/history/batch-delete":                    {"post"},
 		"/api/v1/admin/history/timeline":                        {"get"},
+		"/api/v1/admin/users":                                    {"get", "post"},
+		"/api/v1/admin/users/{id}":                              {"get", "delete"},
+		"/api/v1/admin/users/{id}/disable":                      {"post"},
 	}
 
 	for path, methods := range expected {
@@ -1091,5 +1094,24 @@ func TestStorageAdminOpenAPIContractGetMe(t *testing.T) {
 		if _, ok := uvProps[want]; !ok {
 			t.Errorf("UserView missing property %q", want)
 		}
+	}
+}
+
+func TestStorageAdminOpenAPIContractAdminGetUser(t *testing.T) {
+	document := loadOpenAPIContract(t)
+	paths := document["paths"].(map[string]any)
+
+	// GET /api/v1/admin/users/{id} must exist and return UserView
+	get := operation(t, paths, "/api/v1/admin/users/{id}", "get")
+	resp200 := get["responses"].(map[string]any)["200"].(map[string]any)
+	content := resp200["content"].(map[string]any)["application/json"].(map[string]any)
+	schema := content["schema"].(map[string]any)
+	if schema["$ref"] != "#/components/schemas/UserView" {
+		t.Errorf("GET /api/v1/admin/users/{id} 200 schema = %v, want UserView ref", schema)
+	}
+
+	// must have a 404 response
+	if _, ok := get["responses"].(map[string]any)["404"]; !ok {
+		t.Error("GET /api/v1/admin/users/{id} missing 404 response")
 	}
 }
