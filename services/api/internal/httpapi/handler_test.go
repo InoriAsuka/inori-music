@@ -6695,3 +6695,72 @@ func TestAdminTrackHistorySinceFilter(t *testing.T) {
 		t.Errorf("total = %v, want 1", result["pagination"].(map[string]any)["total"])
 	}
 }
+
+// ---- Phase 91: GET /api/v1/admin/users/{id}/sessions ----
+
+func TestAdminGetUserSessionsEmpty(t *testing.T) {
+	authSvc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAuthService(authSvc),
+		WithAdminToken(testAdminToken),
+	).Routes()
+	view, err := authSvc.CreateUser(context.Background(), "sess_alice", "pass1234!", auth.RoleViewer)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/users/"+view.ID+"/sessions", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("GET sessions: %d %s", resp.Code, resp.Body.String())
+	}
+	var body map[string]any
+	decodeResponse(t, resp, &body)
+	if body["count"].(float64) != 0 {
+		t.Errorf("count = %v, want 0", body["count"])
+	}
+}
+
+func TestAdminGetUserSessionsActive(t *testing.T) {
+	authSvc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAuthService(authSvc),
+		WithAdminToken(testAdminToken),
+	).Routes()
+	view, err := authSvc.CreateUser(context.Background(), "sess_bob", "pass1234!", auth.RoleViewer)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	if _, _, err := authSvc.Login(context.Background(), "sess_bob", "pass1234!"); err != nil {
+		t.Fatalf("login: %v", err)
+	}
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/users/"+view.ID+"/sessions", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("GET sessions: %d %s", resp.Code, resp.Body.String())
+	}
+	var body map[string]any
+	decodeResponse(t, resp, &body)
+	if body["count"].(float64) != 1 {
+		t.Errorf("count = %v, want 1", body["count"])
+	}
+}
+
+func TestAdminGetUserSessionsNotFound(t *testing.T) {
+	authSvc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAuthService(authSvc),
+		WithAdminToken(testAdminToken),
+	).Routes()
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/users/does-not-exist/sessions", "")
+	assertAPIError(t, resp, http.StatusNotFound, "not_found")
+}
+
+func TestAdminGetUserSessionsNotConfigured(t *testing.T) {
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAdminToken(testAdminToken),
+	).Routes()
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/users/any-id/sessions", "")
+	assertAPIError(t, resp, http.StatusServiceUnavailable, "auth_not_configured")
+}

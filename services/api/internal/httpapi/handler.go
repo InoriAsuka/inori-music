@@ -305,6 +305,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("PATCH /api/v1/admin/users/{id}", handler.requireAdminAuth(handler.patchAdminUser))
 	mux.HandleFunc("GET /api/v1/admin/users/{id}", handler.requireAdminAuth(handler.getAdminUser))
 	mux.HandleFunc("DELETE /api/v1/admin/users/{id}", handler.requireAdminAuth(handler.deleteUser))
+	mux.HandleFunc("GET /api/v1/admin/users/{id}/sessions", handler.requireAdminAuth(handler.getAdminUserSessions))
 	mux.HandleFunc("GET /api/v1/admin/catalog/artists", handler.requireAdminAuth(handler.listArtists))
 	mux.HandleFunc("POST /api/v1/admin/catalog/artists", handler.requireAdminAuth(handler.createArtist))
 	mux.HandleFunc("GET /api/v1/admin/catalog/artists/{id}", handler.requireAdminAuth(handler.getArtist))
@@ -430,6 +431,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("/api/v1/admin/users", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/users/{id}/disable", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/users/{id}/enable", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/users/{id}/sessions", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/users/{id}", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/catalog/artists", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/catalog/artists/{id}", handler.requireAdminAuth(handler.methodNotAllowed))
@@ -853,6 +855,18 @@ func (handler *Handler) deleteUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (handler *Handler) getAdminUserSessions(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireAuthService(w) {
+		return
+	}
+	sessions, err := handler.authService.ListActiveSessions(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"sessions": sessions, "count": len(sessions)})
 }
 
 // ---- catalog helpers ----

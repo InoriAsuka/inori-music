@@ -2306,6 +2306,27 @@
             "maxLength": 64
           }
         }
+      },
+      "SessionView": {
+        "type": "object",
+        "required": [
+          "userId",
+          "expiresAt",
+          "createdAt"
+        ],
+        "properties": {
+          "userId": {
+            "type": "string"
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -2319,7 +2340,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "0.90.0"
+    "version": "0.91.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -10311,6 +10332,61 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/admin/users/{id}/sessions": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/UserId"
+        }
+      ],
+      "get": {
+        "summary": "List active sessions for a user",
+        "operationId": "getAdminUserSessions",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "tags": [
+          "Admin Users"
+        ],
+        "responses": {
+          "200": {
+            "description": "Active session list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "sessions",
+                    "count"
+                  ],
+                  "properties": {
+                    "sessions": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SessionView"
+                      }
+                    },
+                    "count": {
+                      "type": "integer"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
           }
         }
       }

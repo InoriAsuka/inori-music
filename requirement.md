@@ -871,3 +871,12 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add `RevokeAllSessionsForUser(ctx, userID string) (int, error)` to `auth.Service`: verifies user exists, delegates to `RevokeAllSessionsByUser`.
 - Add 3 `auth.Service` unit tests: `TestListActiveSessionsEmpty`, `TestListActiveSessionsFiltersRevoked`, `TestListActiveSessionsFiltersExpired`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.91.0 - 2026-06-19
+
+- Add `getAdminUserSessions` handler: `GET /api/v1/admin/users/{id}/sessions`; requires admin auth; calls `auth.Service.ListActiveSessions`; returns `{sessions: [SessionView], count: N}`; propagates `ErrUserNotFound` (404) and auth not configured (503).
+- Register `GET /api/v1/admin/users/{id}/sessions` (admin-auth) and its `methodNotAllowed` fallback.
+- Add `get` operation to `/api/v1/admin/users/{id}/sessions` in OpenAPI contract; add `SessionView` schema to components; bump `info.version` to `0.91.0`.
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `get` on `/api/v1/admin/users/{id}/sessions`.
+- Add 4 HTTP-layer tests: `TestAdminGetUserSessionsEmpty`, `TestAdminGetUserSessionsActive`, `TestAdminGetUserSessionsNotFound`, `TestAdminGetUserSessionsNotConfigured`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
