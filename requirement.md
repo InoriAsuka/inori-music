@@ -805,3 +805,14 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add `get` operation to `/api/v1/me/history/timeline` in OpenAPI contract; `since`(required), `until`(required), `granularity`(enum day/week/month, default day), `trackId`(optional) params; 200 refs `TimelineResult`; bump `info.version` to `0.84.0`.
 - Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `get` on `/api/v1/me/history/timeline`; add `TestStorageAdminOpenAPIContractViewerHistoryTimeline`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.85.0 - 2026-06-19
+
+- Add `GetUser(ctx, id)` to `auth.Service` (delegates to `users.GetUser`; wraps result with `toView`).
+- Add `getMe` handler: reads the authenticated user from `userFromContext` and writes `UserView` at `GET /api/v1/me`.
+- Add `GET /api/v1/me` route (viewer-auth); add `/api/v1/me` methodNotAllowed catch-all.
+- Add 2 `auth.Service` unit tests (`TestGetUser`, `TestGetUser_NotFound`).
+- Add 3 HTTP-layer tests (`TestGetMe`, `TestGetMeUnauthenticated`, `TestGetMeNotConfigured`).
+- Add `GET /api/v1/me` to OpenAPI contract; 200 refs `UserView`; bump `info.version` to `0.85.0`.
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `get` on `/api/v1/me`; add `TestStorageAdminOpenAPIContractGetMe`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.

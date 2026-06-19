@@ -70,6 +70,7 @@ func TestStorageAdminOpenAPIContractCoversRoutes(t *testing.T) {
 		"/api/v1/catalog/stats/artists":                          {"get"},
 		"/api/v1/catalog/stats/albums":                           {"get"},
 		"/api/v1/catalog/stats/playlists":                        {"get"},
+		"/api/v1/me":                                             {"get"},
 		"/api/v1/me/history":                                     {"get", "post", "delete"},
 		"/api/v1/me/history/stats":                               {"get"},
 		"/api/v1/me/history/top-tracks":                         {"get"},
@@ -1062,5 +1063,33 @@ func TestStorageAdminOpenAPIContractViewerHistoryTimeline(t *testing.T) {
 	schema := content["schema"].(map[string]any)
 	if schema["$ref"] != "#/components/schemas/TimelineResult" {
 		t.Errorf("GET /api/v1/me/history/timeline 200 schema = %v, want TimelineResult ref", schema)
+	}
+}
+
+func TestStorageAdminOpenAPIContractGetMe(t *testing.T) {
+	document := loadOpenAPIContract(t)
+	paths := document["paths"].(map[string]any)
+	components := document["components"].(map[string]any)
+	schemas := components["schemas"].(map[string]any)
+
+	// GET /api/v1/me must exist and return UserView
+	get := operation(t, paths, "/api/v1/me", "get")
+	resp200 := get["responses"].(map[string]any)["200"].(map[string]any)
+	content := resp200["content"].(map[string]any)["application/json"].(map[string]any)
+	schema := content["schema"].(map[string]any)
+	if schema["$ref"] != "#/components/schemas/UserView" {
+		t.Errorf("GET /api/v1/me 200 schema = %v, want UserView ref", schema)
+	}
+
+	// UserView schema must have required fields
+	uv, ok := schemas["UserView"].(map[string]any)
+	if !ok {
+		t.Fatal("schema UserView is missing")
+	}
+	uvProps, _ := uv["properties"].(map[string]any)
+	for _, want := range []string{"id", "username", "role", "enabled", "createdAt", "updatedAt"} {
+		if _, ok := uvProps[want]; !ok {
+			t.Errorf("UserView missing property %q", want)
+		}
 	}
 }

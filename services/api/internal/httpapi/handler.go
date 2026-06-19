@@ -296,6 +296,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /versionz", handler.version)
 	mux.HandleFunc("POST /api/v1/auth/login", handler.login)
 	mux.HandleFunc("POST /api/v1/auth/logout", handler.logout)
+	mux.HandleFunc("GET /api/v1/me", handler.requireViewerAuth(handler.getMe))
 	mux.HandleFunc("GET /api/v1/admin/users", handler.requireAdminAuth(handler.listUsers))
 	mux.HandleFunc("POST /api/v1/admin/users", handler.requireAdminAuth(handler.createUser))
 	mux.HandleFunc("POST /api/v1/admin/users/{id}/disable", handler.requireAdminAuth(handler.disableUser))
@@ -420,6 +421,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("/versionz", handler.methodNotAllowed)
 	mux.HandleFunc("/api/v1/auth/login", handler.methodNotAllowed)
 	mux.HandleFunc("/api/v1/auth/logout", handler.methodNotAllowed)
+	mux.HandleFunc("/api/v1/me", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/users", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/users/{id}/disable", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/users/{id}", handler.requireAdminAuth(handler.methodNotAllowed))
@@ -685,6 +687,23 @@ func (handler *Handler) requireAuthService(w http.ResponseWriter) bool {
 		return false
 	}
 	return true
+}
+
+func (handler *Handler) getMe(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireAuthService(w) {
+		return
+	}
+	user, ok := userFromContext(r)
+	if !ok {
+		writeAPIError(w, http.StatusUnauthorized, "unauthorized", "valid bearer token is required")
+		return
+	}
+	view, err := handler.authService.GetUser(r.Context(), user.ID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, view)
 }
 
 func (handler *Handler) listUsers(w http.ResponseWriter, r *http.Request) {

@@ -157,6 +157,15 @@ func (s *Service) Logout(ctx context.Context, token string) error {
 	return s.sessions.RevokeSession(ctx, HashToken(token), s.now().UTC())
 }
 
+// GetUser returns the public view of a single user by ID.
+func (s *Service) GetUser(ctx context.Context, id string) (UserView, error) {
+	user, err := s.users.GetUser(ctx, id)
+	if err != nil {
+		return UserView{}, err
+	}
+	return toView(user), nil
+}
+
 // ListUsers returns all user accounts.
 func (s *Service) ListUsers(ctx context.Context) ([]UserView, error) {
 	users, err := s.users.ListUsers(ctx)

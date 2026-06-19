@@ -318,3 +318,26 @@ func TestDeleteUser(t *testing.T) {
 		t.Errorf("expected 0 users after delete, got %d", len(users))
 	}
 }
+
+func TestGetUser(t *testing.T) {
+	svc := newTestService(time.Hour)
+	created, err := svc.CreateUser(context.Background(), "fred", "password123", auth.RoleViewer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := svc.GetUser(context.Background(), created.ID)
+	if err != nil {
+		t.Fatalf("GetUser: %v", err)
+	}
+	if got.ID != created.ID || got.Username != "fred" || got.Role != auth.RoleViewer {
+		t.Errorf("GetUser: got %+v, want id=%s username=fred role=viewer", got, created.ID)
+	}
+}
+
+func TestGetUser_NotFound(t *testing.T) {
+	svc := newTestService(time.Hour)
+	_, err := svc.GetUser(context.Background(), "no-such-id")
+	if !errors.Is(err, auth.ErrUserNotFound) {
+		t.Errorf("expected ErrUserNotFound, got %v", err)
+	}
+}

@@ -1066,6 +1066,44 @@ func TestUserManagementNotConfigured(t *testing.T) {
 	assertAPIError(t, resp, http.StatusServiceUnavailable, "auth_not_configured")
 }
 
+func TestGetMe(t *testing.T) {
+	h, svc := newAuthTestHandler()
+	// create a viewer and log in
+	if _, err := svc.CreateUser(context.Background(), "viewer_me", "viewpass1", auth.RoleViewer); err != nil {
+		t.Fatal(err)
+	}
+	loginResp := performRequestWithoutAuth(t, h, http.MethodPost, "/api/v1/auth/login", `{"username":"viewer_me","password":"viewpass1"}`)
+	var loginResult map[string]any
+	decodeResponse(t, loginResp, &loginResult)
+	token := loginResult["token"].(string)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/me", "", "Bearer "+token)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("GET /me status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var view auth.UserView
+	decodeResponse(t, resp, &view)
+	if view.Username != "viewer_me" || view.Role != auth.RoleViewer || !view.Enabled {
+		t.Errorf("GET /me: got %+v", view)
+	}
+	if strings.Contains(resp.Body.String(), "password") {
+		t.Errorf("GET /me leaked password material")
+	}
+}
+
+func TestGetMeUnauthenticated(t *testing.T) {
+	h, _ := newAuthTestHandler()
+	resp := performRequestWithoutAuth(t, h, http.MethodGet, "/api/v1/me", "")
+	assertAPIError(t, resp, http.StatusUnauthorized, "unauthorized")
+}
+
+func TestGetMeNotConfigured(t *testing.T) {
+	repo := storage.NewMemoryRepository()
+	h := NewHandler(storage.NewService(repo), WithAdminToken(testAdminToken)).Routes()
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/me", "")
+	assertAPIError(t, resp, http.StatusServiceUnavailable, "auth_not_configured")
+}
+
 func loginAdminToken(t *testing.T, h http.Handler) string {
 	t.Helper()
 	loginResp := performRequestWithoutAuth(t, h, http.MethodPost, "/api/v1/auth/login", `{"username":"admin","password":"adminpass1"}`)
