@@ -374,6 +374,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/me/history/stats", handler.requireViewerAuth(handler.getMyHistoryStats))
 	mux.HandleFunc("GET /api/v1/me/history/top-tracks", handler.requireViewerAuth(handler.getMyTopTracks))
 	mux.HandleFunc("GET /api/v1/me/history/timeline", handler.requireViewerAuth(handler.getMyHistoryTimeline))
+	mux.HandleFunc("GET /api/v1/me/history/summary", handler.requireViewerAuth(handler.getMyHistorySummary))
 	mux.HandleFunc("POST /api/v1/me/history/batch-delete", handler.requireViewerAuth(handler.batchDeleteMyEvents))
 	mux.HandleFunc("GET /api/v1/me/history/tracks/{trackId}", handler.requireViewerAuth(handler.getMyTrackHistory))
 	mux.HandleFunc("GET /api/v1/me/history/tracks/{trackId}/stats", handler.requireViewerAuth(handler.getMyTrackStats))
@@ -2394,6 +2395,42 @@ func (handler *Handler) getMyHistoryTimeline(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"buckets": buckets})
+}
+
+// getMyHistorySummary returns combined stats and top-tracks for the authenticated
+// viewer in one request.
+func (handler *Handler) getMyHistorySummary(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireHistoryService(w) {
+		return
+	}
+	user, ok := userFromContext(r)
+	if !ok {
+		writeAPIError(w, http.StatusUnauthorized, "unauthorized", "valid bearer token is required")
+		return
+	}
+	f, ok := parseHistoryAdminFilter(w, r)
+	if !ok {
+		return
+	}
+	topN, ok := parseHistoryAdminLimit(w, r)
+	if !ok {
+		return
+	}
+	sf := history.UserStatsFilter{UserID: user.ID, Since: f.Since, Until: f.Until}
+	stats, err := handler.historyService.GetMyStats(r.Context(), sf)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if topN <= 0 {
+		topN = 10
+	}
+	tracks, err := handler.historyService.GetMyTopTracks(r.Context(), sf, topN)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"stats": stats, "topTracks": tracks})
 }
 
 // getMyTrackHistory returns the calling user's paginated play history for a

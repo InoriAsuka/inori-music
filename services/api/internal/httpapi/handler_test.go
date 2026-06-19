@@ -7919,3 +7919,76 @@ func TestAdminGetTrackHistorySummaryNotConfigured(t *testing.T) {
 		"", "Bearer "+testAdminToken)
 	assertAPIError(t, resp, http.StatusServiceUnavailable, "history_not_configured")
 }
+
+func TestViewerGetMyHistorySummary(t *testing.T) {
+	h, viewerToken, _ := newHistoryTestHandler(t)
+
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		`{"trackId":"sum-track-a","playedAt":"2025-10-01T10:00:00Z"}`, "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		`{"trackId":"sum-track-a","playedAt":"2025-10-01T11:00:00Z"}`, "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		`{"trackId":"sum-track-b","playedAt":"2025-10-01T12:00:00Z"}`, "Bearer "+viewerToken)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/me/history/summary",
+		"", "Bearer "+viewerToken)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", resp.Code, resp.Body.String())
+	}
+	var body map[string]any
+	decodeResponse(t, resp, &body)
+	stats, ok := body["stats"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected stats object, got %T", body["stats"])
+	}
+	if int(stats["totalEvents"].(float64)) != 3 {
+		t.Errorf("stats.totalEvents = %v, want 3", stats["totalEvents"])
+	}
+	topTracks, ok := body["topTracks"].([]any)
+	if !ok {
+		t.Fatalf("expected topTracks array, got %T", body["topTracks"])
+	}
+	if len(topTracks) == 0 {
+		t.Error("expected at least one top track")
+	}
+}
+
+func TestViewerGetMyHistorySummaryWithTopN(t *testing.T) {
+	h, viewerToken, _ := newHistoryTestHandler(t)
+
+	for _, tid := range []string{"s-a", "s-b", "s-c"} {
+		performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+			fmt.Sprintf(`{"trackId":%q,"playedAt":"2025-10-02T10:00:00Z"}`, tid), "Bearer "+viewerToken)
+	}
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/me/history/summary?limit=1",
+		"", "Bearer "+viewerToken)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", resp.Code, resp.Body.String())
+	}
+	var body map[string]any
+	decodeResponse(t, resp, &body)
+	topTracks := body["topTracks"].([]any)
+	if len(topTracks) != 1 {
+		t.Errorf("expected 1 top track with limit=1, got %d", len(topTracks))
+	}
+}
+
+func TestViewerGetMyHistorySummaryNotConfigured(t *testing.T) {
+	authSvc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAuthService(authSvc),
+	).Routes()
+	if _, err := authSvc.CreateUser(context.Background(), "viewersum", "viewerpassSUM1", auth.RoleViewer); err != nil {
+		t.Fatalf("create viewer: %v", err)
+	}
+	viewerToken, _, _ := authSvc.Login(context.Background(), "viewersum", "viewerpassSUM1")
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/me/history/summary", "", "Bearer "+viewerToken)
+	assertAPIError(t, resp, http.StatusServiceUnavailable, "history_not_configured")
+}
