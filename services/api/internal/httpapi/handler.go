@@ -799,6 +799,45 @@ func (handler *Handler) listUsers(w http.ResponseWriter, r *http.Request) {
 
 	q := r.URL.Query()
 
+	// -- filter --
+	if rawUsername := strings.TrimSpace(q.Get("username")); rawUsername != "" {
+		filtered := users[:0]
+		for _, u := range users {
+			if u.Username == rawUsername {
+				filtered = append(filtered, u)
+			}
+		}
+		users = filtered
+	}
+	if rawRole := strings.TrimSpace(q.Get("role")); rawRole != "" {
+		role := auth.Role(rawRole)
+		if role != auth.RoleAdmin && role != auth.RoleViewer {
+			writeAPIError(w, http.StatusBadRequest, "invalid_role", "role must be admin or viewer")
+			return
+		}
+		filtered := users[:0]
+		for _, u := range users {
+			if u.Role == role {
+				filtered = append(filtered, u)
+			}
+		}
+		users = filtered
+	}
+	if rawEnabled := strings.TrimSpace(q.Get("enabled")); rawEnabled != "" {
+		if rawEnabled != "true" && rawEnabled != "false" {
+			writeAPIError(w, http.StatusBadRequest, "invalid_enabled", "enabled must be true or false")
+			return
+		}
+		wantEnabled := rawEnabled == "true"
+		filtered := users[:0]
+		for _, u := range users {
+			if u.Enabled == wantEnabled {
+				filtered = append(filtered, u)
+			}
+		}
+		users = filtered
+	}
+
 	// -- sort --
 	sortBy := strings.ToLower(strings.TrimSpace(q.Get("sortBy")))
 	sortOrder := strings.ToLower(strings.TrimSpace(q.Get("sortOrder")))

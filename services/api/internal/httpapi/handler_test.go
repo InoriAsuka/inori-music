@@ -7083,3 +7083,116 @@ func TestAdminListUsersInvalidLimit(t *testing.T) {
 	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/users?limit=0", "")
 	assertAPIError(t, resp, http.StatusBadRequest, "invalid_limit")
 }
+
+// ---- Phase 96: GET /api/v1/admin/users filter by username/role/enabled ----
+
+func TestAdminListUsersFilterByRole(t *testing.T) {
+	authSvc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAuthService(authSvc),
+		WithAdminToken(testAdminToken),
+	).Routes()
+	if _, err := authSvc.CreateUser(context.Background(), "viewer_filter1", "pass1234!", auth.RoleViewer); err != nil {
+		t.Fatalf("create viewer: %v", err)
+	}
+	if _, err := authSvc.CreateUser(context.Background(), "admin_filter1", "pass1234!", auth.RoleAdmin); err != nil {
+		t.Fatalf("create admin: %v", err)
+	}
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/users?role=viewer", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d %s", resp.Code, resp.Body.String())
+	}
+	var body map[string]any
+	decodeResponse(t, resp, &body)
+	for _, u := range body["users"].([]any) {
+		if u.(map[string]any)["role"].(string) != "viewer" {
+			t.Errorf("expected only viewer users; got role=%s", u.(map[string]any)["role"])
+		}
+	}
+}
+
+func TestAdminListUsersFilterByEnabled(t *testing.T) {
+	authSvc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAuthService(authSvc),
+		WithAdminToken(testAdminToken),
+	).Routes()
+	if _, err := authSvc.CreateUser(context.Background(), "enabled_filt", "pass1234!", auth.RoleViewer); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	if _, err := authSvc.CreateUser(context.Background(), "disabled_filt", "pass1234!", auth.RoleViewer); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	// Disable the second user
+	all, _ := authSvc.ListUsers(context.Background())
+	for _, u := range all {
+		if u.Username == "disabled_filt" {
+			if _, err := authSvc.DisableUser(context.Background(), u.ID); err != nil {
+				t.Fatalf("disable: %v", err)
+			}
+		}
+	}
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/users?enabled=false", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d %s", resp.Code, resp.Body.String())
+	}
+	var body map[string]any
+	decodeResponse(t, resp, &body)
+	for _, u := range body["users"].([]any) {
+		if u.(map[string]any)["enabled"].(bool) {
+			t.Errorf("expected only disabled users; got enabled=true for %s", u.(map[string]any)["username"])
+		}
+	}
+}
+
+func TestAdminListUsersFilterByUsername(t *testing.T) {
+	authSvc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAuthService(authSvc),
+		WithAdminToken(testAdminToken),
+	).Routes()
+	if _, err := authSvc.CreateUser(context.Background(), "unique_user_xyz", "pass1234!", auth.RoleViewer); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	if _, err := authSvc.CreateUser(context.Background(), "other_user_abc", "pass1234!", auth.RoleViewer); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/users?username=unique_user_xyz", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d %s", resp.Code, resp.Body.String())
+	}
+	var body map[string]any
+	decodeResponse(t, resp, &body)
+	users := body["users"].([]any)
+	if len(users) != 1 {
+		t.Errorf("expected 1 user, got %d", len(users))
+	}
+	if len(users) > 0 && users[0].(map[string]any)["username"].(string) != "unique_user_xyz" {
+		t.Errorf("unexpected username: %s", users[0].(map[string]any)["username"])
+	}
+}
+
+func TestAdminListUsersFilterInvalidRole(t *testing.T) {
+	authSvc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAuthService(authSvc),
+		WithAdminToken(testAdminToken),
+	).Routes()
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/users?role=superuser", "")
+	assertAPIError(t, resp, http.StatusBadRequest, "invalid_role")
+}
+
+func TestAdminListUsersFilterInvalidEnabled(t *testing.T) {
+	authSvc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAuthService(authSvc),
+		WithAdminToken(testAdminToken),
+	).Routes()
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/users?enabled=yes", "")
+	assertAPIError(t, resp, http.StatusBadRequest, "invalid_enabled")
+}

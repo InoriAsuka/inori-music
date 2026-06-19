@@ -919,3 +919,11 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add 5 HTTP-layer tests: `TestAdminListUsersPagination`, `TestAdminListUsersSortByUsername`, `TestAdminListUsersSortDesc`, `TestAdminListUsersInvalidSortOrder`, `TestAdminListUsersInvalidLimit`.
 - Update `GET /api/v1/admin/users` in OpenAPI contract with `limit`, `offset`, `sortBy`, `sortOrder` query params and updated 200 response schema including `pagination`; bump `info.version` to `0.95.0`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.96.0 - 2026-06-19
+
+- Add `?username` (exact match), `?role` (admin/viewer), and `?enabled` (true/false) filter query parameters to `GET /api/v1/admin/users`; filters are applied before sort and pagination.
+- Invalid `?role` values return `400 invalid_role`; invalid `?enabled` values return `400 invalid_enabled`.
+- Add 5 HTTP-layer tests: `TestAdminListUsersFilterByRole`, `TestAdminListUsersFilterByEnabled`, `TestAdminListUsersFilterByUsername`, `TestAdminListUsersFilterInvalidRole`, `TestAdminListUsersFilterInvalidEnabled`.
+- Extend `GET /api/v1/admin/users` in OpenAPI contract with `username`, `role`, and `enabled` query params; bump `info.version` to `0.96.0`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
