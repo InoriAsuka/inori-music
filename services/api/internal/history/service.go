@@ -394,6 +394,26 @@ func (s *Service) GetMyTrackStats(ctx context.Context, userID, trackID string, f
 	return s.repo.UserTrackPlayStats(ctx, userID, trackID, f)
 }
 
+// GetMyTrackSummary returns a combined per-track play stats and overall top tracks
+// snapshot for the authenticated viewer. topN ≤ 0 defaults to 10 and is clamped to 100.
+func (s *Service) GetMyTrackSummary(ctx context.Context, userID, trackID string, f UserStatsFilter, topN int) (MyTrackSummary, error) {
+	if topN <= 0 {
+		topN = 10
+	}
+	if topN > 100 {
+		topN = 100
+	}
+	stats, err := s.GetMyTrackStats(ctx, userID, trackID, f)
+	if err != nil {
+		return MyTrackSummary{}, err
+	}
+	recent, err := s.GetMyTopTracks(ctx, UserStatsFilter{UserID: userID, Since: f.Since, Until: f.Until}, topN)
+	if err != nil {
+		return MyTrackSummary{}, err
+	}
+	return MyTrackSummary{Stats: stats, RecentTracks: recent}, nil
+}
+
 // GetTopTracks returns the most-played tracks across all users.
 // limit ≤ 0 defaults to 10 and is clamped to 100.
 // f.Since optionally bounds the query to events on or after that time.

@@ -2424,6 +2424,24 @@
             }
           }
         }
+      },
+      "MyTrackSummary": {
+        "type": "object",
+        "required": [
+          "stats",
+          "recentTracks"
+        ],
+        "properties": {
+          "stats": {
+            "$ref": "#/components/schemas/UserTrackStats"
+          },
+          "recentTracks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TrackPlayCount"
+            }
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -2437,7 +2455,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "1.10.0"
+    "version": "1.11.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -11575,6 +11593,75 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/GlobalHistorySummary"
+                }
+              }
+            }
+          },
+          "503": {
+            "$ref": "#/components/responses/HistoryNotConfigured"
+          }
+        }
+      }
+    },
+    "/api/v1/me/history/tracks/{trackId}/summary": {
+      "get": {
+        "summary": "Get viewer track summary",
+        "operationId": "getMyTrackSummary",
+        "tags": [
+          "viewer",
+          "history"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "trackId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 10
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Viewer's per-track summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyTrackSummary"
                 }
               }
             }

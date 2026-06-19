@@ -214,3 +214,10 @@ type GlobalHistorySummary struct {
 	TopTracks []TrackPlayCount `json:"topTracks"`
 	TopUsers  []UserPlayCount  `json:"topUsers"`
 }
+
+// MyTrackSummary combines the viewer's per-track play stats with their overall
+// top tracks for cross-track context, in a single response for client use.
+type MyTrackSummary struct {
+	Stats        UserTrackStats   `json:"stats"`
+	RecentTracks []TrackPlayCount `json:"recentTracks"`
+}

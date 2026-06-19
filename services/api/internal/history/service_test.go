@@ -1559,3 +1559,50 @@ func TestGetGlobalSummaryWithTopN(t *testing.T) {
 		t.Errorf("len(TopUsers) = %d, want ≤ 2", len(summary.TopUsers))
 	}
 }
+
+func TestGetMyTrackSummary(t *testing.T) {
+	ctx := context.Background()
+	svc := history.NewService(history.NewMemoryRepository())
+
+	// 2 plays on t-mts, 1 play on another track for context.
+	if _, err := svc.RecordPlay(ctx, "u-mts", "t-mts", time.Now()); err != nil {
+		t.Fatalf("RecordPlay: %v", err)
+	}
+	if _, err := svc.RecordPlay(ctx, "u-mts", "t-mts", time.Now()); err != nil {
+		t.Fatalf("RecordPlay: %v", err)
+	}
+	if _, err := svc.RecordPlay(ctx, "u-mts", "t-other", time.Now()); err != nil {
+		t.Fatalf("RecordPlay: %v", err)
+	}
+
+	summary, err := svc.GetMyTrackSummary(ctx, "u-mts", "t-mts", history.UserStatsFilter{}, 10)
+	if err != nil {
+		t.Fatalf("GetMyTrackSummary: %v", err)
+	}
+	if summary.Stats.TotalPlays != 2 {
+		t.Errorf("Stats.TotalPlays = %d, want 2", summary.Stats.TotalPlays)
+	}
+	if summary.Stats.TrackID != "t-mts" {
+		t.Errorf("Stats.TrackID = %q, want t-mts", summary.Stats.TrackID)
+	}
+	if len(summary.RecentTracks) == 0 {
+		t.Error("RecentTracks is empty, want at least 1")
+	}
+}
+
+func TestGetMyTrackSummaryEmpty(t *testing.T) {
+	ctx := context.Background()
+	svc := history.NewService(history.NewMemoryRepository())
+
+	// No plays recorded — summary should return zero stats and empty recent tracks.
+	summary, err := svc.GetMyTrackSummary(ctx, "u-mts-empty", "t-mts-empty", history.UserStatsFilter{}, 10)
+	if err != nil {
+		t.Fatalf("GetMyTrackSummary empty: %v", err)
+	}
+	if summary.Stats.TotalPlays != 0 {
+		t.Errorf("Stats.TotalPlays = %d, want 0", summary.Stats.TotalPlays)
+	}
+	if summary.RecentTracks == nil {
+		t.Error("RecentTracks is nil, want empty slice")
+	}
+}

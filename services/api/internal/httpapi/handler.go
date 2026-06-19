@@ -379,6 +379,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/me/history/tracks/{trackId}", handler.requireViewerAuth(handler.getMyTrackHistory))
 	mux.HandleFunc("GET /api/v1/me/history/tracks/{trackId}/stats", handler.requireViewerAuth(handler.getMyTrackStats))
 	mux.HandleFunc("GET /api/v1/me/history/tracks/{trackId}/timeline", handler.requireViewerAuth(handler.getMyTrackTimeline))
+	mux.HandleFunc("GET /api/v1/me/history/tracks/{trackId}/summary", handler.requireViewerAuth(handler.getMyTrackSummary))
 	mux.HandleFunc("/api/v1/me/history/tracks/{trackId}/timeline", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/me/history/tracks/{trackId}/stats", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/me/history/tracks/{trackId}", handler.requireViewerAuth(handler.methodNotAllowed))
@@ -2602,6 +2603,42 @@ func (handler *Handler) getMyTrackTimeline(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"buckets": buckets})
+}
+
+// getMyTrackSummary returns the viewer's per-track play stats combined with their
+// overall top tracks for cross-track context.
+func (handler *Handler) getMyTrackSummary(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireHistoryService(w) {
+		return
+	}
+	user, ok := userFromContext(r)
+	if !ok {
+		writeAPIError(w, http.StatusUnauthorized, "unauthorized", "valid bearer token is required")
+		return
+	}
+	trackID := r.PathValue("trackId")
+	if trackID == "" {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", "trackId is required")
+		return
+	}
+	f, ok := parseHistoryAdminFilter(w, r)
+	if !ok {
+		return
+	}
+	topN, ok := parseHistoryAdminLimit(w, r)
+	if !ok {
+		return
+	}
+	summary, err := handler.historyService.GetMyTrackSummary(r.Context(), user.ID, trackID, history.UserStatsFilter{
+		UserID: user.ID,
+		Since:  f.Since,
+		Until:  f.Until,
+	}, topN)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, summary)
 }
 
 func (handler *Handler) getAdminHistoryStats(w http.ResponseWriter, r *http.Request) {
