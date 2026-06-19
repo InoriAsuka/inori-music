@@ -71,6 +71,7 @@ func TestStorageAdminOpenAPIContractCoversRoutes(t *testing.T) {
 		"/api/v1/catalog/stats/albums":                           {"get"},
 		"/api/v1/catalog/stats/playlists":                        {"get"},
 		"/api/v1/me":                                             {"get"},
+		"/api/v1/me/change-password":                             {"post"},
 		"/api/v1/me/history":                                     {"get", "post", "delete"},
 		"/api/v1/me/history/stats":                               {"get"},
 		"/api/v1/me/history/top-tracks":                         {"get"},
@@ -1113,5 +1114,30 @@ func TestStorageAdminOpenAPIContractAdminGetUser(t *testing.T) {
 	// must have a 404 response
 	if _, ok := get["responses"].(map[string]any)["404"]; !ok {
 		t.Error("GET /api/v1/admin/users/{id} missing 404 response")
+	}
+}
+
+func TestStorageAdminOpenAPIContractChangePassword(t *testing.T) {
+	document := loadOpenAPIContract(t)
+	paths := document["paths"].(map[string]any)
+	components := document["components"].(map[string]any)
+	schemas := components["schemas"].(map[string]any)
+
+	// POST /api/v1/me/change-password must exist with 204 response
+	post := operation(t, paths, "/api/v1/me/change-password", "post")
+	if _, ok := post["responses"].(map[string]any)["204"]; !ok {
+		t.Error("POST /api/v1/me/change-password missing 204 response")
+	}
+
+	// ChangePasswordRequest schema must exist with required fields
+	schema, ok := schemas["ChangePasswordRequest"].(map[string]any)
+	if !ok {
+		t.Fatal("schema ChangePasswordRequest is missing")
+	}
+	props, _ := schema["properties"].(map[string]any)
+	for _, want := range []string{"currentPassword", "newPassword"} {
+		if _, ok := props[want]; !ok {
+			t.Errorf("ChangePasswordRequest missing property %q", want)
+		}
 	}
 }

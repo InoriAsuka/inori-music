@@ -201,6 +201,29 @@ func (s *Service) DeleteUser(ctx context.Context, id string) error {
 	return s.users.DeleteUser(ctx, id)
 }
 
+// ChangePassword verifies the current password and replaces it with the new one.
+// Returns ErrBadCredentials when currentPassword does not match.
+// Returns ErrInvalidUser when newPassword is fewer than 8 characters.
+func (s *Service) ChangePassword(ctx context.Context, userID, currentPassword, newPassword string) error {
+	user, err := s.users.GetUser(ctx, userID)
+	if err != nil {
+		return err
+	}
+	if !CheckPassword(user.PasswordHash, currentPassword) {
+		return ErrBadCredentials
+	}
+	if len(newPassword) < 8 {
+		return fmt.Errorf("%w: password must be at least 8 characters", ErrInvalidUser)
+	}
+	hash, err := HashPassword(newPassword)
+	if err != nil {
+		return fmt.Errorf("hash password: %w", err)
+	}
+	user.PasswordHash = hash
+	user.UpdatedAt = s.now().UTC()
+	return s.users.SaveUser(ctx, user)
+}
+
 func toView(u User) UserView {
 	return UserView{
 		ID:        u.ID,

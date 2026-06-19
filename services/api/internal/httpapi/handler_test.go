@@ -1137,6 +1137,63 @@ func TestAdminGetUserNotConfigured(t *testing.T) {
 	assertAPIError(t, resp, http.StatusServiceUnavailable, "auth_not_configured")
 }
 
+func TestChangePassword(t *testing.T) {
+	h, svc := newAuthTestHandler()
+	if _, err := svc.CreateUser(context.Background(), "passusr", "oldpasswd1", auth.RoleViewer); err != nil {
+		t.Fatal(err)
+	}
+	loginResp := performRequestWithoutAuth(t, h, http.MethodPost, "/api/v1/auth/login", `{"username":"passusr","password":"oldpasswd1"}`)
+	var loginResult map[string]any
+	decodeResponse(t, loginResp, &loginResult)
+	token := loginResult["token"].(string)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/change-password",
+		`{"currentPassword":"oldpasswd1","newPassword":"newpasswd2"}`, "Bearer "+token)
+	if resp.Code != http.StatusNoContent {
+		t.Fatalf("POST /me/change-password status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+
+	// old password should be rejected
+	badLogin := performRequestWithoutAuth(t, h, http.MethodPost, "/api/v1/auth/login", `{"username":"passusr","password":"oldpasswd1"}`)
+	assertAPIError(t, badLogin, http.StatusUnauthorized, "unauthorized")
+
+	// new password should be accepted
+	goodLogin := performRequestWithoutAuth(t, h, http.MethodPost, "/api/v1/auth/login", `{"username":"passusr","password":"newpasswd2"}`)
+	if goodLogin.Code != http.StatusOK {
+		t.Fatalf("login with new password status = %d", goodLogin.Code)
+	}
+}
+
+func TestChangePasswordWrongCurrent(t *testing.T) {
+	h, svc := newAuthTestHandler()
+	if _, err := svc.CreateUser(context.Background(), "passusr2", "correctpass", auth.RoleViewer); err != nil {
+		t.Fatal(err)
+	}
+	loginResp := performRequestWithoutAuth(t, h, http.MethodPost, "/api/v1/auth/login", `{"username":"passusr2","password":"correctpass"}`)
+	var loginResult map[string]any
+	decodeResponse(t, loginResp, &loginResult)
+	token := loginResult["token"].(string)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/change-password",
+		`{"currentPassword":"wrongpass","newPassword":"newpasswd2"}`, "Bearer "+token)
+	assertAPIError(t, resp, http.StatusUnauthorized, "unauthorized")
+}
+
+func TestChangePasswordUnauthenticated(t *testing.T) {
+	h, _ := newAuthTestHandler()
+	resp := performRequestWithoutAuth(t, h, http.MethodPost, "/api/v1/me/change-password",
+		`{"currentPassword":"old","newPassword":"new"}`)
+	assertAPIError(t, resp, http.StatusUnauthorized, "unauthorized")
+}
+
+func TestChangePasswordNotConfigured(t *testing.T) {
+	repo := storage.NewMemoryRepository()
+	h := NewHandler(storage.NewService(repo), WithAdminToken(testAdminToken)).Routes()
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/me/change-password",
+		`{"currentPassword":"old","newPassword":"new"}`)
+	assertAPIError(t, resp, http.StatusServiceUnavailable, "auth_not_configured")
+}
+
 func loginAdminToken(t *testing.T, h http.Handler) string {
 	t.Helper()
 	loginResp := performRequestWithoutAuth(t, h, http.MethodPost, "/api/v1/auth/login", `{"username":"admin","password":"adminpass1"}`)

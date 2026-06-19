@@ -341,3 +341,46 @@ func TestGetUser_NotFound(t *testing.T) {
 		t.Errorf("expected ErrUserNotFound, got %v", err)
 	}
 }
+
+func TestChangePassword(t *testing.T) {
+	svc := newTestService(time.Hour)
+	view, err := svc.CreateUser(context.Background(), "changeme", "oldpass1", auth.RoleViewer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.ChangePassword(context.Background(), view.ID, "oldpass1", "newpass99"); err != nil {
+		t.Fatalf("ChangePassword: %v", err)
+	}
+	// old password should no longer work
+	if _, _, err := svc.Login(context.Background(), "changeme", "oldpass1"); !errors.Is(err, auth.ErrBadCredentials) {
+		t.Errorf("old password still accepted; expected ErrBadCredentials, got %v", err)
+	}
+	// new password should work
+	if _, _, err := svc.Login(context.Background(), "changeme", "newpass99"); err != nil {
+		t.Errorf("new password rejected: %v", err)
+	}
+}
+
+func TestChangePassword_WrongCurrent(t *testing.T) {
+	svc := newTestService(time.Hour)
+	view, err := svc.CreateUser(context.Background(), "changefail", "rightpass", auth.RoleViewer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = svc.ChangePassword(context.Background(), view.ID, "wrongpass", "newpass99")
+	if !errors.Is(err, auth.ErrBadCredentials) {
+		t.Errorf("expected ErrBadCredentials for wrong current, got %v", err)
+	}
+}
+
+func TestChangePassword_WeakNew(t *testing.T) {
+	svc := newTestService(time.Hour)
+	view, err := svc.CreateUser(context.Background(), "changeweakpass", "oldpass1", auth.RoleViewer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = svc.ChangePassword(context.Background(), view.ID, "oldpass1", "short")
+	if !errors.Is(err, auth.ErrInvalidUser) {
+		t.Errorf("expected ErrInvalidUser for short new password, got %v", err)
+	}
+}

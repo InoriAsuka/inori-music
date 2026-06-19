@@ -825,3 +825,15 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add `get` operation to `/api/v1/admin/users/{id}` in OpenAPI contract; 200 refs `UserView`, 404 ErrorEnvelope; bump `info.version` to `0.86.0`.
 - Add `TestStorageAdminOpenAPIContractAdminGetUser`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.87.0 - 2026-06-19
+
+- Add `ChangePassword(ctx, userID, currentPassword, newPassword)` to `auth.Service`: verifies current password via `CheckPassword`, enforces 8-character minimum on new password, hashes and saves the updated credential.
+- Add `changePassword` handler: `POST /api/v1/me/change-password`; decodes `{currentPassword, newPassword}`; returns `204 No Content` on success; `400 invalid_user` for weak/missing new password, `401 unauthorized` for wrong current password.
+- Register `POST /api/v1/me/change-password` (viewer-auth); add `/api/v1/me/change-password` methodNotAllowed catch-all.
+- Add `ChangePasswordRequest` schema to OpenAPI components.
+- Add 3 `auth.Service` unit tests (`TestChangePassword`, `TestChangePassword_WrongCurrent`, `TestChangePassword_WeakNew`).
+- Add 4 HTTP-layer tests (`TestChangePassword`, `TestChangePasswordWrongCurrent`, `TestChangePasswordUnauthenticated`, `TestChangePasswordNotConfigured`).
+- Add `POST /api/v1/me/change-password` to OpenAPI contract; bump `info.version` to `0.87.0`.
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes`; add `TestStorageAdminOpenAPIContractChangePassword`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
