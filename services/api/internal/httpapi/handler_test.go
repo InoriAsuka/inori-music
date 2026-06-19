@@ -5204,6 +5204,88 @@ func TestGetMyHistoryStatsNotConfigured(t *testing.T) {
 	}
 }
 
+func TestViewerGetHistoryTimeline(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"TLViewerBand"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"TLVT1","artistId":%q,"mediaObjectId":"mo-tlv-1"}`, artistID), "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	// 2 events on day1, 1 event on day2
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q,"playedAt":"2025-05-01T10:00:00Z"}`, trackID), "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q,"playedAt":"2025-05-01T14:00:00Z"}`, trackID), "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q,"playedAt":"2025-05-02T09:00:00Z"}`, trackID), "Bearer "+viewerToken)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/me/history/timeline?since=2025-05-01T00:00:00Z&until=2025-05-03T00:00:00Z&granularity=day",
+		"", "Bearer "+viewerToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("getMyHistoryTimeline: %d %s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	decodeResponse(t, resp, &result)
+	buckets := result["buckets"].([]any)
+	if len(buckets) != 2 {
+		t.Fatalf("buckets = %d, want 2", len(buckets))
+	}
+	b0 := buckets[0].(map[string]any)
+	if b0["eventCount"].(float64) != 2 {
+		t.Errorf("day1 eventCount = %v, want 2", b0["eventCount"])
+	}
+	b1 := buckets[1].(map[string]any)
+	if b1["eventCount"].(float64) != 1 {
+		t.Errorf("day2 eventCount = %v, want 1", b1["eventCount"])
+	}
+}
+
+func TestViewerGetHistoryTimelineMissingSince(t *testing.T) {
+	h, viewerToken, _ := newHistoryTestHandler(t)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/me/history/timeline?until=2025-05-03T00:00:00Z", "", "Bearer "+viewerToken)
+	assertAPIError(t, resp, http.StatusBadRequest, "missing_time_bounds")
+
+	resp2 := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/me/history/timeline?since=2025-05-01T00:00:00Z", "", "Bearer "+viewerToken)
+	assertAPIError(t, resp2, http.StatusBadRequest, "missing_time_bounds")
+}
+
+func TestViewerGetHistoryTimelineInvalidGranularity(t *testing.T) {
+	h, viewerToken, _ := newHistoryTestHandler(t)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/me/history/timeline?since=2025-05-01T00:00:00Z&until=2025-05-03T00:00:00Z&granularity=hour",
+		"", "Bearer "+viewerToken)
+	assertAPIError(t, resp, http.StatusBadRequest, "invalid_granularity")
+}
+
+func TestViewerGetHistoryTimelineNotConfigured(t *testing.T) {
+	authSvc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAuthService(authSvc),
+	).Routes()
+	if _, err := authSvc.CreateUser(context.Background(), "viewertl", "viewerpassTL1", auth.RoleViewer); err != nil {
+		t.Fatalf("create viewer: %v", err)
+	}
+	viewerToken, _, _ := authSvc.Login(context.Background(), "viewertl", "viewerpassTL1")
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/me/history/timeline?since=2025-05-01T00:00:00Z&until=2025-05-03T00:00:00Z",
+		"", "Bearer "+viewerToken)
+	assertAPIError(t, resp, http.StatusServiceUnavailable, "history_not_configured")
+}
+
 func TestAdminGetUserStats(t *testing.T) {
 	h, viewerToken, adminToken := newHistoryTestHandler(t)
 

@@ -832,6 +832,86 @@ func TestGetHistoryTimelineInvalidRange(t *testing.T) {
 	}
 }
 
+func TestGetMyTimelineDay(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+
+	// u1: 2 events on day1, 1 event on day2; u2: 1 event on day1 (must be excluded)
+	day1 := time.Date(2024, 6, 10, 10, 0, 0, 0, time.UTC)
+	day2 := time.Date(2024, 6, 11, 9, 0, 0, 0, time.UTC)
+	svc.RecordPlay(ctx, "u1", "t1", day1)
+	svc.RecordPlay(ctx, "u1", "t2", day1.Add(2*time.Hour))
+	svc.RecordPlay(ctx, "u1", "t1", day2)
+	svc.RecordPlay(ctx, "u2", "t3", day1) // different user — must not appear
+
+	f := history.TimelineFilter{
+		Since:       time.Date(2024, 6, 10, 0, 0, 0, 0, time.UTC),
+		Until:       time.Date(2024, 6, 12, 0, 0, 0, 0, time.UTC),
+		Granularity: history.GranularityDay,
+		UserID:      "u1",
+	}
+	buckets, err := svc.GetMyTimeline(ctx, f)
+	if err != nil {
+		t.Fatalf("GetMyTimeline: %v", err)
+	}
+	if len(buckets) != 2 {
+		t.Fatalf("buckets = %d, want 2", len(buckets))
+	}
+	if buckets[0].EventCount != 2 {
+		t.Errorf("day1 count = %d, want 2", buckets[0].EventCount)
+	}
+	if buckets[1].EventCount != 1 {
+		t.Errorf("day2 count = %d, want 1", buckets[1].EventCount)
+	}
+}
+
+func TestGetMyTimelineTrackFilter(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+
+	day := time.Date(2024, 7, 1, 12, 0, 0, 0, time.UTC)
+	svc.RecordPlay(ctx, "u1", "t1", day)
+	svc.RecordPlay(ctx, "u1", "t1", day.Add(time.Hour))
+	svc.RecordPlay(ctx, "u1", "t2", day.Add(2*time.Hour)) // different track — excluded
+
+	f := history.TimelineFilter{
+		Since:       time.Date(2024, 7, 1, 0, 0, 0, 0, time.UTC),
+		Until:       time.Date(2024, 7, 2, 0, 0, 0, 0, time.UTC),
+		Granularity: history.GranularityDay,
+		UserID:      "u1",
+		TrackID:     "t1",
+	}
+	buckets, err := svc.GetMyTimeline(ctx, f)
+	if err != nil {
+		t.Fatalf("GetMyTimeline track filter: %v", err)
+	}
+	if len(buckets) != 1 {
+		t.Fatalf("buckets = %d, want 1", len(buckets))
+	}
+	if buckets[0].EventCount != 2 {
+		t.Errorf("t1 count = %d, want 2", buckets[0].EventCount)
+	}
+}
+
+func TestGetMyTimelineInvalidRange(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+	base := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	// missing userID
+	if _, err := svc.GetMyTimeline(ctx, history.TimelineFilter{Since: base, Until: base.Add(time.Hour)}); err == nil {
+		t.Error("expected error for empty UserID, got nil")
+	}
+	// zero bounds with userID
+	if _, err := svc.GetMyTimeline(ctx, history.TimelineFilter{UserID: "u1"}); !errors.Is(err, history.ErrInvalidTimeRange) {
+		t.Errorf("zero bounds: want ErrInvalidTimeRange, got %v", err)
+	}
+	// since >= until with userID
+	if _, err := svc.GetMyTimeline(ctx, history.TimelineFilter{UserID: "u1", Since: base, Until: base}); !errors.Is(err, history.ErrInvalidTimeRange) {
+		t.Errorf("equal bounds: want ErrInvalidTimeRange, got %v", err)
+	}
+}
+
 func TestGetAllHistory(t *testing.T) {
 	svc := history.NewService(history.NewMemoryRepository())
 	ctx := context.Background()

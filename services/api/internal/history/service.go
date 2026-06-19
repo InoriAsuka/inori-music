@@ -307,6 +307,30 @@ func (s *Service) GetMyStats(ctx context.Context, f UserStatsFilter) (UserHistor
 	return s.repo.UserHistoryStats(ctx, f)
 }
 
+// GetMyTimeline returns the viewer's own play-event counts grouped by time bucket.
+// f.UserID must be non-empty (injected from auth context).
+// Both f.Since and f.Until must be set and Since must be before Until.
+func (s *Service) GetMyTimeline(ctx context.Context, f TimelineFilter) ([]TimelineBucket, error) {
+	if f.UserID == "" {
+		return nil, fmt.Errorf("userID is required")
+	}
+	if f.Since.IsZero() || f.Until.IsZero() {
+		return nil, ErrInvalidTimeRange
+	}
+	if !f.Since.Before(f.Until) {
+		return nil, ErrInvalidTimeRange
+	}
+	switch f.Granularity {
+	case GranularityDay, GranularityWeek, GranularityMonth:
+		// valid
+	case "":
+		f.Granularity = GranularityDay
+	default:
+		return nil, fmt.Errorf("invalid granularity %q: must be day, week, or month", f.Granularity)
+	}
+	return s.repo.HistoryTimeline(ctx, f)
+}
+
 // GetMyTopTracks returns the most-played tracks for the authenticated viewer.
 // limit ≤ 0 defaults to 10 and is clamped to 100.
 func (s *Service) GetMyTopTracks(ctx context.Context, f UserStatsFilter, limit int) ([]TrackPlayCount, error) {

@@ -2285,7 +2285,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "0.83.0"
+    "version": "0.84.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -9220,6 +9220,88 @@
                 }
               }
             }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/me/history/timeline": {
+      "get": {
+        "summary": "Get the authenticated user's play history grouped by time bucket",
+        "operationId": "getMyHistoryTimeline",
+        "description": "Returns the viewer's own play event counts grouped by day, week, or month within the specified time window. Both since and until are required.",
+        "tags": [
+          "history"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "since",
+            "in": "query",
+            "required": true,
+            "description": "Start of the time window (RFC3339, inclusive).",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": true,
+            "description": "End of the time window (RFC3339, exclusive).",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "granularity",
+            "in": "query",
+            "required": false,
+            "description": "Bucket size: day (default), week, or month.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "day",
+                "week",
+                "month"
+              ],
+              "default": "day"
+            }
+          },
+          {
+            "name": "trackId",
+            "in": "query",
+            "required": false,
+            "description": "Optional: restrict to events for a specific track.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Timeline buckets for the authenticated user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimelineResult"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"

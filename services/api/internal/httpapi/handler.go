@@ -362,6 +362,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/me/history", handler.requireViewerAuth(handler.clearHistory))
 	mux.HandleFunc("GET /api/v1/me/history/stats", handler.requireViewerAuth(handler.getMyHistoryStats))
 	mux.HandleFunc("GET /api/v1/me/history/top-tracks", handler.requireViewerAuth(handler.getMyTopTracks))
+	mux.HandleFunc("GET /api/v1/me/history/timeline", handler.requireViewerAuth(handler.getMyHistoryTimeline))
 	mux.HandleFunc("POST /api/v1/me/history/batch-delete", handler.requireViewerAuth(handler.batchDeleteMyEvents))
 	mux.HandleFunc("GET /api/v1/me/history/{eventId}", handler.requireViewerAuth(handler.getMyEvent))
 	mux.HandleFunc("PATCH /api/v1/me/history/{eventId}", handler.requireViewerAuth(handler.patchMyEvent))
@@ -1974,6 +1975,61 @@ func (handler *Handler) getMyTopTracks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"tracks": tracks})
+}
+
+func (handler *Handler) getMyHistoryTimeline(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireHistoryService(w) {
+		return
+	}
+	user, ok := userFromContext(r)
+	if !ok {
+		writeAPIError(w, http.StatusUnauthorized, "unauthorized", "valid bearer token is required")
+		return
+	}
+	q := r.URL.Query()
+
+	sinceRaw := q.Get("since")
+	untilRaw := q.Get("until")
+	if sinceRaw == "" || untilRaw == "" {
+		writeAPIError(w, http.StatusBadRequest, "missing_time_bounds", "both since and until are required for timeline queries")
+		return
+	}
+
+	since, err := time.Parse(time.RFC3339, sinceRaw)
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid_since", "since must be an RFC3339 timestamp")
+		return
+	}
+	until, err := time.Parse(time.RFC3339, untilRaw)
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid_until", "until must be an RFC3339 timestamp")
+		return
+	}
+
+	gran := history.TimelineGranularity(q.Get("granularity"))
+	if gran == "" {
+		gran = history.GranularityDay
+	}
+	switch gran {
+	case history.GranularityDay, history.GranularityWeek, history.GranularityMonth:
+		// valid
+	default:
+		writeAPIError(w, http.StatusBadRequest, "invalid_granularity", "granularity must be day, week, or month")
+		return
+	}
+
+	buckets, err := handler.historyService.GetMyTimeline(r.Context(), history.TimelineFilter{
+		Since:       since.UTC(),
+		Until:       until.UTC(),
+		Granularity: gran,
+		UserID:      user.ID,
+		TrackID:     q.Get("trackId"),
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"buckets": buckets})
 }
 
 func (handler *Handler) getAdminHistoryStats(w http.ResponseWriter, r *http.Request) {

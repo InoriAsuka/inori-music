@@ -73,6 +73,7 @@ func TestStorageAdminOpenAPIContractCoversRoutes(t *testing.T) {
 		"/api/v1/me/history":                                     {"get", "post", "delete"},
 		"/api/v1/me/history/stats":                               {"get"},
 		"/api/v1/me/history/top-tracks":                         {"get"},
+		"/api/v1/me/history/timeline":                           {"get"},
 		"/api/v1/me/history/{eventId}":                          {"get", "patch", "delete"},
 		"/api/v1/me/history/batch-delete":                       {"post"},
 		"/api/v1/admin/catalog/stats":                           {"get"},
@@ -1032,5 +1033,34 @@ func TestStorageAdminOpenAPIContractHistoryTimeline(t *testing.T) {
 		if !containsString(codes, want) {
 			t.Errorf("error code enum is missing %q", want)
 		}
+	}
+}
+
+func TestStorageAdminOpenAPIContractViewerHistoryTimeline(t *testing.T) {
+	document := loadOpenAPIContract(t)
+	paths := document["paths"].(map[string]any)
+
+	// GET /api/v1/me/history/timeline must exist
+	get := operation(t, paths, "/api/v1/me/history/timeline", "get")
+
+	// required params: since, until, granularity, trackId
+	params := map[string]bool{}
+	for _, p := range get["parameters"].([]any) {
+		if m, ok := p.(map[string]any); ok {
+			params[m["name"].(string)] = true
+		}
+	}
+	for _, want := range []string{"since", "until", "granularity", "trackId"} {
+		if !params[want] {
+			t.Errorf("GET /api/v1/me/history/timeline missing param %q", want)
+		}
+	}
+
+	// 200 response must reference TimelineResult
+	resp200 := get["responses"].(map[string]any)["200"].(map[string]any)
+	content := resp200["content"].(map[string]any)["application/json"].(map[string]any)
+	schema := content["schema"].(map[string]any)
+	if schema["$ref"] != "#/components/schemas/TimelineResult" {
+		t.Errorf("GET /api/v1/me/history/timeline 200 schema = %v, want TimelineResult ref", schema)
 	}
 }

@@ -795,3 +795,13 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add `TimelineBucket` schema and `TimelineResult` schema (`{buckets: [TimelineBucket]}`) to OpenAPI components; add `get` operation to `/api/v1/admin/history/timeline` with `since`(required), `until`(required), `granularity`(enum day/week/month, default day), `userId`(optional), `trackId`(optional) params; 200 refs `TimelineResult`; add `missing_time_bounds` and `invalid_granularity` to error code enum; bump `info.version` to `0.83.0`.
 - Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `get` on `/api/v1/admin/history/timeline`; add `TestStorageAdminOpenAPIContractHistoryTimeline`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.84.0 - 2026-06-19
+
+- Add `GetMyTimeline(ctx, TimelineFilter)` to `history.Service` (viewer-facing; validate non-empty `UserID` in the filter, then delegate to `repo.HistoryTimeline`; reuse the same `ErrInvalidTimeRange` validation as `GetHistoryTimeline`).
+- Add viewer route `GET /api/v1/me/history/timeline` → `getMyHistoryTimeline`; parses `?since`, `?until` (both required, `400 missing_time_bounds`), `?granularity` (optional, default `day`, `400 invalid_granularity`), optional `?trackId`; injects `UserID` from auth context; returns `{"buckets":[...]}`.
+- Add 3 `history.Service` unit tests (`TestGetMyTimelineDay`, `TestGetMyTimelineTrackFilter`, `TestGetMyTimelineInvalidRange`).
+- Add 4 HTTP-layer tests (`TestViewerGetHistoryTimeline`, `TestViewerGetHistoryTimelineMissingSince`, `TestViewerGetHistoryTimelineInvalidGranularity`, `TestViewerGetHistoryTimelineNotConfigured`).
+- Add `get` operation to `/api/v1/me/history/timeline` in OpenAPI contract; `since`(required), `until`(required), `granularity`(enum day/week/month, default day), `trackId`(optional) params; 200 refs `TimelineResult`; bump `info.version` to `0.84.0`.
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `get` on `/api/v1/me/history/timeline`; add `TestStorageAdminOpenAPIContractViewerHistoryTimeline`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
