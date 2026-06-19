@@ -197,3 +197,10 @@ type UserHistorySummary struct {
 	Stats     UserHistoryStats `json:"stats"`
 	TopTracks []TrackPlayCount `json:"topTracks"`
 }
+
+// TrackHistorySummary combines per-track aggregate stats and the track's top
+// listeners into a single response for dashboard use.
+type TrackHistorySummary struct {
+	Stats        TrackHistoryStatsResult `json:"stats"`
+	TopListeners []UserPlayCount         `json:"topListeners"`
+}

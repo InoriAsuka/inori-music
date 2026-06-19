@@ -317,6 +317,24 @@ func (s *Service) GetTrackTopListeners(ctx context.Context, f TrackStatsFilter, 
 	return s.repo.TrackTopListeners(ctx, f, limit)
 }
 
+// GetTrackSummary returns a combined stats + top-listeners summary for any track;
+// intended for admin use. topN ≤ 0 defaults to 10 and is clamped to 100.
+func (s *Service) GetTrackSummary(ctx context.Context, trackID string, f TrackStatsFilter, topN int) (TrackHistorySummary, error) {
+	if trackID == "" {
+		return TrackHistorySummary{}, fmt.Errorf("trackID is required")
+	}
+	f.TrackID = trackID
+	stats, err := s.GetTrackStats(ctx, f)
+	if err != nil {
+		return TrackHistorySummary{}, err
+	}
+	listeners, err := s.GetTrackTopListeners(ctx, f, topN)
+	if err != nil {
+		return TrackHistorySummary{}, err
+	}
+	return TrackHistorySummary{Stats: stats, TopListeners: listeners}, nil
+}
+
 // GetMyStats returns per-user aggregate counts for the authenticated viewer.
 func (s *Service) GetMyStats(ctx context.Context, f UserStatsFilter) (UserHistoryStats, error) {
 	if f.UserID == "" {

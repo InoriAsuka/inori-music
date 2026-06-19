@@ -1410,3 +1410,52 @@ func TestGetAdminUserSummaryEmpty(t *testing.T) {
 		t.Errorf("expected no top tracks, got %d", len(summary.TopTracks))
 	}
 }
+
+func TestGetTrackSummary(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+
+	now := time.Now().UTC()
+	// u-ts-1 plays track-ts 3 times, u-ts-2 plays it once
+	for i := 0; i < 3; i++ {
+		if _, err := svc.RecordPlay(ctx, "u-ts-1", "track-ts", now.Add(-time.Duration(i)*time.Hour)); err != nil {
+			t.Fatalf("RecordPlay: %v", err)
+		}
+	}
+	if _, err := svc.RecordPlay(ctx, "u-ts-2", "track-ts", now.Add(-4*time.Hour)); err != nil {
+		t.Fatalf("RecordPlay: %v", err)
+	}
+
+	summary, err := svc.GetTrackSummary(ctx, "track-ts", history.TrackStatsFilter{}, 10)
+	if err != nil {
+		t.Fatalf("GetTrackSummary: %v", err)
+	}
+	if summary.Stats.TotalEvents != 4 {
+		t.Errorf("Stats.TotalEvents = %d, want 4", summary.Stats.TotalEvents)
+	}
+	if summary.Stats.UniqueListeners != 2 {
+		t.Errorf("Stats.UniqueListeners = %d, want 2", summary.Stats.UniqueListeners)
+	}
+	if len(summary.TopListeners) == 0 {
+		t.Error("TopListeners should not be empty")
+	}
+	if summary.TopListeners[0].UserID != "u-ts-1" {
+		t.Errorf("TopListeners[0].UserID = %q, want u-ts-1", summary.TopListeners[0].UserID)
+	}
+}
+
+func TestGetTrackSummaryEmpty(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+
+	summary, err := svc.GetTrackSummary(ctx, "track-nobody", history.TrackStatsFilter{}, 10)
+	if err != nil {
+		t.Fatalf("GetTrackSummary empty: %v", err)
+	}
+	if summary.Stats.TotalEvents != 0 {
+		t.Errorf("expected 0 total events, got %d", summary.Stats.TotalEvents)
+	}
+	if len(summary.TopListeners) != 0 {
+		t.Errorf("expected no top listeners, got %d", len(summary.TopListeners))
+	}
+}

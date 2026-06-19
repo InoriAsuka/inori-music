@@ -102,6 +102,7 @@ func TestStorageAdminOpenAPIContractCoversRoutes(t *testing.T) {
 		"/api/v1/admin/history/tracks/{trackId}/stats":          {"get"},
 		"/api/v1/admin/history/tracks/{trackId}/top-listeners":  {"get"},
 		"/api/v1/admin/history/tracks/{trackId}/timeline":       {"get"},
+		"/api/v1/admin/history/tracks/{trackId}/history-summary": {"get"},
 		"/api/v1/admin/history/{eventId}":                       {"get", "patch", "delete"},
 		"/api/v1/admin/history":                                 {"get", "delete"},
 		"/api/v1/admin/history/batch-delete":                    {"post"},

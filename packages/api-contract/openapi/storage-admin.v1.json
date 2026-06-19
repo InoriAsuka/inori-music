@@ -2381,6 +2381,24 @@
           "stats",
           "topTracks"
         ]
+      },
+      "TrackHistorySummary": {
+        "type": "object",
+        "properties": {
+          "stats": {
+            "$ref": "#/components/schemas/TrackHistoryStatsResult"
+          },
+          "topListeners": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserPlayCount"
+            }
+          }
+        },
+        "required": [
+          "stats",
+          "topListeners"
+        ]
       }
     },
     "securitySchemes": {
@@ -2394,7 +2412,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "1.6.0"
+    "version": "1.7.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -11279,6 +11297,87 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/UserHistorySummary"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "503": {
+            "$ref": "#/components/responses/HistoryNotConfigured"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/history/tracks/{trackId}/history-summary": {
+      "parameters": [
+        {
+          "in": "path",
+          "name": "trackId",
+          "required": true,
+          "schema": {
+            "type": "string"
+          },
+          "description": "The track ID."
+        }
+      ],
+      "get": {
+        "summary": "Get track history summary",
+        "operationId": "getAdminTrackHistorySummary",
+        "description": "Returns combined aggregate stats and top-listeners for a specific track in a single response. Accepts optional `since`/`until` bounds and a `limit` for the top-listeners list.",
+        "tags": [
+          "History"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "description": "Include only events at or after this time (RFC3339, inclusive).",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": false,
+            "description": "Include only events before this time (RFC3339, exclusive).",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "description": "Maximum number of top-listeners entries to return (1\u2013100; default 10).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 10
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Track history summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrackHistorySummary"
                 }
               }
             }

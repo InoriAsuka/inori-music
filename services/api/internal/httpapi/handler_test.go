@@ -7851,3 +7851,71 @@ func TestAdminGetUserHistorySummaryNotConfigured(t *testing.T) {
 		"", "Bearer "+testAdminToken)
 	assertAPIError(t, resp, http.StatusServiceUnavailable, "history_not_configured")
 }
+
+func TestAdminGetTrackHistorySummary(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	// 3 plays for user1, 1 play for user2 — all on track-hsum
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		`{"trackId":"track-hsum","playedAt":"2025-09-01T10:00:00Z"}`, "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		`{"trackId":"track-hsum","playedAt":"2025-09-01T11:00:00Z"}`, "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		`{"trackId":"track-hsum","playedAt":"2025-09-01T12:00:00Z"}`, "Bearer "+viewerToken)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/admin/history/tracks/track-hsum/history-summary",
+		"", "Bearer "+adminToken)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", resp.Code, resp.Body.String())
+	}
+	var body map[string]any
+	decodeResponse(t, resp, &body)
+	stats, ok := body["stats"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected stats object, got %T", body["stats"])
+	}
+	if int(stats["totalEvents"].(float64)) != 3 {
+		t.Errorf("stats.totalEvents = %v, want 3", stats["totalEvents"])
+	}
+	topListeners, ok := body["topListeners"].([]any)
+	if !ok {
+		t.Fatalf("expected topListeners array, got %T", body["topListeners"])
+	}
+	if len(topListeners) == 0 {
+		t.Error("expected at least one top listener")
+	}
+}
+
+func TestAdminGetTrackHistorySummaryWithTopN(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		`{"trackId":"track-hsum2","playedAt":"2025-09-02T10:00:00Z"}`, "Bearer "+viewerToken)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/admin/history/tracks/track-hsum2/history-summary?limit=1",
+		"", "Bearer "+adminToken)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", resp.Code, resp.Body.String())
+	}
+	var body map[string]any
+	decodeResponse(t, resp, &body)
+	topListeners := body["topListeners"].([]any)
+	if len(topListeners) != 1 {
+		t.Errorf("expected 1 top listener with limit=1, got %d", len(topListeners))
+	}
+}
+
+func TestAdminGetTrackHistorySummaryNotConfigured(t *testing.T) {
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAdminToken(testAdminToken),
+	).Routes()
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/admin/history/tracks/some-track/history-summary",
+		"", "Bearer "+testAdminToken)
+	assertAPIError(t, resp, http.StatusServiceUnavailable, "history_not_configured")
+}
