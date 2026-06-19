@@ -2399,6 +2399,31 @@
           "stats",
           "topListeners"
         ]
+      },
+      "GlobalHistorySummary": {
+        "type": "object",
+        "required": [
+          "stats",
+          "topTracks",
+          "topUsers"
+        ],
+        "properties": {
+          "stats": {
+            "$ref": "#/components/schemas/HistoryStats"
+          },
+          "topTracks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/TrackPlayCount"
+            }
+          },
+          "topUsers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/UserPlayCount"
+            }
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -2412,7 +2437,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "1.9.0"
+    "version": "1.10.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -11492,6 +11517,67 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          },
+          "503": {
+            "$ref": "#/components/responses/HistoryNotConfigured"
+          }
+        }
+      }
+    },
+    "/api/v1/admin/history/summary": {
+      "get": {
+        "summary": "Get global history summary",
+        "operationId": "getAdminHistorySummary",
+        "tags": [
+          "admin",
+          "history"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 10
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "System-wide history summary",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GlobalHistorySummary"
+                }
+              }
+            }
           },
           "503": {
             "$ref": "#/components/responses/HistoryNotConfigured"

@@ -1059,3 +1059,58 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add 1 `history.Service` unit test: `TestGetMyTrackStatsTimeWindow`.
 - Add 2 HTTP-layer tests: `TestViewerGetMyTrackStatsSince`, `TestViewerGetMyTrackStatsUntil`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v1.10.0 - 2026-06-20
+
+- Add `GlobalHistorySummary{Stats HistoryStats, TopTracks []TrackPlayCount, TopUsers []UserPlayCount}` type to the `history` package.
+- Add `GetGlobalSummary(ctx, f StatsFilter, topN int) (GlobalHistorySummary, error)` to `history.Service`: calls `GetHistoryStats`, `GetTopTracks`, and `GetTopUsers` in sequence; `topN ≤ 0` defaults to 10, clamped to 100.
+- Add `getAdminHistorySummary` handler: `GET /api/v1/admin/history/summary`; requires admin auth; accepts optional `since`, `until` (RFC3339) and optional `?topN` (int; default 10; clamped 1–100) query params; calls `history.Service.GetGlobalSummary`; returns `GlobalHistorySummary`; `503` when history service not configured.
+- Register `GET /api/v1/admin/history/summary` (admin-auth) before the existing `/api/v1/admin/history/{eventId}` wildcard; add `methodNotAllowed` fallback.
+- Add `GlobalHistorySummary` schema to OpenAPI components; add `get` operation to `/api/v1/admin/history/summary`; bump `info.version` to `1.10.0`.
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `get` on `/api/v1/admin/history/summary`.
+- Add 2 `history.Service` unit tests: `TestGetGlobalSummary`, `TestGetGlobalSummaryWithTopN`.
+- Add 3 HTTP-layer tests: `TestAdminGetHistorySummary`, `TestAdminGetHistorySummaryWithTopN`, `TestAdminGetHistorySummaryNotConfigured`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v1.11.0 - 2026-06-20
+
+- Add `MyTrackSummary{Stats UserTrackStats, RecentTracks []TrackPlayCount}` type to the `history` package.
+- Add `GetMyTrackSummary(ctx, userID, trackID string, f UserStatsFilter, topN int) (MyTrackSummary, error)` to `history.Service`: calls `GetMyTrackStats` and `GetMyTopTracks`; `topN ≤ 0` defaults to 10, clamped to 100.
+- Add `getMyTrackSummary` handler: `GET /api/v1/me/history/tracks/{trackId}/summary`; requires viewer auth; reads `{trackId}` from path; accepts optional `since`, `until` (RFC3339) and optional `?topN` (int; default 10; clamped 1–100) query params; calls `history.Service.GetMyTrackSummary`; returns `MyTrackSummary`; `503` when history service not configured.
+- Register `GET /api/v1/me/history/tracks/{trackId}/summary` (viewer-auth) before the existing `{trackId}` wildcard fallback; add `methodNotAllowed` fallback.
+- Add `MyTrackSummary` schema to OpenAPI components; add `get` operation to `/api/v1/me/history/tracks/{trackId}/summary`; bump `info.version` to `1.11.0`.
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `get` on `/api/v1/me/history/tracks/{trackId}/summary`.
+- Add 2 `history.Service` unit tests: `TestGetMyTrackSummary`, `TestGetMyTrackSummaryEmpty`.
+- Add 3 HTTP-layer tests: `TestViewerGetMyTrackSummary`, `TestViewerGetMyTrackSummaryWithTopN`, `TestViewerGetMyTrackSummaryNotConfigured`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v1.12.0 - 2026-06-20
+
+- Verify `historypg.Repository.TrackHistoryStats` and `TrackTopListeners` filter on `played_at` when `f.Since`/`f.Until` are non-zero; add `AND played_at >= $N` / `AND played_at < $N` clauses if missing.
+- Verify `history.MemoryRepository.TrackHistoryStats` and `TrackTopListeners` skip events outside the bounds; add filtering if missing.
+- Update `getAdminTrackStats` handler to parse optional `?since` / `?until` query params (RFC3339) and pass them into `TrackStatsFilter`; return `400 invalid_since` / `400 invalid_until` on parse failure.
+- Update `getAdminTrackTopListeners` handler similarly.
+- Update `GET /api/v1/admin/history/tracks/{trackId}/stats` and `GET /api/v1/admin/history/tracks/{trackId}/top-listeners` in OpenAPI to declare `since` and `until` query parameters; bump `info.version` to `1.12.0`.
+- Add 1 `history.Service` unit test: `TestGetAdminTrackStatsTimeWindow`.
+- Add 2 HTTP-layer tests: `TestAdminGetTrackStatsSince`, `TestAdminGetTrackStatsUntil`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v1.13.0 - 2026-06-20
+
+- Verify `historypg.Repository.HistoryStats`, `TopTracks`, and `TopUsers` filter on `played_at` when `f.Since`/`f.Until` are non-zero; add clauses if missing.
+- Verify `history.MemoryRepository.HistoryStats`, `TopTracks`, and `TopUsers` skip events outside the bounds; add filtering if missing.
+- Verify `getAdminHistoryStats`, `getAdminTopTracks`, and `getAdminTopUsers` handlers forward parsed `since`/`until` into `StatsFilter`; fix forwarding if missing.
+- Update `GET /api/v1/admin/history/stats`, `GET /api/v1/admin/history/top-tracks`, and `GET /api/v1/admin/history/top-users` in OpenAPI to declare `since` and `until` query parameters if not yet declared; bump `info.version` to `1.13.0`.
+- Add 1 `history.Service` unit test: `TestGetHistoryStatsTimeWindow`.
+- Add 2 HTTP-layer tests: `TestAdminGetHistoryStatsSince`, `TestAdminGetHistoryStatsUntil`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v1.14.0 - 2026-06-20
+
+- Verify `getMyTopTracks` handler parses `?since`/`?until` and passes them as `UserStatsFilter.Since`/`Until` to `GetMyTopTracks`; fix forwarding if missing.
+- Verify `getMyHistoryStats` handler does the same for `GetMyStats`.
+- Verify `getMyHistoryTimeline` handler does the same for `GetMyTimeline`.
+- Update `GET /api/v1/me/history/top-tracks`, `GET /api/v1/me/history/stats`, and `GET /api/v1/me/history/timeline` in OpenAPI to declare `since` and `until` query parameters if not yet declared; bump `info.version` to `1.14.0`.
+- Add 1 `history.Service` unit test: `TestGetMyTopTracksTimeWindow`.
+- Add 2 HTTP-layer tests: `TestViewerGetMyTopTracksSince`, `TestViewerGetMyTopTracksUntil`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.

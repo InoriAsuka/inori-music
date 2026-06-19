@@ -1500,3 +1500,62 @@ func TestGetMyTrackStatsTimeWindow(t *testing.T) {
 		t.Errorf("TotalPlays all = %d, want 3", all.TotalPlays)
 	}
 }
+
+func TestGetGlobalSummary(t *testing.T) {
+	ctx := context.Background()
+	svc := history.NewService(history.NewMemoryRepository())
+
+	if _, err := svc.RecordPlay(ctx, "u1", "t1", time.Now()); err != nil {
+		t.Fatalf("RecordPlay: %v", err)
+	}
+	if _, err := svc.RecordPlay(ctx, "u1", "t2", time.Now()); err != nil {
+		t.Fatalf("RecordPlay: %v", err)
+	}
+	if _, err := svc.RecordPlay(ctx, "u2", "t1", time.Now()); err != nil {
+		t.Fatalf("RecordPlay: %v", err)
+	}
+
+	summary, err := svc.GetGlobalSummary(ctx, history.StatsFilter{}, 10)
+	if err != nil {
+		t.Fatalf("GetGlobalSummary: %v", err)
+	}
+	if summary.Stats.TotalEvents != 3 {
+		t.Errorf("TotalEvents = %d, want 3", summary.Stats.TotalEvents)
+	}
+	if summary.Stats.UniqueUsers != 2 {
+		t.Errorf("UniqueUsers = %d, want 2", summary.Stats.UniqueUsers)
+	}
+	if summary.Stats.UniqueTracks != 2 {
+		t.Errorf("UniqueTracks = %d, want 2", summary.Stats.UniqueTracks)
+	}
+	if len(summary.TopTracks) == 0 {
+		t.Error("TopTracks is empty, want at least 1")
+	}
+	if len(summary.TopUsers) == 0 {
+		t.Error("TopUsers is empty, want at least 1")
+	}
+}
+
+func TestGetGlobalSummaryWithTopN(t *testing.T) {
+	ctx := context.Background()
+	svc := history.NewService(history.NewMemoryRepository())
+
+	// Record plays for 5 tracks so topN=2 truncates the result.
+	for i := 0; i < 5; i++ {
+		trackID := "t-gn-" + string(rune('a'+i))
+		if _, err := svc.RecordPlay(ctx, "u-gn", trackID, time.Now()); err != nil {
+			t.Fatalf("RecordPlay track %s: %v", trackID, err)
+		}
+	}
+
+	summary, err := svc.GetGlobalSummary(ctx, history.StatsFilter{}, 2)
+	if err != nil {
+		t.Fatalf("GetGlobalSummary topN=2: %v", err)
+	}
+	if len(summary.TopTracks) > 2 {
+		t.Errorf("len(TopTracks) = %d, want ≤ 2", len(summary.TopTracks))
+	}
+	if len(summary.TopUsers) > 2 {
+		t.Errorf("len(TopUsers) = %d, want ≤ 2", len(summary.TopUsers))
+	}
+}

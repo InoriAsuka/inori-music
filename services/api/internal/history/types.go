@@ -206,3 +206,11 @@ type TrackHistorySummary struct {
 	Stats        TrackHistoryStatsResult `json:"stats"`
 	TopListeners []UserPlayCount         `json:"topListeners"`
 }
+
+// GlobalHistorySummary combines system-wide aggregate stats, top tracks, and top
+// users into a single response for admin dashboard use.
+type GlobalHistorySummary struct {
+	Stats     HistoryStats     `json:"stats"`
+	TopTracks []TrackPlayCount `json:"topTracks"`
+	TopUsers  []UserPlayCount  `json:"topUsers"`
+}

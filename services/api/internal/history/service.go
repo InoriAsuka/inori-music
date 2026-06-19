@@ -420,6 +420,31 @@ func (s *Service) GetTopUsers(ctx context.Context, f StatsFilter, limit int) ([]
 	return s.repo.TopUsers(ctx, f, limit)
 }
 
+// GetGlobalSummary returns a combined system-wide aggregate stats, top tracks,
+// and top users snapshot for admin dashboard use.
+// topN ≤ 0 defaults to 10 and is clamped to 100.
+func (s *Service) GetGlobalSummary(ctx context.Context, f StatsFilter, topN int) (GlobalHistorySummary, error) {
+	if topN <= 0 {
+		topN = 10
+	}
+	if topN > 100 {
+		topN = 100
+	}
+	stats, err := s.GetHistoryStats(ctx, f)
+	if err != nil {
+		return GlobalHistorySummary{}, err
+	}
+	tracks, err := s.GetTopTracks(ctx, f, topN)
+	if err != nil {
+		return GlobalHistorySummary{}, err
+	}
+	users, err := s.GetTopUsers(ctx, f, topN)
+	if err != nil {
+		return GlobalHistorySummary{}, err
+	}
+	return GlobalHistorySummary{Stats: stats, TopTracks: tracks, TopUsers: users}, nil
+}
+
 func newID() (string, error) {
 	var b [8]byte
 	if _, err := rand.Read(b[:]); err != nil {

@@ -8043,3 +8043,70 @@ func TestViewerGetMyTrackStatsUntil(t *testing.T) {
 		t.Errorf("totalPlays with until=day2 = %v, want 1", body["totalPlays"])
 	}
 }
+
+func TestAdminGetHistorySummary(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	// 2 events on different tracks so stats reflect aggregation.
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		`{"trackId":"gs-t1","playedAt":"2025-10-01T10:00:00Z"}`, "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		`{"trackId":"gs-t2","playedAt":"2025-10-01T11:00:00Z"}`, "Bearer "+viewerToken)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/admin/history/summary",
+		"", "Bearer "+adminToken)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", resp.Code, resp.Body.String())
+	}
+	var body map[string]any
+	decodeResponse(t, resp, &body)
+	stats, ok := body["stats"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected stats object, got %T", body["stats"])
+	}
+	if int(stats["totalEvents"].(float64)) < 2 {
+		t.Errorf("stats.totalEvents = %v, want ≥ 2", stats["totalEvents"])
+	}
+	if _, ok := body["topTracks"].([]any); !ok {
+		t.Fatalf("expected topTracks array, got %T", body["topTracks"])
+	}
+	if _, ok := body["topUsers"].([]any); !ok {
+		t.Fatalf("expected topUsers array, got %T", body["topUsers"])
+	}
+}
+
+func TestAdminGetHistorySummaryWithTopN(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	for _, tid := range []string{"gs2-t1", "gs2-t2", "gs2-t3"} {
+		performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+			fmt.Sprintf(`{"trackId":%q,"playedAt":"2025-10-02T10:00:00Z"}`, tid), "Bearer "+viewerToken)
+	}
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/admin/history/summary?limit=1",
+		"", "Bearer "+adminToken)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", resp.Code, resp.Body.String())
+	}
+	var body map[string]any
+	decodeResponse(t, resp, &body)
+	topTracks := body["topTracks"].([]any)
+	if len(topTracks) != 1 {
+		t.Errorf("expected 1 top track with limit=1, got %d", len(topTracks))
+	}
+}
+
+func TestAdminGetHistorySummaryNotConfigured(t *testing.T) {
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAdminToken(testAdminToken),
+	).Routes()
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/admin/history/summary",
+		"", "Bearer "+testAdminToken)
+	assertAPIError(t, resp, http.StatusServiceUnavailable, "history_not_configured")
+}

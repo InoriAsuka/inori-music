@@ -415,6 +415,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("/api/v1/admin/history/tracks/{trackId}", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("GET /api/v1/admin/history/timeline", handler.requireAdminAuth(handler.getAdminHistoryTimeline))
 	mux.HandleFunc("POST /api/v1/admin/history/batch-delete", handler.requireAdminAuth(handler.batchDeleteAdminEvents))
+	mux.HandleFunc("GET /api/v1/admin/history/summary", handler.requireAdminAuth(handler.getAdminHistorySummary))
 	mux.HandleFunc("GET /api/v1/admin/history/{eventId}", handler.requireAdminAuth(handler.getAdminEvent))
 	mux.HandleFunc("PATCH /api/v1/admin/history/{eventId}", handler.requireAdminAuth(handler.patchAdminEvent))
 	mux.HandleFunc("DELETE /api/v1/admin/history/{eventId}", handler.requireAdminAuth(handler.deleteAdminEvent))
@@ -2780,6 +2781,28 @@ func (handler *Handler) getAdminTrackHistorySummary(w http.ResponseWriter, r *ht
 		Since: f.Since,
 		Until: f.Until,
 	}, topN)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, summary)
+}
+
+// getAdminHistorySummary returns combined system-wide aggregate stats, top tracks,
+// and top users in one request; intended for admin dashboard use.
+func (handler *Handler) getAdminHistorySummary(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireHistoryService(w) {
+		return
+	}
+	f, ok := parseHistoryAdminFilter(w, r)
+	if !ok {
+		return
+	}
+	topN, ok := parseHistoryAdminLimit(w, r)
+	if !ok {
+		return
+	}
+	summary, err := handler.historyService.GetGlobalSummary(r.Context(), f, topN)
 	if err != nil {
 		writeError(w, err)
 		return
