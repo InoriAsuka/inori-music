@@ -108,6 +108,31 @@ func (r *memSessionRepo) RevokeSession(_ context.Context, tokenHash string, revo
 	r.sessions[tokenHash] = s
 	return nil
 }
+func (r *memSessionRepo) ListSessionsByUser(_ context.Context, userID string) ([]auth.Session, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var list []auth.Session
+	for _, s := range r.sessions {
+		if s.UserID == userID {
+			list = append(list, s)
+		}
+	}
+	return list, nil
+}
+func (r *memSessionRepo) RevokeAllSessionsByUser(_ context.Context, userID string, revokedAt time.Time) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	count := 0
+	for k, s := range r.sessions {
+		if s.UserID == userID && s.RevokedAt == nil {
+			t := revokedAt
+			s.RevokedAt = &t
+			r.sessions[k] = s
+			count++
+		}
+	}
+	return count, nil
+}
 func (r *memSessionRepo) DeleteExpiredSessions(_ context.Context, before time.Time) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -461,5 +486,63 @@ func TestPatchUserConflict(t *testing.T) {
 	_, err = svc.PatchUser(context.Background(), view2.ID, nil, &conflict)
 	if !errors.Is(err, auth.ErrUserConflict) {
 		t.Errorf("expected ErrUserConflict, got %v", err)
+	}
+}
+
+func TestListActiveSessionsEmpty(t *testing.T) {
+	svc := newTestService(time.Hour)
+	view, err := svc.CreateUser(context.Background(), "alice", "pass1234", auth.RoleViewer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sessions, err := svc.ListActiveSessions(context.Background(), view.ID)
+	if err != nil {
+		t.Fatalf("ListActiveSessions: %v", err)
+	}
+	if len(sessions) != 0 {
+		t.Errorf("expected 0 sessions, got %d", len(sessions))
+	}
+}
+
+func TestListActiveSessionsFiltersRevoked(t *testing.T) {
+	svc := newTestService(time.Hour)
+	view, err := svc.CreateUser(context.Background(), "bob", "pass1234", auth.RoleViewer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	token, _, err := svc.Login(context.Background(), "bob", "pass1234")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.Logout(context.Background(), token); err != nil {
+		t.Fatal(err)
+	}
+	sessions, err := svc.ListActiveSessions(context.Background(), view.ID)
+	if err != nil {
+		t.Fatalf("ListActiveSessions after logout: %v", err)
+	}
+	if len(sessions) != 0 {
+		t.Errorf("expected 0 active sessions after logout, got %d", len(sessions))
+	}
+}
+
+func TestListActiveSessionsFiltersExpired(t *testing.T) {
+	// Use a very short TTL so the session expires immediately.
+	svc := newTestService(1 * time.Millisecond)
+	view, err := svc.CreateUser(context.Background(), "carol", "pass1234", auth.RoleViewer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := svc.Login(context.Background(), "carol", "pass1234"); err != nil {
+		t.Fatal(err)
+	}
+	// Wait for the session to expire.
+	time.Sleep(5 * time.Millisecond)
+	sessions, err := svc.ListActiveSessions(context.Background(), view.ID)
+	if err != nil {
+		t.Fatalf("ListActiveSessions after expiry: %v", err)
+	}
+	if len(sessions) != 0 {
+		t.Errorf("expected 0 sessions after expiry, got %d", len(sessions))
 	}
 }

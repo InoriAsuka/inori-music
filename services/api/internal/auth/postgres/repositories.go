@@ -169,6 +169,38 @@ func (r *SessionRepository) RevokeSession(ctx context.Context, tokenHash string,
 	return nil
 }
 
+func (r *SessionRepository) ListSessionsByUser(ctx context.Context, userID string) ([]auth.Session, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT token_hash, user_id, expires_at, created_at, revoked_at
+		FROM sessions WHERE user_id = $1 ORDER BY created_at`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var sessions []auth.Session
+	for rows.Next() {
+		var s auth.Session
+		var revokedAt *time.Time
+		if err := rows.Scan(&s.TokenHash, &s.UserID, &s.ExpiresAt, &s.CreatedAt, &revokedAt); err != nil {
+			return nil, err
+		}
+		s.RevokedAt = revokedAt
+		sessions = append(sessions, s)
+	}
+	return sessions, rows.Err()
+}
+
+func (r *SessionRepository) RevokeAllSessionsByUser(ctx context.Context, userID string, revokedAt time.Time) (int, error) {
+	tag, err := r.pool.Exec(ctx,
+		`UPDATE sessions SET revoked_at = $1 WHERE user_id = $2 AND revoked_at IS NULL AND expires_at > $1`,
+		revokedAt.UTC(), userID,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return int(tag.RowsAffected()), nil
+}
+
 func (r *SessionRepository) DeleteExpiredSessions(ctx context.Context, before time.Time) error {
 	_, err := r.pool.Exec(ctx,
 		`DELETE FROM sessions WHERE expires_at < $1`, before.UTC())

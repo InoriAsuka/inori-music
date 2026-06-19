@@ -56,6 +56,13 @@ type Session struct {
 	RevokedAt *time.Time `json:"revokedAt,omitempty"`
 }
 
+// SessionView is the safe public projection of a Session (no token hash).
+type SessionView struct {
+	UserID    string    `json:"userId"`
+	ExpiresAt time.Time `json:"expiresAt"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
 // UserRepository persists user account records.
 type UserRepository interface {
 	SaveUser(ctx context.Context, user User) error
@@ -70,6 +77,8 @@ type UserRepository interface {
 type SessionRepository interface {
 	SaveSession(ctx context.Context, session Session) error
 	GetSession(ctx context.Context, tokenHash string) (Session, error)
+	ListSessionsByUser(ctx context.Context, userID string) ([]Session, error)
 	RevokeSession(ctx context.Context, tokenHash string, revokedAt time.Time) error
+	RevokeAllSessionsByUser(ctx context.Context, userID string, revokedAt time.Time) (int, error)
 	DeleteExpiredSessions(ctx context.Context, before time.Time) error
 }

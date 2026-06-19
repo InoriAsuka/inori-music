@@ -865,6 +865,31 @@ func (r *memAuthSessionRepo) RevokeSession(_ context.Context, h string, t time.T
 	r.sessions[h] = s
 	return nil
 }
+func (r *memAuthSessionRepo) ListSessionsByUser(_ context.Context, userID string) ([]auth.Session, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	var list []auth.Session
+	for _, s := range r.sessions {
+		if s.UserID == userID {
+			list = append(list, s)
+		}
+	}
+	return list, nil
+}
+func (r *memAuthSessionRepo) RevokeAllSessionsByUser(_ context.Context, userID string, revokedAt time.Time) (int, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	count := 0
+	for k, s := range r.sessions {
+		if s.UserID == userID && s.RevokedAt == nil {
+			t := revokedAt
+			s.RevokedAt = &t
+			r.sessions[k] = s
+			count++
+		}
+	}
+	return count, nil
+}
 func (r *memAuthSessionRepo) DeleteExpiredSessions(_ context.Context, before time.Time) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()

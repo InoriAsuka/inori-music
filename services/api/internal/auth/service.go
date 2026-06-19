@@ -243,6 +243,43 @@ func (s *Service) PatchUser(ctx context.Context, id string, role *Role, username
 	return toView(user), nil
 }
 
+// ListActiveSessions returns all non-revoked, non-expired sessions for a user.
+func (s *Service) ListActiveSessions(ctx context.Context, userID string) ([]SessionView, error) {
+	// Verify the user exists first.
+	if _, err := s.users.GetUser(ctx, userID); err != nil {
+		return nil, err
+	}
+	all, err := s.sessions.ListSessionsByUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	now := s.now().UTC()
+	views := make([]SessionView, 0, len(all))
+	for _, sess := range all {
+		if sess.RevokedAt != nil {
+			continue
+		}
+		if now.After(sess.ExpiresAt) {
+			continue
+		}
+		views = append(views, SessionView{
+			UserID:    sess.UserID,
+			ExpiresAt: sess.ExpiresAt,
+			CreatedAt: sess.CreatedAt,
+		})
+	}
+	return views, nil
+}
+
+// RevokeAllSessionsForUser revokes all active (non-revoked, non-expired) sessions
+// for a user. Returns the number of sessions revoked.
+func (s *Service) RevokeAllSessionsForUser(ctx context.Context, userID string) (int, error) {
+	if _, err := s.users.GetUser(ctx, userID); err != nil {
+		return 0, err
+	}
+	return s.sessions.RevokeAllSessionsByUser(ctx, userID, s.now().UTC())
+}
+
 // DeleteUser removes a user record permanently.
 func (s *Service) DeleteUser(ctx context.Context, id string) error {
 	if _, err := s.users.GetUser(ctx, id); err != nil {

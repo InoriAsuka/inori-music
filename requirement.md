@@ -860,3 +860,14 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add `patch` operation to `/api/v1/admin/users/{id}` in OpenAPI contract; bump `info.version` to `0.89.0`.
 - Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `patch` on `/api/v1/admin/users/{id}`; add `TestStorageAdminOpenAPIContractAdminPatchUser`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.90.0 - 2026-06-19
+
+- Add `SessionView{UserID, ExpiresAt, CreatedAt}` to `auth` package as a safe public projection of a session (no token hash).
+- Extend `SessionRepository` interface with `ListSessionsByUser(ctx, userID string) ([]Session, error)` and `RevokeAllSessionsByUser(ctx, userID string, revokedAt time.Time) (int, error)`.
+- Implement both methods in `authpg.SessionRepository` (SQL: `SELECT … WHERE user_id = $1` and `UPDATE … WHERE user_id = $2 AND revoked_at IS NULL AND expires_at > $1`).
+- Implement both methods in the in-memory test stubs (`memSessionRepo` in `service_test.go` and `memAuthSessionRepo` in `handler_test.go`).
+- Add `ListActiveSessions(ctx, userID string) ([]SessionView, error)` to `auth.Service`: verifies user exists, calls `ListSessionsByUser`, filters out revoked and expired sessions.
+- Add `RevokeAllSessionsForUser(ctx, userID string) (int, error)` to `auth.Service`: verifies user exists, delegates to `RevokeAllSessionsByUser`.
+- Add 3 `auth.Service` unit tests: `TestListActiveSessionsEmpty`, `TestListActiveSessionsFiltersRevoked`, `TestListActiveSessionsFiltersExpired`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
