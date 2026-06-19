@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`1.0.0`
+`1.1.0`
 
 ## Product Goal
 
@@ -965,4 +965,18 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add `get` operation to `/api/v1/me/history/tracks/{trackId}` in OpenAPI contract; bump `info.version` to `1.0.0`.
 - Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `get` on `/api/v1/me/history/tracks/{trackId}`.
 - Add 3 HTTP-layer tests: `TestViewerGetMyTrackHistory`, `TestViewerGetMyTrackHistoryFiltersToOwnUser`, `TestViewerGetMyTrackHistoryMethodNotAllowed`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v1.1.0 - 2026-06-19
+
+- Add `UserTrackStats{TrackID, TotalPlays, FirstPlayedAt, LastPlayedAt}` type to the `history` package.
+- Extend `history.Repository` interface with `UserTrackPlayStats(ctx, userID, trackID string) (UserTrackStats, error)`.
+- Implement `MemoryRepository.UserTrackPlayStats` and `historypg.Repository.UserTrackPlayStats`.
+- Add `GetMyTrackStats(ctx, userID, trackID string) (UserTrackStats, error)` to `history.Service`.
+- Add `getMyTrackStats` handler: `GET /api/v1/me/history/tracks/{trackId}/stats`; requires viewer auth; returns `UserTrackStats`; `503` when history service not configured.
+- Register `GET /api/v1/me/history/tracks/{trackId}/stats` (viewer-auth) and its `methodNotAllowed` fallback.
+- Add `UserTrackStats` schema to OpenAPI components; add `get` operation to `/api/v1/me/history/tracks/{trackId}/stats`; bump `info.version` to `1.1.0`.
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `get` on `/api/v1/me/history/tracks/{trackId}/stats`.
+- Add 3 `history.Service` unit tests: `TestGetMyTrackStatsNoPlays`, `TestGetMyTrackStatsWithPlays`, `TestGetMyTrackStatsMissingArgs`.
+- Add 3 HTTP-layer tests: `TestViewerGetMyTrackStats`, `TestViewerGetMyTrackStatsNoPlays`, `TestViewerGetMyTrackStatsMethodNotAllowed`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

@@ -406,6 +406,25 @@ func (r *MemoryRepository) UserHistoryStats(_ context.Context, f UserStatsFilter
 	}, nil
 }
 
+func (r *MemoryRepository) UserTrackPlayStats(_ context.Context, userID, trackID string) (UserTrackStats, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	stats := UserTrackStats{TrackID: trackID}
+	for _, e := range r.events {
+		if e.UserID != userID || e.TrackID != trackID {
+			continue
+		}
+		stats.TotalPlays++
+		if stats.FirstPlayedAt.IsZero() || e.PlayedAt.Before(stats.FirstPlayedAt) {
+			stats.FirstPlayedAt = e.PlayedAt
+		}
+		if e.PlayedAt.After(stats.LastPlayedAt) {
+			stats.LastPlayedAt = e.PlayedAt
+		}
+	}
+	return stats, nil
+}
+
 func (r *MemoryRepository) TrackHistoryStats(_ context.Context, f TrackStatsFilter) (TrackHistoryStatsResult, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()

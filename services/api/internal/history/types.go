@@ -140,6 +140,7 @@ type Repository interface {
 	// Viewer-scoped aggregate stats — restricted to the authenticated user.
 	UserTopTracks(ctx context.Context, f UserStatsFilter, limit int) ([]TrackPlayCount, error)
 	UserHistoryStats(ctx context.Context, f UserStatsFilter) (UserHistoryStats, error)
+	UserTrackPlayStats(ctx context.Context, userID, trackID string) (UserTrackStats, error)
 
 	// Track-scoped aggregate stats — admin-facing queries for a single track.
 	TrackHistoryStats(ctx context.Context, f TrackStatsFilter) (TrackHistoryStatsResult, error)
@@ -179,4 +180,13 @@ type TrackPlayCount struct {
 type UserPlayCount struct {
 	UserID    string `json:"userId"`
 	PlayCount int    `json:"playCount"`
+}
+
+// UserTrackStats holds aggregate play counts for one (user, track) pair.
+// FirstPlayedAt and LastPlayedAt are zero when TotalPlays is zero.
+type UserTrackStats struct {
+	TrackID       string    `json:"trackId"`
+	TotalPlays    int       `json:"totalPlays"`
+	FirstPlayedAt time.Time `json:"firstPlayedAt,omitempty"`
+	LastPlayedAt  time.Time `json:"lastPlayedAt,omitempty"`
 }

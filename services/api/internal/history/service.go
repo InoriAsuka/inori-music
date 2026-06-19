@@ -346,6 +346,17 @@ func (s *Service) GetMyTopTracks(ctx context.Context, f UserStatsFilter, limit i
 	return s.repo.UserTopTracks(ctx, f, limit)
 }
 
+// GetMyTrackStats returns aggregate play counts for the authenticated viewer on a specific track.
+func (s *Service) GetMyTrackStats(ctx context.Context, userID, trackID string) (UserTrackStats, error) {
+	if userID == "" {
+		return UserTrackStats{}, fmt.Errorf("userID is required")
+	}
+	if trackID == "" {
+		return UserTrackStats{}, fmt.Errorf("trackID is required")
+	}
+	return s.repo.UserTrackPlayStats(ctx, userID, trackID)
+}
+
 // GetTopTracks returns the most-played tracks across all users.
 // limit ≤ 0 defaults to 10 and is clamped to 100.
 // f.Since optionally bounds the query to events on or after that time.

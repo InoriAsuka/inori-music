@@ -376,6 +376,8 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/me/history/timeline", handler.requireViewerAuth(handler.getMyHistoryTimeline))
 	mux.HandleFunc("POST /api/v1/me/history/batch-delete", handler.requireViewerAuth(handler.batchDeleteMyEvents))
 	mux.HandleFunc("GET /api/v1/me/history/tracks/{trackId}", handler.requireViewerAuth(handler.getMyTrackHistory))
+	mux.HandleFunc("GET /api/v1/me/history/tracks/{trackId}/stats", handler.requireViewerAuth(handler.getMyTrackStats))
+	mux.HandleFunc("/api/v1/me/history/tracks/{trackId}/stats", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/me/history/tracks/{trackId}", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("GET /api/v1/me/history/{eventId}", handler.requireViewerAuth(handler.getMyEvent))
 	mux.HandleFunc("PATCH /api/v1/me/history/{eventId}", handler.requireViewerAuth(handler.patchMyEvent))
@@ -2449,6 +2451,29 @@ func (handler *Handler) getMyTrackHistory(w http.ResponseWriter, r *http.Request
 			"hasMore": offset+limit < total && limit > 0,
 		},
 	})
+}
+
+// getMyTrackStats returns aggregate play counts for the authenticated viewer on a specific track.
+func (handler *Handler) getMyTrackStats(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireHistoryService(w) {
+		return
+	}
+	user, ok := userFromContext(r)
+	if !ok {
+		writeAPIError(w, http.StatusUnauthorized, "unauthorized", "valid bearer token is required")
+		return
+	}
+	trackID := r.PathValue("trackId")
+	if trackID == "" {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", "trackId is required")
+		return
+	}
+	stats, err := handler.historyService.GetMyTrackStats(r.Context(), user.ID, trackID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, stats)
 }
 
 func (handler *Handler) getAdminHistoryStats(w http.ResponseWriter, r *http.Request) {

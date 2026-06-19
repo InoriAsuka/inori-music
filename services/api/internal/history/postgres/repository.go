@@ -485,6 +485,33 @@ func (r *Repository) UserHistoryStats(ctx context.Context, f history.UserStatsFi
 	return s, nil
 }
 
+func (r *Repository) UserTrackPlayStats(ctx context.Context, userID, trackID string) (history.UserTrackStats, error) {
+	row := r.pool.QueryRow(ctx, `
+		SELECT
+			COUNT(*)   AS total_plays,
+			MIN(played_at) AS first_played_at,
+			MAX(played_at) AS last_played_at
+		FROM play_events
+		WHERE user_id = $1 AND track_id = $2`, userID, trackID)
+	stats := history.UserTrackStats{TrackID: trackID}
+	var (
+		totalPlays    int
+		firstPlayedAt *time.Time
+		lastPlayedAt  *time.Time
+	)
+	if err := row.Scan(&totalPlays, &firstPlayedAt, &lastPlayedAt); err != nil {
+		return history.UserTrackStats{}, err
+	}
+	stats.TotalPlays = totalPlays
+	if firstPlayedAt != nil {
+		stats.FirstPlayedAt = firstPlayedAt.UTC()
+	}
+	if lastPlayedAt != nil {
+		stats.LastPlayedAt = lastPlayedAt.UTC()
+	}
+	return stats, nil
+}
+
 // trackStatsWhere builds a mandatory track_id clause plus optional time bounds.
 func trackStatsWhere(f history.TrackStatsFilter) (string, []any) {
 	args := []any{f.TrackID}

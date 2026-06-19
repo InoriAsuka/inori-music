@@ -5248,6 +5248,76 @@ func TestViewerGetMyTrackHistoryMethodNotAllowed(t *testing.T) {
 	}
 }
 
+func TestViewerGetMyTrackStats(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	// Create track
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"BandStats"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"SongStats","artistId":%q,"mediaObjectId":"mo-tkstats-1"}`, artistID), "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	// Record 3 plays
+	for i := 0; i < 3; i++ {
+		performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+			fmt.Sprintf(`{"trackId":%q}`, trackID), "Bearer "+viewerToken)
+	}
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/me/history/tracks/"+trackID+"/stats", "", "Bearer "+viewerToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	if int(got["totalPlays"].(float64)) != 3 {
+		t.Errorf("totalPlays = %v, want 3", got["totalPlays"])
+	}
+	if got["firstPlayedAt"] == nil || got["lastPlayedAt"] == nil {
+		t.Error("firstPlayedAt and lastPlayedAt should be populated")
+	}
+}
+
+func TestViewerGetMyTrackStatsNoPlays(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	// Create track (no plays)
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"BandZero"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"SongZero","artistId":%q,"mediaObjectId":"mo-tkzero-1"}`, artistID), "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/me/history/tracks/"+trackID+"/stats", "", "Bearer "+viewerToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	if int(got["totalPlays"].(float64)) != 0 {
+		t.Errorf("totalPlays = %v, want 0", got["totalPlays"])
+	}
+}
+
+func TestViewerGetMyTrackStatsMethodNotAllowed(t *testing.T) {
+	h, viewerToken, _ := newHistoryTestHandler(t)
+	resp := performRequestWithAuthHeader(t, h, http.MethodPost,
+		"/api/v1/me/history/tracks/some-track/stats", "", "Bearer "+viewerToken)
+	if resp.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405, got %d", resp.Code)
+	}
+}
+
 func TestAdminHistoryDetailMethodNotAllowed(t *testing.T) {
 	h, _, adminToken := newHistoryTestHandler(t)
 	for _, path := range []string{

@@ -1309,3 +1309,59 @@ func TestGetUserHistorySinceFilter(t *testing.T) {
 		t.Errorf("user history window: total=%d, want 1/t2; got %v", total, events)
 	}
 }
+
+func TestGetMyTrackStatsNoPlays(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+
+	stats, err := svc.GetMyTrackStats(ctx, "u1", "t1")
+	if err != nil {
+		t.Fatalf("GetMyTrackStats: %v", err)
+	}
+	if stats.TotalPlays != 0 {
+		t.Errorf("TotalPlays = %d, want 0", stats.TotalPlays)
+	}
+	if !stats.FirstPlayedAt.IsZero() {
+		t.Errorf("FirstPlayedAt should be zero when no plays")
+	}
+}
+
+func TestGetMyTrackStatsWithPlays(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+	base := time.Now().UTC()
+
+	svc.RecordPlay(ctx, "u1", "t1", base)
+	svc.RecordPlay(ctx, "u1", "t1", base.Add(10*time.Second))
+	svc.RecordPlay(ctx, "u1", "t2", base.Add(5*time.Second)) // different track
+	svc.RecordPlay(ctx, "u2", "t1", base.Add(3*time.Second)) // different user
+
+	stats, err := svc.GetMyTrackStats(ctx, "u1", "t1")
+	if err != nil {
+		t.Fatalf("GetMyTrackStats: %v", err)
+	}
+	if stats.TotalPlays != 2 {
+		t.Errorf("TotalPlays = %d, want 2", stats.TotalPlays)
+	}
+	if stats.FirstPlayedAt.IsZero() {
+		t.Error("FirstPlayedAt should not be zero")
+	}
+	if stats.LastPlayedAt.IsZero() {
+		t.Error("LastPlayedAt should not be zero")
+	}
+	if !stats.FirstPlayedAt.Before(stats.LastPlayedAt) {
+		t.Errorf("FirstPlayedAt %v should be before LastPlayedAt %v", stats.FirstPlayedAt, stats.LastPlayedAt)
+	}
+}
+
+func TestGetMyTrackStatsMissingArgs(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+
+	if _, err := svc.GetMyTrackStats(ctx, "", "t1"); err == nil {
+		t.Error("expected error for empty userID")
+	}
+	if _, err := svc.GetMyTrackStats(ctx, "u1", ""); err == nil {
+		t.Error("expected error for empty trackID")
+	}
+}
