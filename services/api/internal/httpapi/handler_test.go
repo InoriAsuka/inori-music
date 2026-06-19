@@ -5678,6 +5678,63 @@ func TestViewerGetHistoryTimelineInvalidGranularity(t *testing.T) {
 	assertAPIError(t, resp, http.StatusBadRequest, "invalid_granularity")
 }
 
+func TestViewerGetHistoryTimelineTrackIdFilter(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"TLFilterBand"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackResp1 := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"TLF1","artistId":%q,"mediaObjectId":"mo-tlf-1"}`, artistID), "Bearer "+adminToken)
+	var track1 map[string]any
+	decodeResponse(t, trackResp1, &track1)
+	trackID1 := track1["id"].(string)
+
+	trackResp2 := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"TLF2","artistId":%q,"mediaObjectId":"mo-tlf-2"}`, artistID), "Bearer "+adminToken)
+	var track2 map[string]any
+	decodeResponse(t, trackResp2, &track2)
+	trackID2 := track2["id"].(string)
+
+	// track1: 2 plays on day1; track2: 1 play on day1
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q,"playedAt":"2025-05-01T10:00:00Z"}`, trackID1), "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q,"playedAt":"2025-05-01T14:00:00Z"}`, trackID1), "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q,"playedAt":"2025-05-01T11:00:00Z"}`, trackID2), "Bearer "+viewerToken)
+
+	// Without filter: 3 events in day1 bucket
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/me/history/timeline?since=2025-05-01T00:00:00Z&until=2025-05-02T00:00:00Z",
+		"", "Bearer "+viewerToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("timeline without filter: %d %s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	decodeResponse(t, resp, &result)
+	bucketsAll := result["buckets"].([]any)
+	if len(bucketsAll) != 1 || int(bucketsAll[0].(map[string]any)["eventCount"].(float64)) != 3 {
+		t.Errorf("without trackId filter: expected 1 bucket with 3 events, got %v", bucketsAll)
+	}
+
+	// With trackId filter: only 2 events for track1
+	resp2 := performRequestWithAuthHeader(t, h, http.MethodGet,
+		fmt.Sprintf("/api/v1/me/history/timeline?since=2025-05-01T00:00:00Z&until=2025-05-02T00:00:00Z&trackId=%s", trackID1),
+		"", "Bearer "+viewerToken)
+	if resp2.Code != http.StatusOK {
+		t.Fatalf("timeline with trackId filter: %d %s", resp2.Code, resp2.Body.String())
+	}
+	var result2 map[string]any
+	decodeResponse(t, resp2, &result2)
+	bucketsFiltered := result2["buckets"].([]any)
+	if len(bucketsFiltered) != 1 || int(bucketsFiltered[0].(map[string]any)["eventCount"].(float64)) != 2 {
+		t.Errorf("with trackId filter: expected 1 bucket with 2 events, got %v", bucketsFiltered)
+	}
+}
+
 func TestViewerGetHistoryTimelineNotConfigured(t *testing.T) {
 	authSvc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
 	h := NewHandler(

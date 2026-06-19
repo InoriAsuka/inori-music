@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`1.3.0`
+`1.4.0`
 
 ## Product Goal
 
@@ -997,4 +997,11 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add `get` operation to `/api/v1/admin/history/users/{userId}/timeline` in OpenAPI contract; bump `info.version` to `1.3.0`.
 - Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `get` on `/api/v1/admin/history/users/{userId}/timeline`.
 - Add 3 HTTP-layer tests: `TestAdminGetUserTimeline`, `TestAdminGetUserTimelineMissingBounds`, `TestAdminGetUserTimelineMethodNotAllowed`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v1.4.0 - 2026-06-19
+
+- Expose `?trackId` query parameter on `GET /api/v1/me/history/timeline`: the `getMyHistoryTimeline` handler already passes `TrackID` from this parameter to `GetMyTimeline`; the OpenAPI contract already declares it. No handler or schema changes needed.
+- Add HTTP-layer test `TestViewerGetHistoryTimelineTrackIdFilter` confirming that `?trackId` correctly scopes the viewer's timeline to a single track.
+- Bump `info.version` to `1.4.0`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
