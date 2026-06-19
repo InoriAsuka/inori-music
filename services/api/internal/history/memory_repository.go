@@ -406,12 +406,18 @@ func (r *MemoryRepository) UserHistoryStats(_ context.Context, f UserStatsFilter
 	}, nil
 }
 
-func (r *MemoryRepository) UserTrackPlayStats(_ context.Context, userID, trackID string) (UserTrackStats, error) {
+func (r *MemoryRepository) UserTrackPlayStats(_ context.Context, userID, trackID string, f UserStatsFilter) (UserTrackStats, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	stats := UserTrackStats{TrackID: trackID}
 	for _, e := range r.events {
 		if e.UserID != userID || e.TrackID != trackID {
+			continue
+		}
+		if !f.Since.IsZero() && e.PlayedAt.Before(f.Since) {
+			continue
+		}
+		if !f.Until.IsZero() && !e.PlayedAt.Before(f.Until) {
 			continue
 		}
 		stats.TotalPlays++

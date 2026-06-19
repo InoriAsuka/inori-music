@@ -1314,7 +1314,7 @@ func TestGetMyTrackStatsNoPlays(t *testing.T) {
 	svc := history.NewService(history.NewMemoryRepository())
 	ctx := context.Background()
 
-	stats, err := svc.GetMyTrackStats(ctx, "u1", "t1")
+	stats, err := svc.GetMyTrackStats(ctx, "u1", "t1", history.UserStatsFilter{})
 	if err != nil {
 		t.Fatalf("GetMyTrackStats: %v", err)
 	}
@@ -1336,7 +1336,7 @@ func TestGetMyTrackStatsWithPlays(t *testing.T) {
 	svc.RecordPlay(ctx, "u1", "t2", base.Add(5*time.Second)) // different track
 	svc.RecordPlay(ctx, "u2", "t1", base.Add(3*time.Second)) // different user
 
-	stats, err := svc.GetMyTrackStats(ctx, "u1", "t1")
+	stats, err := svc.GetMyTrackStats(ctx, "u1", "t1", history.UserStatsFilter{})
 	if err != nil {
 		t.Fatalf("GetMyTrackStats: %v", err)
 	}
@@ -1358,10 +1358,10 @@ func TestGetMyTrackStatsMissingArgs(t *testing.T) {
 	svc := history.NewService(history.NewMemoryRepository())
 	ctx := context.Background()
 
-	if _, err := svc.GetMyTrackStats(ctx, "", "t1"); err == nil {
+	if _, err := svc.GetMyTrackStats(ctx, "", "t1", history.UserStatsFilter{}); err == nil {
 		t.Error("expected error for empty userID")
 	}
-	if _, err := svc.GetMyTrackStats(ctx, "u1", ""); err == nil {
+	if _, err := svc.GetMyTrackStats(ctx, "u1", "", history.UserStatsFilter{}); err == nil {
 		t.Error("expected error for empty trackID")
 	}
 }
@@ -1457,5 +1457,46 @@ func TestGetTrackSummaryEmpty(t *testing.T) {
 	}
 	if len(summary.TopListeners) != 0 {
 		t.Errorf("expected no top listeners, got %d", len(summary.TopListeners))
+	}
+}
+
+func TestGetMyTrackStatsTimeWindow(t *testing.T) {
+	svc := history.NewService(history.NewMemoryRepository())
+	ctx := context.Background()
+
+	day1 := time.Date(2025, 11, 1, 10, 0, 0, 0, time.UTC)
+	day2 := time.Date(2025, 11, 2, 10, 0, 0, 0, time.UTC)
+	day3 := time.Date(2025, 11, 3, 10, 0, 0, 0, time.UTC)
+
+	// 2 plays on day1, 1 play on day3
+	if _, err := svc.RecordPlay(ctx, "u-tw", "t-tw", day1); err != nil {
+		t.Fatalf("RecordPlay: %v", err)
+	}
+	if _, err := svc.RecordPlay(ctx, "u-tw", "t-tw", day1.Add(time.Hour)); err != nil {
+		t.Fatalf("RecordPlay: %v", err)
+	}
+	if _, err := svc.RecordPlay(ctx, "u-tw", "t-tw", day3); err != nil {
+		t.Fatalf("RecordPlay: %v", err)
+	}
+
+	// Window covering only day1-day2 (exclusive): should see 2 plays
+	stats, err := svc.GetMyTrackStats(ctx, "u-tw", "t-tw", history.UserStatsFilter{
+		Since: day1,
+		Until: day2,
+	})
+	if err != nil {
+		t.Fatalf("GetMyTrackStats with window: %v", err)
+	}
+	if stats.TotalPlays != 2 {
+		t.Errorf("TotalPlays in window [day1,day2) = %d, want 2", stats.TotalPlays)
+	}
+
+	// No window: should see all 3
+	all, err := svc.GetMyTrackStats(ctx, "u-tw", "t-tw", history.UserStatsFilter{})
+	if err != nil {
+		t.Fatalf("GetMyTrackStats no window: %v", err)
+	}
+	if all.TotalPlays != 3 {
+		t.Errorf("TotalPlays all = %d, want 3", all.TotalPlays)
 	}
 }

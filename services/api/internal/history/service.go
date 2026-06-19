@@ -383,14 +383,15 @@ func (s *Service) GetMyTopTracks(ctx context.Context, f UserStatsFilter, limit i
 }
 
 // GetMyTrackStats returns aggregate play counts for the authenticated viewer on a specific track.
-func (s *Service) GetMyTrackStats(ctx context.Context, userID, trackID string) (UserTrackStats, error) {
+// f.Since and f.Until optionally restrict the played_at window; f.UserID is ignored.
+func (s *Service) GetMyTrackStats(ctx context.Context, userID, trackID string, f UserStatsFilter) (UserTrackStats, error) {
 	if userID == "" {
 		return UserTrackStats{}, fmt.Errorf("userID is required")
 	}
 	if trackID == "" {
 		return UserTrackStats{}, fmt.Errorf("trackID is required")
 	}
-	return s.repo.UserTrackPlayStats(ctx, userID, trackID)
+	return s.repo.UserTrackPlayStats(ctx, userID, trackID, f)
 }
 
 // GetTopTracks returns the most-played tracks across all users.

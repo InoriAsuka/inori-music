@@ -7992,3 +7992,54 @@ func TestViewerGetMyHistorySummaryNotConfigured(t *testing.T) {
 	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/me/history/summary", "", "Bearer "+viewerToken)
 	assertAPIError(t, resp, http.StatusServiceUnavailable, "history_not_configured")
 }
+
+func TestViewerGetMyTrackStatsSince(t *testing.T) {
+	h, viewerToken, _ := newHistoryTestHandler(t)
+
+	// 2 plays before cutoff, 1 play after
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		`{"trackId":"tss-1","playedAt":"2025-11-01T10:00:00Z"}`, "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		`{"trackId":"tss-1","playedAt":"2025-11-01T12:00:00Z"}`, "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		`{"trackId":"tss-1","playedAt":"2025-11-03T10:00:00Z"}`, "Bearer "+viewerToken)
+
+	// since=day3: only 1 play in window
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/me/history/tracks/tss-1/stats?since=2025-11-03T00:00:00Z",
+		"", "Bearer "+viewerToken)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", resp.Code, resp.Body.String())
+	}
+	var body map[string]any
+	decodeResponse(t, resp, &body)
+	if int(body["totalPlays"].(float64)) != 1 {
+		t.Errorf("totalPlays with since=day3 = %v, want 1", body["totalPlays"])
+	}
+}
+
+func TestViewerGetMyTrackStatsUntil(t *testing.T) {
+	h, viewerToken, _ := newHistoryTestHandler(t)
+
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		`{"trackId":"tsu-1","playedAt":"2025-11-01T10:00:00Z"}`, "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		`{"trackId":"tsu-1","playedAt":"2025-11-02T10:00:00Z"}`, "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		`{"trackId":"tsu-1","playedAt":"2025-11-03T10:00:00Z"}`, "Bearer "+viewerToken)
+
+	// until=day2 (exclusive): 1 play (day1 only)
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/me/history/tracks/tsu-1/stats?until=2025-11-02T00:00:00Z",
+		"", "Bearer "+viewerToken)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", resp.Code, resp.Body.String())
+	}
+	var body map[string]any
+	decodeResponse(t, resp, &body)
+	if int(body["totalPlays"].(float64)) != 1 {
+		t.Errorf("totalPlays with until=day2 = %v, want 1", body["totalPlays"])
+	}
+}

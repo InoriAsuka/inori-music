@@ -485,14 +485,24 @@ func (r *Repository) UserHistoryStats(ctx context.Context, f history.UserStatsFi
 	return s, nil
 }
 
-func (r *Repository) UserTrackPlayStats(ctx context.Context, userID, trackID string) (history.UserTrackStats, error) {
+func (r *Repository) UserTrackPlayStats(ctx context.Context, userID, trackID string, f history.UserStatsFilter) (history.UserTrackStats, error) {
+	args := []any{userID, trackID}
+	where := "user_id = $1 AND track_id = $2"
+	if !f.Since.IsZero() {
+		args = append(args, f.Since.UTC())
+		where += fmt.Sprintf(" AND played_at >= $%d", len(args))
+	}
+	if !f.Until.IsZero() {
+		args = append(args, f.Until.UTC())
+		where += fmt.Sprintf(" AND played_at < $%d", len(args))
+	}
 	row := r.pool.QueryRow(ctx, `
 		SELECT
-			COUNT(*)   AS total_plays,
+			COUNT(*)       AS total_plays,
 			MIN(played_at) AS first_played_at,
 			MAX(played_at) AS last_played_at
 		FROM play_events
-		WHERE user_id = $1 AND track_id = $2`, userID, trackID)
+		WHERE `+where, args...)
 	stats := history.UserTrackStats{TrackID: trackID}
 	var (
 		totalPlays    int

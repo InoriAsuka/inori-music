@@ -2515,7 +2515,25 @@ func (handler *Handler) getMyTrackStats(w http.ResponseWriter, r *http.Request) 
 		writeAPIError(w, http.StatusBadRequest, "validation_error", "trackId is required")
 		return
 	}
-	stats, err := handler.historyService.GetMyTrackStats(r.Context(), user.ID, trackID)
+	q := r.URL.Query()
+	var sf history.UserStatsFilter
+	if sinceRaw := q.Get("since"); sinceRaw != "" {
+		t, err := time.Parse(time.RFC3339, sinceRaw)
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, "invalid_since", "since must be an RFC3339 timestamp")
+			return
+		}
+		sf.Since = t.UTC()
+	}
+	if untilRaw := q.Get("until"); untilRaw != "" {
+		t, err := time.Parse(time.RFC3339, untilRaw)
+		if err != nil {
+			writeAPIError(w, http.StatusBadRequest, "invalid_until", "until must be an RFC3339 timestamp")
+			return
+		}
+		sf.Until = t.UTC()
+	}
+	stats, err := handler.historyService.GetMyTrackStats(r.Context(), user.ID, trackID, sf)
 	if err != nil {
 		writeError(w, err)
 		return

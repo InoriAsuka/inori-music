@@ -140,7 +140,9 @@ type Repository interface {
 	// Viewer-scoped aggregate stats — restricted to the authenticated user.
 	UserTopTracks(ctx context.Context, f UserStatsFilter, limit int) ([]TrackPlayCount, error)
 	UserHistoryStats(ctx context.Context, f UserStatsFilter) (UserHistoryStats, error)
-	UserTrackPlayStats(ctx context.Context, userID, trackID string) (UserTrackStats, error)
+	// UserTrackPlayStats returns aggregate play counts for (userID, trackID).
+	// f.Since and f.Until optionally bound the played_at window; f.UserID is ignored.
+	UserTrackPlayStats(ctx context.Context, userID, trackID string, f UserStatsFilter) (UserTrackStats, error)
 
 	// Track-scoped aggregate stats — admin-facing queries for a single track.
 	TrackHistoryStats(ctx context.Context, f TrackStatsFilter) (TrackHistoryStatsResult, error)
