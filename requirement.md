@@ -889,3 +889,12 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `delete` on `/api/v1/admin/users/{id}/sessions`.
 - Add 3 HTTP-layer tests: `TestAdminDeleteUserSessionsRevokeActive`, `TestAdminDeleteUserSessionsNotFound`, `TestAdminDeleteUserSessionsNotConfigured`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.93.0 - 2026-06-19
+
+- Add `getMyActiveSessions` handler: `GET /api/v1/me/sessions`; requires viewer auth; calls `auth.Service.ListActiveSessions` with the authenticated user's ID; returns `{sessions: [SessionView], count: N}`; 503 when auth not configured.
+- Register `GET /api/v1/me/sessions` (viewer-auth) and its `methodNotAllowed` fallback.
+- Add `get` operation to `/api/v1/me/sessions` in OpenAPI contract; bump `info.version` to `0.93.0`.
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `get` on `/api/v1/me/sessions`.
+- Add 3 HTTP-layer tests: `TestViewerGetMySessionsFiltersRevoked`, `TestViewerGetMySessionsActive`, `TestViewerGetMySessionsNotConfigured`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.

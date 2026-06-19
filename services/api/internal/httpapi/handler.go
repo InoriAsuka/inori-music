@@ -298,6 +298,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/auth/logout", handler.logout)
 	mux.HandleFunc("GET /api/v1/me", handler.requireViewerAuth(handler.getMe))
 	mux.HandleFunc("POST /api/v1/me/change-password", handler.requireViewerAuth(handler.changePassword))
+	mux.HandleFunc("GET /api/v1/me/sessions", handler.requireViewerAuth(handler.getMyActiveSessions))
 	mux.HandleFunc("GET /api/v1/admin/users", handler.requireAdminAuth(handler.listUsers))
 	mux.HandleFunc("POST /api/v1/admin/users", handler.requireAdminAuth(handler.createUser))
 	mux.HandleFunc("POST /api/v1/admin/users/{id}/disable", handler.requireAdminAuth(handler.disableUser))
@@ -429,6 +430,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("/api/v1/auth/logout", handler.methodNotAllowed)
 	mux.HandleFunc("/api/v1/me", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/me/change-password", handler.requireViewerAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/me/sessions", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/users", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/users/{id}/disable", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/users/{id}/enable", handler.requireAdminAuth(handler.methodNotAllowed))
@@ -713,6 +715,23 @@ func (handler *Handler) getMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, view)
+}
+
+func (handler *Handler) getMyActiveSessions(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireAuthService(w) {
+		return
+	}
+	user, ok := userFromContext(r)
+	if !ok {
+		writeAPIError(w, http.StatusUnauthorized, "unauthorized", "valid bearer token is required")
+		return
+	}
+	sessions, err := handler.authService.ListActiveSessions(r.Context(), user.ID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"sessions": sessions, "count": len(sessions)})
 }
 
 func (handler *Handler) changePassword(w http.ResponseWriter, r *http.Request) {

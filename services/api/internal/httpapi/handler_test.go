@@ -6819,3 +6819,76 @@ func TestAdminDeleteUserSessionsNotConfigured(t *testing.T) {
 	resp := performRequest(t, h, http.MethodDelete, "/api/v1/admin/users/any-id/sessions", "")
 	assertAPIError(t, resp, http.StatusServiceUnavailable, "auth_not_configured")
 }
+
+// ---- Phase 93: GET /api/v1/me/sessions ----
+
+func TestViewerGetMySessionsFiltersRevoked(t *testing.T) {
+	authSvc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAuthService(authSvc),
+		WithAdminToken(testAdminToken),
+	).Routes()
+	if _, err := authSvc.CreateUser(context.Background(), "mysess_alice", "pass1234!", auth.RoleViewer); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	token, _, err := authSvc.Login(context.Background(), "mysess_alice", "pass1234!")
+	if err != nil {
+		t.Fatalf("login: %v", err)
+	}
+	// Revoke own session, then login again to get a valid session for the request.
+	if err := authSvc.Logout(context.Background(), token); err != nil {
+		t.Fatalf("logout: %v", err)
+	}
+	token2, _, err := authSvc.Login(context.Background(), "mysess_alice", "pass1234!")
+	if err != nil {
+		t.Fatalf("login2: %v", err)
+	}
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/me/sessions", "", "Bearer "+token2)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("GET /me/sessions: %d %s", resp.Code, resp.Body.String())
+	}
+	var body map[string]any
+	decodeResponse(t, resp, &body)
+	if body["count"].(float64) != 1 {
+		t.Errorf("count = %v, want 1 (only active token2)", body["count"])
+	}
+}
+
+func TestViewerGetMySessionsActive(t *testing.T) {
+	authSvc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAuthService(authSvc),
+		WithAdminToken(testAdminToken),
+	).Routes()
+	if _, err := authSvc.CreateUser(context.Background(), "mysess_bob", "pass1234!", auth.RoleViewer); err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	var tokens []string
+	for range 3 {
+		tok, _, err := authSvc.Login(context.Background(), "mysess_bob", "pass1234!")
+		if err != nil {
+			t.Fatalf("login: %v", err)
+		}
+		tokens = append(tokens, tok)
+	}
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/me/sessions", "", "Bearer "+tokens[0])
+	if resp.Code != http.StatusOK {
+		t.Fatalf("GET /me/sessions: %d %s", resp.Code, resp.Body.String())
+	}
+	var body map[string]any
+	decodeResponse(t, resp, &body)
+	if body["count"].(float64) != 3 {
+		t.Errorf("count = %v, want 3", body["count"])
+	}
+}
+
+func TestViewerGetMySessionsNotConfigured(t *testing.T) {
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAdminToken(testAdminToken),
+	).Routes()
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/me/sessions", "")
+	assertAPIError(t, resp, http.StatusServiceUnavailable, "auth_not_configured")
+}
