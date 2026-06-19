@@ -8229,3 +8229,51 @@ func TestAdminGetTrackStatsUntil(t *testing.T) {
 		t.Errorf("totalEvents with until=day2 = %v, want 2", body["totalEvents"])
 	}
 }
+
+func TestAdminGetHistoryStatsSince(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		`{"trackId":"hs-tw","playedAt":"2025-03-01T10:00:00Z"}`, "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		`{"trackId":"hs-tw","playedAt":"2025-03-01T12:00:00Z"}`, "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		`{"trackId":"hs-tw","playedAt":"2025-03-03T10:00:00Z"}`, "Bearer "+viewerToken)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/admin/history/stats?since=2025-03-02T00:00:00Z",
+		"", "Bearer "+adminToken)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", resp.Code, resp.Body.String())
+	}
+	var body2 map[string]any
+	decodeResponse(t, resp, &body2)
+	if int(body2["totalEvents"].(float64)) != 1 {
+		t.Errorf("totalEvents with since=day2 = %v, want 1", body2["totalEvents"])
+	}
+}
+
+func TestAdminGetHistoryStatsUntil(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		`{"trackId":"hs-tw2","playedAt":"2025-04-01T10:00:00Z"}`, "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		`{"trackId":"hs-tw2","playedAt":"2025-04-01T12:00:00Z"}`, "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		`{"trackId":"hs-tw2","playedAt":"2025-04-03T10:00:00Z"}`, "Bearer "+viewerToken)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/admin/history/stats?until=2025-04-02T00:00:00Z",
+		"", "Bearer "+adminToken)
+
+	if resp.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", resp.Code, resp.Body.String())
+	}
+	var body3 map[string]any
+	decodeResponse(t, resp, &body3)
+	if int(body3["totalEvents"].(float64)) != 2 {
+		t.Errorf("totalEvents with until=day2 = %v, want 2", body3["totalEvents"])
+	}
+}

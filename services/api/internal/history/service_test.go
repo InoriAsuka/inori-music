@@ -1644,3 +1644,40 @@ func TestGetAdminTrackStatsTimeWindow(t *testing.T) {
 		t.Errorf("TotalEvents all = %d, want 3", all.TotalEvents)
 	}
 }
+
+func TestGetHistoryStatsTimeWindow(t *testing.T) {
+	ctx := context.Background()
+	svc := history.NewService(history.NewMemoryRepository())
+
+	day1 := time.Date(2025, 3, 1, 12, 0, 0, 0, time.UTC)
+	day2 := time.Date(2025, 3, 2, 12, 0, 0, 0, time.UTC)
+	day3 := time.Date(2025, 3, 3, 12, 0, 0, 0, time.UTC)
+
+	if _, err := svc.RecordPlay(ctx, "u-hstw", "t-hstw", day1); err != nil {
+		t.Fatalf("RecordPlay day1: %v", err)
+	}
+	if _, err := svc.RecordPlay(ctx, "u-hstw", "t-hstw", day1.Add(time.Hour)); err != nil {
+		t.Fatalf("RecordPlay day1+1h: %v", err)
+	}
+	if _, err := svc.RecordPlay(ctx, "u-hstw", "t-hstw", day3); err != nil {
+		t.Fatalf("RecordPlay day3: %v", err)
+	}
+
+	// Window [day1, day2) — should see 2 events
+	stats, err := svc.GetHistoryStats(ctx, history.StatsFilter{Since: day1, Until: day2})
+	if err != nil {
+		t.Fatalf("GetHistoryStats with window: %v", err)
+	}
+	if stats.TotalEvents != 2 {
+		t.Errorf("TotalEvents in [day1,day2) = %d, want 2", stats.TotalEvents)
+	}
+
+	// No window — should see all 3
+	all, err := svc.GetHistoryStats(ctx, history.StatsFilter{})
+	if err != nil {
+		t.Fatalf("GetHistoryStats no window: %v", err)
+	}
+	if all.TotalEvents != 3 {
+		t.Errorf("TotalEvents all = %d, want 3", all.TotalEvents)
+	}
+}
