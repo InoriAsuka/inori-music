@@ -5153,6 +5153,101 @@ func TestAdminGetTrackHistory(t *testing.T) {
 	}
 }
 
+func TestViewerGetMyTrackHistory(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	// Create artist + track
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Band"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"Song","artistId":%q,"mediaObjectId":"mo-mytrack-1"}`, artistID), "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	// Record 2 plays for this track
+	for i := 0; i < 2; i++ {
+		performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+			fmt.Sprintf(`{"trackId":%q}`, trackID), "Bearer "+viewerToken)
+	}
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/me/history/tracks/"+trackID, "", "Bearer "+viewerToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	events := got["events"].([]any)
+	if len(events) != 2 {
+		t.Errorf("events = %d, want 2", len(events))
+	}
+	pagination := got["pagination"].(map[string]any)
+	if int(pagination["total"].(float64)) != 2 {
+		t.Errorf("total = %v, want 2", pagination["total"])
+	}
+}
+
+func TestViewerGetMyTrackHistoryFiltersToOwnUser(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	// Create a second viewer
+	createResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/users",
+		`{"username":"viewer2","password":"password99","role":"viewer"}`, "Bearer "+adminToken)
+	if createResp.Code != http.StatusCreated {
+		t.Fatalf("create viewer2: %d %s", createResp.Code, createResp.Body.String())
+	}
+	loginResp := performRequest(t, h, http.MethodPost, "/api/v1/auth/login",
+		`{"username":"viewer2","password":"password99"}`)
+	var loginBody map[string]any
+	decodeResponse(t, loginResp, &loginBody)
+	viewer2Token := loginBody["token"].(string)
+
+	// Create track
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"Band2"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"Song2","artistId":%q,"mediaObjectId":"mo-mytrack-2"}`, artistID), "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	// viewer1 records 1 play, viewer2 records 2 plays
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q}`, trackID), "Bearer "+viewerToken)
+	for i := 0; i < 2; i++ {
+		performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+			fmt.Sprintf(`{"trackId":%q}`, trackID), "Bearer "+viewer2Token)
+	}
+
+	// viewer1 should only see their 1 play
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/me/history/tracks/"+trackID, "", "Bearer "+viewerToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("status = %d", resp.Code)
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	events := got["events"].([]any)
+	if len(events) != 1 {
+		t.Errorf("events = %d, want 1 (own plays only)", len(events))
+	}
+}
+
+func TestViewerGetMyTrackHistoryMethodNotAllowed(t *testing.T) {
+	h, viewerToken, _ := newHistoryTestHandler(t)
+	resp := performRequestWithAuthHeader(t, h, http.MethodPost,
+		"/api/v1/me/history/tracks/some-track", "", "Bearer "+viewerToken)
+	if resp.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405, got %d", resp.Code)
+	}
+}
+
 func TestAdminHistoryDetailMethodNotAllowed(t *testing.T) {
 	h, _, adminToken := newHistoryTestHandler(t)
 	for _, path := range []string{

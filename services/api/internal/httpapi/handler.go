@@ -375,6 +375,8 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/me/history/top-tracks", handler.requireViewerAuth(handler.getMyTopTracks))
 	mux.HandleFunc("GET /api/v1/me/history/timeline", handler.requireViewerAuth(handler.getMyHistoryTimeline))
 	mux.HandleFunc("POST /api/v1/me/history/batch-delete", handler.requireViewerAuth(handler.batchDeleteMyEvents))
+	mux.HandleFunc("GET /api/v1/me/history/tracks/{trackId}", handler.requireViewerAuth(handler.getMyTrackHistory))
+	mux.HandleFunc("/api/v1/me/history/tracks/{trackId}", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("GET /api/v1/me/history/{eventId}", handler.requireViewerAuth(handler.getMyEvent))
 	mux.HandleFunc("PATCH /api/v1/me/history/{eventId}", handler.requireViewerAuth(handler.patchMyEvent))
 	mux.HandleFunc("DELETE /api/v1/me/history/{eventId}", handler.requireViewerAuth(handler.deleteMyEvent))
@@ -2380,6 +2382,73 @@ func (handler *Handler) getMyHistoryTimeline(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"buckets": buckets})
+}
+
+// getMyTrackHistory returns the calling user's paginated play history for a
+// specific track, identified by {trackId} in the path.
+func (handler *Handler) getMyTrackHistory(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireHistoryService(w) {
+		return
+	}
+	user, ok := userFromContext(r)
+	if !ok {
+		writeAPIError(w, http.StatusUnauthorized, "unauthorized", "valid bearer token is required")
+		return
+	}
+	trackID := r.PathValue("trackId")
+	if trackID == "" {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", "trackId is required")
+		return
+	}
+	q := r.URL.Query()
+	limit := 0
+	offset := 0
+	if raw := q.Get("limit"); raw != "" {
+		v, err := strconv.Atoi(raw)
+		if err != nil || v < 1 {
+			writeAPIError(w, http.StatusBadRequest, "invalid_limit", "limit must be a positive integer")
+			return
+		}
+		limit = v
+	}
+	if raw := q.Get("offset"); raw != "" {
+		v, err := strconv.Atoi(raw)
+		if err != nil || v < 0 {
+			writeAPIError(w, http.StatusBadRequest, "invalid_offset", "offset must be a non-negative integer")
+			return
+		}
+		offset = v
+	}
+	tf, ok := parseHistoryAdminFilter(w, r)
+	if !ok {
+		return
+	}
+	asc, ok := parseHistoryOrder(w, r)
+	if !ok {
+		return
+	}
+	events, total, err := handler.historyService.ListPlays(r.Context(), history.PlayEventFilter{
+		UserID:  user.ID,
+		TrackID: trackID,
+		Since:   tf.Since,
+		Until:   tf.Until,
+		Limit:   limit,
+		Offset:  offset,
+		Asc:     asc,
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"events": events,
+		"pagination": map[string]any{
+			"limit":   limit,
+			"offset":  offset,
+			"total":   total,
+			"hasMore": offset+limit < total && limit > 0,
+		},
+	})
 }
 
 func (handler *Handler) getAdminHistoryStats(w http.ResponseWriter, r *http.Request) {

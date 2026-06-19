@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`0.95.0`
+`1.0.0`
 
 ## Product Goal
 
@@ -956,4 +956,13 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add `post` operation to `/api/v1/me/sessions/revoke-all-devices` in OpenAPI contract; bump `info.version` to `0.99.0`.
 - Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `post` on `/api/v1/me/sessions/revoke-all-devices`.
 - Add 3 HTTP-layer tests: `TestViewerRevokeAllMySessions`, `TestViewerRevokeAllMySessionsIncludesCurrent`, `TestViewerRevokeAllMySessionsNotConfigured`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v1.0.0 - 2026-06-19
+
+- Add `getMyTrackHistory` handler: `GET /api/v1/me/history/tracks/{trackId}`; requires viewer auth; reads `{trackId}` from path; accepts `limit`, `offset`, `since`, `until`, `order` query params; calls `history.Service.ListPlays` with `UserID` from auth context and `TrackID` from path; returns `{events, pagination}`; `503` when history service not configured.
+- Register `GET /api/v1/me/history/tracks/{trackId}` (viewer-auth) and its `methodNotAllowed` fallback.
+- Add `get` operation to `/api/v1/me/history/tracks/{trackId}` in OpenAPI contract; bump `info.version` to `1.0.0`.
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `get` on `/api/v1/me/history/tracks/{trackId}`.
+- Add 3 HTTP-layer tests: `TestViewerGetMyTrackHistory`, `TestViewerGetMyTrackHistoryFiltersToOwnUser`, `TestViewerGetMyTrackHistoryMethodNotAllowed`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
