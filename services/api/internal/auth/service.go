@@ -308,10 +308,14 @@ func (s *Service) RevokeAllExcept(ctx context.Context, userID, exceptTokenHash s
 	return count, nil
 }
 
-// DeleteUser removes a user record permanently.
+// DeleteUser revokes all active sessions for the user then removes the user record permanently.
 func (s *Service) DeleteUser(ctx context.Context, id string) error {
 	if _, err := s.users.GetUser(ctx, id); err != nil {
 		return err
+	}
+	// Revoke all sessions before deleting so orphaned session records are cleaned up.
+	if _, err := s.sessions.RevokeAllSessionsByUser(ctx, id, s.now().UTC()); err != nil {
+		return fmt.Errorf("revoke sessions before delete: %w", err)
 	}
 	return s.users.DeleteUser(ctx, id)
 }

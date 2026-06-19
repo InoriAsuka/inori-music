@@ -939,3 +939,12 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Extend `TestStorageAdminOpenAPIContractCoversRoutes` with `post` on `/api/v1/admin/users/{id}/change-password`; add `TestStorageAdminOpenAPIContractAdminForceChangePassword`.
 - Bump `info.version` to `0.97.0`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v0.98.0 - 2026-06-19
+
+- Modify `DeleteUser(ctx, id string) error` in `auth.Service` to call `RevokeAllSessionsByUser` before deleting the user record, ensuring all active sessions are revoked as part of the deletion.
+- No new endpoints or repository interface methods required.
+- Add 2 `auth.Service` unit tests: `TestDeleteUserRevokesSessionsFirst`, `TestDeleteUserNotFound`.
+- Add 1 HTTP-layer test: `TestAdminDeleteUserRevokesSessionsFirst`.
+- Bump `info.version` to `0.98.0`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.

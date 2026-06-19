@@ -7251,3 +7251,35 @@ func TestAdminForceChangePasswordNotConfigured(t *testing.T) {
 	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/users/any-id/change-password", `{"newPassword":"newSecurePass9"}`)
 	assertAPIError(t, resp, http.StatusServiceUnavailable, "auth_not_configured")
 }
+
+// ---- Phase 98: DELETE /admin/users/{id} cascades session revocation ----
+
+func TestAdminDeleteUserRevokesSessionsFirst(t *testing.T) {
+	authSvc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAuthService(authSvc),
+		WithAdminToken(testAdminToken),
+	).Routes()
+
+	// Create a viewer and log in to get a session.
+	view, err := authSvc.CreateUser(context.Background(), "delete_cascade_http", "pass1234!", auth.RoleViewer)
+	if err != nil {
+		t.Fatalf("create user: %v", err)
+	}
+	tok, _, err := authSvc.Login(context.Background(), "delete_cascade_http", "pass1234!")
+	if err != nil {
+		t.Fatalf("login: %v", err)
+	}
+
+	// Delete the user via HTTP.
+	resp := performRequest(t, h, http.MethodDelete, "/api/v1/admin/users/"+view.ID, "")
+	if resp.Code != http.StatusNoContent {
+		t.Fatalf("DELETE /admin/users/{id}: %d %s", resp.Code, resp.Body.String())
+	}
+
+	// The former session token should now be invalid.
+	if _, err := authSvc.ValidateToken(context.Background(), tok); err == nil {
+		t.Error("session should be revoked after user deletion via HTTP")
+	}
+}

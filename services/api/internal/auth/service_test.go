@@ -583,3 +583,35 @@ func TestForceChangePassword_NotFound(t *testing.T) {
 		t.Error("expected error for unknown user")
 	}
 }
+
+// ---- Phase 98: DeleteUser cascades session revocation ----
+
+func TestDeleteUserRevokesSessionsFirst(t *testing.T) {
+	svc := newTestService(time.Hour)
+	view, err := svc.CreateUser(context.Background(), "delete_cascade", "pass1234!", auth.RoleViewer)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tok, _, err := svc.Login(context.Background(), "delete_cascade", "pass1234!")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Session should be active before delete.
+	if _, err := svc.ValidateToken(context.Background(), tok); err != nil {
+		t.Fatalf("session should be active before delete: %v", err)
+	}
+	if err := svc.DeleteUser(context.Background(), view.ID); err != nil {
+		t.Fatalf("DeleteUser: %v", err)
+	}
+	// After delete the session should be revoked.
+	if _, err := svc.ValidateToken(context.Background(), tok); err == nil {
+		t.Error("session should be revoked after user deletion")
+	}
+}
+
+func TestDeleteUserNotFound(t *testing.T) {
+	svc := newTestService(time.Hour)
+	if err := svc.DeleteUser(context.Background(), "no-such-id"); err == nil {
+		t.Error("expected error for unknown user")
+	}
+}
