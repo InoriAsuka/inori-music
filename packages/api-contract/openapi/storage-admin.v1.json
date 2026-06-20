@@ -2401,7 +2401,7 @@
         "type": "object",
         "properties": {
           "stats": {
-            "$ref": "#/components/schemas/TrackHistoryStatsResult"
+            "$ref": "#/components/schemas/TrackHistoryStats"
           },
           "topListeners": {
             "type": "array",
@@ -2505,6 +2505,78 @@
         "bearerFormat": "opaque",
         "scheme": "bearer",
         "type": "http"
+      }
+    },
+    "responses": {
+      "Unauthorized": {
+        "description": "Unauthorized \u2014 missing or invalid credentials",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "Forbidden \u2014 insufficient permissions",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Resource not found",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "BadRequest": {
+        "description": "Bad request \u2014 invalid parameters",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "ServiceUnavailable": {
+        "description": "Service unavailable or not configured",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "HistoryNotConfigured": {
+        "description": "History service not configured",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "AuthNotConfigured": {
+        "description": "Auth service not configured",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
       }
     }
   },
@@ -5981,7 +6053,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/APIError"
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             }
@@ -5991,7 +6063,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/APIError"
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             }
@@ -6001,7 +6073,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/APIError"
+                  "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
             }
@@ -11850,7 +11922,7 @@
                       }
                     },
                     "pagination": {
-                      "$ref": "#/components/schemas/PaginationMeta"
+                      "$ref": "#/components/schemas/PaginationMetadata"
                     }
                   }
                 }

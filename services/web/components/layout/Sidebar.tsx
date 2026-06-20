@@ -1,0 +1,108 @@
+"use client";
+
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import {
+  Music2,
+  Users,
+  Disc3,
+  ListMusic,
+  Heart,
+  History,
+  LayoutDashboard,
+  ChevronRight,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { useAuthStore } from "@/store/auth";
+
+interface NavItem {
+  href: string;
+  label: string;
+  icon: React.ReactNode;
+  adminOnly?: boolean;
+}
+
+const NAV: NavItem[] = [
+  { href: "/", label: "Home", icon: <LayoutDashboard size={16} /> },
+  { href: "/artists", label: "Artists", icon: <Users size={16} /> },
+  { href: "/albums", label: "Albums", icon: <Disc3 size={16} /> },
+  { href: "/tracks", label: "Tracks", icon: <Music2 size={16} /> },
+  { href: "/playlists", label: "Playlists", icon: <ListMusic size={16} /> },
+  { href: "/search", label: "Search", icon: <ChevronRight size={16} /> },
+];
+
+const LIBRARY_NAV: NavItem[] = [
+  { href: "/library/favorites", label: "Favorites", icon: <Heart size={16} /> },
+  { href: "/library/history", label: "History", icon: <History size={16} /> },
+];
+
+const ADMIN_NAV: NavItem[] = [
+  { href: "/admin", label: "Dashboard", icon: <LayoutDashboard size={16} />, adminOnly: true },
+];
+
+export function Sidebar() {
+  const pathname = usePathname();
+  const user = useAuthStore((s) => s.user);
+  const isAdmin = user?.role === "admin";
+
+  return (
+    <aside className="hidden w-60 shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-card)] md:flex">
+      <nav className="flex flex-col gap-1 overflow-y-auto px-3 py-4">
+        <SectionLabel>Library</SectionLabel>
+        {NAV.map((item) => (
+          <NavLink key={item.href} item={item} active={pathname === item.href} />
+        ))}
+
+        <SectionLabel className="mt-4">My Music</SectionLabel>
+        {LIBRARY_NAV.map((item) => (
+          <NavLink key={item.href} item={item} active={pathname.startsWith(item.href)} />
+        ))}
+
+        {isAdmin && (
+          <>
+            <SectionLabel className="mt-4">Admin</SectionLabel>
+            {ADMIN_NAV.map((item) => (
+              <NavLink key={item.href} item={item} active={pathname.startsWith("/admin")} />
+            ))}
+          </>
+        )}
+      </nav>
+    </aside>
+  );
+}
+
+function SectionLabel({
+  children,
+  className,
+}: {
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <span
+      className={cn(
+        "px-2 py-1 text-xs font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]",
+        className
+      )}
+    >
+      {children}
+    </span>
+  );
+}
+
+function NavLink({ item, active }: { item: NavItem; active: boolean }) {
+  return (
+    <Link
+      href={item.href}
+      className={cn(
+        "flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors",
+        active
+          ? "bg-[var(--color-primary)] text-[var(--color-primary-foreground)]"
+          : "text-[var(--color-foreground)] hover:bg-[var(--color-muted)]"
+      )}
+    >
+      {item.icon}
+      {item.label}
+    </Link>
+  );
+}
