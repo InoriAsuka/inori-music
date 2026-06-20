@@ -297,7 +297,10 @@ func (r *MemoryRepository) ListAlbumsPage(_ context.Context, q ListQuery) (ListP
 	r.mu.RLock()
 	all := make([]Album, 0, len(r.albums))
 	for _, a := range r.albums {
-		all = append(all, a)
+		if (q.ReleaseYearMin == 0 || a.ReleaseYear >= q.ReleaseYearMin) &&
+			(q.ReleaseYearMax == 0 || a.ReleaseYear <= q.ReleaseYearMax) {
+			all = append(all, a)
+		}
 	}
 	r.mu.RUnlock()
 	return memPage(all, q, albumLess(q.SortBy))
@@ -307,7 +310,9 @@ func (r *MemoryRepository) ListAlbumsByArtistPage(_ context.Context, artistID st
 	r.mu.RLock()
 	var all []Album
 	for _, a := range r.albums {
-		if a.ArtistID == artistID {
+		if a.ArtistID == artistID &&
+			(q.ReleaseYearMin == 0 || a.ReleaseYear >= q.ReleaseYearMin) &&
+			(q.ReleaseYearMax == 0 || a.ReleaseYear <= q.ReleaseYearMax) {
 			all = append(all, a)
 		}
 	}

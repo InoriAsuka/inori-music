@@ -124,6 +124,26 @@ func (r *Repository) ListArtistsPage(ctx context.Context, q catalog.ListQuery) (
 }
 
 func (r *Repository) ListAlbumsPage(ctx context.Context, q catalog.ListQuery) (catalog.ListPage[catalog.Album], error) {
+	if q.ReleaseYearMin > 0 || q.ReleaseYearMax > 0 {
+		var clauses []string
+		args := []any{q.Limit, q.Offset}
+		if q.ReleaseYearMin > 0 {
+			args = append(args, q.ReleaseYearMin)
+			clauses = append(clauses, fmt.Sprintf("release_year >= $%d", len(args)))
+		}
+		if q.ReleaseYearMax > 0 {
+			args = append(args, q.ReleaseYearMax)
+			clauses = append(clauses, fmt.Sprintf("release_year <= $%d", len(args)))
+		}
+		where := " WHERE " + strings.Join(clauses, " AND ")
+		sql := fmt.Sprintf(`
+			SELECT id, title, sort_title, artist_id, release_year, created_at, updated_at,
+			       COUNT(*) OVER () AS total_count
+			FROM albums%s
+			ORDER BY %s
+			LIMIT $1 OFFSET $2`, where, albumOrderBy(q))
+		return r.queryAlbumsPage(ctx, sql, args...)
+	}
 	sql := fmt.Sprintf(`
 		SELECT id, title, sort_title, artist_id, release_year, created_at, updated_at,
 		       COUNT(*) OVER () AS total_count
@@ -134,14 +154,25 @@ func (r *Repository) ListAlbumsPage(ctx context.Context, q catalog.ListQuery) (c
 }
 
 func (r *Repository) ListAlbumsByArtistPage(ctx context.Context, artistID string, q catalog.ListQuery) (catalog.ListPage[catalog.Album], error) {
+	args := []any{q.Limit, q.Offset, artistID}
+	clauses := []string{"artist_id = $3"}
+	if q.ReleaseYearMin > 0 {
+		args = append(args, q.ReleaseYearMin)
+		clauses = append(clauses, fmt.Sprintf("release_year >= $%d", len(args)))
+	}
+	if q.ReleaseYearMax > 0 {
+		args = append(args, q.ReleaseYearMax)
+		clauses = append(clauses, fmt.Sprintf("release_year <= $%d", len(args)))
+	}
+	where := strings.Join(clauses, " AND ")
 	sql := fmt.Sprintf(`
 		SELECT id, title, sort_title, artist_id, release_year, created_at, updated_at,
 		       COUNT(*) OVER () AS total_count
 		FROM albums
-		WHERE artist_id = $3
+		WHERE %s
 		ORDER BY %s
-		LIMIT $1 OFFSET $2`, albumOrderBy(q))
-	return r.queryAlbumsPage(ctx, sql, q.Limit, q.Offset, artistID)
+		LIMIT $1 OFFSET $2`, where, albumOrderBy(q))
+	return r.queryAlbumsPage(ctx, sql, args...)
 }
 
 func (r *Repository) queryAlbumsPage(ctx context.Context, sql string, args ...any) (catalog.ListPage[catalog.Album], error) {

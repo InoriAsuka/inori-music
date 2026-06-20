@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`1.31.0`
+`1.32.0`
 
 ## Product Goal
 
@@ -1283,4 +1283,16 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Register `PATCH /api/v1/admin/storage/backends/{id}` in `Routes()`.
 - Add `PATCH /api/v1/admin/storage/backends/{id}` path to OpenAPI spec with `displayName` and `priority` request body fields; 200/400/401/404/503 responses.
 - Bump VERSION and OpenAPI `info.version` to `1.31.0`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v1.32.0 - 2026-06-20
+
+- Add `ReleaseYearMin int` and `ReleaseYearMax int` fields to `catalog.ListQuery`.
+- `MemoryRepository.ListAlbumsPage`: apply year range guard in the collection loop.
+- `MemoryRepository.ListAlbumsByArtistPage`: apply year range guard alongside `ArtistID` check.
+- `postgres.Repository.ListAlbumsPage`: build optional `WHERE release_year >= $N` / `release_year <= $N` clauses when bounds are non-zero.
+- `postgres.Repository.ListAlbumsByArtistPage`: extend dynamic WHERE clause with optional year bounds.
+- `httpapi`: add `parseReleaseYearRange(w, r)` helper (validates non-negative ints, enforces min ≤ max); wire into `listAlbums` and `listAlbumsByArtist` handlers.
+- Add `?releaseYearMin` and `?releaseYearMax` query params to 4 album list paths in OpenAPI spec.
+- Bump VERSION and OpenAPI `info.version` to `1.32.0`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

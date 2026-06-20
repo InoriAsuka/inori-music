@@ -1288,6 +1288,33 @@ func parseCatalogPage(w http.ResponseWriter, r *http.Request) (limit, offset int
 	return limit, offset, sortBy, sortOrder, true
 }
 
+// parseReleaseYearRange parses optional ?releaseYearMin and ?releaseYearMax query params.
+// Returns 0,0,true when both are absent. Writes a 400 error and returns _,_,false on invalid input.
+func parseReleaseYearRange(w http.ResponseWriter, r *http.Request) (min, max int, ok bool) {
+	q := r.URL.Query()
+	if raw := q.Get("releaseYearMin"); raw != "" {
+		v, err := strconv.Atoi(raw)
+		if err != nil || v < 0 {
+			writeAPIError(w, http.StatusBadRequest, "validation_error", "releaseYearMin must be a non-negative integer")
+			return 0, 0, false
+		}
+		min = v
+	}
+	if raw := q.Get("releaseYearMax"); raw != "" {
+		v, err := strconv.Atoi(raw)
+		if err != nil || v < 0 {
+			writeAPIError(w, http.StatusBadRequest, "validation_error", "releaseYearMax must be a non-negative integer")
+			return 0, 0, false
+		}
+		max = v
+	}
+	if min > 0 && max > 0 && min > max {
+		writeAPIError(w, http.StatusBadRequest, "validation_error", "releaseYearMin must be <= releaseYearMax")
+		return 0, 0, false
+	}
+	return min, max, true
+}
+
 // normalizeSortOrder returns "asc" or "desc". Empty input → "asc".
 // Returns "", false for any other value.
 func normalizeSortOrder(raw string) (string, bool) {
@@ -1513,8 +1540,13 @@ func (handler *Handler) listAlbumsByArtist(w http.ResponseWriter, r *http.Reques
 		writeError(w, err)
 		return
 	}
+	ryMin, ryMax, ok2 := parseReleaseYearRange(w, r)
+	if !ok2 {
+		return
+	}
 	albumPage, err := handler.catalogService.ListAlbumsByArtistPage(r.Context(), r.PathValue("id"), catalog.ListQuery{
 		SortBy: sortBy, SortOrder: sortOrder, Limit: limit, Offset: offset,
+		ReleaseYearMin: ryMin, ReleaseYearMax: ryMax,
 	})
 	if err != nil {
 		writeError(w, err)
@@ -1611,6 +1643,12 @@ func (handler *Handler) listAlbums(w http.ResponseWriter, r *http.Request) {
 	}
 	q := catalog.ListQuery{SortBy: sortBy, SortOrder: sortOrder, Limit: limit, Offset: offset}
 	artistID := r.URL.Query().Get("artistId")
+	if ryMin, ryMax, ok := parseReleaseYearRange(w, r); !ok {
+		return
+	} else {
+		q.ReleaseYearMin = ryMin
+		q.ReleaseYearMax = ryMax
+	}
 	var (
 		page catalog.ListPage[catalog.Album]
 		err  error

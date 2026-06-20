@@ -2511,7 +2511,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "1.31.0"
+    "version": "1.32.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -2566,6 +2566,26 @@
               ],
               "default": "asc"
             }
+          },
+          {
+            "name": "releaseYearMin",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "Include only albums with release year >= this value"
+          },
+          {
+            "name": "releaseYearMax",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "Include only albums with release year <= this value"
           }
         ],
         "responses": {
@@ -5989,6 +6009,26 @@
               ],
               "default": "asc"
             }
+          },
+          {
+            "name": "releaseYearMin",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "Include only albums with release year >= this value"
+          },
+          {
+            "name": "releaseYearMax",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "Include only albums with release year <= this value"
           }
         ],
         "responses": {
@@ -7809,6 +7849,26 @@
               "default": "asc"
             },
             "description": "Sort direction."
+          },
+          {
+            "name": "releaseYearMin",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "Include only albums with release year >= this value"
+          },
+          {
+            "name": "releaseYearMax",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "Include only albums with release year <= this value"
           }
         ],
         "responses": {
@@ -8178,6 +8238,26 @@
               "default": "asc"
             },
             "description": "Sort direction."
+          },
+          {
+            "name": "releaseYearMin",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "Include only albums with release year >= this value"
+          },
+          {
+            "name": "releaseYearMax",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "Include only albums with release year <= this value"
           }
         ],
         "responses": {

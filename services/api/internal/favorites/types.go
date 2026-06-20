@@ -37,4 +37,8 @@ type Repository interface {
 	IsFavorite(ctx context.Context, userID, trackID string) (bool, error)
 	// AreFavorites returns the subset of trackIDs that userID has favorited.
 	AreFavorites(ctx context.Context, userID string, trackIDs []string) (map[string]bool, error)
+	// ClearUserFavorites removes all favorites for the given user.
+	ClearUserFavorites(ctx context.Context, userID string) error
+	// RemoveTrackFavorites removes a specific user–track favorite (admin use).
+	RemoveTrackFavorites(ctx context.Context, trackID string) error
 }
