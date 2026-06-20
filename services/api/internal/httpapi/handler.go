@@ -531,7 +531,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("/api/v1/catalog/", handler.requireViewerAuth(handler.notFound))
 	mux.HandleFunc("/api/v1/admin/", handler.requireAdminAuth(handler.notFound))
 	mux.HandleFunc("/", handler.notFound)
-	return corsMiddleware(handler.corsOrigins)(handler.instrument(mux))
+	return requestIDMiddleware()(corsMiddleware(handler.corsOrigins)(handler.instrument(mux)))
 }
 
 type statusRecorder struct {

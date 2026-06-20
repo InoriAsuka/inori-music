@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`1.22.0`
+`1.23.0`
 
 ## Product Goal
 
@@ -1179,5 +1179,14 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add `corsOrigins()` helper in `main.go` that parses `INORI_CORS_ORIGINS` (comma-separated); logs a permissive-mode warning when unset; import `strings`.
 - Add `services/api/internal/httpapi/cors_test.go` with 6 tests: `TestCORSPreflightReturns204`, `TestCORSPreflightHeadersPresent`, `TestCORSAllowedOriginReflected`, `TestCORSDisallowedOriginOmitted`, `TestCORSPermissiveModeReflectsAnyOrigin`, `TestCORSNonPreflightPassesThrough`.
 - Bump VERSION and OpenAPI `info.version` to `1.22.0`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v1.23.0 - 2026-06-20
+
+- Add `internal/httpapi/requestid.go` with `requestIDMiddleware()`, `requestIDFromContext(ctx)`, and `generateRequestID()` (16 random bytes as 32 lowercase hex chars).
+- Middleware reads `X-Request-ID` from the incoming request; generates a new ID when absent; echoes the ID on the response header; injects it into the request context.
+- Chain order in `Routes()`: `requestIDMiddleware` wraps `corsMiddleware` wraps `instrument(mux)`.
+- Add `services/api/internal/httpapi/requestid_test.go` with 4 tests: `TestRequestIDPassthroughExisting`, `TestRequestIDGeneratedWhenAbsent`, `TestRequestIDPresentOnAllRoutes`, `TestRequestIDInjectedIntoContext`.
+- Bump VERSION and OpenAPI `info.version` to `1.23.0`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
