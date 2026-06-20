@@ -165,6 +165,23 @@ func (service *Service) DisableBackend(ctx context.Context, id string) (StorageB
 	return backend, nil
 }
 
+func (service *Service) EnableBackend(ctx context.Context, id string) (StorageBackend, error) {
+	backend, err := service.repository.Get(ctx, id)
+	if err != nil {
+		return StorageBackend{}, err
+	}
+	if backend.Enabled {
+		return backend, nil
+	}
+	backend.Enabled = true
+	backend.HealthStatus = HealthStatusUnknown
+	backend.UpdatedAt = service.now().UTC()
+	if err := service.repository.Save(ctx, backend); err != nil {
+		return StorageBackend{}, err
+	}
+	return backend, nil
+}
+
 func ensureDefaultCandidate(backend StorageBackend) error {
 	if !backend.Enabled {
 		return fmt.Errorf("%w: default backend must be enabled", ErrInvalidBackend)

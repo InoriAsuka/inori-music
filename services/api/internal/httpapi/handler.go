@@ -442,6 +442,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/admin/storage/backends/refresh", handler.requireAdminAuth(handler.refreshStorageBackends))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends/{id}/default", handler.requireAdminAuth(handler.setDefaultStorageBackend))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends/{id}/disable", handler.requireAdminAuth(handler.disableStorageBackend))
+	mux.HandleFunc("POST /api/v1/admin/storage/backends/{id}/enable", handler.requireAdminAuth(handler.enableStorageBackend))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends/{id}/probe", handler.requireAdminAuth(handler.probeStorageBackend))
 	mux.HandleFunc("GET /api/v1/admin/storage/backends/{id}/health", handler.requireAdminAuth(handler.getStorageBackendHealth))
 	mux.HandleFunc("GET /api/v1/admin/storage/backends/{id}/capacity", handler.requireAdminAuth(handler.getStorageBackendCapacity))
@@ -520,6 +521,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("/api/v1/admin/storage/backends/refresh", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/storage/backends/{id}/default", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/storage/backends/{id}/disable", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/storage/backends/{id}/enable", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/storage/backends/{id}/probe", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/storage/backends/{id}/health", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/storage/backends/{id}/capacity", handler.requireAdminAuth(handler.methodNotAllowed))
@@ -3722,6 +3724,15 @@ func (handler *Handler) setDefaultStorageBackend(w http.ResponseWriter, r *http.
 
 func (handler *Handler) disableStorageBackend(w http.ResponseWriter, r *http.Request) {
 	backend, err := handler.storage.DisableBackend(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, backend)
+}
+
+func (handler *Handler) enableStorageBackend(w http.ResponseWriter, r *http.Request) {
+	backend, err := handler.storage.EnableBackend(r.Context(), r.PathValue("id"))
 	if err != nil {
 		writeError(w, err)
 		return

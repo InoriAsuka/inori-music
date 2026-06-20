@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`1.24.0`
+`1.25.0`
 
 ## Product Goal
 
@@ -1195,4 +1195,13 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Rewrite `README.md` to reflect the `1.24.0` baseline: update version, rename "0.x Architecture Direction", enumerate all completed phases (1–124), update run command with `INORI_CORS_ORIGINS`, add `docs/architecture/frontend-client-constraints.md` to project document list, revise Future Outlook to name inori-web, inori-admin, inori-app, and shared packages.
 - Bump VERSION and OpenAPI `info.version` to `1.24.0`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v1.25.0 - 2026-06-20
+
+- Add `POST /api/v1/admin/storage/backends/{id}/enable` endpoint to complement the existing disable endpoint.
+- Implement `(*Service).EnableBackend` in `services/api/internal/storage/service.go`: fetch backend by ID, return current state unchanged if already enabled (idempotent), otherwise set `Enabled=true`, `HealthStatus=HealthStatusUnknown`, `UpdatedAt=now`, persist via `repository.Save`.
+- Register `enableStorageBackend` handler in `Routes()` immediately after `disableStorageBackend`; add corresponding `methodNotAllowed` catch-all for the path.
+- Add `/api/v1/admin/storage/backends/{id}/enable` path to OpenAPI spec `packages/api-contract/openapi/storage-admin.v1.json` with POST method, 200/401/404/503 responses, mirroring the disable path structure.
+- Bump VERSION and OpenAPI `info.version` to `1.25.0`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
