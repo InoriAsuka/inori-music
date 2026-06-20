@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`1.17.0`
+`1.18.0`
 
 ## Product Goal
 
@@ -1134,5 +1134,16 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Verify that `GET /api/v1/me/history` OpenAPI path declares a `trackId` query parameter (already supported in handler via `PlayEventFilter.TrackID`).
 - Add `TestViewerListPlayEventsTrackIdFilter` HTTP-layer test confirming that `?trackId` restricts results to only events for the specified track.
 - Add `TestStorageAdminOpenAPIContractViewerHistoryTrackIdParam` asserting that `GET /api/v1/me/history` declares `trackId` in its parameters.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v1.18.0 - 2026-06-20
+
+- Add `services/api/internal/history/postgres/repository_integration_test.go` with build tag `integration` containing 5 PostgreSQL integration tests using testcontainers-go:
+  - `TestRepositoryHistoryStats`: verifies total events, unique users, unique tracks after inserts.
+  - `TestRepositoryTopTracks`: verifies track play counts sorted by descending count.
+  - `TestRepositoryUserHistoryStats`: verifies per-user scoping of total events and unique tracks.
+  - `TestRepositoryTrackHistoryStats`: verifies per-track scoping of total events and unique listeners.
+  - `TestRepositoryHistoryTimeline`: verifies day-granularity bucketing and Since/Until windowing.
+- Bump OpenAPI `info.version` to `1.18.0`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
 
