@@ -261,6 +261,8 @@ func (handler *Handler) readinessReport() ReadinessReport {
 		readinessCheck("storage_service", handler.storage != nil, "storage service is configured", "storage service is not configured"),
 		readinessCheck("media_registry", handler.mediaObjects != nil, "media object registry is configured", "media object registry is not configured"),
 		readinessCheck("admin_auth", handler.adminToken != "", "admin bearer token is configured", "admin bearer token is not configured"),
+		readinessCheck("catalog_service", handler.catalogService != nil, "catalog service is configured", "catalog service is not configured"),
+		readinessCheck("history_service", handler.historyService != nil, "history service is configured", "history service is not configured"),
 	}
 	report := ReadinessReport{Ready: true, Checks: checks}
 	for _, check := range checks {

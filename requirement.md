@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`1.20.0`
+`1.21.0`
 
 ## Product Goal
 
@@ -1161,5 +1161,13 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Append `httpapi.WithCatalogService(catalogService)` and `httpapi.WithHistoryService(historyService)` to `handlerOpts`; all catalog and history routes now respond correctly in production instead of returning 503.
 - Add 3 `main_test.go` tests: `TestCatalogRepositoryDefaultsToMemory`, `TestHistoryRepositoryDefaultsToMemory`, `TestHandlerWithAllServicesReportsThreeBaseChecks`.
 - Bump VERSION and OpenAPI `info.version` to `1.20.0`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v1.21.0 - 2026-06-20
+
+- Extend `readinessReport()` in `handler.go` with two new `ReadinessCheck` entries: `catalog_service` and `history_service`; `ReadinessReport.Ready` becomes `false` if either is nil.
+- Add `newNoCatalogTestHandler()` and `newNoHistoryTestHandler()` helper functions in `handler_test.go`; update the 8 existing `NoCatalogService` tests that incorrectly relied on `newTestHandler()` to use `newNoCatalogTestHandler()` instead.
+- Update `TestReadinessIsPublic` to assert 5 checks (up from 3) and add 3 new readiness tests: `TestReadinessAllConfigured`, `TestReadinessMissingCatalog`, `TestReadinessMissingHistory`, `TestReadinessMissingAdminAuth`.
+- Bump VERSION and OpenAPI `info.version` to `1.21.0`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

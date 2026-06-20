@@ -63,8 +63,8 @@ func TestReadinessIsPublic(t *testing.T) {
 	}
 	var readyReport ReadinessReport
 	decodeResponse(t, ready, &readyReport)
-	if !readyReport.Ready || len(readyReport.Checks) != 3 {
-		t.Fatalf("ready report = %+v, want ready report with three checks", readyReport)
+	if !readyReport.Ready || len(readyReport.Checks) != 5 {
+		t.Fatalf("ready report = %+v, want ready report with five checks", readyReport)
 	}
 
 	unready := performRequestWithoutAuth(t, newUnauthenticatedTestHandler(), http.MethodGet, "/readyz", "")
@@ -73,8 +73,8 @@ func TestReadinessIsPublic(t *testing.T) {
 	}
 	var unreadyReport ReadinessReport
 	decodeResponse(t, unready, &unreadyReport)
-	if unreadyReport.Ready || len(unreadyReport.Checks) != 3 {
-		t.Fatalf("unready report = %+v, want not ready report with three checks", unreadyReport)
+	if unreadyReport.Ready || len(unreadyReport.Checks) != 5 {
+		t.Fatalf("unready report = %+v, want not ready report with five checks", unreadyReport)
 	}
 	failed := make(map[string]bool)
 	for _, check := range unreadyReport.Checks {
@@ -82,8 +82,8 @@ func TestReadinessIsPublic(t *testing.T) {
 			failed[check.Name] = true
 		}
 	}
-	if !failed["media_registry"] || !failed["admin_auth"] {
-		t.Fatalf("failed checks = %+v, want media_registry and admin_auth failures", failed)
+	if !failed["media_registry"] || !failed["admin_auth"] || !failed["catalog_service"] || !failed["history_service"] {
+		t.Fatalf("failed checks = %+v, want media_registry, admin_auth, catalog_service, and history_service failures", failed)
 	}
 }
 
@@ -640,12 +640,38 @@ func newTestHandler() http.Handler {
 		storage.NewService(repository),
 		WithAdminToken(testAdminToken),
 		WithMediaObjectService(storage.NewMediaObjectService(repository, storage.NewMemoryMediaObjectRepository())),
+		WithCatalogService(catalog.NewService(catalog.NewMemoryRepository())),
+		WithHistoryService(history.NewService(history.NewMemoryRepository())),
 		WithServiceInfo(ServiceInfo{Name: "inori-api", Version: "test-version", Commit: "test-commit", BuildTime: "2026-06-05T12:30:00Z"}),
 	).Routes()
 }
 
 func newUnauthenticatedTestHandler() http.Handler {
 	return NewHandler(storage.NewService(storage.NewMemoryRepository())).Routes()
+}
+
+// newNoCatalogTestHandler returns a fully authenticated handler with all services
+// except catalog, to verify catalog_not_configured 503 responses.
+func newNoCatalogTestHandler() http.Handler {
+	repository := storage.NewMemoryRepository()
+	return NewHandler(
+		storage.NewService(repository),
+		WithAdminToken(testAdminToken),
+		WithMediaObjectService(storage.NewMediaObjectService(repository, storage.NewMemoryMediaObjectRepository())),
+		WithHistoryService(history.NewService(history.NewMemoryRepository())),
+	).Routes()
+}
+
+// newNoHistoryTestHandler returns a fully authenticated handler with all services
+// except history, to verify history_not_configured 503 responses.
+func newNoHistoryTestHandler() http.Handler {
+	repository := storage.NewMemoryRepository()
+	return NewHandler(
+		storage.NewService(repository),
+		WithAdminToken(testAdminToken),
+		WithMediaObjectService(storage.NewMediaObjectService(repository, storage.NewMemoryMediaObjectRepository())),
+		WithCatalogService(catalog.NewService(catalog.NewMemoryRepository())),
+	).Routes()
 }
 
 func performRequest(t *testing.T, handler http.Handler, method string, path string, body string) *httptest.ResponseRecorder {
@@ -1413,7 +1439,7 @@ func TestCatalogArtistInvalid(t *testing.T) {
 }
 
 func TestCatalogArtistNotConfigured(t *testing.T) {
-	h := newTestHandler()
+	h := newNoCatalogTestHandler()
 	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/artists", "")
 	assertAPIError(t, resp, http.StatusServiceUnavailable, "catalog_not_configured")
 }
@@ -1674,7 +1700,7 @@ func TestCatalogImportTrackMediaNotFound(t *testing.T) {
 }
 
 func TestCatalogImportTrackNoCatalogService(t *testing.T) {
-	h := newTestHandler()
+	h := newNoCatalogTestHandler()
 	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/import", `{"mediaObjectId":"x"}`)
 	assertAPIError(t, resp, http.StatusServiceUnavailable, "catalog_not_configured")
 }
@@ -1823,7 +1849,7 @@ func TestCatalogRelinkTrackNotFound(t *testing.T) {
 }
 
 func TestCatalogRelinkTrackNoCatalogService(t *testing.T) {
-	h := newTestHandler()
+	h := newNoCatalogTestHandler()
 	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks/some-id/relink", `{"mediaObjectId":"x"}`)
 	assertAPIError(t, resp, http.StatusServiceUnavailable, "catalog_not_configured")
 }
@@ -2108,7 +2134,7 @@ func TestCatalogBatchImportEmptyBatch(t *testing.T) {
 }
 
 func TestCatalogBatchImportNoCatalogService(t *testing.T) {
-	h := newTestHandler()
+	h := newNoCatalogTestHandler()
 	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/batch-import", `{"items":[]}`)
 	assertAPIError(t, resp, http.StatusServiceUnavailable, "catalog_not_configured")
 }
@@ -2257,7 +2283,7 @@ func TestCatalogPatchTrackNotFound(t *testing.T) {
 }
 
 func TestCatalogPatchNoCatalogService(t *testing.T) {
-	h := newTestHandler()
+	h := newNoCatalogTestHandler()
 	resp := performRequest(t, h, http.MethodPatch, "/api/v1/admin/catalog/artists/x", `{"name":"X"}`)
 	assertAPIError(t, resp, http.StatusServiceUnavailable, "catalog_not_configured")
 }
@@ -2400,7 +2426,7 @@ func TestPlaylistViewerCanRead(t *testing.T) {
 }
 
 func TestPlaylistNoCatalogService(t *testing.T) {
-	h := newTestHandler()
+	h := newNoCatalogTestHandler()
 	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/playlists", "")
 	assertAPIError(t, resp, http.StatusServiceUnavailable, "catalog_not_configured")
 }
@@ -2487,7 +2513,7 @@ func TestPlaylistSetTracks(t *testing.T) {
 }
 
 func TestPlaylistSetTracksNoCatalogService(t *testing.T) {
-	h := newTestHandler()
+	h := newNoCatalogTestHandler()
 	resp := performRequest(t, h, http.MethodPut, "/api/v1/admin/catalog/playlists/some-id/tracks",
 		`{"trackIds":[]}`)
 	assertAPIError(t, resp, http.StatusServiceUnavailable, "catalog_not_configured")
@@ -2621,7 +2647,7 @@ func TestGetPlaylistTracksViewerCanRead(t *testing.T) {
 }
 
 func TestGetPlaylistTracksNoCatalogService(t *testing.T) {
-	h := newTestHandler()
+	h := newNoCatalogTestHandler()
 	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/playlists/some-id/tracks", "")
 	assertAPIError(t, resp, http.StatusServiceUnavailable, "catalog_not_configured")
 }
@@ -8535,5 +8561,116 @@ func TestAdminGetAllHistoryUntilFilter(t *testing.T) {
 	pagination := result["pagination"].(map[string]any)
 	if int(pagination["total"].(float64)) != 1 {
 		t.Errorf("total with until filter = %v, want 1", pagination["total"])
+	}
+}
+
+// ---- Phase 121: readiness check coverage for catalog and history services ----
+
+func TestReadinessAllConfigured(t *testing.T) {
+	// newTestHandler now includes catalog and history services.
+	resp := performRequestWithoutAuth(t, newTestHandler(), http.MethodGet, "/readyz", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("GET /readyz status = %d, want 200; body = %s", resp.Code, resp.Body.String())
+	}
+	var report ReadinessReport
+	decodeResponse(t, resp, &report)
+	if !report.Ready {
+		t.Fatalf("expected ready=true, got false; checks = %+v", report.Checks)
+	}
+	names := make(map[string]string)
+	for _, c := range report.Checks {
+		names[c.Name] = c.Status
+	}
+	for _, want := range []string{"storage_service", "media_registry", "admin_auth", "catalog_service", "history_service"} {
+		if names[want] != "ok" {
+			t.Errorf("check %q = %q, want \"ok\"", want, names[want])
+		}
+	}
+}
+
+func TestReadinessMissingCatalog(t *testing.T) {
+	repository := storage.NewMemoryRepository()
+	h := NewHandler(
+		storage.NewService(repository),
+		WithAdminToken(testAdminToken),
+		WithMediaObjectService(storage.NewMediaObjectService(repository, storage.NewMemoryMediaObjectRepository())),
+		WithHistoryService(history.NewService(history.NewMemoryRepository())),
+		// catalog service intentionally omitted
+	).Routes()
+	resp := performRequestWithoutAuth(t, h, http.MethodGet, "/readyz", "")
+	if resp.Code != http.StatusServiceUnavailable {
+		t.Fatalf("GET /readyz status = %d, want 503; body = %s", resp.Code, resp.Body.String())
+	}
+	var report ReadinessReport
+	decodeResponse(t, resp, &report)
+	if report.Ready {
+		t.Fatalf("expected ready=false, got true")
+	}
+	found := false
+	for _, c := range report.Checks {
+		if c.Name == "catalog_service" && c.Status == "failed" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("catalog_service check not failed; checks = %+v", report.Checks)
+	}
+}
+
+func TestReadinessMissingHistory(t *testing.T) {
+	repository := storage.NewMemoryRepository()
+	h := NewHandler(
+		storage.NewService(repository),
+		WithAdminToken(testAdminToken),
+		WithMediaObjectService(storage.NewMediaObjectService(repository, storage.NewMemoryMediaObjectRepository())),
+		WithCatalogService(catalog.NewService(catalog.NewMemoryRepository())),
+		// history service intentionally omitted
+	).Routes()
+	resp := performRequestWithoutAuth(t, h, http.MethodGet, "/readyz", "")
+	if resp.Code != http.StatusServiceUnavailable {
+		t.Fatalf("GET /readyz status = %d, want 503; body = %s", resp.Code, resp.Body.String())
+	}
+	var report ReadinessReport
+	decodeResponse(t, resp, &report)
+	if report.Ready {
+		t.Fatalf("expected ready=false, got true")
+	}
+	found := false
+	for _, c := range report.Checks {
+		if c.Name == "history_service" && c.Status == "failed" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("history_service check not failed; checks = %+v", report.Checks)
+	}
+}
+
+func TestReadinessMissingAdminAuth(t *testing.T) {
+	repository := storage.NewMemoryRepository()
+	h := NewHandler(
+		storage.NewService(repository),
+		// admin token intentionally omitted
+		WithMediaObjectService(storage.NewMediaObjectService(repository, storage.NewMemoryMediaObjectRepository())),
+		WithCatalogService(catalog.NewService(catalog.NewMemoryRepository())),
+		WithHistoryService(history.NewService(history.NewMemoryRepository())),
+	).Routes()
+	resp := performRequestWithoutAuth(t, h, http.MethodGet, "/readyz", "")
+	if resp.Code != http.StatusServiceUnavailable {
+		t.Fatalf("GET /readyz status = %d, want 503; body = %s", resp.Code, resp.Body.String())
+	}
+	var report ReadinessReport
+	decodeResponse(t, resp, &report)
+	if report.Ready {
+		t.Fatalf("expected ready=false, got true")
+	}
+	found := false
+	for _, c := range report.Checks {
+		if c.Name == "admin_auth" && c.Status == "failed" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("admin_auth check not failed; checks = %+v", report.Checks)
 	}
 }
