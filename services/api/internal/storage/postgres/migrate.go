@@ -208,4 +208,16 @@ CREATE INDEX IF NOT EXISTS play_events_track_id_idx           ON play_events (tr
 ALTER TABLE tracks ADD COLUMN IF NOT EXISTS genre TEXT;
 CREATE INDEX IF NOT EXISTS tracks_genre_idx ON tracks (lower(genre)) WHERE genre IS NOT NULL;`,
 	},
+	{
+		name: "010_user_track_favorites",
+		sql: `
+CREATE TABLE IF NOT EXISTS user_track_favorites (
+    user_id    TEXT        NOT NULL REFERENCES users(id)  ON DELETE CASCADE,
+    track_id   TEXT        NOT NULL REFERENCES tracks(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL,
+    PRIMARY KEY (user_id, track_id)
+);
+CREATE INDEX IF NOT EXISTS user_track_favorites_user_id_created_at_idx
+    ON user_track_favorites (user_id, created_at DESC);`,
+	},
 }

@@ -16,6 +16,8 @@ import (
 	authpg "inori-music/services/api/internal/auth/postgres"
 	"inori-music/services/api/internal/catalog"
 	catalogpg "inori-music/services/api/internal/catalog/postgres"
+	"inori-music/services/api/internal/favorites"
+	favoritespg "inori-music/services/api/internal/favorites/postgres"
 	"inori-music/services/api/internal/history"
 	historypg "inori-music/services/api/internal/history/postgres"
 	"inori-music/services/api/internal/httpapi"
@@ -84,6 +86,10 @@ func main() {
 	historyRepo := historyRepository(pool)
 	historyService := history.NewService(historyRepo)
 
+	// Favorites service — PostgreSQL when pool is available, in-memory otherwise.
+	favoritesRepo := favoritesRepository(pool)
+	favoritesService := favorites.NewService(favoritesRepo)
+
 	if interval := storageRefreshInterval(); interval > 0 {
 		log.Printf("storage refresh scheduler enabled with interval %s", interval)
 		scheduler := storage.NewRefreshScheduler(storageService, interval, func(report storage.RefreshReport, err error) {
@@ -101,6 +107,7 @@ func main() {
 		httpapi.WithMediaObjectService(mediaObjectService),
 		httpapi.WithCatalogService(catalogService),
 		httpapi.WithHistoryService(historyService),
+		httpapi.WithFavoritesService(favoritesService),
 		httpapi.WithCORSOrigins(corsOrigins()),
 		httpapi.WithServiceInfo(httpapi.ServiceInfo{Name: "inori-api", Version: version, Commit: commit, BuildTime: buildTime}),
 	}
@@ -218,6 +225,15 @@ func historyRepository(pool *pgxpool.Pool) history.Repository {
 		return historypg.NewRepository(pool)
 	}
 	return history.NewMemoryRepository()
+}
+
+// favoritesRepository returns a PostgreSQL-backed favorites repository when a pool is
+// available, falling back to an in-memory repository for development and testing.
+func favoritesRepository(pool *pgxpool.Pool) favorites.Repository {
+	if pool != nil {
+		return favoritespg.NewRepository(pool)
+	}
+	return favorites.NewMemoryRepository()
 }
 
 // corsOrigins parses INORI_CORS_ORIGINS (comma-separated list of allowed origins).

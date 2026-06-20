@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`1.27.0`
+`1.28.0`
 
 ## Product Goal
 
@@ -1238,4 +1238,19 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Update all `CreateTrack` call sites in `service_test.go` to add `""` for the new genre param.
 - Add `genre` field to `CatalogTrack` and `CatalogUpdateTrackRequest` OpenAPI schemas; add `?genre` parameter to 6 track list endpoints.
 - Bump VERSION and OpenAPI `info.version` to `1.27.0`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v1.28.0 - 2026-06-20
+
+- Add `internal/favorites` package: `FavoriteEntry`, `FavoritesPage`, `Repository` interface, `Service`.
+- `Service` methods: `AddFavorite` (idempotent), `RemoveFavorite` (idempotent), `ListFavorites` (paginated, newest-first), `IsFavorite`, `AreFavorites` (batch).
+- `favorites.MemoryRepository`: in-memory implementation with sorted output.
+- `favorites/postgres.Repository`: PostgreSQL implementation using `user_track_favorites` table; `AddFavorite` uses `ON CONFLICT (user_id, track_id) DO NOTHING`; `ListFavorites` uses `COUNT(*) OVER()`; `AreFavorites` uses `ANY($2)`.
+- Migration `010_user_track_favorites`: `user_track_favorites(user_id, track_id, created_at)` table + unique PK + covering index.
+- `httpapi.Handler`: add `favoritesService *favorites.Service` field and `WithFavoritesService` option.
+- `httpapi` routes: `POST /api/v1/me/favorites/tracks/{trackId}` (add, returns 200), `DELETE /api/v1/me/favorites/tracks/{trackId}` (remove, 204), `GET /api/v1/me/favorites/tracks` (list with limit/offset pagination).
+- `requireFavoritesService` guard mirrors `requireHistoryService`.
+- `main.go`: wire `favoritesRepository` and `favorites.NewService` with PG/memory fallback.
+- OpenAPI: `FavoritesPage` schema, 3 favorites paths, `favorites_not_configured` error code.
+- Bump VERSION and OpenAPI `info.version` to `1.28.0`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

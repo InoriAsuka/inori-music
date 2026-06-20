@@ -17,6 +17,7 @@ import (
 
 	"inori-music/services/api/internal/auth"
 	"inori-music/services/api/internal/catalog"
+	"inori-music/services/api/internal/favorites"
 	"inori-music/services/api/internal/history"
 	"inori-music/services/api/internal/storage"
 )
@@ -110,6 +111,13 @@ func WithHistoryService(svc *history.Service) HandlerOption {
 	}
 }
 
+// WithFavoritesService enables user favorites routes.
+func WithFavoritesService(svc *favorites.Service) HandlerOption {
+	return func(handler *Handler) {
+		handler.favoritesService = svc
+	}
+}
+
 // withCatalogMediaReader wires the media object service into the catalog service
 // as a MediaObjectReader after both have been set via options. Called from Routes().
 func (handler *Handler) withCatalogMediaReader() {
@@ -156,16 +164,17 @@ func WithCORSOrigins(origins []string) HandlerOption {
 
 // Handler serves versioned administrative HTTP endpoints.
 type Handler struct {
-	storage        *storage.Service
-	mediaObjects   *storage.MediaObjectService
-	authService    *auth.Service
-	catalogService *catalog.Service
-	historyService *history.Service
-	adminToken     string
-	corsOrigins    []string
-	info           ServiceInfo
-	metricsMu      sync.Mutex
-	requestMetrics map[requestMetricKey]requestMetricValue
+	storage          *storage.Service
+	mediaObjects     *storage.MediaObjectService
+	authService      *auth.Service
+	catalogService   *catalog.Service
+	historyService   *history.Service
+	favoritesService *favorites.Service
+	adminToken       string
+	corsOrigins      []string
+	info             ServiceInfo
+	metricsMu        sync.Mutex
+	requestMetrics   map[requestMetricKey]requestMetricValue
 }
 
 type storageBackendRequest struct {
@@ -401,6 +410,11 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/me/history/{eventId}", handler.requireViewerAuth(handler.deleteMyEvent))
 	mux.HandleFunc("/api/v1/me/history/{eventId}", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/me/history", handler.requireViewerAuth(handler.methodNotAllowed))
+	mux.HandleFunc("POST /api/v1/me/favorites/tracks/{trackId}", handler.requireViewerAuth(handler.addFavoriteTrack))
+	mux.HandleFunc("DELETE /api/v1/me/favorites/tracks/{trackId}", handler.requireViewerAuth(handler.removeFavoriteTrack))
+	mux.HandleFunc("GET /api/v1/me/favorites/tracks", handler.requireViewerAuth(handler.listFavoriteTracks))
+	mux.HandleFunc("/api/v1/me/favorites/tracks/{trackId}", handler.requireViewerAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/me/favorites/tracks", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("GET /api/v1/admin/history/stats", handler.requireAdminAuth(handler.getAdminHistoryStats))
 	mux.HandleFunc("GET /api/v1/admin/history/top-tracks", handler.requireAdminAuth(handler.getAdminTopTracks))
 	mux.HandleFunc("GET /api/v1/admin/history/top-users", handler.requireAdminAuth(handler.getAdminTopUsers))
@@ -4126,4 +4140,83 @@ func writeJSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)
+}
+
+// ---- favorites handlers ----
+
+func (handler *Handler) requireFavoritesService(w http.ResponseWriter) bool {
+	if handler.favoritesService == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "favorites_not_configured", "favorites service is not configured")
+		return false
+	}
+	return true
+}
+
+func (handler *Handler) addFavoriteTrack(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireFavoritesService(w) {
+		return
+	}
+	user, ok := userFromContext(r)
+	if !ok {
+		writeAPIError(w, http.StatusUnauthorized, "unauthorized", "valid bearer token is required")
+		return
+	}
+	trackID := r.PathValue("trackId")
+	if err := handler.favoritesService.AddFavorite(r.Context(), user.ID, trackID); err != nil {
+		writeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+func (handler *Handler) removeFavoriteTrack(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireFavoritesService(w) {
+		return
+	}
+	user, ok := userFromContext(r)
+	if !ok {
+		writeAPIError(w, http.StatusUnauthorized, "unauthorized", "valid bearer token is required")
+		return
+	}
+	trackID := r.PathValue("trackId")
+	if err := handler.favoritesService.RemoveFavorite(r.Context(), user.ID, trackID); err != nil {
+		writeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (handler *Handler) listFavoriteTracks(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireFavoritesService(w) {
+		return
+	}
+	user, ok := userFromContext(r)
+	if !ok {
+		writeAPIError(w, http.StatusUnauthorized, "unauthorized", "valid bearer token is required")
+		return
+	}
+	limit, err := parseMediaObjectListInt(r.URL.Query().Get("limit"), "limit", favorites.DefaultListLimit)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	offset, err := parseMediaObjectListInt(r.URL.Query().Get("offset"), "offset", 0)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	page, err := handler.favoritesService.ListFavorites(r.Context(), user.ID, limit, offset)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"trackIds": page.TrackIDs,
+		"pagination": map[string]any{
+			"limit":   limit,
+			"offset":  offset,
+			"total":   page.Total,
+			"hasMore": offset+limit < page.Total,
+		},
+	})
 }

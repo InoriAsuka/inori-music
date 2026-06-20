@@ -394,7 +394,8 @@
                   "missing_time_bounds",
                   "invalid_granularity",
                   "storage_backend_is_default",
-                  "storage_backend_in_use"
+                  "storage_backend_in_use",
+                  "favorites_not_configured"
                 ],
                 "type": "string"
               },
@@ -2451,6 +2452,39 @@
             }
           }
         }
+      },
+      "FavoritesPage": {
+        "type": "object",
+        "required": [
+          "trackIds",
+          "pagination"
+        ],
+        "properties": {
+          "trackIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Ordered list of favorite track IDs (newest first)"
+          },
+          "pagination": {
+            "type": "object",
+            "properties": {
+              "limit": {
+                "type": "integer"
+              },
+              "offset": {
+                "type": "integer"
+              },
+              "total": {
+                "type": "integer"
+              },
+              "hasMore": {
+                "type": "boolean"
+              }
+            }
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -2464,7 +2498,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "1.27.0"
+    "version": "1.28.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -8436,6 +8470,154 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/api/v1/me/favorites/tracks": {
+      "get": {
+        "summary": "List favorite tracks (paginated)",
+        "operationId": "listFavoriteTracks",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "tags": [
+          "History"
+        ],
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Favorite track list",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FavoritesPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        }
+      }
+    },
+    "/api/v1/me/favorites/tracks/{trackId}": {
+      "parameters": [
+        {
+          "name": "trackId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "summary": "Add a track to favorites (idempotent)",
+        "operationId": "addFavoriteTrack",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "tags": [
+          "History"
+        ],
+        "responses": {
+          "200": {
+            "description": "Track favorited"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Remove a track from favorites (idempotent)",
+        "operationId": "removeFavoriteTrack",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "tags": [
+          "History"
+        ],
+        "responses": {
+          "204": {
+            "description": "Favorite removed"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
           }
         }
       }
