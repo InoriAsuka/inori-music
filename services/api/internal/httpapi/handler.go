@@ -144,6 +144,16 @@ func WithServiceInfo(info ServiceInfo) HandlerOption {
 	}
 }
 
+// WithCORSOrigins sets the list of allowed CORS origins. When the list is empty
+// the middleware reflects any request Origin back (permissive development mode).
+func WithCORSOrigins(origins []string) HandlerOption {
+	return func(handler *Handler) {
+		cp := make([]string, len(origins))
+		copy(cp, origins)
+		handler.corsOrigins = cp
+	}
+}
+
 // Handler serves versioned administrative HTTP endpoints.
 type Handler struct {
 	storage        *storage.Service
@@ -152,6 +162,7 @@ type Handler struct {
 	catalogService *catalog.Service
 	historyService *history.Service
 	adminToken     string
+	corsOrigins    []string
 	info           ServiceInfo
 	metricsMu      sync.Mutex
 	requestMetrics map[requestMetricKey]requestMetricValue
@@ -520,7 +531,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("/api/v1/catalog/", handler.requireViewerAuth(handler.notFound))
 	mux.HandleFunc("/api/v1/admin/", handler.requireAdminAuth(handler.notFound))
 	mux.HandleFunc("/", handler.notFound)
-	return handler.instrument(mux)
+	return corsMiddleware(handler.corsOrigins)(handler.instrument(mux))
 }
 
 type statusRecorder struct {

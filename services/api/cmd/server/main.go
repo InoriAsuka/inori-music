@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -100,6 +101,7 @@ func main() {
 		httpapi.WithMediaObjectService(mediaObjectService),
 		httpapi.WithCatalogService(catalogService),
 		httpapi.WithHistoryService(historyService),
+		httpapi.WithCORSOrigins(corsOrigins()),
 		httpapi.WithServiceInfo(httpapi.ServiceInfo{Name: "inori-api", Version: version, Commit: commit, BuildTime: buildTime}),
 	}
 	if authService != nil {
@@ -216,4 +218,23 @@ func historyRepository(pool *pgxpool.Pool) history.Repository {
 		return historypg.NewRepository(pool)
 	}
 	return history.NewMemoryRepository()
+}
+
+// corsOrigins parses INORI_CORS_ORIGINS (comma-separated list of allowed origins).
+// Returns an empty slice when the env var is unset, which enables permissive mode
+// in the CORS middleware (any origin is reflected — suitable for local development).
+func corsOrigins() []string {
+	raw := strings.TrimSpace(os.Getenv("INORI_CORS_ORIGINS"))
+	if raw == "" {
+		log.Print("INORI_CORS_ORIGINS is not set; CORS middleware running in permissive mode (any origin allowed)")
+		return nil
+	}
+	parts := strings.Split(raw, ",")
+	origins := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if o := strings.TrimSpace(p); o != "" {
+			origins = append(origins, o)
+		}
+	}
+	return origins
 }

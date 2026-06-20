@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`1.21.0`
+`1.22.0`
 
 ## Product Goal
 
@@ -1169,5 +1169,15 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add `newNoCatalogTestHandler()` and `newNoHistoryTestHandler()` helper functions in `handler_test.go`; update the 8 existing `NoCatalogService` tests that incorrectly relied on `newTestHandler()` to use `newNoCatalogTestHandler()` instead.
 - Update `TestReadinessIsPublic` to assert 5 checks (up from 3) and add 3 new readiness tests: `TestReadinessAllConfigured`, `TestReadinessMissingCatalog`, `TestReadinessMissingHistory`, `TestReadinessMissingAdminAuth`.
 - Bump VERSION and OpenAPI `info.version` to `1.21.0`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v1.22.0 - 2026-06-20
+
+- Add `internal/httpapi/cors.go` with `corsMiddleware(origins []string)` that sets CORS response headers and handles OPTIONS preflight with `204 No Content`; reflects request Origin when origins is empty (permissive dev mode) or when it matches a configured value; never emits `Access-Control-Allow-Origin: *`.
+- Add `corsOrigins` field to `Handler`; add `WithCORSOrigins([]string) HandlerOption`.
+- Wrap `Routes()` return value with `corsMiddleware(handler.corsOrigins)(...)`.
+- Add `corsOrigins()` helper in `main.go` that parses `INORI_CORS_ORIGINS` (comma-separated); logs a permissive-mode warning when unset; import `strings`.
+- Add `services/api/internal/httpapi/cors_test.go` with 6 tests: `TestCORSPreflightReturns204`, `TestCORSPreflightHeadersPresent`, `TestCORSAllowedOriginReflected`, `TestCORSDisallowedOriginOmitted`, `TestCORSPermissiveModeReflectsAnyOrigin`, `TestCORSNonPreflightPassesThrough`.
+- Bump VERSION and OpenAPI `info.version` to `1.22.0`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
