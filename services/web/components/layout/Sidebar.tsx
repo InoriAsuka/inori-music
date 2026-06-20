@@ -10,7 +10,12 @@ import {
   Heart,
   History,
   LayoutDashboard,
-  ChevronRight,
+  Search,
+  Shield,
+  Database,
+  Upload,
+  HardDrive,
+  Activity,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth";
@@ -19,7 +24,6 @@ interface NavItem {
   href: string;
   label: string;
   icon: React.ReactNode;
-  adminOnly?: boolean;
 }
 
 const NAV: NavItem[] = [
@@ -28,7 +32,7 @@ const NAV: NavItem[] = [
   { href: "/albums", label: "Albums", icon: <Disc3 size={16} /> },
   { href: "/tracks", label: "Tracks", icon: <Music2 size={16} /> },
   { href: "/playlists", label: "Playlists", icon: <ListMusic size={16} /> },
-  { href: "/search", label: "Search", icon: <ChevronRight size={16} /> },
+  { href: "/search", label: "Search", icon: <Search size={16} /> },
 ];
 
 const LIBRARY_NAV: NavItem[] = [
@@ -37,7 +41,12 @@ const LIBRARY_NAV: NavItem[] = [
 ];
 
 const ADMIN_NAV: NavItem[] = [
-  { href: "/admin", label: "Dashboard", icon: <LayoutDashboard size={16} />, adminOnly: true },
+  { href: "/admin", label: "Dashboard", icon: <Shield size={16} /> },
+  { href: "/admin/users", label: "Users", icon: <Users size={16} /> },
+  { href: "/admin/catalog", label: "Catalog", icon: <Database size={16} /> },
+  { href: "/admin/import", label: "Import", icon: <Upload size={16} /> },
+  { href: "/admin/storage", label: "Storage", icon: <HardDrive size={16} /> },
+  { href: "/admin/history", label: "History", icon: <Activity size={16} /> },
 ];
 
 export function Sidebar() {
@@ -62,7 +71,7 @@ export function Sidebar() {
           <>
             <SectionLabel className="mt-4">Admin</SectionLabel>
             {ADMIN_NAV.map((item) => (
-              <NavLink key={item.href} item={item} active={pathname.startsWith("/admin")} />
+              <NavLink key={item.href} item={item} active={pathname === item.href} />
             ))}
           </>
         )}
@@ -71,20 +80,9 @@ export function Sidebar() {
   );
 }
 
-function SectionLabel({
-  children,
-  className,
-}: {
-  children: React.ReactNode;
-  className?: string;
-}) {
+function SectionLabel({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <span
-      className={cn(
-        "px-2 py-1 text-xs font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]",
-        className
-      )}
-    >
+    <span className={cn("px-2 py-1 text-xs font-semibold uppercase tracking-wider text-[var(--color-muted-foreground)]", className)}>
       {children}
     </span>
   );
