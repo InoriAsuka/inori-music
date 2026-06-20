@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`1.19.0`
+`1.20.0`
 
 ## Product Goal
 
@@ -1153,4 +1153,13 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Extend `TestStorageAdminOpenAPIContractCoversRoutes` expected map to include `POST /api/v1/auth/login` and `POST /api/v1/auth/logout`, which were missing from the assertion despite being present in both handler and spec.
 - Synchronize `requirement.md` `## Current Version` and `VERSION` file to `1.19.0`.
 - Bump OpenAPI `info.version` to `1.19.0`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v1.20.0 - 2026-06-20
+
+- Wire `catalog.Service` and `history.Service` into `main.go`: add `catalogRepository(pool)` and `historyRepository(pool)` constructor helpers that return PostgreSQL-backed repositories when a pool is available and in-memory repositories otherwise.
+- Append `httpapi.WithCatalogService(catalogService)` and `httpapi.WithHistoryService(historyService)` to `handlerOpts`; all catalog and history routes now respond correctly in production instead of returning 503.
+- Add 3 `main_test.go` tests: `TestCatalogRepositoryDefaultsToMemory`, `TestHistoryRepositoryDefaultsToMemory`, `TestHandlerWithAllServicesReportsThreeBaseChecks`.
+- Bump VERSION and OpenAPI `info.version` to `1.20.0`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

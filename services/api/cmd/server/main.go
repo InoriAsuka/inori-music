@@ -13,6 +13,10 @@ import (
 
 	"inori-music/services/api/internal/auth"
 	authpg "inori-music/services/api/internal/auth/postgres"
+	"inori-music/services/api/internal/catalog"
+	catalogpg "inori-music/services/api/internal/catalog/postgres"
+	"inori-music/services/api/internal/history"
+	historypg "inori-music/services/api/internal/history/postgres"
 	"inori-music/services/api/internal/httpapi"
 	"inori-music/services/api/internal/storage"
 	pgstore "inori-music/services/api/internal/storage/postgres"
@@ -71,6 +75,14 @@ func main() {
 		}
 	}
 
+	// Catalog service — PostgreSQL when pool is available, in-memory otherwise.
+	catalogRepo := catalogRepository(pool)
+	catalogService := catalog.NewService(catalogRepo)
+
+	// History service — PostgreSQL when pool is available, in-memory otherwise.
+	historyRepo := historyRepository(pool)
+	historyService := history.NewService(historyRepo)
+
 	if interval := storageRefreshInterval(); interval > 0 {
 		log.Printf("storage refresh scheduler enabled with interval %s", interval)
 		scheduler := storage.NewRefreshScheduler(storageService, interval, func(report storage.RefreshReport, err error) {
@@ -86,6 +98,8 @@ func main() {
 	handlerOpts := []httpapi.HandlerOption{
 		httpapi.WithAdminToken(adminToken),
 		httpapi.WithMediaObjectService(mediaObjectService),
+		httpapi.WithCatalogService(catalogService),
+		httpapi.WithHistoryService(historyService),
 		httpapi.WithServiceInfo(httpapi.ServiceInfo{Name: "inori-api", Version: version, Commit: commit, BuildTime: buildTime}),
 	}
 	if authService != nil {
@@ -184,4 +198,22 @@ func mediaObjectRepository(ctx context.Context, pool *pgxpool.Pool) (storage.Med
 	}
 	log.Printf("media object repository file enabled at %s", path)
 	return storage.NewFileMediaObjectRepository(path)
+}
+
+// catalogRepository returns a PostgreSQL-backed catalog repository when a pool is
+// available, falling back to an in-memory repository for development and testing.
+func catalogRepository(pool *pgxpool.Pool) catalog.Repository {
+	if pool != nil {
+		return catalogpg.NewRepository(pool)
+	}
+	return catalog.NewMemoryRepository()
+}
+
+// historyRepository returns a PostgreSQL-backed history repository when a pool is
+// available, falling back to an in-memory repository for development and testing.
+func historyRepository(pool *pgxpool.Pool) history.Repository {
+	if pool != nil {
+		return historypg.NewRepository(pool)
+	}
+	return history.NewMemoryRepository()
 }
