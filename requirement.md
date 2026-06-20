@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`1.16.0`
+`1.17.0`
 
 ## Product Goal
 
@@ -1122,9 +1122,17 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add `TestStorageAdminOpenAPIContractAdminDetailTimelinePaths` asserting param declarations and `TimelineResult` schema ref for both detail timeline paths.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
 
+### v1.17.0 - 2026-06-20
+
+- Verify that `GET /api/v1/admin/history` OpenAPI path already declares `since` and `until` query parameters; confirm `getAdminAllHistory` handler forwards them via `GlobalPlayEventFilter`.
+- Add `TestAdminGetAllHistorySinceFilter` HTTP-layer test verifying that `?since` restricts the global event list to events on or after the given timestamp.
+- Add `TestAdminGetAllHistoryUntilFilter` HTTP-layer test verifying that `?until` excludes events on or after the given timestamp.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
 ### v1.16.0 - 2026-06-20
 
 - Verify that `GET /api/v1/me/history` OpenAPI path declares a `trackId` query parameter (already supported in handler via `PlayEventFilter.TrackID`).
 - Add `TestViewerListPlayEventsTrackIdFilter` HTTP-layer test confirming that `?trackId` restricts results to only events for the specified track.
 - Add `TestStorageAdminOpenAPIContractViewerHistoryTrackIdParam` asserting that `GET /api/v1/me/history` declares `trackId` in its parameters.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
+

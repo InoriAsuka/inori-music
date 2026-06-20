@@ -8464,3 +8464,76 @@ func TestViewerListPlayEventsTrackIdFilter(t *testing.T) {
 		}
 	}
 }
+
+// TestAdminGetAllHistorySinceFilter verifies that GET /api/v1/admin/history?since=
+// restricts the global event list to events on or after the given timestamp.
+func TestAdminGetAllHistorySinceFilter(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"SinceFilterBand"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"SFT1","artistId":%q,"mediaObjectId":"mo-agh-s-1"}`, artistID), "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	// Event before and after cutoff
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q,"playedAt":"2025-10-01T10:00:00Z"}`, trackID), "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q,"playedAt":"2025-10-03T10:00:00Z"}`, trackID), "Bearer "+viewerToken)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/admin/history?since=2025-10-02T00:00:00Z",
+		"", "Bearer "+adminToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("admin/history?since: %d %s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	decodeResponse(t, resp, &result)
+	pagination := result["pagination"].(map[string]any)
+	if int(pagination["total"].(float64)) != 1 {
+		t.Errorf("total with since filter = %v, want 1", pagination["total"])
+	}
+}
+
+// TestAdminGetAllHistoryUntilFilter verifies that GET /api/v1/admin/history?until=
+// excludes events on or after the given timestamp.
+func TestAdminGetAllHistoryUntilFilter(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"UntilFilterBand"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"UFT1","artistId":%q,"mediaObjectId":"mo-agh-u-1"}`, artistID), "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	// Event before and after cutoff
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q,"playedAt":"2025-11-01T10:00:00Z"}`, trackID), "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q,"playedAt":"2025-11-03T10:00:00Z"}`, trackID), "Bearer "+viewerToken)
+
+	// until=Nov 2: only the first event should match (Nov 3 is excluded)
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/admin/history?until=2025-11-02T00:00:00Z",
+		"", "Bearer "+adminToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("admin/history?until: %d %s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	decodeResponse(t, resp, &result)
+	pagination := result["pagination"].(map[string]any)
+	if int(pagination["total"].(float64)) != 1 {
+		t.Errorf("total with until filter = %v, want 1", pagination["total"])
+	}
+}
