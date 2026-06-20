@@ -5,7 +5,7 @@ both browser/server and client/server deployment styles.
 
 ## Version
 
-Current architecture baseline version: `1.24.0`
+Current architecture baseline version: `1.34.0`
 
 ## Documentation Policy
 
@@ -232,6 +232,60 @@ response; injects the ID into the request context; chains outermost in `Routes()
 Bring README to v1.24.0 baseline; enumerate all completed phases; update run command; add
 frontend client constraint document reference; update Future Outlook.
 
+### Phase 125: Storage Backend Enable Endpoint
+
+Add `POST /api/v1/admin/storage/backends/{id}/enable` to complement the existing disable
+endpoint; idempotent when the backend is already enabled; resets health status to `unknown`.
+
+### Phase 126: Storage Backend Delete Endpoint
+
+Add `DELETE /api/v1/admin/storage/backends/{id}` with two safety guards: 409 when the backend
+is the current default, and 409 when media objects still reference it.
+
+### Phase 127: Track Genre Field and Filter
+
+Add optional `genre` field to `CatalogTrack`; expose `?genre=` case-insensitive filter and
+`sortBy=genre` on all six track list endpoints; PostgreSQL migration 009 (`ADD COLUMN IF NOT
+EXISTS genre TEXT`).
+
+### Phase 128: User Favorites Domain
+
+Add `internal/favorites` package with `AddFavorite`, `RemoveFavorite`, `ListFavorites`,
+`IsFavorite`, and `AreFavorites`; memory and PostgreSQL implementations; migration 010
+`user_track_favorites` table; viewer HTTP routes `POST/DELETE/GET /api/v1/me/favorites/tracks`.
+
+### Phase 129: CatalogTrack isFavorite Annotation
+
+Inject `isFavorite: bool` into viewer-facing track responses (`listTracks`, `getTrack`,
+`getPlaylistTracks`, `listFavoriteTracks`) via a single batch `AreFavorites` lookup per
+request — no N+1 queries. Admin responses always carry `false`.
+
+### Phase 130: Favorites Service Readiness Check
+
+Add `favorites_service` as the sixth check in `/readyz`; total checks are now six.
+
+### Phase 131: Storage Backend PATCH Endpoint
+
+Add `PATCH /api/v1/admin/storage/backends/{id}` allowing `displayName` and `priority` updates
+without touching type, config, or enabled state.
+
+### Phase 132: Album Release Year Range Filter
+
+Add optional `?releaseYearMin=` and `?releaseYearMax=` query params to all four album list
+endpoints (admin + viewer); enforces `min ≤ max`; memory and PostgreSQL implementations via
+dynamic WHERE clauses.
+
+### Phase 133: Admin Favorites Management
+
+Add `GET/DELETE /api/v1/admin/favorites/users/{userId}/tracks` and
+`DELETE /api/v1/admin/favorites/users/{userId}/tracks/{trackId}` for admin-level user
+favorites inspection and cleanup.
+
+### Phase 134: README and Documentation Sync
+
+Bring README to v1.34.0 baseline; add Phases 125–134 to the completed phases list; update
+OpenAPI path count and version reference.
+
 ---
 
 ## Run the API Server
@@ -260,7 +314,7 @@ The server listens on `127.0.0.1:8080` by default (`INORI_HTTP_ADDR` overrides t
   - [`docs/architecture/frontend-client-constraints.md`](docs/architecture/frontend-client-constraints.md): tech-stack, design language, and boundary constraints for inori-web, inori-admin, and the Flutter client.
 - [`docs/adr/`](docs/adr/): architecture decision records.
 - [`docs/operations/release-and-container.md`](docs/operations/release-and-container.md): GitHub Actions release and container publishing notes.
-- [`packages/api-contract/openapi/storage-admin.v1.json`](packages/api-contract/openapi/storage-admin.v1.json): OpenAPI 3.1 contract (115 operations, v1.24.0).
+- [`packages/api-contract/openapi/storage-admin.v1.json`](packages/api-contract/openapi/storage-admin.v1.json): OpenAPI 3.1 contract (134 operations, v1.34.0).
 
 ---
 

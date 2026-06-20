@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`1.33.0`
+`1.34.0`
 
 ## Product Goal
 
@@ -1306,4 +1306,10 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Implement `adminListUserFavorites`, `adminClearUserFavorites`, `adminRemoveUserFavoriteTrack` handlers.
 - Add admin favorites paths to OpenAPI spec (3 paths, 5 operations); total paths 112.
 - Bump VERSION and OpenAPI `info.version` to `1.33.0`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v1.34.0 - 2026-06-20
+
+- Update `README.md` to `1.34.0` baseline: version field, phases 125–134 descriptions, OpenAPI path count updated to 134 operations.
+- Bump VERSION and OpenAPI `info.version` to `1.34.0`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
