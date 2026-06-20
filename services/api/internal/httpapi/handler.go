@@ -1784,7 +1784,49 @@ func (handler *Handler) listTracks(w http.ResponseWriter, r *http.Request) {
 	meta := catalog.CatalogPaginationMeta{
 		Limit: limit, Offset: offset, Total: page.Total, HasMore: offset+limit < page.Total,
 	}
+	if isViewerPath(r) {
+		user, _ := userFromContext(r)
+		views := handler.annotateTracksWithFavorites(r.Context(), user.ID, page.Items)
+		writeJSON(w, http.StatusOK, map[string]any{"tracks": views, "pagination": meta})
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"tracks": page.Items, "pagination": meta})
+}
+
+// trackView wraps a catalog.Track with an isFavorite annotation for viewer responses.
+type trackView struct {
+	catalog.Track
+	IsFavorite bool `json:"isFavorite"`
+}
+
+// annotateTracksWithFavorites returns a slice of trackView with IsFavorite populated
+// using a single batch lookup. Returns all-false when favoritesService is nil or the
+// batch lookup fails (best-effort; does not fail the request).
+func (handler *Handler) annotateTracksWithFavorites(ctx context.Context, userID string, tracks []catalog.Track) []trackView {
+	views := make([]trackView, len(tracks))
+	if len(tracks) == 0 {
+		return views
+	}
+	ids := make([]string, len(tracks))
+	for i, t := range tracks {
+		ids[i] = t.ID
+		views[i] = trackView{Track: t}
+	}
+	if handler.favoritesService != nil && userID != "" {
+		favMap, err := handler.favoritesService.AreFavorites(ctx, userID, ids)
+		if err == nil {
+			for i, t := range tracks {
+				views[i].IsFavorite = favMap[t.ID]
+			}
+		}
+	}
+	return views
+}
+
+// isViewerPath reports whether the request path is under /api/v1/catalog/ (viewer) vs /api/v1/admin/.
+func isViewerPath(r *http.Request) bool {
+	return strings.HasPrefix(r.URL.Path, "/api/v1/catalog/") ||
+		strings.HasPrefix(r.URL.Path, "/api/v1/me/")
 }
 
 func (handler *Handler) createTrack(w http.ResponseWriter, r *http.Request) {
@@ -1811,6 +1853,12 @@ func (handler *Handler) getTrack(w http.ResponseWriter, r *http.Request) {
 	track, err := handler.catalogService.GetTrack(r.Context(), r.PathValue("id"))
 	if err != nil {
 		writeError(w, err)
+		return
+	}
+	if isViewerPath(r) {
+		user, _ := userFromContext(r)
+		views := handler.annotateTracksWithFavorites(r.Context(), user.ID, []catalog.Track{track})
+		writeJSON(w, http.StatusOK, views[0])
 		return
 	}
 	writeJSON(w, http.StatusOK, track)
@@ -2153,6 +2201,12 @@ func (handler *Handler) getPlaylistTracks(w http.ResponseWriter, r *http.Request
 		return
 	}
 	page, meta := paginateCatalog(tracks, limit, offset)
+	if isViewerPath(r) {
+		user, _ := userFromContext(r)
+		views := handler.annotateTracksWithFavorites(r.Context(), user.ID, page)
+		writeJSON(w, http.StatusOK, map[string]any{"tracks": views, "pagination": meta})
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"tracks": page, "pagination": meta})
 }
 
@@ -4210,13 +4264,31 @@ func (handler *Handler) listFavoriteTracks(w http.ResponseWriter, r *http.Reques
 		writeError(w, err)
 		return
 	}
+	pagination := map[string]any{
+		"limit":   limit,
+		"offset":  offset,
+		"total":   page.Total,
+		"hasMore": offset+limit < page.Total,
+	}
+	// If catalog service is available, resolve track IDs to full Track objects.
+	if handler.catalogService != nil && len(page.TrackIDs) > 0 {
+		tracks := make([]catalog.Track, 0, len(page.TrackIDs))
+		for _, tid := range page.TrackIDs {
+			t, err := handler.catalogService.GetTrack(r.Context(), tid)
+			if err == nil {
+				tracks = append(tracks, t)
+			}
+		}
+		// All favorites are — by definition — favorited; isFavorite is always true.
+		views := make([]trackView, len(tracks))
+		for i, t := range tracks {
+			views[i] = trackView{Track: t, IsFavorite: true}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"tracks": views, "pagination": pagination})
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"trackIds": page.TrackIDs,
-		"pagination": map[string]any{
-			"limit":   limit,
-			"offset":  offset,
-			"total":   page.Total,
-			"hasMore": offset+limit < page.Total,
-		},
+		"trackIds":   page.TrackIDs,
+		"pagination": pagination,
 	})
 }

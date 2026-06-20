@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`1.28.0`
+`1.29.0`
 
 ## Product Goal
 
@@ -1253,4 +1253,17 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - `main.go`: wire `favoritesRepository` and `favorites.NewService` with PG/memory fallback.
 - OpenAPI: `FavoritesPage` schema, 3 favorites paths, `favorites_not_configured` error code.
 - Bump VERSION and OpenAPI `info.version` to `1.28.0`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v1.29.0 - 2026-06-20
+
+- Add `isFavorite bool` field to `CatalogTrack` OpenAPI schema; viewer responses carry the flag, admin responses always carry `false`.
+- Define `trackView` struct in `httpapi` embedding `catalog.Track` plus `IsFavorite bool`.
+- Add `annotateTracksWithFavorites(ctx, userID, tracks)` helper: single batch call to `favorites.Service.AreFavorites`; best-effort (annotation skipped on error, no request failure).
+- Add `isViewerPath(r)` helper distinguishing `/api/v1/catalog/` and `/api/v1/me/` paths from admin paths.
+- Update `listTracks` handler: viewer path → annotate and respond with `[]trackView`; admin path → respond with `[]catalog.Track` unchanged.
+- Update `getTrack` handler: viewer path → wrap in `trackView` with `IsFavorite` set; admin path unchanged.
+- Update `getPlaylistTracks` handler: viewer path → annotate paged slice; admin path unchanged.
+- Update `listFavoriteTracks` handler: resolve track IDs to full `catalog.Track` objects via `catalogService.GetTrack`; build `[]trackView` with `IsFavorite=true` for all entries; falls back to `trackIds`-only response when catalog service is unavailable.
+- Bump VERSION and OpenAPI `info.version` to `1.29.0`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
