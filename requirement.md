@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`1.29.0`
+`1.30.0`
 
 ## Product Goal
 
@@ -1266,4 +1266,11 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Update `getPlaylistTracks` handler: viewer path → annotate paged slice; admin path unchanged.
 - Update `listFavoriteTracks` handler: resolve track IDs to full `catalog.Track` objects via `catalogService.GetTrack`; build `[]trackView` with `IsFavorite=true` for all entries; falls back to `trackIds`-only response when catalog service is unavailable.
 - Bump VERSION and OpenAPI `info.version` to `1.29.0`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v1.30.0 - 2026-06-20
+
+- Add `favorites_service` as the 6th check in `readinessReport()`; message: "favorites service is configured" / "favorites service is not configured".
+- Add `WithFavoritesService` to `newTestHandler()` in `handler_test.go`; update readiness check count assertions from 5 to 6 in `TestReadinessIsPublic` and `TestReadinessAllConfigured`; add `"favorites_service"` to the expected-ok names slice.
+- Bump VERSION and OpenAPI `info.version` to `1.30.0`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

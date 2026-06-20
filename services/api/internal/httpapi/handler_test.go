@@ -18,6 +18,7 @@ import (
 
 	"inori-music/services/api/internal/auth"
 	"inori-music/services/api/internal/catalog"
+	"inori-music/services/api/internal/favorites"
 	"inori-music/services/api/internal/history"
 	"inori-music/services/api/internal/storage"
 )
@@ -63,8 +64,8 @@ func TestReadinessIsPublic(t *testing.T) {
 	}
 	var readyReport ReadinessReport
 	decodeResponse(t, ready, &readyReport)
-	if !readyReport.Ready || len(readyReport.Checks) != 5 {
-		t.Fatalf("ready report = %+v, want ready report with five checks", readyReport)
+	if !readyReport.Ready || len(readyReport.Checks) != 6 {
+		t.Fatalf("ready report = %+v, want ready report with six checks", readyReport)
 	}
 
 	unready := performRequestWithoutAuth(t, newUnauthenticatedTestHandler(), http.MethodGet, "/readyz", "")
@@ -73,8 +74,8 @@ func TestReadinessIsPublic(t *testing.T) {
 	}
 	var unreadyReport ReadinessReport
 	decodeResponse(t, unready, &unreadyReport)
-	if unreadyReport.Ready || len(unreadyReport.Checks) != 5 {
-		t.Fatalf("unready report = %+v, want not ready report with five checks", unreadyReport)
+	if unreadyReport.Ready || len(unreadyReport.Checks) != 6 {
+		t.Fatalf("unready report = %+v, want not ready report with six checks", unreadyReport)
 	}
 	failed := make(map[string]bool)
 	for _, check := range unreadyReport.Checks {
@@ -642,6 +643,7 @@ func newTestHandler() http.Handler {
 		WithMediaObjectService(storage.NewMediaObjectService(repository, storage.NewMemoryMediaObjectRepository())),
 		WithCatalogService(catalog.NewService(catalog.NewMemoryRepository())),
 		WithHistoryService(history.NewService(history.NewMemoryRepository())),
+		WithFavoritesService(favorites.NewService(favorites.NewMemoryRepository())),
 		WithServiceInfo(ServiceInfo{Name: "inori-api", Version: "test-version", Commit: "test-commit", BuildTime: "2026-06-05T12:30:00Z"}),
 	).Routes()
 }
@@ -8581,7 +8583,7 @@ func TestReadinessAllConfigured(t *testing.T) {
 	for _, c := range report.Checks {
 		names[c.Name] = c.Status
 	}
-	for _, want := range []string{"storage_service", "media_registry", "admin_auth", "catalog_service", "history_service"} {
+	for _, want := range []string{"storage_service", "media_registry", "admin_auth", "catalog_service", "history_service", "favorites_service"} {
 		if names[want] != "ok" {
 			t.Errorf("check %q = %q, want \"ok\"", want, names[want])
 		}

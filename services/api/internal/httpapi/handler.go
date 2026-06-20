@@ -283,6 +283,7 @@ func (handler *Handler) readinessReport() ReadinessReport {
 		readinessCheck("admin_auth", handler.adminToken != "", "admin bearer token is configured", "admin bearer token is not configured"),
 		readinessCheck("catalog_service", handler.catalogService != nil, "catalog service is configured", "catalog service is not configured"),
 		readinessCheck("history_service", handler.historyService != nil, "history service is configured", "history service is not configured"),
+		readinessCheck("favorites_service", handler.favoritesService != nil, "favorites service is configured", "favorites service is not configured"),
 	}
 	report := ReadinessReport{Ready: true, Checks: checks}
 	for _, check := range checks {

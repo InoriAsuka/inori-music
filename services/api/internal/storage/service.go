@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -191,6 +192,35 @@ func (service *Service) DeleteBackend(ctx context.Context, id string) error {
 		return fmt.Errorf("%w: cannot delete default backend %s", ErrBackendIsDefault, id)
 	}
 	return service.repository.Delete(ctx, id)
+}
+
+// UpdateBackendRequest carries the fields that may be changed via a PATCH request.
+// Nil pointer fields are left unchanged.
+type UpdateBackendRequest struct {
+	DisplayName *string
+	Priority    *int
+}
+
+func (service *Service) UpdateBackend(ctx context.Context, id string, req UpdateBackendRequest) (StorageBackend, error) {
+	backend, err := service.repository.Get(ctx, id)
+	if err != nil {
+		return StorageBackend{}, err
+	}
+	if req.DisplayName != nil {
+		name := strings.TrimSpace(*req.DisplayName)
+		if name == "" {
+			return StorageBackend{}, fmt.Errorf("%w: display name must not be empty", ErrInvalidBackend)
+		}
+		backend.DisplayName = name
+	}
+	if req.Priority != nil {
+		backend.Priority = *req.Priority
+	}
+	backend.UpdatedAt = service.now().UTC()
+	if err := service.repository.Save(ctx, backend); err != nil {
+		return StorageBackend{}, err
+	}
+	return backend, nil
 }
 
 func ensureDefaultCandidate(backend StorageBackend) error {
