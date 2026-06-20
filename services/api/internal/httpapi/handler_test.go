@@ -9115,3 +9115,84 @@ func TestAlbumReleaseYearFilter(t *testing.T) {
 	resp5 := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/albums?releaseYearMin=notanumber", "")
 	assertAPIError(t, resp5, http.StatusBadRequest, "validation_error")
 }
+
+// ---- catalog search type filter tests (Phase 139) ----
+
+func TestCatalogSearchTypesFilter(t *testing.T) {
+	h := newTestHandler()
+
+	// Seed data: one artist, one album, one track
+	artistResp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"SearchMe"}`)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/albums",
+		fmt.Sprintf(`{"title":"SearchMe Album","artistId":%q}`, artistID))
+	performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"SearchMe Track","artistId":%q,"mediaObjectId":"mo-search-1"}`, artistID))
+
+	// No types filter → all 3 kinds
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/search?q=SearchMe", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("search status = %d; body = %s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	decodeResponse(t, resp, &result)
+	items := result["items"].([]any)
+	if len(items) != 3 {
+		t.Fatalf("expected 3 results (artist+album+track), got %d", len(items))
+	}
+
+	// types=track → only tracks
+	resp2 := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/search?q=SearchMe&types=track", "")
+	var result2 map[string]any
+	decodeResponse(t, resp2, &result2)
+	items2 := result2["items"].([]any)
+	if len(items2) != 1 {
+		t.Fatalf("types=track: expected 1 result, got %d", len(items2))
+	}
+	first := items2[0].(map[string]any)
+	if first["kind"] != "track" {
+		t.Errorf("types=track: kind = %v, want track", first["kind"])
+	}
+
+	// types=artist,album → 2 results
+	resp3 := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/search?q=SearchMe&types=artist,album", "")
+	var result3 map[string]any
+	decodeResponse(t, resp3, &result3)
+	items3 := result3["items"].([]any)
+	if len(items3) != 2 {
+		t.Fatalf("types=artist,album: expected 2 results, got %d", len(items3))
+	}
+
+	// Invalid type → 400
+	resp4 := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/search?q=SearchMe&types=playlist", "")
+	assertAPIError(t, resp4, http.StatusBadRequest, "validation_error")
+}
+
+func TestViewerCatalogSearchTypesFilter(t *testing.T) {
+	// newHistoryTestHandler has auth service wired so viewer tokens work
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists",
+		`{"name":"ViewerSearch"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"ViewerSearch Track","artistId":%q,"mediaObjectId":"mo-vs-1"}`, artistID), "Bearer "+adminToken)
+
+	// Viewer path with types=track
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/catalog/search?q=ViewerSearch&types=track", "", "Bearer "+viewerToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("viewer search status = %d; body = %s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	decodeResponse(t, resp, &result)
+	items := result["items"].([]any)
+	if len(items) != 1 || items[0].(map[string]any)["kind"] != "track" {
+		t.Errorf("viewer search types=track: unexpected items = %v", items)
+	}
+}

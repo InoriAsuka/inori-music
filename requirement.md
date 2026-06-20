@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`1.38.0`
+`1.39.0`
 
 ## Product Goal
 
@@ -1356,4 +1356,13 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add `TestDeleteStorageBackendSuccess`: delete non-default backend → 204; subsequent GET → 404.
 - Add `TestAlbumReleaseYearFilter`: no filter → 3 albums; `releaseYearMin=2015` → 2; `releaseYearMax=2015` → 2; min>max → 400; invalid value → 400.
 - Bump VERSION and OpenAPI `info.version` to `1.38.0`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+### v1.39.0 - 2026-06-20
+
+- Add `?types=` query parameter to `GET /api/v1/admin/catalog/search` and `GET /api/v1/catalog/search`; accepts comma-separated subset of `artist`, `album`, `track`; invalid values return 400 `validation_error`.
+- Filter is applied in the handler after the catalog service returns results; no changes to `Repository` or `Service` interfaces.
+- Add `TestCatalogSearchTypesFilter`: no types → 3 results; `types=track` → 1 track; `types=artist,album` → 2; invalid `types=playlist` → 400.
+- Add `TestViewerCatalogSearchTypesFilter`: viewer token + `types=track` returns correct filtered results.
+- Add `?types` query param to both search paths in OpenAPI spec.
+- Bump VERSION and OpenAPI `info.version` to `1.39.0`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

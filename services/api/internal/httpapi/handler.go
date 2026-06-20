@@ -1252,6 +1252,33 @@ func (handler *Handler) searchCatalog(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+	// Optional ?types= filter: comma-separated subset of "artist", "album", "track".
+	// When absent or empty the full result is returned unchanged.
+	if rawTypes := strings.TrimSpace(r.URL.Query().Get("types")); rawTypes != "" {
+		allowed := make(map[string]bool)
+		for _, t := range strings.Split(rawTypes, ",") {
+			switch strings.TrimSpace(t) {
+			case "artist", "album", "track":
+				allowed[strings.TrimSpace(t)] = true
+			default:
+				writeAPIError(w, http.StatusBadRequest, "validation_error",
+					"types must be a comma-separated list of: artist, album, track")
+				return
+			}
+		}
+		filtered := make([]catalog.SearchResultItem, 0, len(result.Items))
+		for _, item := range result.Items {
+			switch {
+			case item.Kind == catalog.SearchResultArtist && allowed["artist"]:
+				filtered = append(filtered, item)
+			case item.Kind == catalog.SearchResultAlbum && allowed["album"]:
+				filtered = append(filtered, item)
+			case item.Kind == catalog.SearchResultTrack && allowed["track"]:
+				filtered = append(filtered, item)
+			}
+		}
+		result.Items = filtered
+	}
 	writeJSON(w, http.StatusOK, result)
 }
 
