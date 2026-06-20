@@ -1235,3 +1235,45 @@ func TestStorageAdminOpenAPIContractAdminForceChangePassword(t *testing.T) {
 		t.Error("ForceChangePasswordRequest missing property newPassword")
 	}
 }
+
+// TestStorageAdminOpenAPIContractAdminDetailTimelinePaths asserts that the
+// per-user and per-track admin timeline paths declare the required since/until
+// params and the optional granularity param.
+func TestStorageAdminOpenAPIContractAdminDetailTimelinePaths(t *testing.T) {
+	document := loadOpenAPIContract(t)
+	paths := document["paths"].(map[string]any)
+
+	for _, tc := range []struct {
+		path   string
+		params []string
+	}{
+		{
+			path:   "/api/v1/admin/history/users/{userId}/timeline",
+			params: []string{"userId", "since", "until", "granularity"},
+		},
+		{
+			path:   "/api/v1/admin/history/tracks/{trackId}/timeline",
+			params: []string{"trackId", "since", "until", "granularity"},
+		},
+	} {
+		get := operation(t, paths, tc.path, "get")
+		declared := map[string]bool{}
+		for _, p := range get["parameters"].([]any) {
+			if m, ok := p.(map[string]any); ok {
+				declared[m["name"].(string)] = true
+			}
+		}
+		for _, want := range tc.params {
+			if !declared[want] {
+				t.Errorf("GET %s missing param %q", tc.path, want)
+			}
+		}
+		// 200 response must reference TimelineResult
+		resp200 := get["responses"].(map[string]any)["200"].(map[string]any)
+		content := resp200["content"].(map[string]any)["application/json"].(map[string]any)
+		schema := content["schema"].(map[string]any)
+		if schema["$ref"] != "#/components/schemas/TimelineResult" {
+			t.Errorf("GET %s 200 schema = %v, want TimelineResult ref", tc.path, schema)
+		}
+	}
+}

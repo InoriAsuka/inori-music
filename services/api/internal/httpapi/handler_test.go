@@ -8327,3 +8327,90 @@ func TestViewerGetMyTopTracksUntil(t *testing.T) {
 		t.Errorf("len(tracks) with until=day2 = %d, want 1", len(tracks))
 	}
 }
+
+// TestAdminGetUserTimelineSinceFilter verifies that ?since restricts the
+// timeline to events on or after that timestamp.
+func TestAdminGetUserTimelineSinceFilter(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"TLUSince"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"TLUSince1","artistId":%q,"mediaObjectId":"mo-tlus-1"}`, artistID), "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	meResp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/me", "", "Bearer "+viewerToken)
+	var me map[string]any
+	decodeResponse(t, meResp, &me)
+	userID := me["id"].(string)
+
+	// Event on day1 (before since) and day2 (within range)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q,"playedAt":"2025-08-01T10:00:00Z"}`, trackID), "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q,"playedAt":"2025-08-02T10:00:00Z"}`, trackID), "Bearer "+viewerToken)
+
+	// since=day2: only day2 event should appear
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/admin/history/users/"+userID+"/timeline?since=2025-08-02T00:00:00Z&until=2025-08-03T00:00:00Z&granularity=day",
+		"", "Bearer "+adminToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("getAdminUserTimeline since filter: %d %s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	decodeResponse(t, resp, &result)
+	buckets := result["buckets"].([]any)
+	if len(buckets) != 1 {
+		t.Fatalf("buckets = %d, want 1 (since filter)", len(buckets))
+	}
+	b0 := buckets[0].(map[string]any)
+	if int(b0["eventCount"].(float64)) != 1 {
+		t.Errorf("day2 eventCount = %v, want 1", b0["eventCount"])
+	}
+}
+
+// TestAdminGetTrackTimelineSinceFilter verifies that ?since restricts the
+// timeline to events on or after that timestamp.
+func TestAdminGetTrackTimelineSinceFilter(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"TLTkSince"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"TLTkSince1","artistId":%q,"mediaObjectId":"mo-tltks-1"}`, artistID), "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	// Event on day1 (before since) and day2 (within range)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q,"playedAt":"2025-09-01T10:00:00Z"}`, trackID), "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q,"playedAt":"2025-09-02T10:00:00Z"}`, trackID), "Bearer "+viewerToken)
+
+	// since=day2: only day2 event should appear
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/admin/history/tracks/"+trackID+"/timeline?since=2025-09-02T00:00:00Z&until=2025-09-03T00:00:00Z&granularity=day",
+		"", "Bearer "+adminToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("getAdminTrackTimeline since filter: %d %s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	decodeResponse(t, resp, &result)
+	buckets := result["buckets"].([]any)
+	if len(buckets) != 1 {
+		t.Fatalf("buckets = %d, want 1 (since filter)", len(buckets))
+	}
+	b0 := buckets[0].(map[string]any)
+	if int(b0["eventCount"].(float64)) != 1 {
+		t.Errorf("day2 eventCount = %v, want 1", b0["eventCount"])
+	}
+}

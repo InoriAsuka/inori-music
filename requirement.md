@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`1.4.0`
+`1.15.0`
 
 ## Product Goal
 
@@ -1113,4 +1113,11 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Update `GET /api/v1/me/history/top-tracks`, `GET /api/v1/me/history/stats`, and `GET /api/v1/me/history/timeline` in OpenAPI to declare `since` and `until` query parameters if not yet declared; bump `info.version` to `1.14.0`.
 - Add 1 `history.Service` unit test: `TestGetMyTopTracksTimeWindow`.
 - Add 2 HTTP-layer tests: `TestViewerGetMyTopTracksSince`, `TestViewerGetMyTopTracksUntil`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v1.15.0 - 2026-06-20
+
+- Verify that `GET /api/v1/admin/history/users/{userId}/timeline` and `GET /api/v1/admin/history/tracks/{trackId}/timeline` OpenAPI paths declare `since` (required), `until` (required), and `granularity` (optional) parameters; confirm handler layer already validates all three.
+- Add `TestAdminGetUserTimelineSinceFilter` and `TestAdminGetTrackTimelineSinceFilter` HTTP-layer tests verifying that `?since` restricts each timeline to events on or after the given timestamp.
+- Add `TestStorageAdminOpenAPIContractAdminDetailTimelinePaths` asserting param declarations and `TimelineResult` schema ref for both detail timeline paths.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
