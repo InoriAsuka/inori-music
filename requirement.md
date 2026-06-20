@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`1.30.0`
+`1.31.0`
 
 ## Product Goal
 
@@ -1273,4 +1273,14 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add `favorites_service` as the 6th check in `readinessReport()`; message: "favorites service is configured" / "favorites service is not configured".
 - Add `WithFavoritesService` to `newTestHandler()` in `handler_test.go`; update readiness check count assertions from 5 to 6 in `TestReadinessIsPublic` and `TestReadinessAllConfigured`; add `"favorites_service"` to the expected-ok names slice.
 - Bump VERSION and OpenAPI `info.version` to `1.30.0`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v1.31.0 - 2026-06-20
+
+- Add `UpdateBackendRequest{DisplayName *string, Priority *int}` to `storage` package.
+- Implement `(*Service).UpdateBackend(ctx, id, req)`: fetch, apply non-nil fields (display name non-empty guard), set `UpdatedAt=now`, persist.
+- Add `patchStorageBackendRequest` struct to `httpapi/handler.go`; implement `patchStorageBackend` handler.
+- Register `PATCH /api/v1/admin/storage/backends/{id}` in `Routes()`.
+- Add `PATCH /api/v1/admin/storage/backends/{id}` path to OpenAPI spec with `displayName` and `priority` request body fields; 200/400/401/404/503 responses.
+- Bump VERSION and OpenAPI `info.version` to `1.31.0`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

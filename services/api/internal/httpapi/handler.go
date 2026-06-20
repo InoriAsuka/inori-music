@@ -458,6 +458,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/admin/storage/backends/{id}/default", handler.requireAdminAuth(handler.setDefaultStorageBackend))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends/{id}/disable", handler.requireAdminAuth(handler.disableStorageBackend))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends/{id}/enable", handler.requireAdminAuth(handler.enableStorageBackend))
+	mux.HandleFunc("PATCH /api/v1/admin/storage/backends/{id}", handler.requireAdminAuth(handler.patchStorageBackend))
 	mux.HandleFunc("DELETE /api/v1/admin/storage/backends/{id}", handler.requireAdminAuth(handler.deleteStorageBackend))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends/{id}/probe", handler.requireAdminAuth(handler.probeStorageBackend))
 	mux.HandleFunc("GET /api/v1/admin/storage/backends/{id}/health", handler.requireAdminAuth(handler.getStorageBackendHealth))
@@ -3843,6 +3844,28 @@ func (handler *Handler) deleteStorageBackend(w http.ResponseWriter, r *http.Requ
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+type patchStorageBackendRequest struct {
+	DisplayName *string `json:"displayName"`
+	Priority    *int    `json:"priority"`
+}
+
+func (handler *Handler) patchStorageBackend(w http.ResponseWriter, r *http.Request) {
+	var req patchStorageBackendRequest
+	if err := decodeJSON(w, r, &req); err != nil {
+		writeError(w, err)
+		return
+	}
+	backend, err := handler.storage.UpdateBackend(r.Context(), r.PathValue("id"), storage.UpdateBackendRequest{
+		DisplayName: req.DisplayName,
+		Priority:    req.Priority,
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, backend)
 }
 
 func (handler *Handler) probeStorageBackend(w http.ResponseWriter, r *http.Request) {

@@ -88,11 +88,13 @@ type CatalogSearchResult struct {
 // ListQuery carries sort and pagination parameters for catalog list operations.
 // SortBy and SortOrder default to the entity's natural order when empty.
 type ListQuery struct {
-	SortBy    string // entity-specific sort field constant; "" = entity default
-	SortOrder string // "asc" | "desc"; "" = "asc"
-	Limit     int    // > 0
-	Offset    int    // >= 0
-	Genre     string // optional genre filter for track list queries; "" = no filter
+	SortBy           string // entity-specific sort field constant; "" = entity default
+	SortOrder        string // "asc" | "desc"; "" = "asc"
+	Limit            int    // > 0
+	Offset           int    // >= 0
+	Genre            string // optional genre filter for track list queries; "" = no filter
+	ReleaseYearMin   int    // optional lower bound (inclusive) for album release year; 0 = no lower bound
+	ReleaseYearMax   int    // optional upper bound (inclusive) for album release year; 0 = no upper bound
 }
 
 // ListPage carries one page of results together with the total unfiltered count.
