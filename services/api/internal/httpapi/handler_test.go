@@ -8676,3 +8676,442 @@ func TestReadinessMissingAdminAuth(t *testing.T) {
 		t.Errorf("admin_auth check not failed; checks = %+v", report.Checks)
 	}
 }
+
+// ---- favorites handler tests (Phase 137) ----
+
+// newFavoritesTestHandler builds a handler with auth, catalog, and favorites wired up.
+// Returns: handler, viewer bearer token, admin bearer token, trackID of a seeded track.
+func newFavoritesTestHandler(t *testing.T) (http.Handler, string, string, string) {
+	t.Helper()
+	authSvc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
+	catalogRepo := catalog.NewMemoryRepository()
+	catalogSvc := catalog.NewService(catalogRepo)
+	favSvc := favorites.NewService(favorites.NewMemoryRepository())
+
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAuthService(authSvc),
+		WithAdminToken(testAdminToken),
+		WithCatalogService(catalogSvc),
+		WithHistoryService(history.NewService(history.NewMemoryRepository())),
+		WithFavoritesService(favSvc),
+	).Routes()
+
+	// Create viewer and admin users
+	if _, err := authSvc.CreateUser(context.Background(), "viewer1", "viewerpass1", auth.RoleViewer); err != nil {
+		t.Fatalf("create viewer: %v", err)
+	}
+	viewerToken, _, err := authSvc.Login(context.Background(), "viewer1", "viewerpass1")
+	if err != nil {
+		t.Fatalf("viewer login: %v", err)
+	}
+	if _, err := authSvc.CreateUser(context.Background(), "admin1", "adminpass1", auth.RoleAdmin); err != nil {
+		t.Fatalf("create admin: %v", err)
+	}
+	adminToken, _, err := authSvc.Login(context.Background(), "admin1", "adminpass1")
+	if err != nil {
+		t.Fatalf("admin login: %v", err)
+	}
+
+	// Seed an artist and track
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists",
+		`{"name":"FavBand"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	trackResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"FavSong","artistId":%q,"mediaObjectId":"fav-mo-1"}`, artistID), "Bearer "+adminToken)
+	var track map[string]any
+	decodeResponse(t, trackResp, &track)
+	trackID := track["id"].(string)
+
+	return h, viewerToken, adminToken, trackID
+}
+
+func TestAddFavoriteTrack(t *testing.T) {
+	h, viewerToken, _, trackID := newFavoritesTestHandler(t)
+
+	// Add favorite — expect 200
+	resp := performRequestWithAuthHeader(t, h, http.MethodPost,
+		"/api/v1/me/favorites/tracks/"+trackID, "", "Bearer "+viewerToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("POST /me/favorites/tracks/{id} status = %d, want 200; body = %s", resp.Code, resp.Body.String())
+	}
+
+	// Idempotent: second add is also 200
+	resp2 := performRequestWithAuthHeader(t, h, http.MethodPost,
+		"/api/v1/me/favorites/tracks/"+trackID, "", "Bearer "+viewerToken)
+	if resp2.Code != http.StatusOK {
+		t.Fatalf("duplicate POST favorites status = %d, want 200", resp2.Code)
+	}
+
+	// Without auth → 401
+	resp3 := performRequestWithAuthHeader(t, h, http.MethodPost,
+		"/api/v1/me/favorites/tracks/"+trackID, "", "")
+	if resp3.Code != http.StatusUnauthorized {
+		t.Fatalf("unauthenticated POST favorites status = %d, want 401", resp3.Code)
+	}
+}
+
+func TestRemoveFavoriteTrack(t *testing.T) {
+	h, viewerToken, _, trackID := newFavoritesTestHandler(t)
+
+	// Add then remove
+	performRequestWithAuthHeader(t, h, http.MethodPost,
+		"/api/v1/me/favorites/tracks/"+trackID, "", "Bearer "+viewerToken)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodDelete,
+		"/api/v1/me/favorites/tracks/"+trackID, "", "Bearer "+viewerToken)
+	if resp.Code != http.StatusNoContent {
+		t.Fatalf("DELETE /me/favorites/tracks/{id} status = %d, want 204; body = %s", resp.Code, resp.Body.String())
+	}
+
+	// Idempotent remove of already-removed → 204
+	resp2 := performRequestWithAuthHeader(t, h, http.MethodDelete,
+		"/api/v1/me/favorites/tracks/"+trackID, "", "Bearer "+viewerToken)
+	if resp2.Code != http.StatusNoContent {
+		t.Fatalf("idempotent DELETE favorites status = %d, want 204", resp2.Code)
+	}
+}
+
+func TestListFavoriteTracks(t *testing.T) {
+	h, viewerToken, _, trackID := newFavoritesTestHandler(t)
+
+	// Empty list
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/me/favorites/tracks", "", "Bearer "+viewerToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("empty GET favorites status = %d; body = %s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	decodeResponse(t, resp, &result)
+	pagination := result["pagination"].(map[string]any)
+	if pagination["total"].(float64) != 0 {
+		t.Fatalf("expected total=0, got %v", pagination["total"])
+	}
+
+	// Add track and list again
+	performRequestWithAuthHeader(t, h, http.MethodPost,
+		"/api/v1/me/favorites/tracks/"+trackID, "", "Bearer "+viewerToken)
+
+	resp2 := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/me/favorites/tracks", "", "Bearer "+viewerToken)
+	if resp2.Code != http.StatusOK {
+		t.Fatalf("GET favorites after add status = %d; body = %s", resp2.Code, resp2.Body.String())
+	}
+	var result2 map[string]any
+	decodeResponse(t, resp2, &result2)
+	pagination2 := result2["pagination"].(map[string]any)
+	if pagination2["total"].(float64) != 1 {
+		t.Fatalf("expected total=1 after adding favorite, got %v", pagination2["total"])
+	}
+	// When catalog is wired, response should include full tracks with isFavorite=true
+	if tracks, ok := result2["tracks"].([]any); ok {
+		if len(tracks) != 1 {
+			t.Fatalf("expected 1 track, got %d", len(tracks))
+		}
+		track := tracks[0].(map[string]any)
+		if track["isFavorite"] != true {
+			t.Errorf("track isFavorite = %v, want true", track["isFavorite"])
+		}
+		if track["id"] != trackID {
+			t.Errorf("track id = %v, want %q", track["id"], trackID)
+		}
+	}
+}
+
+func TestListFavoritesNotConfigured(t *testing.T) {
+	// Handler with auth but no favorites service — token must be valid
+	authSvc := auth.NewService(newMemAuthUserRepo(), newMemAuthSessionRepo(), auth.ServiceConfig{SessionTTL: time.Hour})
+	if _, err := authSvc.CreateUser(context.Background(), "viewer_nc", "pass12345", auth.RoleViewer); err != nil {
+		t.Fatal(err)
+	}
+	tok, _, err := authSvc.Login(context.Background(), "viewer_nc", "pass12345")
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := NewHandler(
+		storage.NewService(storage.NewMemoryRepository()),
+		WithAdminToken(testAdminToken),
+		WithAuthService(authSvc),
+	).Routes()
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/me/favorites/tracks", "", "Bearer "+tok)
+	assertAPIError(t, resp, http.StatusServiceUnavailable, "favorites_not_configured")
+}
+
+func TestAdminListUserFavorites(t *testing.T) {
+	h, viewerToken, adminToken, trackID := newFavoritesTestHandler(t)
+
+	// Add a favorite as viewer
+	performRequestWithAuthHeader(t, h, http.MethodPost,
+		"/api/v1/me/favorites/tracks/"+trackID, "", "Bearer "+viewerToken)
+
+	// Get viewer user ID
+	meResp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/me", "", "Bearer "+viewerToken)
+	var me map[string]any
+	decodeResponse(t, meResp, &me)
+	userID := me["id"].(string)
+
+	// Admin lists the user's favorites
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/admin/favorites/users/"+userID+"/tracks", "", "Bearer "+adminToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("admin GET user favorites status = %d; body = %s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	decodeResponse(t, resp, &result)
+	pagination := result["pagination"].(map[string]any)
+	if pagination["total"].(float64) != 1 {
+		t.Fatalf("expected total=1, got %v", pagination["total"])
+	}
+	trackIDs := result["trackIds"].([]any)
+	if len(trackIDs) != 1 || trackIDs[0] != trackID {
+		t.Fatalf("trackIds = %v, want [%q]", trackIDs, trackID)
+	}
+}
+
+func TestAdminClearUserFavorites(t *testing.T) {
+	h, viewerToken, adminToken, trackID := newFavoritesTestHandler(t)
+
+	performRequestWithAuthHeader(t, h, http.MethodPost,
+		"/api/v1/me/favorites/tracks/"+trackID, "", "Bearer "+viewerToken)
+
+	meResp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/me", "", "Bearer "+viewerToken)
+	var me map[string]any
+	decodeResponse(t, meResp, &me)
+	userID := me["id"].(string)
+
+	// Clear all favorites
+	resp := performRequestWithAuthHeader(t, h, http.MethodDelete,
+		"/api/v1/admin/favorites/users/"+userID+"/tracks", "", "Bearer "+adminToken)
+	if resp.Code != http.StatusNoContent {
+		t.Fatalf("admin DELETE all favorites status = %d; body = %s", resp.Code, resp.Body.String())
+	}
+
+	// Verify empty
+	listResp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/admin/favorites/users/"+userID+"/tracks", "", "Bearer "+adminToken)
+	var result map[string]any
+	decodeResponse(t, listResp, &result)
+	if result["pagination"].(map[string]any)["total"].(float64) != 0 {
+		t.Error("expected 0 favorites after clear")
+	}
+}
+
+func TestAdminRemoveUserFavoriteTrack(t *testing.T) {
+	h, viewerToken, adminToken, trackID := newFavoritesTestHandler(t)
+
+	performRequestWithAuthHeader(t, h, http.MethodPost,
+		"/api/v1/me/favorites/tracks/"+trackID, "", "Bearer "+viewerToken)
+
+	meResp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/me", "", "Bearer "+viewerToken)
+	var me map[string]any
+	decodeResponse(t, meResp, &me)
+	userID := me["id"].(string)
+
+	// Remove single track favorite
+	resp := performRequestWithAuthHeader(t, h, http.MethodDelete,
+		"/api/v1/admin/favorites/users/"+userID+"/tracks/"+trackID, "", "Bearer "+adminToken)
+	if resp.Code != http.StatusNoContent {
+		t.Fatalf("admin DELETE single favorite status = %d; body = %s", resp.Code, resp.Body.String())
+	}
+
+	// Idempotent
+	resp2 := performRequestWithAuthHeader(t, h, http.MethodDelete,
+		"/api/v1/admin/favorites/users/"+userID+"/tracks/"+trackID, "", "Bearer "+adminToken)
+	if resp2.Code != http.StatusNoContent {
+		t.Fatalf("idempotent admin DELETE single favorite status = %d", resp2.Code)
+	}
+}
+
+func TestCatalogTrackIsFavoriteInViewerList(t *testing.T) {
+	h, viewerToken, adminToken, trackID := newFavoritesTestHandler(t)
+
+	// Add favorite
+	performRequestWithAuthHeader(t, h, http.MethodPost,
+		"/api/v1/me/favorites/tracks/"+trackID, "", "Bearer "+viewerToken)
+
+	// GET viewer catalog/tracks — should carry isFavorite=true for the favorited track
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/catalog/tracks", "", "Bearer "+viewerToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("GET /catalog/tracks status = %d; body = %s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	decodeResponse(t, resp, &result)
+	tracks := result["tracks"].([]any)
+	if len(tracks) != 1 {
+		t.Fatalf("expected 1 track, got %d", len(tracks))
+	}
+	track := tracks[0].(map[string]any)
+	if track["isFavorite"] != true {
+		t.Errorf("track isFavorite = %v, want true (track was favorited)", track["isFavorite"])
+	}
+
+	// Admin catalog/tracks — isFavorite must be false (admin path)
+	adminResp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/admin/catalog/tracks", "", "Bearer "+adminToken)
+	var adminResult map[string]any
+	decodeResponse(t, adminResp, &adminResult)
+	adminTracks := adminResult["tracks"].([]any)
+	adminTrack := adminTracks[0].(map[string]any)
+	if adminTrack["isFavorite"] == true {
+		t.Error("admin track isFavorite should be false, got true")
+	}
+}
+
+// ---- storage backend + album filter HTTP tests (Phase 138) ----
+
+func TestGetStorageBackend(t *testing.T) {
+	// Register a backend, then fetch it by ID
+	backend := `{"id":"local-1","type":"local","displayName":"Local One","enabled":true,"config":{"local":{"rootPath":"/tmp/t1"}}}`
+	registerResp := performRequest(t, newTestHandler(), http.MethodPost, "/api/v1/admin/storage/backends", backend)
+	if registerResp.Code != http.StatusCreated {
+		t.Fatalf("register status = %d; body = %s", registerResp.Code, registerResp.Body.String())
+	}
+
+	h := newTestHandler()
+	performRequest(t, h, http.MethodPost, "/api/v1/admin/storage/backends", backend)
+
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/storage/backends/local-1", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("GET backend status = %d; body = %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	if got["id"] != "local-1" || got["displayName"] != "Local One" {
+		t.Errorf("unexpected backend = %v", got)
+	}
+
+	// Unknown ID → 404
+	resp2 := performRequest(t, h, http.MethodGet, "/api/v1/admin/storage/backends/no-such", "")
+	assertAPIError(t, resp2, http.StatusNotFound, "not_found")
+}
+
+func TestPatchStorageBackend(t *testing.T) {
+	h := newTestHandler()
+	backend := `{"id":"local-patch","type":"local","displayName":"Before","enabled":true,"config":{"local":{"rootPath":"/tmp/patch"}}}`
+	performRequest(t, h, http.MethodPost, "/api/v1/admin/storage/backends", backend)
+
+	// Patch displayName
+	resp := performRequest(t, h, http.MethodPatch, "/api/v1/admin/storage/backends/local-patch", `{"displayName":"After"}`)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("PATCH backend status = %d; body = %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	if got["displayName"] != "After" {
+		t.Errorf("displayName = %v, want After", got["displayName"])
+	}
+
+	// Empty displayName → 400
+	resp2 := performRequest(t, h, http.MethodPatch, "/api/v1/admin/storage/backends/local-patch", `{"displayName":""}`)
+	assertAPIError(t, resp2, http.StatusBadRequest, "invalid_backend")
+
+	// Unknown ID → 404
+	resp3 := performRequest(t, h, http.MethodPatch, "/api/v1/admin/storage/backends/no-such", `{"priority":5}`)
+	assertAPIError(t, resp3, http.StatusNotFound, "not_found")
+}
+
+func TestEnableStorageBackend(t *testing.T) {
+	h := newTestHandler()
+	// Register and then disable a backend, then enable it
+	backend := `{"id":"local-enable","type":"local","displayName":"Enable Test","enabled":true,"config":{"local":{"rootPath":"/tmp/en"}}}`
+	performRequest(t, h, http.MethodPost, "/api/v1/admin/storage/backends", backend)
+	performRequest(t, h, http.MethodPost, "/api/v1/admin/storage/backends/local-enable/disable", "")
+
+	resp := performRequest(t, h, http.MethodPost, "/api/v1/admin/storage/backends/local-enable/enable", "")
+	if resp.Code != http.StatusOK {
+		t.Fatalf("enable status = %d; body = %s", resp.Code, resp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, resp, &got)
+	if got["enabled"] != true {
+		t.Errorf("enabled = %v, want true", got["enabled"])
+	}
+
+	// Idempotent enable of already-enabled backend
+	resp2 := performRequest(t, h, http.MethodPost, "/api/v1/admin/storage/backends/local-enable/enable", "")
+	if resp2.Code != http.StatusOK {
+		t.Fatalf("idempotent enable status = %d", resp2.Code)
+	}
+}
+
+func TestDeleteStorageBackendGuards(t *testing.T) {
+	h := newTestHandler()
+	backend := `{"id":"local-del","type":"local","displayName":"Del Test","enabled":true,"isDefault":false,"config":{"local":{"rootPath":"/tmp/del"}}}`
+	performRequest(t, h, http.MethodPost, "/api/v1/admin/storage/backends", backend)
+
+	// Set as default then try to delete → 409 storage_backend_is_default
+	performRequest(t, h, http.MethodPost, "/api/v1/admin/storage/backends/local-del/default", "")
+	resp := performRequest(t, h, http.MethodDelete, "/api/v1/admin/storage/backends/local-del", "")
+	assertAPIError(t, resp, http.StatusConflict, "storage_backend_is_default")
+
+	// Unknown ID → 404
+	resp2 := performRequest(t, h, http.MethodDelete, "/api/v1/admin/storage/backends/no-such", "")
+	assertAPIError(t, resp2, http.StatusNotFound, "not_found")
+}
+
+func TestDeleteStorageBackendSuccess(t *testing.T) {
+	h := newTestHandler()
+	backend := `{"id":"local-del2","type":"local","displayName":"Del2","enabled":true,"config":{"local":{"rootPath":"/tmp/del2"}}}`
+	performRequest(t, h, http.MethodPost, "/api/v1/admin/storage/backends", backend)
+
+	resp := performRequest(t, h, http.MethodDelete, "/api/v1/admin/storage/backends/local-del2", "")
+	if resp.Code != http.StatusNoContent {
+		t.Fatalf("DELETE backend status = %d; body = %s", resp.Code, resp.Body.String())
+	}
+
+	// Verify gone
+	resp2 := performRequest(t, h, http.MethodGet, "/api/v1/admin/storage/backends/local-del2", "")
+	assertAPIError(t, resp2, http.StatusNotFound, "not_found")
+}
+
+func TestAlbumReleaseYearFilter(t *testing.T) {
+	h := newTestHandler()
+
+	// Seed artist
+	artistResp := performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"YearBand"}`)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	// Seed albums with different release years
+	for _, year := range []int{2010, 2015, 2020} {
+		performRequest(t, h, http.MethodPost, "/api/v1/admin/catalog/albums",
+			fmt.Sprintf(`{"title":"Album %d","artistId":%q,"releaseYear":%d}`, year, artistID, year))
+	}
+
+	// No filter → all 3
+	resp := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/albums?limit=10", "")
+	var all map[string]any
+	decodeResponse(t, resp, &all)
+	if all["pagination"].(map[string]any)["total"].(float64) != 3 {
+		t.Fatalf("expected 3 albums, got %v", all["pagination"])
+	}
+
+	// releaseYearMin=2015 → 2015 and 2020
+	resp2 := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/albums?releaseYearMin=2015&limit=10", "")
+	var filtered map[string]any
+	decodeResponse(t, resp2, &filtered)
+	if filtered["pagination"].(map[string]any)["total"].(float64) != 2 {
+		t.Fatalf("expected 2 albums with year>=2015, got %v", filtered["pagination"])
+	}
+
+	// releaseYearMax=2015 → 2010 and 2015
+	resp3 := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/albums?releaseYearMax=2015&limit=10", "")
+	var filtered2 map[string]any
+	decodeResponse(t, resp3, &filtered2)
+	if filtered2["pagination"].(map[string]any)["total"].(float64) != 2 {
+		t.Fatalf("expected 2 albums with year<=2015, got %v", filtered2["pagination"])
+	}
+
+	// releaseYearMin > releaseYearMax → 400
+	resp4 := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/albums?releaseYearMin=2020&releaseYearMax=2010", "")
+	assertAPIError(t, resp4, http.StatusBadRequest, "validation_error")
+
+	// Invalid value → 400
+	resp5 := performRequest(t, h, http.MethodGet, "/api/v1/admin/catalog/albums?releaseYearMin=notanumber", "")
+	assertAPIError(t, resp5, http.StatusBadRequest, "validation_error")
+}

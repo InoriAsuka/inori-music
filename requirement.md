@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`1.36.0`
+`1.38.0`
 
 ## Product Goal
 
@@ -1331,4 +1331,29 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add `TestStorageAdminOpenAPIContractPhase131PatchBackendBody`: verifies `displayName` and `priority` fields in the PATCH backend requestBody.
 - Add `TestStorageAdminOpenAPIContractPhase128FavoritesPage`: verifies `FavoritesPage` schema with `pagination` field.
 - Bump VERSION and OpenAPI `info.version` to `1.36.0`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v1.37.0 - 2026-06-20
+
+- Add `newFavoritesTestHandler` test helper creating a handler with auth, catalog, and favorites services wired; seeds one viewer user, one admin user, and one track.
+- Add `TestAddFavoriteTrack`: POST add → 200; idempotent re-add → 200; unauthenticated → 401.
+- Add `TestRemoveFavoriteTrack`: POST add + DELETE remove → 204; idempotent remove → 204.
+- Add `TestListFavoriteTracks`: empty list → total=0; add + list → total=1, track carries `isFavorite=true`.
+- Add `TestListFavoritesNotConfigured`: handler without favorites service returns 503 `favorites_not_configured`.
+- Add `TestAdminListUserFavorites`: admin GET /admin/favorites/users/{userId}/tracks returns the viewer's favorited track.
+- Add `TestAdminClearUserFavorites`: admin DELETE all favorites → 204; verify empty afterward.
+- Add `TestAdminRemoveUserFavoriteTrack`: admin DELETE single track favorite → 204; idempotent → 204.
+- Add `TestCatalogTrackIsFavoriteInViewerList`: viewer catalog/tracks carries `isFavorite=true` for favorited track; admin catalog/tracks carries `false`.
+- Bump VERSION and OpenAPI `info.version` to `1.37.0`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v1.38.0 - 2026-06-20
+
+- Add `TestGetStorageBackend`: GET /admin/storage/backends/{id} returns the registered backend; unknown ID → 404.
+- Add `TestPatchStorageBackend`: PATCH displayName updates the field; empty displayName → 400; unknown ID → 404.
+- Add `TestEnableStorageBackend`: disable then enable → enabled=true; idempotent enable → 200.
+- Add `TestDeleteStorageBackendGuards`: delete default backend → 409 `storage_backend_is_default`; unknown ID → 404.
+- Add `TestDeleteStorageBackendSuccess`: delete non-default backend → 204; subsequent GET → 404.
+- Add `TestAlbumReleaseYearFilter`: no filter → 3 albums; `releaseYearMin=2015` → 2; `releaseYearMax=2015` → 2; min>max → 400; invalid value → 400.
+- Bump VERSION and OpenAPI `info.version` to `1.38.0`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
