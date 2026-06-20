@@ -9196,3 +9196,60 @@ func TestViewerCatalogSearchTypesFilter(t *testing.T) {
 		t.Errorf("viewer search types=track: unexpected items = %v", items)
 	}
 }
+
+// ---- media object PATCH tests (Phase 140) ----
+
+func TestPatchMediaObjectMetadata(t *testing.T) {
+	h := newTestHandler()
+
+	// Register a media object first
+	body := `{"id":"mo-patch-1","backendId":"local-patch","objectKey":"audio/test.mp3","contentHash":"sha256:abc123def456abc123def456abc123def456abc123def456abc123def456abc1","sizeBytes":1024,"mimeType":"audio/mpeg","assetKind":"original_audio","lifecycleState":"active"}`
+
+	// Need a backend first
+	backendBody := `{"id":"local-patch","type":"local","displayName":"Patch Test","enabled":true,"config":{"local":{"rootPath":"/tmp/patch-mo"}}}`
+	performRequest(t, h, http.MethodPost, "/api/v1/admin/storage/backends", backendBody)
+
+	registerResp := performRequest(t, h, http.MethodPost, "/api/v1/admin/media/objects", body)
+	if registerResp.Code != http.StatusCreated {
+		t.Fatalf("register media object status = %d; body = %s", registerResp.Code, registerResp.Body.String())
+	}
+
+	// Patch mimeType
+	patchResp := performRequest(t, h, http.MethodPatch, "/api/v1/admin/media/objects/mo-patch-1",
+		`{"mimeType":"audio/flac"}`)
+	if patchResp.Code != http.StatusOK {
+		t.Fatalf("PATCH media object status = %d; body = %s", patchResp.Code, patchResp.Body.String())
+	}
+	var got map[string]any
+	decodeResponse(t, patchResp, &got)
+	if got["mimeType"] != "audio/flac" {
+		t.Errorf("mimeType = %v, want audio/flac", got["mimeType"])
+	}
+
+	// Patch assetKind
+	patchResp2 := performRequest(t, h, http.MethodPatch, "/api/v1/admin/media/objects/mo-patch-1",
+		`{"assetKind":"transcoded_audio"}`)
+	if patchResp2.Code != http.StatusOK {
+		t.Fatalf("PATCH assetKind status = %d; body = %s", patchResp2.Code, patchResp2.Body.String())
+	}
+	var got2 map[string]any
+	decodeResponse(t, patchResp2, &got2)
+	if got2["assetKind"] != "transcoded_audio" {
+		t.Errorf("assetKind = %v, want transcoded_audio", got2["assetKind"])
+	}
+
+	// Invalid assetKind → 400
+	patchResp3 := performRequest(t, h, http.MethodPatch, "/api/v1/admin/media/objects/mo-patch-1",
+		`{"assetKind":"not_valid"}`)
+	assertAPIError(t, patchResp3, http.StatusBadRequest, "invalid_media_object")
+
+	// Invalid mimeType → 400
+	patchResp4 := performRequest(t, h, http.MethodPatch, "/api/v1/admin/media/objects/mo-patch-1",
+		`{"mimeType":"badformat"}`)
+	assertAPIError(t, patchResp4, http.StatusBadRequest, "invalid_media_object")
+
+	// Unknown ID → 404
+	patchResp5 := performRequest(t, h, http.MethodPatch, "/api/v1/admin/media/objects/no-such",
+		`{"mimeType":"audio/ogg"}`)
+	assertAPIError(t, patchResp5, http.StatusNotFound, "not_found")
+}

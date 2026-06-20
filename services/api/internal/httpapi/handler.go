@@ -476,6 +476,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/admin/media/objects/lifecycle", handler.requireAdminAuth(handler.setMediaObjectsLifecycle))
 	mux.HandleFunc("POST /api/v1/admin/media/objects/verify", handler.requireAdminAuth(handler.verifyMediaObjects))
 	mux.HandleFunc("GET /api/v1/admin/media/objects/{id}", handler.requireAdminAuth(handler.getMediaObject))
+	mux.HandleFunc("PATCH /api/v1/admin/media/objects/{id}", handler.requireAdminAuth(handler.patchMediaObject))
 	mux.HandleFunc("GET /api/v1/admin/media/objects/{id}/timeline", handler.requireAdminAuth(handler.getMediaObjectTimeline))
 	mux.HandleFunc("POST /api/v1/admin/media/objects/{id}/lifecycle", handler.requireAdminAuth(handler.setMediaObjectLifecycle))
 	mux.HandleFunc("POST /api/v1/admin/media/objects/{id}/verify", handler.requireAdminAuth(handler.verifyMediaObject))
@@ -4066,6 +4067,32 @@ func (handler *Handler) getMediaObject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	object, err := handler.mediaObjects.GetMediaObject(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, object)
+}
+
+type patchMediaObjectRequest struct {
+	AssetKind *string `json:"assetKind"`
+	MIMEType  *string `json:"mimeType"`
+}
+
+func (handler *Handler) patchMediaObject(w http.ResponseWriter, r *http.Request) {
+	if handler.mediaObjects == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "media_registry_not_configured", "media object registry is not configured")
+		return
+	}
+	var req patchMediaObjectRequest
+	if err := decodeJSONWithSentinel(w, r, &req, storage.ErrInvalidMediaObject); err != nil {
+		writeError(w, err)
+		return
+	}
+	object, err := handler.mediaObjects.UpdateMediaObjectMetadata(r.Context(), r.PathValue("id"), storage.UpdateMediaObjectMetadataRequest{
+		AssetKind: req.AssetKind,
+		MIMEType:  req.MIMEType,
+	})
 	if err != nil {
 		writeError(w, err)
 		return

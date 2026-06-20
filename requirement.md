@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`1.39.0`
+`1.40.0`
 
 ## Product Goal
 

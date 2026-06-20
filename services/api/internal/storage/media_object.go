@@ -330,6 +330,42 @@ func (service *MediaObjectService) GetMediaObject(ctx context.Context, id string
 	return service.mediaRepository.GetMediaObject(ctx, id)
 }
 
+// UpdateMediaObjectMetadataRequest carries the correctable metadata fields.
+// Only non-nil fields are applied.
+type UpdateMediaObjectMetadataRequest struct {
+	AssetKind *string
+	MIMEType  *string
+}
+
+// UpdateMediaObjectMetadata applies a partial update to a media object's correctable metadata fields.
+// Only assetKind and mimeType may be changed. Both must remain valid if supplied.
+func (service *MediaObjectService) UpdateMediaObjectMetadata(ctx context.Context, id string, req UpdateMediaObjectMetadataRequest) (MediaObject, error) {
+	id = strings.TrimSpace(id)
+	object, err := service.mediaRepository.GetMediaObject(ctx, id)
+	if err != nil {
+		return MediaObject{}, err
+	}
+	if req.AssetKind != nil {
+		kind := strings.TrimSpace(*req.AssetKind)
+		if !validAssetKind(AssetKind(kind)) {
+			return MediaObject{}, fmt.Errorf("%w: unsupported asset kind %q", ErrInvalidMediaObject, kind)
+		}
+		object.AssetKind = kind
+	}
+	if req.MIMEType != nil {
+		mime := strings.TrimSpace(*req.MIMEType)
+		if mime == "" || !strings.Contains(mime, "/") {
+			return MediaObject{}, fmt.Errorf("%w: mime type must be type/subtype", ErrInvalidMediaObject)
+		}
+		object.MIMEType = mime
+	}
+	object.UpdatedAt = service.now().UTC()
+	if err := service.mediaRepository.SaveMediaObject(ctx, object); err != nil {
+		return MediaObject{}, err
+	}
+	return object, nil
+}
+
 // GetMediaObjectInfoForImport returns the fields needed by the catalog import workflow.
 // Callers typically wrap *MediaObjectService in a thin adapter to avoid a cross-package import.
 func (service *MediaObjectService) GetMediaObjectInfoForImport(ctx context.Context, id string) (id2 string, assetKind string, lifecycleState string, mimeType string, err error) {
