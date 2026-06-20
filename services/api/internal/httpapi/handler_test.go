@@ -8414,3 +8414,53 @@ func TestAdminGetTrackTimelineSinceFilter(t *testing.T) {
 		t.Errorf("day2 eventCount = %v, want 1", b0["eventCount"])
 	}
 }
+
+// TestViewerListPlayEventsTrackIdFilter verifies that GET /api/v1/me/history?trackId=
+// returns only events for the specified track.
+func TestViewerListPlayEventsTrackIdFilter(t *testing.T) {
+	h, viewerToken, adminToken := newHistoryTestHandler(t)
+
+	artistResp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/artists", `{"name":"FilterArtist"}`, "Bearer "+adminToken)
+	var artist map[string]any
+	decodeResponse(t, artistResp, &artist)
+	artistID := artist["id"].(string)
+
+	track1Resp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"FilterTrk1","artistId":%q,"mediaObjectId":"mo-ftf-1"}`, artistID), "Bearer "+adminToken)
+	var track1 map[string]any
+	decodeResponse(t, track1Resp, &track1)
+	trackID1 := track1["id"].(string)
+
+	track2Resp := performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/admin/catalog/tracks",
+		fmt.Sprintf(`{"title":"FilterTrk2","artistId":%q,"mediaObjectId":"mo-ftf-2"}`, artistID), "Bearer "+adminToken)
+	var track2 map[string]any
+	decodeResponse(t, track2Resp, &track2)
+	trackID2 := track2["id"].(string)
+
+	// 2 events for track1, 1 for track2
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q}`, trackID1), "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q}`, trackID1), "Bearer "+viewerToken)
+	performRequestWithAuthHeader(t, h, http.MethodPost, "/api/v1/me/history",
+		fmt.Sprintf(`{"trackId":%q}`, trackID2), "Bearer "+viewerToken)
+
+	resp := performRequestWithAuthHeader(t, h, http.MethodGet,
+		"/api/v1/me/history?trackId="+trackID1,
+		"", "Bearer "+viewerToken)
+	if resp.Code != http.StatusOK {
+		t.Fatalf("listPlayEvents trackId filter: %d %s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	decodeResponse(t, resp, &result)
+	events := result["events"].([]any)
+	if len(events) != 2 {
+		t.Errorf("events with trackId filter = %d, want 2", len(events))
+	}
+	for _, ev := range events {
+		e := ev.(map[string]any)
+		if e["trackId"] != trackID1 {
+			t.Errorf("event trackId = %v, want %v", e["trackId"], trackID1)
+		}
+	}
+}

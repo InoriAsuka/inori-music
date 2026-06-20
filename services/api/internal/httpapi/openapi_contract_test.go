@@ -1277,3 +1277,21 @@ func TestStorageAdminOpenAPIContractAdminDetailTimelinePaths(t *testing.T) {
 		}
 	}
 }
+
+// TestStorageAdminOpenAPIContractViewerHistoryTrackIdParam asserts that
+// GET /api/v1/me/history declares a trackId query parameter.
+func TestStorageAdminOpenAPIContractViewerHistoryTrackIdParam(t *testing.T) {
+	document := loadOpenAPIContract(t)
+	paths := document["paths"].(map[string]any)
+
+	get := operation(t, paths, "/api/v1/me/history", "get")
+	declared := map[string]bool{}
+	for _, p := range get["parameters"].([]any) {
+		if m, ok := p.(map[string]any); ok {
+			declared[m["name"].(string)] = true
+		}
+	}
+	if !declared["trackId"] {
+		t.Error("GET /api/v1/me/history missing query param trackId")
+	}
+}
