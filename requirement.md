@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`1.18.0`
+`1.19.0`
 
 ## Product Goal
 
@@ -1147,3 +1147,10 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Bump OpenAPI `info.version` to `1.18.0`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
 
+### v1.19.0 - 2026-06-20
+
+- Perform full cross-check of handler-registered routes (115 operations) against OpenAPI `paths` entries; confirm 100% coverage with no orphans in either direction.
+- Extend `TestStorageAdminOpenAPIContractCoversRoutes` expected map to include `POST /api/v1/auth/login` and `POST /api/v1/auth/logout`, which were missing from the assertion despite being present in both handler and spec.
+- Synchronize `requirement.md` `## Current Version` and `VERSION` file to `1.19.0`.
+- Bump OpenAPI `info.version` to `1.19.0`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
