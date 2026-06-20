@@ -101,3 +101,13 @@ func (r *Repository) AreFavorites(ctx context.Context, userID string, trackIDs [
 	}
 	return result, rows.Err()
 }
+
+func (r *Repository) ClearUserFavorites(ctx context.Context, userID string) error {
+	_, err := r.pool.Exec(ctx, `DELETE FROM user_track_favorites WHERE user_id = $1`, userID)
+	return err
+}
+
+func (r *Repository) RemoveTrackFavorites(ctx context.Context, trackID string) error {
+	_, err := r.pool.Exec(ctx, `DELETE FROM user_track_favorites WHERE track_id = $1`, trackID)
+	return err
+}

@@ -85,3 +85,25 @@ func (r *MemoryRepository) AreFavorites(_ context.Context, userID string, trackI
 	}
 	return result, nil
 }
+
+func (r *MemoryRepository) ClearUserFavorites(_ context.Context, userID string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for key := range r.entries {
+		if key.userID == userID {
+			delete(r.entries, key)
+		}
+	}
+	return nil
+}
+
+func (r *MemoryRepository) RemoveTrackFavorites(_ context.Context, trackID string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for key := range r.entries {
+		if key.trackID == trackID {
+			delete(r.entries, key)
+		}
+	}
+	return nil
+}

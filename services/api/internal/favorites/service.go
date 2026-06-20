@@ -69,3 +69,13 @@ func (s *Service) AreFavorites(ctx context.Context, userID string, trackIDs []st
 	}
 	return s.repo.AreFavorites(ctx, strings.TrimSpace(userID), trackIDs)
 }
+
+// ClearUserFavorites removes all favorites for the given user. Admin use.
+func (s *Service) ClearUserFavorites(ctx context.Context, userID string) error {
+	return s.repo.ClearUserFavorites(ctx, strings.TrimSpace(userID))
+}
+
+// AdminRemoveFavorite removes a single user–track favorite. Admin use.
+func (s *Service) AdminRemoveFavorite(ctx context.Context, userID, trackID string) error {
+	return s.repo.RemoveFavorite(ctx, strings.TrimSpace(userID), strings.TrimSpace(trackID))
+}

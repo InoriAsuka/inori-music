@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`1.32.0`
+`1.33.0`
 
 ## Product Goal
 
@@ -1295,4 +1295,15 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - `httpapi`: add `parseReleaseYearRange(w, r)` helper (validates non-negative ints, enforces min ≤ max); wire into `listAlbums` and `listAlbumsByArtist` handlers.
 - Add `?releaseYearMin` and `?releaseYearMax` query params to 4 album list paths in OpenAPI spec.
 - Bump VERSION and OpenAPI `info.version` to `1.32.0`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v1.33.0 - 2026-06-20
+
+- Add `ClearUserFavorites(ctx, userID) error` and `RemoveTrackFavorites(ctx, trackID) error` to `favorites.Repository` interface.
+- Implement both on `MemoryRepository` (map iteration + delete) and `postgres.Repository` (DELETE WHERE user_id / track_id).
+- Add `ClearUserFavorites` and `AdminRemoveFavorite` to `favorites.Service`.
+- Register admin favorites routes: `GET /api/v1/admin/favorites/users/{userId}/tracks`, `DELETE /api/v1/admin/favorites/users/{userId}/tracks`, `DELETE /api/v1/admin/favorites/users/{userId}/tracks/{trackId}`.
+- Implement `adminListUserFavorites`, `adminClearUserFavorites`, `adminRemoveUserFavoriteTrack` handlers.
+- Add admin favorites paths to OpenAPI spec (3 paths, 5 operations); total paths 112.
+- Bump VERSION and OpenAPI `info.version` to `1.33.0`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

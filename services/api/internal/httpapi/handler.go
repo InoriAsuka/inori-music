@@ -416,6 +416,11 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/me/favorites/tracks", handler.requireViewerAuth(handler.listFavoriteTracks))
 	mux.HandleFunc("/api/v1/me/favorites/tracks/{trackId}", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/me/favorites/tracks", handler.requireViewerAuth(handler.methodNotAllowed))
+	mux.HandleFunc("GET /api/v1/admin/favorites/users/{userId}/tracks", handler.requireAdminAuth(handler.adminListUserFavorites))
+	mux.HandleFunc("DELETE /api/v1/admin/favorites/users/{userId}/tracks", handler.requireAdminAuth(handler.adminClearUserFavorites))
+	mux.HandleFunc("DELETE /api/v1/admin/favorites/users/{userId}/tracks/{trackId}", handler.requireAdminAuth(handler.adminRemoveUserFavoriteTrack))
+	mux.HandleFunc("/api/v1/admin/favorites/users/{userId}/tracks/{trackId}", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("/api/v1/admin/favorites/users/{userId}/tracks", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("GET /api/v1/admin/history/stats", handler.requireAdminAuth(handler.getAdminHistoryStats))
 	mux.HandleFunc("GET /api/v1/admin/history/top-tracks", handler.requireAdminAuth(handler.getAdminTopTracks))
 	mux.HandleFunc("GET /api/v1/admin/history/top-users", handler.requireAdminAuth(handler.getAdminTopUsers))
@@ -4353,4 +4358,59 @@ func (handler *Handler) listFavoriteTracks(w http.ResponseWriter, r *http.Reques
 		"trackIds":   page.TrackIDs,
 		"pagination": pagination,
 	})
+}
+
+// ---- admin favorites handlers ----
+
+func (handler *Handler) adminListUserFavorites(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireFavoritesService(w) {
+		return
+	}
+	userID := r.PathValue("userId")
+	limit, err := parseMediaObjectListInt(r.URL.Query().Get("limit"), "limit", favorites.DefaultListLimit)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	offset, err := parseMediaObjectListInt(r.URL.Query().Get("offset"), "offset", 0)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	page, err := handler.favoritesService.ListFavorites(r.Context(), userID, limit, offset)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"trackIds": page.TrackIDs,
+		"pagination": map[string]any{
+			"limit":   limit,
+			"offset":  offset,
+			"total":   page.Total,
+			"hasMore": offset+limit < page.Total,
+		},
+	})
+}
+
+func (handler *Handler) adminClearUserFavorites(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireFavoritesService(w) {
+		return
+	}
+	if err := handler.favoritesService.ClearUserFavorites(r.Context(), r.PathValue("userId")); err != nil {
+		writeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (handler *Handler) adminRemoveUserFavoriteTrack(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireFavoritesService(w) {
+		return
+	}
+	if err := handler.favoritesService.AdminRemoveFavorite(r.Context(), r.PathValue("userId"), r.PathValue("trackId")); err != nil {
+		writeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
