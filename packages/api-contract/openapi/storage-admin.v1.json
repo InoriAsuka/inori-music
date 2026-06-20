@@ -2511,7 +2511,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "1.34.0"
+    "version": "1.36.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -4824,7 +4824,149 @@
           "$ref": "#/components/parameters/BackendId"
         }
       ],
+      "get": {
+        "summary": "Get a storage backend by ID",
+        "operationId": "getStorageBackend",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "tags": [],
+        "responses": {
+          "200": {
+            "description": "Storage backend",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageBackend"
+                }
+              }
+            }
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update a storage backend's display name or priority",
+        "operationId": "patchStorageBackend",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "tags": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "displayName": {
+                    "type": "string",
+                    "description": "New human-readable name"
+                  },
+                  "priority": {
+                    "type": "integer",
+                    "description": "Scheduling priority (lower = higher priority)"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated backend",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StorageBackend"
+                }
+              }
+            }
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            },
+            "description": "Error"
+          }
+        }
+      },
       "delete": {
+        "summary": "Delete a storage backend",
+        "operationId": "deleteStorageBackend",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "tags": [],
         "responses": {
           "204": {
             "description": "Backend deleted"
@@ -4850,14 +4992,14 @@
             "description": "Error"
           },
           "409": {
+            "description": "Error \u2014 backend is default (storage_backend_is_default) or has media objects (storage_backend_in_use)",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorEnvelope"
                 }
               }
-            },
-            "description": "Error \u2014 backend is default (storage_backend_is_default) or has media objects (storage_backend_in_use)"
+            }
           },
           "503": {
             "content": {
@@ -4869,15 +5011,7 @@
             },
             "description": "Error"
           }
-        },
-        "security": [
-          {
-            "bearerAuth": []
-          }
-        ],
-        "summary": "Delete a storage backend",
-        "operationId": "deleteStorageBackend",
-        "tags": []
+        }
       }
     },
     "/api/v1/admin/storage/backends/{id}/health": {

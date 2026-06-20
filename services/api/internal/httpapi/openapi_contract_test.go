@@ -1297,3 +1297,169 @@ func TestStorageAdminOpenAPIContractViewerHistoryTrackIdParam(t *testing.T) {
 		t.Error("GET /api/v1/me/history missing query param trackId")
 	}
 }
+
+// TestStorageAdminOpenAPIContractPhase125to135Routes asserts that all routes added
+// in Phases 125–135 are declared in the OpenAPI spec.
+func TestStorageAdminOpenAPIContractPhase125to135Routes(t *testing.T) {
+	document := loadOpenAPIContract(t)
+	paths := document["paths"].(map[string]any)
+
+	// Phase 125: enable endpoint
+	enablePath := paths["/api/v1/admin/storage/backends/{id}/enable"].(map[string]any)
+	if _, ok := enablePath["post"].(map[string]any); !ok {
+		t.Error("POST /api/v1/admin/storage/backends/{id}/enable is missing")
+	}
+
+	// Phase 126 + 135: backends/{id} must have GET, PATCH, DELETE
+	backendID := paths["/api/v1/admin/storage/backends/{id}"].(map[string]any)
+	for _, method := range []string{"get", "patch", "delete"} {
+		if _, ok := backendID[method].(map[string]any); !ok {
+			t.Errorf("%s /api/v1/admin/storage/backends/{id} is missing", method)
+		}
+	}
+
+	// Phase 128: viewer favorites
+	for _, tc := range []struct{ path, method string }{
+		{"/api/v1/me/favorites/tracks", "get"},
+		{"/api/v1/me/favorites/tracks/{trackId}", "post"},
+		{"/api/v1/me/favorites/tracks/{trackId}", "delete"},
+	} {
+		pathItem, ok := paths[tc.path].(map[string]any)
+		if !ok {
+			t.Fatalf("path %q is missing", tc.path)
+		}
+		if _, ok := pathItem[tc.method].(map[string]any); !ok {
+			t.Errorf("%s %s is missing", tc.method, tc.path)
+		}
+	}
+
+	// Phase 133: admin favorites
+	for _, tc := range []struct{ path, method string }{
+		{"/api/v1/admin/favorites/users/{userId}/tracks", "get"},
+		{"/api/v1/admin/favorites/users/{userId}/tracks", "delete"},
+		{"/api/v1/admin/favorites/users/{userId}/tracks/{trackId}", "delete"},
+	} {
+		pathItem, ok := paths[tc.path].(map[string]any)
+		if !ok {
+			t.Fatalf("path %q is missing", tc.path)
+		}
+		if _, ok := pathItem[tc.method].(map[string]any); !ok {
+			t.Errorf("%s %s is missing", tc.method, tc.path)
+		}
+	}
+}
+
+// TestStorageAdminOpenAPIContractPhase127GenreParam asserts ?genre is declared on
+// track list endpoints.
+func TestStorageAdminOpenAPIContractPhase127GenreParam(t *testing.T) {
+	document := loadOpenAPIContract(t)
+	paths := document["paths"].(map[string]any)
+
+	trackListPaths := []string{
+		"/api/v1/admin/catalog/tracks",
+		"/api/v1/catalog/tracks",
+		"/api/v1/admin/catalog/albums/{id}/tracks",
+		"/api/v1/catalog/albums/{id}/tracks",
+		"/api/v1/admin/catalog/artists/{id}/tracks",
+		"/api/v1/catalog/artists/{id}/tracks",
+	}
+	for _, p := range trackListPaths {
+		get := operation(t, paths, p, "get")
+		params, _ := get["parameters"].([]any)
+		seen := make(map[string]bool)
+		for _, param := range params {
+			if m, ok := param.(map[string]any); ok {
+				seen[m["name"].(string)] = true
+			}
+		}
+		if !seen["genre"] {
+			t.Errorf("GET %s is missing ?genre query param", p)
+		}
+	}
+}
+
+// TestStorageAdminOpenAPIContractPhase132ReleaseYearParams asserts ?releaseYearMin
+// and ?releaseYearMax are declared on album list endpoints.
+func TestStorageAdminOpenAPIContractPhase132ReleaseYearParams(t *testing.T) {
+	document := loadOpenAPIContract(t)
+	paths := document["paths"].(map[string]any)
+
+	albumListPaths := []string{
+		"/api/v1/admin/catalog/albums",
+		"/api/v1/catalog/albums",
+		"/api/v1/admin/catalog/artists/{id}/albums",
+		"/api/v1/catalog/artists/{id}/albums",
+	}
+	for _, p := range albumListPaths {
+		get := operation(t, paths, p, "get")
+		params, _ := get["parameters"].([]any)
+		seen := make(map[string]bool)
+		for _, param := range params {
+			if m, ok := param.(map[string]any); ok {
+				seen[m["name"].(string)] = true
+			}
+		}
+		for _, want := range []string{"releaseYearMin", "releaseYearMax"} {
+			if !seen[want] {
+				t.Errorf("GET %s is missing ?%s query param", p, want)
+			}
+		}
+	}
+}
+
+// TestStorageAdminOpenAPIContractPhase127GenreField asserts CatalogTrack has a
+// genre field and CatalogTrack has an isFavorite field (Phase 129).
+func TestStorageAdminOpenAPIContractPhase127And129Fields(t *testing.T) {
+	document := loadOpenAPIContract(t)
+	components := document["components"].(map[string]any)
+	schemas := components["schemas"].(map[string]any)
+
+	track, ok := schemas["CatalogTrack"].(map[string]any)
+	if !ok {
+		t.Fatal("schema CatalogTrack is missing")
+	}
+	props := track["properties"].(map[string]any)
+	if _, ok := props["genre"]; !ok {
+		t.Error("CatalogTrack missing field \"genre\" (Phase 127)")
+	}
+	if _, ok := props["isFavorite"]; !ok {
+		t.Error("CatalogTrack missing field \"isFavorite\" (Phase 129)")
+	}
+}
+
+// TestStorageAdminOpenAPIContractPhase131PatchBackendBody asserts the PATCH
+// /admin/storage/backends/{id} requestBody carries displayName and priority.
+func TestStorageAdminOpenAPIContractPhase131PatchBackendBody(t *testing.T) {
+	document := loadOpenAPIContract(t)
+	paths := document["paths"].(map[string]any)
+
+	patch := operation(t, paths, "/api/v1/admin/storage/backends/{id}", "patch")
+	rb, ok := patch["requestBody"].(map[string]any)
+	if !ok {
+		t.Fatal("PATCH /api/v1/admin/storage/backends/{id} missing requestBody")
+	}
+	schema := rb["content"].(map[string]any)["application/json"].(map[string]any)["schema"].(map[string]any)
+	props := schema["properties"].(map[string]any)
+	for _, want := range []string{"displayName", "priority"} {
+		if _, ok := props[want]; !ok {
+			t.Errorf("PATCH /api/v1/admin/storage/backends/{id} requestBody missing field %q", want)
+		}
+	}
+}
+
+// TestStorageAdminOpenAPIContractPhase128FavoritesPage asserts the FavoritesPage
+// schema exists.
+func TestStorageAdminOpenAPIContractPhase128FavoritesPage(t *testing.T) {
+	document := loadOpenAPIContract(t)
+	components := document["components"].(map[string]any)
+	schemas := components["schemas"].(map[string]any)
+
+	fp, ok := schemas["FavoritesPage"].(map[string]any)
+	if !ok {
+		t.Fatal("schema FavoritesPage is missing")
+	}
+	props := fp["properties"].(map[string]any)
+	if _, ok := props["pagination"]; !ok {
+		t.Error("FavoritesPage missing field \"pagination\"")
+	}
+}

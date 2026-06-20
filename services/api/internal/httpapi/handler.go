@@ -460,6 +460,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/admin/storage/backends", handler.requireAdminAuth(handler.registerStorageBackend))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends/validate", handler.requireAdminAuth(handler.validateStorageBackend))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends/refresh", handler.requireAdminAuth(handler.refreshStorageBackends))
+	mux.HandleFunc("GET /api/v1/admin/storage/backends/{id}", handler.requireAdminAuth(handler.getStorageBackend))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends/{id}/default", handler.requireAdminAuth(handler.setDefaultStorageBackend))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends/{id}/disable", handler.requireAdminAuth(handler.disableStorageBackend))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends/{id}/enable", handler.requireAdminAuth(handler.enableStorageBackend))
@@ -3798,6 +3799,15 @@ func (handler *Handler) listStorageBackends(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"backends": backends})
+}
+
+func (handler *Handler) getStorageBackend(w http.ResponseWriter, r *http.Request) {
+	backend, err := handler.storage.GetBackend(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, backend)
 }
 
 func (handler *Handler) registerStorageBackend(w http.ResponseWriter, r *http.Request) {

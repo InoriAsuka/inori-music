@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`1.34.0`
+`1.36.0`
 
 ## Product Goal
 
@@ -1312,4 +1312,23 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 
 - Update `README.md` to `1.34.0` baseline: version field, phases 125–134 descriptions, OpenAPI path count updated to 134 operations.
 - Bump VERSION and OpenAPI `info.version` to `1.34.0`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v1.35.0 - 2026-06-20
+
+- Add `GET /api/v1/admin/storage/backends/{id}` endpoint returning the single backend by ID; handler `getStorageBackend` delegates to `storage.Service.GetBackend`; 404 on unknown ID.
+- Register `GET /api/v1/admin/storage/backends/{id}` in `Routes()` before the sub-path handlers.
+- Fix OpenAPI spec `packages/api-contract/openapi/storage-admin.v1.json`: replace the `{id}` path that previously held only `DELETE` with a complete entry carrying `GET`, `PATCH`, and `DELETE` (the PATCH spec was missing from Phase 131 due to an insertion guard bug).
+- Bump VERSION and OpenAPI `info.version` to `1.35.0`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v1.36.0 - 2026-06-20
+
+- Add `TestStorageAdminOpenAPIContractPhase125to135Routes`: asserts `POST .../enable`, `GET/PATCH/DELETE .../backends/{id}`, viewer favorites (GET/POST/DELETE), and admin favorites (GET/DELETE/DELETE per-track) are all present in the OpenAPI spec.
+- Add `TestStorageAdminOpenAPIContractPhase127GenreParam`: verifies `?genre` on the 6 track list paths.
+- Add `TestStorageAdminOpenAPIContractPhase132ReleaseYearParams`: verifies `?releaseYearMin` and `?releaseYearMax` on 4 album list paths.
+- Add `TestStorageAdminOpenAPIContractPhase127And129Fields`: verifies `CatalogTrack.genre` (Phase 127) and `CatalogTrack.isFavorite` (Phase 129) are in the schema.
+- Add `TestStorageAdminOpenAPIContractPhase131PatchBackendBody`: verifies `displayName` and `priority` fields in the PATCH backend requestBody.
+- Add `TestStorageAdminOpenAPIContractPhase128FavoritesPage`: verifies `FavoritesPage` schema with `pagination` field.
+- Bump VERSION and OpenAPI `info.version` to `1.36.0`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
