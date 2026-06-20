@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`1.25.0`
+`1.26.0`
 
 ## Product Goal
 
@@ -1204,4 +1204,16 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Register `enableStorageBackend` handler in `Routes()` immediately after `disableStorageBackend`; add corresponding `methodNotAllowed` catch-all for the path.
 - Add `/api/v1/admin/storage/backends/{id}/enable` path to OpenAPI spec `packages/api-contract/openapi/storage-admin.v1.json` with POST method, 200/401/404/503 responses, mirroring the disable path structure.
 - Bump VERSION and OpenAPI `info.version` to `1.25.0`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v1.26.0 - 2026-06-20
+
+- Add `Delete(ctx, id) error` to `storage.Repository` interface; implement on `MemoryRepository` (map delete), `FileRepository` (map delete + persist), and `postgres.BackendRepository` (SQL DELETE, 404 on zero rows).
+- Add `ErrBackendIsDefault` and `ErrBackendInUse` sentinel errors to `storage/validation.go`.
+- Implement `(*Service).DeleteBackend(ctx, id)`: fetch, guard `IsDefault → ErrBackendIsDefault`, then delegate to `repository.Delete`.
+- Add `deleteStorageBackend` handler: check media object count via `ListMediaObjects(limit=1)`, reject with `ErrBackendInUse` if references exist, call `storage.DeleteBackend`, respond 204.
+- Add `ErrBackendIsDefault → 409 storage_backend_is_default` and `ErrBackendInUse → 409 storage_backend_in_use` cases to `writeError`.
+- Register `DELETE /api/v1/admin/storage/backends/{id}` in `Routes()`; fix `/validate` and `/refresh` catch-alls to explicit method prefixes to avoid Go ServeMux conflict with the new DELETE wildcard route.
+- Add `/api/v1/admin/storage/backends/{id}` DELETE path and two new error codes to OpenAPI spec.
+- Bump VERSION and OpenAPI `info.version` to `1.26.0`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

@@ -443,6 +443,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("POST /api/v1/admin/storage/backends/{id}/default", handler.requireAdminAuth(handler.setDefaultStorageBackend))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends/{id}/disable", handler.requireAdminAuth(handler.disableStorageBackend))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends/{id}/enable", handler.requireAdminAuth(handler.enableStorageBackend))
+	mux.HandleFunc("DELETE /api/v1/admin/storage/backends/{id}", handler.requireAdminAuth(handler.deleteStorageBackend))
 	mux.HandleFunc("POST /api/v1/admin/storage/backends/{id}/probe", handler.requireAdminAuth(handler.probeStorageBackend))
 	mux.HandleFunc("GET /api/v1/admin/storage/backends/{id}/health", handler.requireAdminAuth(handler.getStorageBackendHealth))
 	mux.HandleFunc("GET /api/v1/admin/storage/backends/{id}/capacity", handler.requireAdminAuth(handler.getStorageBackendCapacity))
@@ -517,8 +518,10 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("/api/v1/catalog/stats/albums", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/catalog/stats/playlists", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/storage/backends", handler.requireAdminAuth(handler.methodNotAllowed))
-	mux.HandleFunc("/api/v1/admin/storage/backends/validate", handler.requireAdminAuth(handler.methodNotAllowed))
-	mux.HandleFunc("/api/v1/admin/storage/backends/refresh", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("GET /api/v1/admin/storage/backends/validate", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("DELETE /api/v1/admin/storage/backends/validate", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("GET /api/v1/admin/storage/backends/refresh", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("DELETE /api/v1/admin/storage/backends/refresh", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/storage/backends/{id}/default", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/storage/backends/{id}/disable", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/storage/backends/{id}/enable", handler.requireAdminAuth(handler.methodNotAllowed))
@@ -3740,6 +3743,31 @@ func (handler *Handler) enableStorageBackend(w http.ResponseWriter, r *http.Requ
 	writeJSON(w, http.StatusOK, backend)
 }
 
+func (handler *Handler) deleteStorageBackend(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	// Guard: reject if any media object still references this backend.
+	if handler.mediaObjects != nil {
+		page, err := handler.mediaObjects.ListMediaObjects(r.Context(), storage.MediaObjectListFilter{
+			BackendID: id,
+			Limit:     1,
+		})
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		if page.Pagination.Total > 0 {
+			writeError(w, fmt.Errorf("%w: backend %s has %d media object(s) — remove or relocate them first",
+				storage.ErrBackendInUse, id, page.Pagination.Total))
+			return
+		}
+	}
+	if err := handler.storage.DeleteBackend(r.Context(), id); err != nil {
+		writeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (handler *Handler) probeStorageBackend(w http.ResponseWriter, r *http.Request) {
 	result, err := handler.storage.ProbeBackend(r.Context(), r.PathValue("id"))
 	if err != nil {
@@ -4051,6 +4079,12 @@ func writeError(w http.ResponseWriter, err error) {
 	case errors.Is(err, storage.ErrConflict), errors.Is(err, storage.ErrBackendDisabled):
 		status = http.StatusConflict
 		code = "conflict"
+	case errors.Is(err, storage.ErrBackendIsDefault):
+		status = http.StatusConflict
+		code = "storage_backend_is_default"
+	case errors.Is(err, storage.ErrBackendInUse):
+		status = http.StatusConflict
+		code = "storage_backend_in_use"
 	case errors.Is(err, storage.ErrMediaObjectVerificationUnsupported):
 		status = http.StatusUnprocessableEntity
 		code = "media_object_verification_unsupported"

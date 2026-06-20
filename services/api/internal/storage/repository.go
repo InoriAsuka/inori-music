@@ -12,6 +12,7 @@ type Repository interface {
 	Get(ctx context.Context, id string) (StorageBackend, error)
 	List(ctx context.Context) ([]StorageBackend, error)
 	ClearDefault(ctx context.Context) error
+	Delete(ctx context.Context, id string) error
 }
 
 // MemoryRepository is a development repository for domain tests and early scaffolding.
@@ -61,5 +62,16 @@ func (repo *MemoryRepository) ClearDefault(_ context.Context) error {
 		backend.IsDefault = false
 		repo.backends[id] = backend
 	}
+	return nil
+}
+
+func (repo *MemoryRepository) Delete(_ context.Context, id string) error {
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+
+	if _, ok := repo.backends[id]; !ok {
+		return fmt.Errorf("%w: %s", ErrNotFound, id)
+	}
+	delete(repo.backends, id)
 	return nil
 }

@@ -110,6 +110,17 @@ func (r *BackendRepository) ClearDefault(ctx context.Context) error {
 	return err
 }
 
+func (r *BackendRepository) Delete(ctx context.Context, id string) error {
+	result, err := r.pool.Exec(ctx, `DELETE FROM storage_backends WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+	if result.RowsAffected() == 0 {
+		return fmt.Errorf("%w: %s", storage.ErrNotFound, id)
+	}
+	return nil
+}
+
 // scanner is satisfied by both pgx.Row and pgx.Rows.
 type scanner interface {
 	Scan(dest ...any) error

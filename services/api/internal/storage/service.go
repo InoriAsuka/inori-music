@@ -182,6 +182,17 @@ func (service *Service) EnableBackend(ctx context.Context, id string) (StorageBa
 	return backend, nil
 }
 
+func (service *Service) DeleteBackend(ctx context.Context, id string) error {
+	backend, err := service.repository.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	if backend.IsDefault {
+		return fmt.Errorf("%w: cannot delete default backend %s", ErrBackendIsDefault, id)
+	}
+	return service.repository.Delete(ctx, id)
+}
+
 func ensureDefaultCandidate(backend StorageBackend) error {
 	if !backend.Enabled {
 		return fmt.Errorf("%w: default backend must be enabled", ErrInvalidBackend)

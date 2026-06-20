@@ -92,6 +92,21 @@ func (repo *FileRepository) ClearDefault(ctx context.Context) error {
 	return repo.persistLocked()
 }
 
+func (repo *FileRepository) Delete(ctx context.Context, id string) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+
+	repo.mu.Lock()
+	defer repo.mu.Unlock()
+
+	if _, ok := repo.backends[id]; !ok {
+		return fmt.Errorf("%w: %s", ErrNotFound, id)
+	}
+	delete(repo.backends, id)
+	return repo.persistLocked()
+}
+
 func (repo *FileRepository) load() error {
 	content, err := os.ReadFile(repo.path)
 	if err != nil {
