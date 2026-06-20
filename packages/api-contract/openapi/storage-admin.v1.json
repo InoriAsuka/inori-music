@@ -270,6 +270,10 @@
           "updatedAt": {
             "format": "date-time",
             "type": "string"
+          },
+          "genre": {
+            "type": "string",
+            "description": "Optional genre tag for the track (e.g. Rock, Jazz, Classical)"
           }
         },
         "required": [
@@ -1580,6 +1584,9 @@
             "type": "integer",
             "minimum": 0,
             "description": "Track duration in milliseconds."
+          },
+          "genre": {
+            "type": "string"
           }
         }
       },
@@ -2457,7 +2464,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "1.26.0"
+    "version": "1.27.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -3174,6 +3181,15 @@
               ],
               "default": "asc"
             }
+          },
+          {
+            "name": "genre",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter tracks by genre (case-insensitive exact match)"
           }
         ],
         "responses": {
@@ -6103,6 +6119,15 @@
               ],
               "default": "asc"
             }
+          },
+          {
+            "name": "genre",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter tracks by genre (case-insensitive exact match)"
           }
         ],
         "responses": {
@@ -7854,6 +7879,15 @@
               "default": "asc"
             },
             "description": "Sort direction."
+          },
+          {
+            "name": "genre",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter tracks by genre (case-insensitive exact match)"
           }
         ],
         "responses": {
@@ -7971,6 +8005,15 @@
               "default": "asc"
             },
             "description": "Sort direction."
+          },
+          {
+            "name": "genre",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter tracks by genre (case-insensitive exact match)"
           }
         ],
         "responses": {
@@ -8205,6 +8248,15 @@
               "default": "asc"
             },
             "description": "Sort direction."
+          },
+          {
+            "name": "genre",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter tracks by genre (case-insensitive exact match)"
           }
         ],
         "responses": {
@@ -8322,6 +8374,15 @@
               "default": "asc"
             },
             "description": "Sort direction."
+          },
+          {
+            "name": "genre",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filter tracks by genre (case-insensitive exact match)"
           }
         ],
         "responses": {

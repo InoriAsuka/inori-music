@@ -202,4 +202,10 @@ CREATE TABLE IF NOT EXISTS play_events (
 CREATE INDEX IF NOT EXISTS play_events_user_id_played_at_idx ON play_events (user_id, played_at DESC);
 CREATE INDEX IF NOT EXISTS play_events_track_id_idx           ON play_events (track_id);`,
 	},
+	{
+		name: "009_track_genre",
+		sql: `
+ALTER TABLE tracks ADD COLUMN IF NOT EXISTS genre TEXT;
+CREATE INDEX IF NOT EXISTS tracks_genre_idx ON tracks (lower(genre)) WHERE genre IS NOT NULL;`,
+	},
 }

@@ -138,8 +138,8 @@ func (r *Repository) DeleteAlbum(ctx context.Context, id string) error {
 
 func (r *Repository) SaveTrack(ctx context.Context, track catalog.Track) error {
 	_, err := r.pool.Exec(ctx, `
-		INSERT INTO tracks (id, title, sort_title, artist_id, album_id, media_object_id, track_number, disc_number, duration_ms, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, NULLIF($5, ''), $6, $7, $8, $9, $10, $11)
+		INSERT INTO tracks (id, title, sort_title, artist_id, album_id, media_object_id, track_number, disc_number, duration_ms, genre, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, NULLIF($5, ''), $6, $7, $8, $9, NULLIF($10, ''), $11, $12)
 		ON CONFLICT (id) DO UPDATE SET
 		    title           = EXCLUDED.title,
 		    sort_title      = EXCLUDED.sort_title,
@@ -149,14 +149,15 @@ func (r *Repository) SaveTrack(ctx context.Context, track catalog.Track) error {
 		    track_number    = EXCLUDED.track_number,
 		    disc_number     = EXCLUDED.disc_number,
 		    duration_ms     = EXCLUDED.duration_ms,
+		    genre           = EXCLUDED.genre,
 		    updated_at      = EXCLUDED.updated_at`,
-		track.ID, track.Title, track.SortTitle, track.ArtistID, track.AlbumID, track.MediaObjectID, track.TrackNumber, track.DiscNumber, track.DurationMS, track.CreatedAt.UTC(), track.UpdatedAt.UTC(),
+		track.ID, track.Title, track.SortTitle, track.ArtistID, track.AlbumID, track.MediaObjectID, track.TrackNumber, track.DiscNumber, track.DurationMS, track.Genre, track.CreatedAt.UTC(), track.UpdatedAt.UTC(),
 	)
 	return err
 }
 
 func (r *Repository) GetTrack(ctx context.Context, id string) (catalog.Track, error) {
-	row := r.pool.QueryRow(ctx, `SELECT id, title, sort_title, artist_id, COALESCE(album_id, ''), media_object_id, track_number, disc_number, duration_ms, created_at, updated_at FROM tracks WHERE id = $1`, id)
+	row := r.pool.QueryRow(ctx, `SELECT id, title, sort_title, artist_id, COALESCE(album_id, ''), media_object_id, track_number, disc_number, duration_ms, COALESCE(genre, ''), created_at, updated_at FROM tracks WHERE id = $1`, id)
 	track, err := scanTrack(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -168,15 +169,15 @@ func (r *Repository) GetTrack(ctx context.Context, id string) (catalog.Track, er
 }
 
 func (r *Repository) ListTracks(ctx context.Context) ([]catalog.Track, error) {
-	return r.queryTracks(ctx, `SELECT id, title, sort_title, artist_id, COALESCE(album_id, ''), media_object_id, track_number, disc_number, duration_ms, created_at, updated_at FROM tracks ORDER BY lower(sort_title), lower(title), id`)
+	return r.queryTracks(ctx, `SELECT id, title, sort_title, artist_id, COALESCE(album_id, ''), media_object_id, track_number, disc_number, duration_ms, COALESCE(genre, ''), created_at, updated_at FROM tracks ORDER BY lower(sort_title), lower(title), id`)
 }
 
 func (r *Repository) ListTracksByAlbum(ctx context.Context, albumID string) ([]catalog.Track, error) {
-	return r.queryTracks(ctx, `SELECT id, title, sort_title, artist_id, COALESCE(album_id, ''), media_object_id, track_number, disc_number, duration_ms, created_at, updated_at FROM tracks WHERE album_id = $1 ORDER BY disc_number, track_number, lower(title), id`, albumID)
+	return r.queryTracks(ctx, `SELECT id, title, sort_title, artist_id, COALESCE(album_id, ''), media_object_id, track_number, disc_number, duration_ms, COALESCE(genre, ''), created_at, updated_at FROM tracks WHERE album_id = $1 ORDER BY disc_number, track_number, lower(title), id`, albumID)
 }
 
 func (r *Repository) ListTracksByArtist(ctx context.Context, artistID string) ([]catalog.Track, error) {
-	return r.queryTracks(ctx, `SELECT id, title, sort_title, artist_id, COALESCE(album_id, ''), media_object_id, track_number, disc_number, duration_ms, created_at, updated_at FROM tracks WHERE artist_id = $1 ORDER BY lower(sort_title), lower(title), id`, artistID)
+	return r.queryTracks(ctx, `SELECT id, title, sort_title, artist_id, COALESCE(album_id, ''), media_object_id, track_number, disc_number, duration_ms, COALESCE(genre, ''), created_at, updated_at FROM tracks WHERE artist_id = $1 ORDER BY lower(sort_title), lower(title), id`, artistID)
 }
 
 func (r *Repository) queryTracks(ctx context.Context, sql string, args ...any) ([]catalog.Track, error) {
@@ -307,7 +308,7 @@ func scanAlbum(s scanner) (catalog.Album, error) {
 
 func scanTrack(s scanner) (catalog.Track, error) {
 	var t catalog.Track
-	if err := s.Scan(&t.ID, &t.Title, &t.SortTitle, &t.ArtistID, &t.AlbumID, &t.MediaObjectID, &t.TrackNumber, &t.DiscNumber, &t.DurationMS, &t.CreatedAt, &t.UpdatedAt); err != nil {
+	if err := s.Scan(&t.ID, &t.Title, &t.SortTitle, &t.ArtistID, &t.AlbumID, &t.MediaObjectID, &t.TrackNumber, &t.DiscNumber, &t.DurationMS, &t.Genre, &t.CreatedAt, &t.UpdatedAt); err != nil {
 		return catalog.Track{}, err
 	}
 	return t, nil

@@ -188,7 +188,7 @@ func (s *Service) UpdateAlbum(ctx context.Context, id string, req UpdateAlbumReq
 	return album, nil
 }
 
-func (s *Service) CreateTrack(ctx context.Context, title, sortTitle, artistID, albumID, mediaObjectID string, trackNumber, discNumber, durationMS int) (Track, error) {
+func (s *Service) CreateTrack(ctx context.Context, title, sortTitle, artistID, albumID, mediaObjectID, genre string, trackNumber, discNumber, durationMS int) (Track, error) {
 	title = strings.TrimSpace(title)
 	sortTitle = strings.TrimSpace(sortTitle)
 	artistID = strings.TrimSpace(artistID)
@@ -223,7 +223,7 @@ func (s *Service) CreateTrack(ctx context.Context, title, sortTitle, artistID, a
 		return Track{}, fmt.Errorf("generate track id: %w", err)
 	}
 	now := s.now().UTC()
-	track := Track{ID: id, Title: title, SortTitle: sortTitle, ArtistID: artistID, AlbumID: albumID, MediaObjectID: mediaObjectID, TrackNumber: trackNumber, DiscNumber: discNumber, DurationMS: durationMS, CreatedAt: now, UpdatedAt: now}
+	track := Track{ID: id, Title: title, SortTitle: sortTitle, ArtistID: artistID, AlbumID: albumID, MediaObjectID: mediaObjectID, TrackNumber: trackNumber, DiscNumber: discNumber, DurationMS: durationMS, Genre: strings.TrimSpace(genre), CreatedAt: now, UpdatedAt: now}
 	if err := s.repo.SaveTrack(ctx, track); err != nil {
 		return Track{}, err
 	}
@@ -323,6 +323,9 @@ func (s *Service) UpdateTrack(ctx context.Context, id string, req UpdateTrackReq
 		}
 		track.DurationMS = *req.DurationMS
 	}
+	if req.Genre != nil {
+		track.Genre = strings.TrimSpace(*req.Genre)
+	}
 	track.UpdatedAt = s.now().UTC()
 	if err := s.repo.SaveTrack(ctx, track); err != nil {
 		return Track{}, err
@@ -394,6 +397,7 @@ func (s *Service) ImportTrack(ctx context.Context, req ImportTrackRequest) (Trac
 		TrackNumber:   req.TrackNumber,
 		DiscNumber:    req.DiscNumber,
 		DurationMS:    req.DurationMS,
+		Genre:         strings.TrimSpace(req.Genre),
 		CreatedAt:     now,
 		UpdatedAt:     now,
 	}

@@ -64,6 +64,8 @@ func trackOrderBy(q catalog.ListQuery) string {
 		col = "disc_number"
 	case catalog.TrackSortByDurationMS:
 		col = "duration_ms"
+	case catalog.TrackSortByGenre:
+		col = "lower(COALESCE(genre,''))"
 	case catalog.TrackSortByCreatedAt:
 		col = "created_at"
 	case catalog.TrackSortByUpdatedAt:
@@ -167,9 +169,20 @@ func (r *Repository) queryAlbumsPage(ctx context.Context, sql string, args ...an
 }
 
 func (r *Repository) ListTracksPage(ctx context.Context, q catalog.ListQuery) (catalog.ListPage[catalog.Track], error) {
+	if q.Genre != "" {
+		sql := fmt.Sprintf(`
+			SELECT id, title, sort_title, artist_id, COALESCE(album_id,''), media_object_id,
+			       track_number, disc_number, duration_ms, COALESCE(genre,''), created_at, updated_at,
+			       COUNT(*) OVER () AS total_count
+			FROM tracks
+			WHERE lower(COALESCE(genre,'')) = lower($3)
+			ORDER BY %s
+			LIMIT $1 OFFSET $2`, trackOrderBy(q))
+		return r.queryTracksPage(ctx, sql, q.Limit, q.Offset, q.Genre)
+	}
 	sql := fmt.Sprintf(`
 		SELECT id, title, sort_title, artist_id, COALESCE(album_id,''), media_object_id,
-		       track_number, disc_number, duration_ms, created_at, updated_at,
+		       track_number, disc_number, duration_ms, COALESCE(genre,''), created_at, updated_at,
 		       COUNT(*) OVER () AS total_count
 		FROM tracks
 		ORDER BY %s
@@ -178,9 +191,20 @@ func (r *Repository) ListTracksPage(ctx context.Context, q catalog.ListQuery) (c
 }
 
 func (r *Repository) ListTracksByAlbumPage(ctx context.Context, albumID string, q catalog.ListQuery) (catalog.ListPage[catalog.Track], error) {
+	if q.Genre != "" {
+		sql := fmt.Sprintf(`
+			SELECT id, title, sort_title, artist_id, COALESCE(album_id,''), media_object_id,
+			       track_number, disc_number, duration_ms, COALESCE(genre,''), created_at, updated_at,
+			       COUNT(*) OVER () AS total_count
+			FROM tracks
+			WHERE album_id = $3 AND lower(COALESCE(genre,'')) = lower($4)
+			ORDER BY %s
+			LIMIT $1 OFFSET $2`, trackOrderBy(q))
+		return r.queryTracksPage(ctx, sql, q.Limit, q.Offset, albumID, q.Genre)
+	}
 	sql := fmt.Sprintf(`
 		SELECT id, title, sort_title, artist_id, COALESCE(album_id,''), media_object_id,
-		       track_number, disc_number, duration_ms, created_at, updated_at,
+		       track_number, disc_number, duration_ms, COALESCE(genre,''), created_at, updated_at,
 		       COUNT(*) OVER () AS total_count
 		FROM tracks
 		WHERE album_id = $3
@@ -190,9 +214,20 @@ func (r *Repository) ListTracksByAlbumPage(ctx context.Context, albumID string, 
 }
 
 func (r *Repository) ListTracksByArtistPage(ctx context.Context, artistID string, q catalog.ListQuery) (catalog.ListPage[catalog.Track], error) {
+	if q.Genre != "" {
+		sql := fmt.Sprintf(`
+			SELECT id, title, sort_title, artist_id, COALESCE(album_id,''), media_object_id,
+			       track_number, disc_number, duration_ms, COALESCE(genre,''), created_at, updated_at,
+			       COUNT(*) OVER () AS total_count
+			FROM tracks
+			WHERE artist_id = $3 AND lower(COALESCE(genre,'')) = lower($4)
+			ORDER BY %s
+			LIMIT $1 OFFSET $2`, trackOrderBy(q))
+		return r.queryTracksPage(ctx, sql, q.Limit, q.Offset, artistID, q.Genre)
+	}
 	sql := fmt.Sprintf(`
 		SELECT id, title, sort_title, artist_id, COALESCE(album_id,''), media_object_id,
-		       track_number, disc_number, duration_ms, created_at, updated_at,
+		       track_number, disc_number, duration_ms, COALESCE(genre,''), created_at, updated_at,
 		       COUNT(*) OVER () AS total_count
 		FROM tracks
 		WHERE artist_id = $3
@@ -213,7 +248,7 @@ func (r *Repository) queryTracksPage(ctx context.Context, sql string, args ...an
 		var t catalog.Track
 		if err := rows.Scan(
 			&t.ID, &t.Title, &t.SortTitle, &t.ArtistID, &t.AlbumID, &t.MediaObjectID,
-			&t.TrackNumber, &t.DiscNumber, &t.DurationMS, &t.CreatedAt, &t.UpdatedAt, &total,
+			&t.TrackNumber, &t.DiscNumber, &t.DurationMS, &t.Genre, &t.CreatedAt, &t.UpdatedAt, &total,
 		); err != nil {
 			return catalog.ListPage[catalog.Track]{}, err
 		}

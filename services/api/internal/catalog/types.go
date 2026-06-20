@@ -57,6 +57,7 @@ type Track struct {
 	TrackNumber   int       `json:"trackNumber,omitempty"`
 	DiscNumber    int       `json:"discNumber,omitempty"`
 	DurationMS    int       `json:"durationMs,omitempty"`
+	Genre         string    `json:"genre,omitempty"`
 	CreatedAt     time.Time `json:"createdAt"`
 	UpdatedAt     time.Time `json:"updatedAt"`
 }
@@ -91,6 +92,7 @@ type ListQuery struct {
 	SortOrder string // "asc" | "desc"; "" = "asc"
 	Limit     int    // > 0
 	Offset    int    // >= 0
+	Genre     string // optional genre filter for track list queries; "" = no filter
 }
 
 // ListPage carries one page of results together with the total unfiltered count.
@@ -178,6 +180,7 @@ type ImportTrackRequest struct {
 	TrackNumber   int
 	DiscNumber    int
 	DurationMS    int
+	Genre         string
 }
 
 // RelinkTrackRequest carries the new media object reference for an existing track.
@@ -211,6 +214,7 @@ type UpdateTrackRequest struct {
 	TrackNumber *int
 	DiscNumber  *int
 	DurationMS  *int
+	Genre       *string
 }
 
 // BatchImportResultItem holds the outcome of a single import within a batch request.
@@ -375,6 +379,7 @@ const (
 	TrackSortByTrackNumber  = "trackNumber"
 	TrackSortByDiscNumber   = "discNumber"
 	TrackSortByDurationMS   = "durationMs"
+	TrackSortByGenre        = "genre"
 	TrackSortByCreatedAt    = "createdAt"
 	TrackSortByUpdatedAt    = "updatedAt"
 

@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`1.26.0`
+`1.27.0`
 
 ## Product Goal
 
@@ -1216,4 +1216,26 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Register `DELETE /api/v1/admin/storage/backends/{id}` in `Routes()`; fix `/validate` and `/refresh` catch-alls to explicit method prefixes to avoid Go ServeMux conflict with the new DELETE wildcard route.
 - Add `/api/v1/admin/storage/backends/{id}` DELETE path and two new error codes to OpenAPI spec.
 - Bump VERSION and OpenAPI `info.version` to `1.26.0`.
+- The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v1.27.0 - 2026-06-20
+
+- Add `Genre string` field (JSON `"genre"`, `omitempty`) to `catalog.Track` struct in `types.go`.
+- Add `Genre string` field to `ListQuery` for track filter pass-through.
+- Add `Genre *string` field to `UpdateTrackRequest`; add `Genre string` to `ImportTrackRequest`.
+- Add `TrackSortByGenre = "genre"` constant.
+- Update `(*Service).CreateTrack` signature to accept `genre string` parameter (after `mediaObjectID`); set `track.Genre = strings.TrimSpace(genre)`.
+- Update `(*Service).UpdateTrack` to apply `req.Genre` when non-nil.
+- Update `(*Service).ImportTrack` to set `track.Genre = strings.TrimSpace(req.Genre)`.
+- `MemoryRepository.ListTracksPage/ListTracksByAlbumPage/ListTracksByArtistPage`: add `strings.EqualFold` genre filter; add `TrackSortByGenre` case to `trackLess`.
+- `postgres.Repository.SaveTrack`: add `genre` column to INSERT/UPDATE; use `NULLIF($10,'')`.
+- `postgres.Repository.GetTrack/ListTracks/ListTracksByAlbum/ListTracksByArtist`: add `COALESCE(genre,'')` to SELECT; update `scanTrack` to scan `&t.Genre`.
+- `postgres.Repository.ListTracksPage/ListTracksByAlbumPage/ListTracksByArtistPage`: add `COALESCE(genre,'')` column and conditional `WHERE lower(COALESCE(genre,''))=lower($N)` when `q.Genre != ""`.
+- `postgres.Repository.queryTracksPage`: add `&t.Genre` to Scan call.
+- `trackOrderBy`: add `TrackSortByGenre → lower(COALESCE(genre,''))`.
+- Migration `009_track_genre`: `ALTER TABLE tracks ADD COLUMN IF NOT EXISTS genre TEXT` + partial index.
+- `httpapi`: add `Genre` to `createTrackRequest`, `patchTrackRequest`, `importTrackRequest`; parse `?genre` query param in `listTracks`; pass all through to service.
+- Update all `CreateTrack` call sites in `service_test.go` to add `""` for the new genre param.
+- Add `genre` field to `CatalogTrack` and `CatalogUpdateTrackRequest` OpenAPI schemas; add `?genre` parameter to 6 track list endpoints.
+- Bump VERSION and OpenAPI `info.version` to `1.27.0`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.

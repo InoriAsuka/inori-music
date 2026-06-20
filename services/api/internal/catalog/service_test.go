@@ -438,7 +438,7 @@ func TestServiceCreatesArtistAlbumAndTrack(t *testing.T) {
 		t.Fatalf("album = %+v", album)
 	}
 
-	track, err := svc.CreateTrack(ctx, "World Is Mine", "World Is Mine", artist.ID, album.ID, "media-1", 1, 1, 245000)
+	track, err := svc.CreateTrack(ctx, "World Is Mine", "World Is Mine", artist.ID, album.ID, "media-1", "", 1, 1, 245000)
 	if err != nil {
 		t.Fatalf("CreateTrack: %v", err)
 	}
@@ -461,7 +461,7 @@ func TestServiceValidatesRequiredFields(t *testing.T) {
 	if _, err := svc.CreateAlbum(ctx, "", "", "artist", 0); !errors.Is(err, catalog.ErrInvalidAlbum) {
 		t.Fatalf("CreateAlbum err = %v, want ErrInvalidAlbum", err)
 	}
-	if _, err := svc.CreateTrack(ctx, "", "", "artist", "", "media", 0, 0, 0); !errors.Is(err, catalog.ErrInvalidTrack) {
+	if _, err := svc.CreateTrack(ctx, "", "", "artist", "", "media", "", 0, 0, 0); !errors.Is(err, catalog.ErrInvalidTrack) {
 		t.Fatalf("CreateTrack err = %v, want ErrInvalidTrack", err)
 	}
 }
@@ -487,7 +487,7 @@ func TestServiceRequiresExistingArtistAndMatchingAlbum(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := svc.CreateTrack(ctx, "Song", "", other.ID, album.ID, "media-1", 1, 1, 1000); !errors.Is(err, catalog.ErrInvalidTrack) {
+	if _, err := svc.CreateTrack(ctx, "Song", "", other.ID, album.ID, "media-1", "", 1, 1, 1000); !errors.Is(err, catalog.ErrInvalidTrack) {
 		t.Fatalf("CreateTrack err = %v, want ErrInvalidTrack", err)
 	}
 }
@@ -497,7 +497,7 @@ func TestServiceDeletesRecords(t *testing.T) {
 	svc := catalog.NewService(newMemRepo())
 	artist, _ := svc.CreateArtist(ctx, "Artist", "")
 	album, _ := svc.CreateAlbum(ctx, "Album", "", artist.ID, 0)
-	track, _ := svc.CreateTrack(ctx, "Track", "", artist.ID, album.ID, "media-1", 0, 0, 0)
+	track, _ := svc.CreateTrack(ctx, "Track", "", artist.ID, album.ID, "media-1", "", 0, 0, 0)
 	if err := svc.DeleteTrack(ctx, track.ID); err != nil {
 		t.Fatalf("DeleteTrack: %v", err)
 	}
@@ -1138,7 +1138,7 @@ func TestUpdateTrackChangesTitle(t *testing.T) {
 	svc := newSteppingService(newMemRepo())
 	artist, _ := svc.CreateArtist(ctx, "A", "")
 	album, _ := svc.CreateAlbum(ctx, "B", "", artist.ID, 0)
-	track, _ := svc.CreateTrack(ctx, "Old", "", artist.ID, album.ID, "mo1", 1, 1, 60000)
+	track, _ := svc.CreateTrack(ctx, "Old", "", artist.ID, album.ID, "mo1", "", 1, 1, 60000)
 
 	updated, err := svc.UpdateTrack(ctx, track.ID, catalog.UpdateTrackRequest{
 		Title:       strPtr("New"),
@@ -1161,7 +1161,7 @@ func TestUpdateTrackClearsAlbum(t *testing.T) {
 	svc := catalog.NewService(newMemRepo())
 	artist, _ := svc.CreateArtist(ctx, "A", "")
 	album, _ := svc.CreateAlbum(ctx, "B", "", artist.ID, 0)
-	track, _ := svc.CreateTrack(ctx, "T", "", artist.ID, album.ID, "mo2", 0, 0, 0)
+	track, _ := svc.CreateTrack(ctx, "T", "", artist.ID, album.ID, "mo2", "", 0, 0, 0)
 
 	empty := ""
 	updated, err := svc.UpdateTrack(ctx, track.ID, catalog.UpdateTrackRequest{AlbumID: &empty})
@@ -1177,7 +1177,7 @@ func TestUpdateTrackRejectsEmptyTitle(t *testing.T) {
 	ctx := context.Background()
 	svc := catalog.NewService(newMemRepo())
 	artist, _ := svc.CreateArtist(ctx, "A", "")
-	track, _ := svc.CreateTrack(ctx, "T", "", artist.ID, "", "mo3", 0, 0, 0)
+	track, _ := svc.CreateTrack(ctx, "T", "", artist.ID, "", "mo3", "", 0, 0, 0)
 
 	_, err := svc.UpdateTrack(ctx, track.ID, catalog.UpdateTrackRequest{Title: strPtr("")})
 	if !errors.Is(err, catalog.ErrInvalidTrack) {
@@ -1231,8 +1231,8 @@ func TestPlaylistAddAndRemoveTrack(t *testing.T) {
 	ctx := context.Background()
 	svc := catalog.NewService(newMemRepo())
 	artist, _ := svc.CreateArtist(ctx, "A", "")
-	t1, _ := svc.CreateTrack(ctx, "T1", "", artist.ID, "", "mo1", 0, 0, 0)
-	t2, _ := svc.CreateTrack(ctx, "T2", "", artist.ID, "", "mo2", 0, 0, 0)
+	t1, _ := svc.CreateTrack(ctx, "T1", "", artist.ID, "", "mo1", "", 0, 0, 0)
+	t2, _ := svc.CreateTrack(ctx, "T2", "", artist.ID, "", "mo2", "", 0, 0, 0)
 
 	pl, _ := svc.CreatePlaylist(ctx, "PL", "")
 	pl, err := svc.AddTrackToPlaylist(ctx, pl.ID, t1.ID)
@@ -1270,7 +1270,7 @@ func TestPlaylistRemoveAbsentTrack(t *testing.T) {
 	ctx := context.Background()
 	svc := catalog.NewService(newMemRepo())
 	artist, _ := svc.CreateArtist(ctx, "A", "")
-	tr, _ := svc.CreateTrack(ctx, "T", "", artist.ID, "", "mo1", 0, 0, 0)
+	tr, _ := svc.CreateTrack(ctx, "T", "", artist.ID, "", "mo1", "", 0, 0, 0)
 	pl, _ := svc.CreatePlaylist(ctx, "PL", "")
 	_, _ = svc.AddTrackToPlaylist(ctx, pl.ID, tr.ID)
 
@@ -1335,8 +1335,8 @@ func TestPlaylistSetTracks(t *testing.T) {
 	ctx := context.Background()
 	svc := catalog.NewService(newMemRepo())
 	artist, _ := svc.CreateArtist(ctx, "A", "")
-	t1, _ := svc.CreateTrack(ctx, "T1", "", artist.ID, "", "mo1", 0, 0, 0)
-	t2, _ := svc.CreateTrack(ctx, "T2", "", artist.ID, "", "mo2", 0, 0, 0)
+	t1, _ := svc.CreateTrack(ctx, "T1", "", artist.ID, "", "mo1", "", 0, 0, 0)
+	t2, _ := svc.CreateTrack(ctx, "T2", "", artist.ID, "", "mo2", "", 0, 0, 0)
 	pl, _ := svc.CreatePlaylist(ctx, "PL", "")
 
 	// happy path: reorder [t2, t1]
@@ -1385,9 +1385,9 @@ func TestGetPlaylistTracksOrdered(t *testing.T) {
 	ctx := context.Background()
 	svc := catalog.NewService(newMemRepo())
 	artist, _ := svc.CreateArtist(ctx, "A", "")
-	tr1, _ := svc.CreateTrack(ctx, "Alpha", "", artist.ID, "", "mo-gpt-1", 0, 0, 0)
-	tr2, _ := svc.CreateTrack(ctx, "Beta", "", artist.ID, "", "mo-gpt-2", 0, 0, 0)
-	tr3, _ := svc.CreateTrack(ctx, "Gamma", "", artist.ID, "", "mo-gpt-3", 0, 0, 0)
+	tr1, _ := svc.CreateTrack(ctx, "Alpha", "", artist.ID, "", "mo-gpt-1", "", 0, 0, 0)
+	tr2, _ := svc.CreateTrack(ctx, "Beta", "", artist.ID, "", "mo-gpt-2", "", 0, 0, 0)
+	tr3, _ := svc.CreateTrack(ctx, "Gamma", "", artist.ID, "", "mo-gpt-3", "", 0, 0, 0)
 
 	pl, _ := svc.CreatePlaylist(ctx, "TestPL", "")
 	_, _ = svc.SetPlaylistTracks(ctx, pl.ID, []string{tr3.ID, tr1.ID, tr2.ID})
@@ -1431,7 +1431,7 @@ func TestGetPlaylistTracksPreserveDuplicates(t *testing.T) {
 	ctx := context.Background()
 	svc := catalog.NewService(newMemRepo())
 	artist, _ := svc.CreateArtist(ctx, "A", "")
-	tr, _ := svc.CreateTrack(ctx, "T", "", artist.ID, "", "mo-dup-1", 0, 0, 0)
+	tr, _ := svc.CreateTrack(ctx, "T", "", artist.ID, "", "mo-dup-1", "", 0, 0, 0)
 
 	pl, _ := svc.CreatePlaylist(ctx, "DupPL", "")
 	_, _ = svc.SetPlaylistTracks(ctx, pl.ID, []string{tr.ID, tr.ID, tr.ID})
@@ -1470,8 +1470,8 @@ func TestGetCatalogStatsPopulated(t *testing.T) {
 	_, _ = svc.CreateArtist(ctx, "Artist A", "")
 	artist2, _ := svc.CreateArtist(ctx, "Artist B", "")
 	_, _ = svc.CreateAlbum(ctx, "Album 1", "", artist2.ID, 2020)
-	_, _ = svc.CreateTrack(ctx, "Track 1", "", artist2.ID, "", "mo-s1", 0, 0, 0)
-	_, _ = svc.CreateTrack(ctx, "Track 2", "", artist2.ID, "", "mo-s2", 0, 0, 0)
+	_, _ = svc.CreateTrack(ctx, "Track 1", "", artist2.ID, "", "mo-s1", "", 0, 0, 0)
+	_, _ = svc.CreateTrack(ctx, "Track 2", "", artist2.ID, "", "mo-s2", "", 0, 0, 0)
 	_, _ = svc.CreatePlaylist(ctx, "Playlist 1", "")
 
 	stats, err := svc.GetCatalogStats(ctx)
@@ -1533,9 +1533,9 @@ func TestGetArtistStatsBreakdownPopulated(t *testing.T) {
 	a1, _ := svc.CreateArtist(ctx, "Aria", "")
 	a2, _ := svc.CreateArtist(ctx, "Bloom", "")
 	_, _ = svc.CreateAlbum(ctx, "First Album", "", a1.ID, 2020)
-	_, _ = svc.CreateTrack(ctx, "Track A", "", a1.ID, "", "mo-1", 0, 0, 0)
-	_, _ = svc.CreateTrack(ctx, "Track B", "", a1.ID, "", "mo-2", 0, 0, 0)
-	_, _ = svc.CreateTrack(ctx, "Track C", "", a1.ID, "", "mo-3", 0, 0, 0)
+	_, _ = svc.CreateTrack(ctx, "Track A", "", a1.ID, "", "mo-1", "", 0, 0, 0)
+	_, _ = svc.CreateTrack(ctx, "Track B", "", a1.ID, "", "mo-2", "", 0, 0, 0)
+	_, _ = svc.CreateTrack(ctx, "Track C", "", a1.ID, "", "mo-3", "", 0, 0, 0)
 
 	result, err := svc.GetArtistStatsBreakdown(ctx)
 	if err != nil {
@@ -1579,8 +1579,8 @@ func TestGetAlbumStatsBreakdownPopulated(t *testing.T) {
 	artist, _ := svc.CreateArtist(ctx, "Solo Artist", "")
 	al1, _ := svc.CreateAlbum(ctx, "Debut", "", artist.ID, 2021)
 	al2, _ := svc.CreateAlbum(ctx, "Sophomore", "", artist.ID, 2023)
-	_, _ = svc.CreateTrack(ctx, "Song 1", "", artist.ID, al1.ID, "mo-a1", 0, 0, 0)
-	_, _ = svc.CreateTrack(ctx, "Song 2", "", artist.ID, al1.ID, "mo-a2", 0, 0, 0)
+	_, _ = svc.CreateTrack(ctx, "Song 1", "", artist.ID, al1.ID, "mo-a1", "", 0, 0, 0)
+	_, _ = svc.CreateTrack(ctx, "Song 2", "", artist.ID, al1.ID, "mo-a2", "", 0, 0, 0)
 
 	result, err := svc.GetAlbumStatsBreakdown(ctx)
 	if err != nil {
@@ -1622,8 +1622,8 @@ func TestGetPlaylistStatsBreakdownPopulated(t *testing.T) {
 	svc := catalog.NewService(newMemRepo())
 
 	artist, _ := svc.CreateArtist(ctx, "Test Artist", "")
-	tr1, _ := svc.CreateTrack(ctx, "Track A", "", artist.ID, "", "mo-p1", 0, 0, 0)
-	tr2, _ := svc.CreateTrack(ctx, "Track B", "", artist.ID, "", "mo-p2", 0, 0, 0)
+	tr1, _ := svc.CreateTrack(ctx, "Track A", "", artist.ID, "", "mo-p1", "", 0, 0, 0)
+	tr2, _ := svc.CreateTrack(ctx, "Track B", "", artist.ID, "", "mo-p2", "", 0, 0, 0)
 
 	pl1, _ := svc.CreatePlaylist(ctx, "Playlist One", "")
 	pl2, _ := svc.CreatePlaylist(ctx, "Playlist Two", "")
@@ -1697,7 +1697,7 @@ func TestGetRecentlyAddedKindFilter(t *testing.T) {
 	ctx := context.Background()
 
 	artist, _ := svc.CreateArtist(ctx, "Solo Artist", "")
-	_, _ = svc.CreateTrack(ctx, "Track 1", "", artist.ID, "", "mo-001", 1, 0, 180000)
+	_, _ = svc.CreateTrack(ctx, "Track 1", "", artist.ID, "", "mo-001", "", 1, 0, 180000)
 
 	result, err := svc.GetRecentlyAdded(ctx, "artist", 0)
 	if err != nil {
@@ -1865,7 +1865,7 @@ func TestGetRecentlyUpdatedKindFilter(t *testing.T) {
 	ctx := context.Background()
 
 	artist, _ := svc.CreateArtist(ctx, "Solo Artist", "")
-	_, _ = svc.CreateTrack(ctx, "Track 1", "", artist.ID, "", "mo-001", 1, 0, 180000)
+	_, _ = svc.CreateTrack(ctx, "Track 1", "", artist.ID, "", "mo-001", "", 1, 0, 180000)
 
 	result, err := svc.GetRecentlyUpdated(ctx, "artist", 0)
 	if err != nil {
@@ -2063,7 +2063,7 @@ func TestListTracksPageSortByTitle(t *testing.T) {
 
 	artist, _ := svc.CreateArtist(ctx, "Band", "")
 	for _, title := range []string{"Zephyr", "Aura", "Midnight"} {
-		svc.CreateTrack(ctx, title, "", artist.ID, "", "mo-"+title, 0, 0, 0)
+		svc.CreateTrack(ctx, title, "", artist.ID, "", "mo-"+title, "", 0, 0, 0)
 	}
 
 	page, err := svc.ListTracksPage(ctx, catalog.ListQuery{

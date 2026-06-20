@@ -1145,6 +1145,7 @@ type importTrackRequest struct {
 	TrackNumber   int    `json:"trackNumber"`
 	DiscNumber    int    `json:"discNumber"`
 	DurationMS    int    `json:"durationMs"`
+	Genre         string `json:"genre"`
 }
 
 func (handler *Handler) importTrack(w http.ResponseWriter, r *http.Request) {
@@ -1165,6 +1166,7 @@ func (handler *Handler) importTrack(w http.ResponseWriter, r *http.Request) {
 		TrackNumber:   req.TrackNumber,
 		DiscNumber:    req.DiscNumber,
 		DurationMS:    req.DurationMS,
+		Genre:         req.Genre,
 	})
 	if err != nil {
 		writeError(w, err)
@@ -1199,6 +1201,7 @@ func (handler *Handler) batchImportTracks(w http.ResponseWriter, r *http.Request
 			TrackNumber:   it.TrackNumber,
 			DiscNumber:    it.DiscNumber,
 			DurationMS:    it.DurationMS,
+			Genre:         it.Genre,
 		}
 	}
 	result := handler.catalogService.BatchImportTracks(r.Context(), items)
@@ -1725,6 +1728,7 @@ type createTrackRequest struct {
 	TrackNumber   int    `json:"trackNumber"`
 	DiscNumber    int    `json:"discNumber"`
 	DurationMS    int    `json:"durationMs"`
+	Genre         string `json:"genre"`
 }
 
 func (handler *Handler) listTracks(w http.ResponseWriter, r *http.Request) {
@@ -1745,6 +1749,8 @@ func (handler *Handler) listTracks(w http.ResponseWriter, r *http.Request) {
 	queryArgs := r.URL.Query()
 	artistID := queryArgs.Get("artistId")
 	albumID := queryArgs.Get("albumId")
+	genre := queryArgs.Get("genre")
+	q.Genre = genre
 	var (
 		page catalog.ListPage[catalog.Track]
 		err  error
@@ -1776,7 +1782,7 @@ func (handler *Handler) createTrack(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
-	track, err := handler.catalogService.CreateTrack(r.Context(), req.Title, req.SortTitle, req.ArtistID, req.AlbumID, req.MediaObjectID, req.TrackNumber, req.DiscNumber, req.DurationMS)
+	track, err := handler.catalogService.CreateTrack(r.Context(), req.Title, req.SortTitle, req.ArtistID, req.AlbumID, req.MediaObjectID, req.Genre, req.TrackNumber, req.DiscNumber, req.DurationMS)
 	if err != nil {
 		writeError(w, err)
 		return
@@ -1907,6 +1913,7 @@ type patchTrackRequest struct {
 	TrackNumber *int    `json:"trackNumber"`
 	DiscNumber  *int    `json:"discNumber"`
 	DurationMS  *int    `json:"durationMs"`
+	Genre       *string `json:"genre"`
 }
 
 func (handler *Handler) patchTrack(w http.ResponseWriter, r *http.Request) {
@@ -1926,6 +1933,7 @@ func (handler *Handler) patchTrack(w http.ResponseWriter, r *http.Request) {
 		TrackNumber: req.TrackNumber,
 		DiscNumber:  req.DiscNumber,
 		DurationMS:  req.DurationMS,
+		Genre:       req.Genre,
 	})
 	if err != nil {
 		writeError(w, err)

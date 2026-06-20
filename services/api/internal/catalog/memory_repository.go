@@ -336,7 +336,9 @@ func (r *MemoryRepository) ListTracksPage(_ context.Context, q ListQuery) (ListP
 	r.mu.RLock()
 	all := make([]Track, 0, len(r.tracks))
 	for _, t := range r.tracks {
-		all = append(all, t)
+		if q.Genre == "" || strings.EqualFold(t.Genre, q.Genre) {
+			all = append(all, t)
+		}
 	}
 	r.mu.RUnlock()
 	return memPage(all, q, trackLess(q.SortBy))
@@ -346,7 +348,7 @@ func (r *MemoryRepository) ListTracksByAlbumPage(_ context.Context, albumID stri
 	r.mu.RLock()
 	var all []Track
 	for _, t := range r.tracks {
-		if t.AlbumID == albumID {
+		if t.AlbumID == albumID && (q.Genre == "" || strings.EqualFold(t.Genre, q.Genre)) {
 			all = append(all, t)
 		}
 	}
@@ -358,7 +360,7 @@ func (r *MemoryRepository) ListTracksByArtistPage(_ context.Context, artistID st
 	r.mu.RLock()
 	var all []Track
 	for _, t := range r.tracks {
-		if t.ArtistID == artistID {
+		if t.ArtistID == artistID && (q.Genre == "" || strings.EqualFold(t.Genre, q.Genre)) {
 			all = append(all, t)
 		}
 	}
@@ -377,6 +379,8 @@ func trackLess(sortBy string) func(a, b Track) bool {
 			return a.DiscNumber < b.DiscNumber
 		case TrackSortByDurationMS:
 			return a.DurationMS < b.DurationMS
+		case TrackSortByGenre:
+			return strings.ToLower(a.Genre) < strings.ToLower(b.Genre)
 		case TrackSortByCreatedAt:
 			return a.CreatedAt.Before(b.CreatedAt)
 		case TrackSortByUpdatedAt:
