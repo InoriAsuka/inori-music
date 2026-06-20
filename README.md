@@ -5,7 +5,7 @@ both browser/server and client/server deployment styles.
 
 ## Version
 
-Current architecture baseline version: `1.34.0`
+Current architecture baseline version: `1.41.0`
 
 ## Documentation Policy
 
@@ -286,6 +286,45 @@ favorites inspection and cleanup.
 Bring README to v1.34.0 baseline; add Phases 125–134 to the completed phases list; update
 OpenAPI path count and version reference.
 
+### Phase 135: Storage Backend GET by ID
+
+Add `GET /api/v1/admin/storage/backends/{id}` returning a single backend by ID (404 on
+unknown IDs); fix OpenAPI spec to include GET, PATCH, and DELETE on `backends/{id}`.
+
+### Phase 136: OpenAPI Contract Test Coverage (Phases 125–135)
+
+Add eight new contract test functions asserting that all routes and fields added in Phases
+125–135 are present in the OpenAPI spec, including the `?genre`, `?releaseYearMin/Max`, and
+`isFavorite` fields.
+
+### Phase 137: Favorites HTTP Layer Tests
+
+Add comprehensive HTTP-layer tests for all six favorites handlers (viewer and admin), including
+idempotency checks, isFavorite annotation verification, and `favorites_not_configured` 503.
+
+### Phase 138: Storage Backend and Album Filter HTTP Tests
+
+Add HTTP-layer tests for `GET/PATCH/enable/DELETE` storage backend handlers and for the album
+`?releaseYearMin/Max` filter, including validation error and guard scenarios.
+
+### Phase 139: Catalog Search ?types= Filter
+
+Add `?types=artist,album,track` filter to both admin and viewer catalog search endpoints;
+invalid type values return 400 `validation_error`.
+
+### Phase 140: Media Object PATCH
+
+Add `PATCH /api/v1/admin/media/objects/{id}` allowing in-place correction of `assetKind` and
+`mimeType` metadata; both fields are validated against allowed values.
+
+### Phase 141: README and Documentation Final Sync
+
+> **v1 Feature Complete** — all planned v1 service-layer functionality is implemented,
+> tested, and documented. The service is ready for system-level testing before v2 begins.
+
+Bring README to v1.41.0 baseline; add Phases 135–141 to the completed phases list; update
+OpenAPI operation count; annotate v1 completion milestone.
+
 ---
 
 ## Run the API Server
@@ -314,7 +353,7 @@ The server listens on `127.0.0.1:8080` by default (`INORI_HTTP_ADDR` overrides t
   - [`docs/architecture/frontend-client-constraints.md`](docs/architecture/frontend-client-constraints.md): tech-stack, design language, and boundary constraints for inori-web, inori-admin, and the Flutter client.
 - [`docs/adr/`](docs/adr/): architecture decision records.
 - [`docs/operations/release-and-container.md`](docs/operations/release-and-container.md): GitHub Actions release and container publishing notes.
-- [`packages/api-contract/openapi/storage-admin.v1.json`](packages/api-contract/openapi/storage-admin.v1.json): OpenAPI 3.1 contract (134 operations, v1.34.0).
+- [`packages/api-contract/openapi/storage-admin.v1.json`](packages/api-contract/openapi/storage-admin.v1.json): OpenAPI 3.1 contract (146 operations, v1.41.0).
 
 ---
 
