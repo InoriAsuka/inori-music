@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { RefreshCw, Zap, Power, Star, Trash2 } from "lucide-react";
 import { useAdminClient } from "@/hooks/useAdminClient";
-import { formatBytes } from "@/lib/utils";
-import { cn } from "@/lib/utils";
+import { formatBytes, cn } from "@/lib/utils";
+import { StorageHealthBadge } from "@/components/admin/StorageHealthBadge";
 
 interface Backend {
   id: string; displayName: string; type: string;
@@ -12,13 +12,6 @@ interface Backend {
   healthStatus?: string;
   capacity?: { totalBytes: number; usedBytes: number; availableBytes: number };
 }
-
-const HEALTH_COLOR: Record<string, string> = {
-  healthy: "text-[var(--color-success)]",
-  unhealthy: "text-[var(--color-danger)]",
-  disabled: "text-[var(--color-text-muted)]",
-  unknown: "text-[var(--color-text-muted)]",
-};
 
 export default function StoragePage() {
   const client = useAdminClient();
@@ -95,40 +88,43 @@ export default function StoragePage() {
         </div>
       ) : (
         <div className="space-y-4">
-          {backends.map((b) => (
-            <div key={b.id} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="space-y-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-semibold text-[var(--color-text)]">{b.displayName}</span>
-                    <span className="rounded border border-[var(--color-border)] px-1.5 py-0.5 font-mono text-xs text-[var(--color-text-muted)]">{b.type}</span>
-                    {b.isDefault && <span className="rounded-full bg-[var(--color-primary-dim)] border border-[var(--color-primary)] px-2 py-0.5 text-[10px] font-semibold text-[var(--color-primary)]">DEFAULT</span>}
-                    {!b.enabled && <span className="text-xs text-[var(--color-text-muted)]">disabled</span>}
+          {backends.map((b) => {
+            const usedPct = b.capacity ? (b.capacity.usedBytes / b.capacity.totalBytes) * 100 : 0;
+            return (
+              <div key={b.id} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-semibold text-[var(--color-text)]">{b.displayName}</span>
+                      <span className="rounded border border-[var(--color-border)] px-1.5 py-0.5 font-mono text-xs text-[var(--color-text-muted)]">{b.type}</span>
+                      {b.isDefault && <span className="rounded-full bg-[var(--color-primary-dim)] border border-[var(--color-primary)] px-2 py-0.5 text-[10px] font-semibold text-[var(--color-primary)]">DEFAULT</span>}
+                      {!b.enabled && <span className="text-xs text-[var(--color-text-muted)]">disabled</span>}
+                    </div>
+                    <p className="font-mono text-xs text-[var(--color-text-muted)]">{b.id}</p>
+                    <StorageHealthBadge status={b.healthStatus} />
+                    {b.capacity && (
+                      <div className="w-48 space-y-1">
+                        <div className="h-1.5 rounded-full bg-[var(--color-surface-raised)]">
+                          <div className="h-full rounded-full bg-[var(--color-secondary)]" style={{ width: `${Math.min(100, usedPct)}%` }} />
+                        </div>
+                        <p className="text-xs text-[var(--color-text-muted)]">
+                          {formatBytes(b.capacity.usedBytes)} / {formatBytes(b.capacity.totalBytes)} · {formatBytes(b.capacity.availableBytes)} free
+                        </p>
+                      </div>
+                    )}
+                    {probeResults[b.id] && <p className="text-xs text-[var(--color-info)]">{probeResults[b.id]}</p>}
                   </div>
-                  <p className="font-mono text-xs text-[var(--color-text-muted)]">{b.id}</p>
-                  <div className="flex items-center gap-1.5">
-                    <span className={cn("text-xs", HEALTH_COLOR[b.healthStatus ?? "unknown"])}>
-                      {b.healthStatus === "healthy" && "● "}health: {b.healthStatus ?? "unknown"}
-                    </span>
-                  </div>
-                  {b.capacity && (
-                    <p className="text-xs text-[var(--color-text-muted)]">
-                      {formatBytes(b.capacity.usedBytes)} / {formatBytes(b.capacity.totalBytes)} used
-                      · {formatBytes(b.capacity.availableBytes)} free
-                    </p>
-                  )}
-                  {probeResults[b.id] && <p className="text-xs text-[var(--color-info)]">{probeResults[b.id]}</p>}
-                </div>
 
-                <div className="flex items-center gap-1.5">
-                  <ActionBtn onClick={() => probe(b.id)} label="Probe"><Zap size={13} /></ActionBtn>
-                  {!b.isDefault && <ActionBtn onClick={() => setDefault(b.id)} label="Set default"><Star size={13} /></ActionBtn>}
-                  <ActionBtn onClick={() => toggle(b)} label={b.enabled ? "Disable" : "Enable"}><Power size={13} /></ActionBtn>
-                  <ActionBtn onClick={() => del(b.id)} label="Delete" danger><Trash2 size={13} /></ActionBtn>
+                  <div className="flex items-center gap-1.5">
+                    <ActionBtn onClick={() => probe(b.id)} label="Probe"><Zap size={13} /></ActionBtn>
+                    {!b.isDefault && <ActionBtn onClick={() => setDefault(b.id)} label="Set default"><Star size={13} /></ActionBtn>}
+                    <ActionBtn onClick={() => toggle(b)} label={b.enabled ? "Disable" : "Enable"}><Power size={13} /></ActionBtn>
+                    <ActionBtn onClick={() => del(b.id)} label="Delete" danger><Trash2 size={13} /></ActionBtn>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

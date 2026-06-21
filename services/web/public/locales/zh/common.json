@@ -1,0 +1,57 @@
+{
+  "common": {
+    "appName": "Inori Music",
+    "loading": "加载中…",
+    "error": "出现错误。",
+    "save": "保存",
+    "cancel": "取消",
+    "delete": "删除",
+    "confirm": "确认",
+    "search": "搜索曲目、艺术家…",
+    "noResults": "没有找到 \"{{query}}\" 的结果",
+    "signIn": "登录",
+    "signOut": "退出"
+  },
+  "nav": {
+    "home": "首页",
+    "artists": "艺术家",
+    "albums": "专辑",
+    "tracks": "曲目",
+    "playlists": "播放列表",
+    "search": "搜索",
+    "favorites": "收藏",
+    "history": "历史",
+    "settings": "设置"
+  },
+  "player": {
+    "noTrack": "没有正在播放的曲目",
+    "playbackFailed": "播放失败",
+    "skip": "跳过",
+    "queue": "队列",
+    "queueEmpty": "队列为空。",
+    "shuffle": "随机",
+    "repeat": "循环",
+    "mute": "静音",
+    "unmute": "取消静音"
+  },
+  "catalog": {
+    "tracks": "首",
+    "albums": "张专辑",
+    "artists": "位艺术家",
+    "playlists": "个播放列表",
+    "recentlyAdded": "最近添加",
+    "viewAll": "查看全部",
+    "playAll": "播放"
+  },
+  "settings": {
+    "changePassword": "修改密码",
+    "currentPassword": "当前密码",
+    "newPassword": "新密码",
+    "confirmPassword": "确认新密码",
+    "passwordUpdated": "密码已成功更新。",
+    "passwordMismatch": "两次密码不一致。",
+    "sessions": "活跃会话",
+    "revokeOthers": "撤销其他会话",
+    "language": "语言"
+  }
+}

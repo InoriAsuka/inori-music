@@ -153,6 +153,19 @@ export function useAudio() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTrack?.id, token]);
 
+  // ── External seek events (keyboard shortcuts / player UI) ──────────────
+  useEffect(() => {
+    function onSeek(e: Event) {
+      const seconds = (e as CustomEvent<number>).detail;
+      if (typeof seconds === "number" && audioRef.current) {
+        audioRef.current.currentTime = Math.max(0, seconds);
+        setPosition(Math.max(0, seconds));
+      }
+    }
+    window.addEventListener("inori:seek", onSeek);
+    return () => window.removeEventListener("inori:seek", onSeek);
+  }, [setPosition]);
+
   // ── MediaSession action handlers ───────────────────────────────────────
   useEffect(() => {
     if (typeof window === "undefined" || !("mediaSession" in navigator)) return;

@@ -11,17 +11,24 @@
     "generate:api": "openapi-typescript ../../packages/api-contract/openapi/storage-admin.v1.json -o ./types/api.gen.ts"
   },
   "dependencies": {
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^8.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "i18next": "^26.3.1",
     "lucide-react": "^0.511.0",
+    "motion": "^11.18.2",
     "next": "^15.3.3",
     "openapi-fetch": "^0.13.5",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "react-i18next": "^17.0.8",
     "tailwind-merge": "^3.3.0",
     "zustand": "^5.0.5"
   },
   "devDependencies": {
+    "@tailwindcss/postcss": "^4.1.10",
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
@@ -29,7 +36,6 @@
     "eslint-config-next": "^15.3.3",
     "openapi-typescript": "^7.8.0",
     "tailwindcss": "^4.1.10",
-    "@tailwindcss/postcss": "^4.1.10",
     "typescript": "^5"
   }
 }

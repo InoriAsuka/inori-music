@@ -1,0 +1,57 @@
+{
+  "common": {
+    "appName": "Inori Music",
+    "loading": "Loading…",
+    "error": "Something went wrong.",
+    "save": "Save",
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "confirm": "Confirm",
+    "search": "Search tracks, artists…",
+    "noResults": "No results for \"{{query}}\"",
+    "signIn": "Sign in",
+    "signOut": "Log out"
+  },
+  "nav": {
+    "home": "Home",
+    "artists": "Artists",
+    "albums": "Albums",
+    "tracks": "Tracks",
+    "playlists": "Playlists",
+    "search": "Search",
+    "favorites": "Favorites",
+    "history": "History",
+    "settings": "Settings"
+  },
+  "player": {
+    "noTrack": "No track playing",
+    "playbackFailed": "Playback failed",
+    "skip": "Skip",
+    "queue": "Queue",
+    "queueEmpty": "Queue is empty.",
+    "shuffle": "Shuffle",
+    "repeat": "Repeat",
+    "mute": "Mute",
+    "unmute": "Unmute"
+  },
+  "catalog": {
+    "tracks": "tracks",
+    "albums": "albums",
+    "artists": "artists",
+    "playlists": "playlists",
+    "recentlyAdded": "Recently Added",
+    "viewAll": "View all",
+    "playAll": "Play"
+  },
+  "settings": {
+    "changePassword": "Change Password",
+    "currentPassword": "Current password",
+    "newPassword": "New password",
+    "confirmPassword": "Confirm new password",
+    "passwordUpdated": "Password updated successfully.",
+    "passwordMismatch": "Passwords do not match.",
+    "sessions": "Active Sessions",
+    "revokeOthers": "Revoke other sessions",
+    "language": "Language"
+  }
+}

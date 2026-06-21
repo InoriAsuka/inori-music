@@ -1,0 +1,57 @@
+{
+  "common": {
+    "appName": "Inori Music",
+    "loading": "読み込み中…",
+    "error": "エラーが発生しました。",
+    "save": "保存",
+    "cancel": "キャンセル",
+    "delete": "削除",
+    "confirm": "確認",
+    "search": "曲、アーティストを検索…",
+    "noResults": "\"{{query}}\" の結果はありません",
+    "signIn": "サインイン",
+    "signOut": "サインアウト"
+  },
+  "nav": {
+    "home": "ホーム",
+    "artists": "アーティスト",
+    "albums": "アルバム",
+    "tracks": "トラック",
+    "playlists": "プレイリスト",
+    "search": "検索",
+    "favorites": "お気に入り",
+    "history": "履歴",
+    "settings": "設定"
+  },
+  "player": {
+    "noTrack": "再生中のトラックはありません",
+    "playbackFailed": "再生に失敗しました",
+    "skip": "スキップ",
+    "queue": "キュー",
+    "queueEmpty": "キューが空です。",
+    "shuffle": "シャッフル",
+    "repeat": "リピート",
+    "mute": "ミュート",
+    "unmute": "ミュート解除"
+  },
+  "catalog": {
+    "tracks": "曲",
+    "albums": "枚のアルバム",
+    "artists": "人のアーティスト",
+    "playlists": "個のプレイリスト",
+    "recentlyAdded": "最近追加",
+    "viewAll": "すべて表示",
+    "playAll": "再生"
+  },
+  "settings": {
+    "changePassword": "パスワード変更",
+    "currentPassword": "現在のパスワード",
+    "newPassword": "新しいパスワード",
+    "confirmPassword": "新しいパスワードを確認",
+    "passwordUpdated": "パスワードが更新されました。",
+    "passwordMismatch": "パスワードが一致しません。",
+    "sessions": "アクティブセッション",
+    "revokeOthers": "他のセッションを無効化",
+    "language": "言語"
+  }
+}

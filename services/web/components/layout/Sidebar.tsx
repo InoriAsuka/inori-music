@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Music2, Users, Disc3, ListMusic,
-  Heart, History, LayoutDashboard, Search,
+  Heart, History, LayoutDashboard, Search, Settings,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -22,6 +22,12 @@ const LIBRARY_NAV = [
   { href: "/library/history", label: "History", icon: <History size={16} /> },
 ];
 
+const SETTINGS_NAV = [
+  { href: "/settings/security", label: "Password", icon: <Settings size={16} /> },
+  { href: "/settings/sessions", label: "Sessions", icon: <Settings size={16} /> },
+  { href: "/settings/language", label: "Language", icon: <Settings size={16} /> },
+];
+
 export function Sidebar() {
   const pathname = usePathname();
 
@@ -36,6 +42,11 @@ export function Sidebar() {
         <SectionLabel className="mt-4">My Music</SectionLabel>
         {LIBRARY_NAV.map((item) => (
           <NavLink key={item.href} item={item} active={pathname.startsWith(item.href)} />
+        ))}
+
+        <SectionLabel className="mt-4">Settings</SectionLabel>
+        {SETTINGS_NAV.map((item) => (
+          <NavLink key={item.href} item={item} active={pathname === item.href} />
         ))}
       </nav>
     </aside>

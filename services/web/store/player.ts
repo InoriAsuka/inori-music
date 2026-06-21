@@ -49,6 +49,8 @@ interface PlayerState {
   clearQueue: () => void;
   /** Remove a single track from the queue by index. */
   removeFromQueue: (index: number) => void;
+  /** Reorder queue by moving one item. Keeps current track selected. */
+  reorderQueue: (fromIndex: number, toIndex: number) => void;
 
   // ── Playback control ──────────────────────────────────────────────────
   play: () => void;
@@ -101,6 +103,23 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
       q.splice(index, 1);
       const ci = index < s.currentIndex ? s.currentIndex - 1 : s.currentIndex;
       return { queue: q, currentIndex: ci };
+    });
+  },
+
+  reorderQueue(fromIndex, toIndex) {
+    set((s) => {
+      if (fromIndex === toIndex) return s;
+      if (fromIndex < 0 || fromIndex >= s.queue.length || toIndex < 0 || toIndex >= s.queue.length) return s;
+      const q = [...s.queue];
+      const [moved] = q.splice(fromIndex, 1);
+      q.splice(toIndex, 0, moved);
+
+      let currentIndex = s.currentIndex;
+      if (s.currentIndex === fromIndex) currentIndex = toIndex;
+      else if (fromIndex < s.currentIndex && toIndex >= s.currentIndex) currentIndex = s.currentIndex - 1;
+      else if (fromIndex > s.currentIndex && toIndex <= s.currentIndex) currentIndex = s.currentIndex + 1;
+
+      return { queue: q, currentIndex };
     });
   },
 

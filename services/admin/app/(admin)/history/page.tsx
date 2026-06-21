@@ -3,8 +3,13 @@
 import { useEffect, useState } from "react";
 import { Trash2, ChevronLeft, ChevronRight } from "lucide-react";
 import { useAdminClient } from "@/hooks/useAdminClient";
+import { HistoryTimelineChart } from "@/components/admin/HistoryTimelineChart";
+
+type Granularity = "day" | "week" | "month";
 
 const PAGE = 50;
+
+interface TimelineBucket { label: string; count: number; }
 
 export default function HistoryPage() {
   const client = useAdminClient();
@@ -12,6 +17,8 @@ export default function HistoryPage() {
   const [stats, setStats] = useState<{ totalEvents: number; uniqueUsers: number; uniqueTracks: number } | null>(null);
   const [topTracks, setTopTracks] = useState<{ trackId: string; playCount: number }[]>([]);
   const [topUsers, setTopUsers] = useState<{ userId: string; playCount: number }[]>([]);
+  const [buckets, setBuckets] = useState<TimelineBucket[]>([]);
+  const [granularity, setGranularity] = useState<Granularity>("day");
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -19,12 +26,14 @@ export default function HistoryPage() {
   async function load() {
     if (!client) return;
     setLoading(true);
-    const [histRes, statsRes, tracksRes, usersRes] = await Promise.all([
+    const [histRes, statsRes, tracksRes, usersRes, tlRes] = await Promise.all([
       client.GET("/api/v1/admin/history", { params: { query: { limit: PAGE, offset, order: "desc" } } }),
       client.GET("/api/v1/admin/history/stats"),
       client.GET("/api/v1/admin/history/top-tracks", { params: { query: { limit: 5 } } }),
       client.GET("/api/v1/admin/history/top-users", { params: { query: { limit: 5 } } }),
+      client.GET("/api/v1/admin/history/timeline", { params: { query: { granularity } } }),
     ]);
+
     if (histRes.data) {
       setEvents((histRes.data.events ?? []).map((e) => ({ id: e.id, userId: e.userId, trackId: e.trackId, playedAt: e.playedAt })));
       setTotal((histRes.data.pagination as { total?: number } | undefined)?.total ?? 0);
@@ -32,10 +41,14 @@ export default function HistoryPage() {
     if (statsRes.data) setStats(statsRes.data);
     if (tracksRes.data?.tracks) setTopTracks(tracksRes.data.tracks.map((t) => ({ trackId: t.trackId, playCount: t.playCount })));
     if (usersRes.data) setTopUsers(((usersRes.data as { users?: { userId: string; playCount: number }[] }).users ?? []));
+    if (tlRes.data) {
+      const tl = (tlRes.data as { buckets?: { period: string; count: number }[] }).buckets ?? [];
+      setBuckets(tl.map((b) => ({ label: b.period, count: b.count })));
+    }
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, [client, offset]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [client, offset, granularity]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function del(id: string) {
     if (!client) return;
@@ -70,6 +83,11 @@ export default function HistoryPage() {
             <p className="mt-2 font-mono text-2xl font-bold text-[var(--color-text)]">{(val as number | undefined)?.toLocaleString() ?? "—"}</p>
           </div>
         ))}
+      </div>
+
+      {/* Timeline chart */}
+      <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+        <HistoryTimelineChart buckets={buckets} granularity={granularity} onGranularityChange={setGranularity} />
       </div>
 
       {/* Top charts */}
