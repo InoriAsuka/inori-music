@@ -1,0 +1,11 @@
+.git
+.github
+*.md
+docs
+var
+tmp
+.DS_Store
+.next
+node_modules
+services/api
+services/web

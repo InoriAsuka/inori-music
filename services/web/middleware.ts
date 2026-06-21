@@ -21,8 +21,6 @@ export function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // Allow /admin/* only to admin users — handled per-page via server components.
-  // Here we only check for the presence of the session hint cookie.
   const hasSession = req.cookies.has("inori_session");
   if (!hasSession) {
     const loginUrl = req.nextUrl.clone();

@@ -1,0 +1,9 @@
+.DS_Store
+*.pem
+node_modules
+.next
+.env*.local
+.env
+*.env
+npm-debug.log*
+types/api.gen.ts

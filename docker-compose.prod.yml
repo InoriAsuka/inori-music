@@ -1,15 +1,10 @@
 # syntax=docker/dockerfile:1
 # docker-compose.prod.yml — production stack
 #
-# Prerequisites:
-#   docker compose -f docker-compose.prod.yml up -d
-#
-# Environment variables (set in .env or shell):
+# Environment variables (set in .env):
 #   INORI_ADMIN_TOKEN       — static bootstrap admin token
 #   INORI_AUTH_SECRET       — JWT signing secret
 #   POSTGRES_PASSWORD       — PostgreSQL password
-#   CADDY_ACME_EMAIL        — ACME email for TLS (leave blank for self-signed)
-#   DOMAIN                  — public domain name (e.g. music.example.com)
 
 name: inori-music
 
@@ -30,9 +25,9 @@ services:
       timeout: 5s
       retries: 5
 
-  # ── API ─────────────────────────────────────────────────────────────────
+  # ── Go REST API ─────────────────────────────────────────────────────────
   api:
-    image: ghcr.io/inoriasuka/inori-music-api:latest
+    image: ghcr.io/inoriasuka/inori-music/api:latest
     restart: unless-stopped
     depends_on:
       postgres:
@@ -46,7 +41,7 @@ services:
       INORI_MEDIA_OBJECT_REPOSITORY_FILE: "/data/media-objects.json"
     volumes:
       - api_data:/data
-      # Mount media directories as read-only for local/NFS backends
+      # Mount media directories for local/NFS backends (read-only)
       # - /mnt/music:/mnt/music:ro
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
@@ -55,9 +50,9 @@ services:
       start_period: 15s
       retries: 3
 
-  # ── Web ─────────────────────────────────────────────────────────────────
+  # ── Web player (Next.js, :3000) ─────────────────────────────────────────
   web:
-    image: ghcr.io/inoriasuka/inori-music-web:latest
+    image: ghcr.io/inoriasuka/inori-music/web:latest
     restart: unless-stopped
     depends_on:
       api:
@@ -65,6 +60,7 @@ services:
     environment:
       NEXT_PUBLIC_API_BASE_URL: "http://api:8080"
       PORT: "3000"
+      HOSTNAME: "0.0.0.0"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/"]
       interval: 30s
@@ -72,24 +68,44 @@ services:
       start_period: 20s
       retries: 3
 
-  # ── Reverse proxy (Caddy) ────────────────────────────────────────────────
-  caddy:
-    image: caddy:2-alpine
+  # ── Admin console (Next.js, :3001) ──────────────────────────────────────
+  admin:
+    image: ghcr.io/inoriasuka/inori-music/admin:latest
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: "http://api:8080"
+      PORT: "3001"
+      HOSTNAME: "0.0.0.0"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3001/"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+  # ── Nginx gateway (:80) ─────────────────────────────────────────────────
+  nginx:
+    image: nginx:1.27-alpine
     restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
-      - "443:443/udp"
     depends_on:
-      - web
-      - api
+      web:
+        condition: service_healthy
+      admin:
+        condition: service_healthy
+      api:
+        condition: service_healthy
     volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile:ro
-      - caddy_data:/data
-      - caddy_config:/config
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infra/nginx/conf.d:/etc/nginx/conf.d:ro
+      # TLS certificates — mount from host or use certbot sidecar
+      # - /etc/letsencrypt:/etc/letsencrypt:ro
 
 volumes:
   postgres_data:
   api_data:
-  caddy_data:
-  caddy_config:
