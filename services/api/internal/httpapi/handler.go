@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
@@ -366,6 +367,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/catalog/tracks", handler.requireViewerAuth(handler.listTracks))
 	mux.HandleFunc("GET /api/v1/catalog/tracks/{id}", handler.requireViewerAuth(handler.getTrack))
 	mux.HandleFunc("GET /api/v1/catalog/tracks/{id}/playback", handler.requireViewerAuth(handler.getTrackPlayback))
+	mux.HandleFunc("GET /api/v1/catalog/tracks/{id}/stream", handler.streamTrack)
 	mux.HandleFunc("GET /api/v1/catalog/search", handler.requireViewerAuth(handler.searchCatalog))
 	mux.HandleFunc("GET /api/v1/admin/catalog/stats", handler.requireAdminAuth(handler.getCatalogStats))
 	mux.HandleFunc("GET /api/v1/admin/catalog/stats/artists", handler.requireAdminAuth(handler.getArtistStatsBreakdown))
@@ -1952,6 +1954,10 @@ type trackPlaybackDescriptor struct {
 	BackendType   string `json:"backendType,omitempty"`
 	ObjectKey     string `json:"objectKey"`
 	PresignedURL  string `json:"presignedUrl,omitempty"`
+	// StreamURL is the server-proxied streaming URL for backends that do not
+	// support presigned URLs (local, NFS, SMB). Clients should prefer
+	// PresignedURL when both are present.
+	StreamURL string `json:"streamUrl,omitempty"`
 }
 
 func (handler *Handler) getTrackPlayback(w http.ResponseWriter, r *http.Request) {
@@ -1980,6 +1986,7 @@ func (handler *Handler) getTrackPlayback(w http.ResponseWriter, r *http.Request)
 	}
 	backendType := ""
 	presignedURL := ""
+	streamURL := ""
 	if handler.storage != nil {
 		backend, backendErr := handler.storage.GetBackend(r.Context(), mo.BackendID)
 		if backendErr == nil {
@@ -1989,6 +1996,14 @@ func (handler *Handler) getTrackPlayback(w http.ResponseWriter, r *http.Request)
 					r.Context(), mo.BackendID, mo.ObjectKey, storage.DefaultPresignedURLTTL,
 				); pErr == nil {
 					presignedURL = purl
+				}
+			}
+			// For filesystem-based backends that cannot presign, expose a
+			// server-proxy stream URL so the web client can play via /stream.
+			if presignedURL == "" {
+				switch backend.Type {
+				case storage.BackendTypeLocal, storage.BackendTypeNFS, storage.BackendTypeSMB:
+					streamURL = "/api/v1/catalog/tracks/" + track.ID + "/stream"
 				}
 			}
 		}
@@ -2002,7 +2017,132 @@ func (handler *Handler) getTrackPlayback(w http.ResponseWriter, r *http.Request)
 		BackendType:   backendType,
 		ObjectKey:     mo.ObjectKey,
 		PresignedURL:  presignedURL,
+		StreamURL:     streamURL,
 	})
+}
+
+// streamTrack proxies audio bytes from a filesystem-based storage backend
+// (local, NFS, SMB) directly to the client. It supports HTTP Range requests
+// so browsers can seek within the audio file.
+//
+// Authentication: accepts a Bearer token in the Authorization header OR in the
+// ?token= query parameter. The ?token= fallback is required because the HTML
+// <audio> element cannot set custom request headers.
+func (handler *Handler) streamTrack(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireCatalogService(w) {
+		return
+	}
+
+	// Authenticate — try header first, fall back to ?token= query param.
+	rawToken := r.Header.Get("Authorization")
+	if rawToken == "" {
+		if qt := r.URL.Query().Get("token"); qt != "" {
+			rawToken = "Bearer " + qt
+		}
+	}
+	token, ok := bearerToken(rawToken)
+	if !ok {
+		w.Header().Set("WWW-Authenticate", `Bearer realm="inori"`)
+		writeAPIError(w, http.StatusUnauthorized, "unauthorized", "valid bearer token is required")
+		return
+	}
+	if handler.authService == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "auth_not_configured", "authentication service is not configured")
+		return
+	}
+	if _, err := handler.authService.ValidateToken(r.Context(), token); err != nil {
+		w.Header().Set("WWW-Authenticate", `Bearer realm="inori"`)
+		writeAPIError(w, http.StatusUnauthorized, "unauthorized", "valid bearer token is required")
+		return
+	}
+
+	track, err := handler.catalogService.GetTrack(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if handler.mediaObjects == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "media_registry_not_configured", "media object registry is not configured")
+		return
+	}
+	mo, err := handler.mediaObjects.GetMediaObject(r.Context(), track.MediaObjectID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if mo.LifecycleState != string(storage.LifecycleStateActive) ||
+		(mo.AssetKind != string(storage.AssetKindOriginalAudio) && mo.AssetKind != string(storage.AssetKindTranscodedAudio)) {
+		writeError(w, fmt.Errorf("%w: media object %s is not in a playable state", storage.ErrPlaybackUnavailable, mo.ID))
+		return
+	}
+	if handler.storage == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "storage_not_configured", "storage service is not configured")
+		return
+	}
+	backend, err := handler.storage.GetBackend(r.Context(), mo.BackendID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	// Resolve the local filesystem path for the object.
+	var rootPath string
+	switch backend.Type {
+	case storage.BackendTypeLocal:
+		if backend.Config.Local == nil {
+			writeAPIError(w, http.StatusServiceUnavailable, "backend_config_missing", "local backend has no config")
+			return
+		}
+		rootPath = backend.Config.Local.RootPath
+	case storage.BackendTypeNFS:
+		if backend.Config.NFS == nil {
+			writeAPIError(w, http.StatusServiceUnavailable, "backend_config_missing", "NFS backend has no config")
+			return
+		}
+		rootPath = backend.Config.NFS.MountPath
+	case storage.BackendTypeSMB:
+		if backend.Config.SMB == nil {
+			writeAPIError(w, http.StatusServiceUnavailable, "backend_config_missing", "SMB backend has no config")
+			return
+		}
+		rootPath = backend.Config.SMB.MountPath
+	default:
+		writeAPIError(w, http.StatusBadRequest, "stream_unsupported",
+			fmt.Sprintf("streaming is not supported for backend type %s; use presigned URLs", backend.Type))
+		return
+	}
+
+	filePath, err := storage.SafeObjectPath(rootPath, mo.ObjectKey)
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid_object_key", "object key resolves outside backend root")
+		return
+	}
+
+	f, err := os.Open(filePath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			writeAPIError(w, http.StatusNotFound, "file_not_found", "audio file not found on storage backend")
+		} else {
+			writeAPIError(w, http.StatusInternalServerError, "file_open_failed", "failed to open audio file")
+		}
+		return
+	}
+	defer f.Close()
+
+	fi, err := f.Stat()
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "file_stat_failed", "failed to stat audio file")
+		return
+	}
+
+	mimeType := mo.MIMEType
+	if mimeType == "" {
+		mimeType = "application/octet-stream"
+	}
+	w.Header().Set("Content-Type", mimeType)
+	w.Header().Set("Cache-Control", "no-store")
+	// Allows the browser to seek by accepting Range requests.
+	http.ServeContent(w, r, fi.Name(), fi.ModTime(), f)
 }
 
 func (handler *Handler) deleteTrack(w http.ResponseWriter, r *http.Request) {

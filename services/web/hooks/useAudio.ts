@@ -1,8 +1,11 @@
 /**
  * useAudio — wires the HTMLAudioElement to the PlayerStore.
- * TrackPlaybackDescriptor: { trackId, mediaObjectId, mimeType, durationMs,
- *   backendId, backendType?, objectKey, presignedUrl? }
- * The presigned URL to play is presignedUrl (not url).
+ *
+ * Playback URL resolution (in priority order):
+ *   1. presignedUrl  — S3-compatible presigned GET URL (16-min TTL)
+ *   2. streamUrl     — server-proxied /stream endpoint for local/NFS/SMB backends
+ *                      Uses ?token= query param because <audio> cannot set headers.
+ *   3. error         — no URL available
  */
 "use client";
 
@@ -48,12 +51,31 @@ export function useAudio() {
         params: { path: { id: currentTrack.id } },
       })
       .then(({ data, error }) => {
-        // presignedUrl is the playback URL (may be null for local backends)
-        const playUrl = data?.presignedUrl ?? null;
-        if (error || !playUrl) {
+        if (error || !data) {
           setStatus("error");
           return;
         }
+
+        // Prefer presigned URL; fall back to server-proxied stream endpoint.
+        let playUrl: string | null = null;
+        if (data.presignedUrl) {
+          playUrl = data.presignedUrl;
+        } else if (data.streamUrl) {
+          // Append the viewer JWT as a query param so the server can
+          // authenticate without a custom Authorization header.
+          const base = data.streamUrl.startsWith("/")
+            ? `${window.location.origin}${data.streamUrl}`
+            : data.streamUrl;
+          const u = new URL(base);
+          u.searchParams.set("token", token);
+          playUrl = u.toString();
+        }
+
+        if (!playUrl) {
+          setStatus("error");
+          return;
+        }
+
         audio.src = playUrl;
         audio.load();
         audio
@@ -75,7 +97,7 @@ export function useAudio() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentTrack?.id, token]);
 
-  // ── Play / Pause on status change ─────────────────────────────────────
+  // ── Play / Pause ───────────────────────────────────────────────────────
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
@@ -134,12 +156,10 @@ export function useAudio() {
   // ── MediaSession action handlers ───────────────────────────────────────
   useEffect(() => {
     if (typeof window === "undefined" || !("mediaSession" in navigator)) return;
-
     navigator.mediaSession.setActionHandler("play", () => usePlayerStore.getState().play());
     navigator.mediaSession.setActionHandler("pause", () => usePlayerStore.getState().pause());
     navigator.mediaSession.setActionHandler("nexttrack", () => usePlayerStore.getState().skipToNext());
     navigator.mediaSession.setActionHandler("previoustrack", () => usePlayerStore.getState().skipToPrevious());
-
     return () => {
       navigator.mediaSession.setActionHandler("play", null);
       navigator.mediaSession.setActionHandler("pause", null);

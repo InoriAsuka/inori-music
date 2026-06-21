@@ -1,6 +1,6 @@
 /**
  * Tracks list page — /tracks
- * v1 uses offset/limit, CatalogTrack has durationMs not durationSeconds.
+ * Resolves artistName from artistId via catalog cache.
  */
 "use client";
 
@@ -9,21 +9,16 @@ import { useAuthStore } from "@/store/auth";
 import { authedApi } from "@/lib/api/client";
 import { PaginationBar, type OffsetPagination, offsetFromPage } from "@/components/ui/PaginationBar";
 import { TrackRowSkeleton } from "@/components/ui/Skeleton";
+import { TrackRow, type TrackRowData } from "@/components/ui/TrackRow";
 import { usePlayerStore } from "@/store/player";
-import { formatDuration } from "@/lib/utils";
-
-interface Track {
-  id: string;
-  title: string;
-  durationMs: number;
-}
+import { resolveArtistNames } from "@/lib/api/catalog-cache";
 
 const PAGE_SIZE = 50;
 
 export default function TracksPage() {
   const token = useAuthStore((s) => s.token);
   const playQueue = usePlayerStore((s) => s.playQueue);
-  const [tracks, setTracks] = useState<Track[]>([]);
+  const [tracks, setTracks] = useState<TrackRowData[]>([]);
   const [pagination, setPagination] = useState<OffsetPagination | null>(null);
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -31,19 +26,23 @@ export default function TracksPage() {
   useEffect(() => {
     if (!token) return;
     setLoading(true);
-    authedApi(token)
+    const client = authedApi(token);
+    client
       .GET("/api/v1/catalog/tracks", {
         params: { query: { limit: PAGE_SIZE, offset: offsetFromPage(page, PAGE_SIZE) } },
       })
-      .then(({ data }) => {
-        if (data) {
-          setTracks((data.tracks ?? []).map((t) => ({
-            id: t.id,
-            title: t.title,
-            durationMs: t.durationMs ?? 0,
-          })));
-          if (data.pagination) setPagination(data.pagination);
-        }
+      .then(async ({ data }) => {
+        if (!data) return;
+        const raw = data.tracks ?? [];
+        const names = await resolveArtistNames(client, raw.map((t) => t.artistId));
+        setTracks(raw.map((t) => ({
+          id: t.id,
+          title: t.title,
+          artistName: names.get(t.artistId) ?? "",
+          durationMs: t.durationMs ?? 0,
+          isFavorite: t.isFavorite,
+        })));
+        if (data.pagination) setPagination(data.pagination);
       })
       .finally(() => setLoading(false));
   }, [token, page]);
@@ -52,8 +51,8 @@ export default function TracksPage() {
     const q = tracks.map((t) => ({
       id: t.id,
       title: t.title,
-      artistName: "",
-      albumTitle: "",
+      artistName: t.artistName ?? "",
+      albumTitle: t.albumTitle ?? "",
       durationSeconds: Math.round(t.durationMs / 1000),
       playbackUrl: "",
     }));
@@ -68,6 +67,7 @@ export default function TracksPage() {
         <div className="flex items-center gap-3 border-b border-[var(--color-border)] px-4 py-2 text-xs font-medium text-[var(--color-muted-foreground)]">
           <span className="w-6 text-right">#</span>
           <span className="flex-1">Title</span>
+          <span className="w-6" />
           <span className="w-12 text-right">Time</span>
         </div>
 
@@ -78,21 +78,12 @@ export default function TracksPage() {
               </div>
             ))
           : tracks.map((t, idx) => (
-              <div
+              <TrackRow
                 key={t.id}
-                onClick={() => playFrom(idx)}
-                className="flex cursor-pointer items-center gap-3 border-b border-[var(--color-border)] px-4 py-2.5 last:border-0 hover:bg-[var(--color-muted)] transition-colors"
-              >
-                <span className="w-6 text-right text-sm text-[var(--color-muted-foreground)]">
-                  {offsetFromPage(page, PAGE_SIZE) + idx + 1}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="truncate text-sm font-medium">{t.title}</p>
-                </div>
-                <span className="w-12 text-right text-xs text-[var(--color-muted-foreground)]">
-                  {formatDuration(t.durationMs / 1000)}
-                </span>
-              </div>
+                track={t}
+                index={offsetFromPage(page, PAGE_SIZE) + idx + 1}
+                onPlay={() => playFrom(idx)}
+              />
             ))}
       </div>
 

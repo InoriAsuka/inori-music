@@ -1,0 +1,27 @@
+# Caddyfile — reverse proxy for inori-music production stack
+# Replace {$DOMAIN} with your domain or set the DOMAIN env var.
+#
+# For local testing without a domain: replace the site block with `:8090`
+# and remove the tls directive.
+
+{$DOMAIN:localhost} {
+    # TLS: Caddy auto-provisions certificates via ACME (Let's Encrypt).
+    # Remove the tls block to use Caddy's self-signed certificate.
+    tls {$CADDY_ACME_EMAIL:internal}
+
+    # Security headers
+    header {
+        Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "SAMEORIGIN"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        -Server
+    }
+
+    # API — proxy /api/v1/* and diagnostic endpoints to Go service
+    @api path /api/v1/* /healthz /readyz /versionz /metrics
+    reverse_proxy @api api:8080
+
+    # All other traffic → Next.js web app
+    reverse_proxy web:3000
+}

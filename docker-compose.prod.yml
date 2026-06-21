@@ -1,0 +1,95 @@
+# syntax=docker/dockerfile:1
+# docker-compose.prod.yml — production stack
+#
+# Prerequisites:
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# Environment variables (set in .env or shell):
+#   INORI_ADMIN_TOKEN       — static bootstrap admin token
+#   INORI_AUTH_SECRET       — JWT signing secret
+#   POSTGRES_PASSWORD       — PostgreSQL password
+#   CADDY_ACME_EMAIL        — ACME email for TLS (leave blank for self-signed)
+#   DOMAIN                  — public domain name (e.g. music.example.com)
+
+name: inori-music
+
+services:
+  # ── PostgreSQL ──────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: inori
+      POSTGRES_USER: inori
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U inori"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── API ─────────────────────────────────────────────────────────────────
+  api:
+    image: ghcr.io/inoriasuka/inori-music-api:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      INORI_HTTP_ADDR: "0.0.0.0:8080"
+      INORI_DB_DSN: "postgres://inori:${POSTGRES_PASSWORD}@postgres:5432/inori?sslmode=disable"
+      INORI_ADMIN_TOKEN: "${INORI_ADMIN_TOKEN:?INORI_ADMIN_TOKEN required}"
+      INORI_AUTH_SECRET: "${INORI_AUTH_SECRET:?INORI_AUTH_SECRET required}"
+      INORI_STORAGE_REPOSITORY_FILE: "/data/storage-backends.json"
+      INORI_MEDIA_OBJECT_REPOSITORY_FILE: "/data/media-objects.json"
+    volumes:
+      - api_data:/data
+      # Mount media directories as read-only for local/NFS backends
+      # - /mnt/music:/mnt/music:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  # ── Web ─────────────────────────────────────────────────────────────────
+  web:
+    image: ghcr.io/inoriasuka/inori-music-web:latest
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: "http://api:8080"
+      PORT: "3000"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+  # ── Reverse proxy (Caddy) ────────────────────────────────────────────────
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    depends_on:
+      - web
+      - api
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  postgres_data:
+  api_data:
+  caddy_data:
+  caddy_config:

@@ -1,5 +1,6 @@
 /**
  * Album detail page — /albums/[id]
+ * Uses shared TrackRow with isFavorite + artistName via cache.
  */
 "use client";
 
@@ -11,22 +12,18 @@ import { useAuthStore } from "@/store/auth";
 import { authedApi } from "@/lib/api/client";
 import { Artwork } from "@/components/ui/Artwork";
 import { Skeleton, TrackRowSkeleton } from "@/components/ui/Skeleton";
+import { TrackRow, type TrackRowData } from "@/components/ui/TrackRow";
 import { usePlayerStore } from "@/store/player";
 import { formatDuration } from "@/lib/utils";
+import { resolveArtistName } from "@/lib/api/catalog-cache";
 
 export default function AlbumDetailPage() {
   const { id } = useParams<{ id: string }>();
   const token = useAuthStore((s) => s.token);
   const playQueue = usePlayerStore((s) => s.playQueue);
 
-  const [album, setAlbum] = useState<{ title: string; year?: number } | null>(null);
-  const [tracks, setTracks] = useState<{
-    id: string;
-    title: string;
-    trackNumber?: number;
-    discNumber?: number;
-    durationMs: number;
-  }[]>([]);
+  const [album, setAlbum] = useState<{ title: string; artistName?: string; year?: number; artistId: string } | null>(null);
+  const [tracks, setTracks] = useState<TrackRowData[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -35,22 +32,39 @@ export default function AlbumDetailPage() {
     Promise.all([
       client.GET("/api/v1/catalog/albums/{id}", { params: { path: { id } } }),
       client.GET("/api/v1/catalog/albums/{id}/tracks", { params: { path: { id } } }),
-    ]).then(([albumRes, tracksRes]) => {
+    ]).then(async ([albumRes, tracksRes]) => {
       if (albumRes.data) {
-        setAlbum({ title: albumRes.data.title, year: albumRes.data.releaseYear ?? undefined });
+        const artistName = await resolveArtistName(client, albumRes.data.artistId);
+        setAlbum({
+          title: albumRes.data.title,
+          artistId: albumRes.data.artistId,
+          artistName,
+          year: albumRes.data.releaseYear ?? undefined,
+        });
       }
       if (tracksRes.data?.tracks) {
-        setTracks(tracksRes.data.tracks.map((t) => ({
+        const raw = tracksRes.data.tracks;
+        // All tracks share the album's artist — already resolved above.
+        const artistName = album?.artistName ?? "";
+        setTracks(raw.map((t) => ({
           id: t.id,
           title: t.title,
-          trackNumber: t.trackNumber ?? undefined,
-          discNumber: t.discNumber ?? undefined,
+          artistName,
           durationMs: t.durationMs ?? 0,
+          isFavorite: t.isFavorite,
         })));
       }
       setLoading(false);
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, id]);
+
+  // Re-resolve tracks when album artistName becomes available
+  useEffect(() => {
+    if (!album?.artistName || tracks.length === 0) return;
+    setTracks((prev) => prev.map((t) => ({ ...t, artistName: album.artistName })));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [album?.artistName]);
 
   const totalMs = tracks.reduce((sum, t) => sum + t.durationMs, 0);
 
@@ -58,7 +72,7 @@ export default function AlbumDetailPage() {
     const q = tracks.map((t) => ({
       id: t.id,
       title: t.title,
-      artistName: "",
+      artistName: t.artistName ?? "",
       albumTitle: album?.title ?? "",
       durationSeconds: Math.round(t.durationMs / 1000),
       playbackUrl: "",
@@ -78,9 +92,12 @@ export default function AlbumDetailPage() {
           {loading
             ? <Skeleton className="h-8 w-64 mb-2" />
             : <h1 className="text-3xl font-bold">{album?.title}</h1>}
-          {album?.year && (
-            <p className="text-[var(--color-muted-foreground)]">{album.year}</p>
-          )}
+          <p className="text-[var(--color-muted-foreground)]">
+            {album?.artistName && (
+              <Link href={`/artists/${album.artistId}`} className="hover:underline">{album.artistName}</Link>
+            )}
+            {album?.year && <span className="ml-1 text-[var(--color-muted-foreground)]">· {album.year}</span>}
+          </p>
           <p className="text-sm text-[var(--color-muted-foreground)]">
             {tracks.length} tracks · {formatDuration(totalMs / 1000)}
           </p>
@@ -102,21 +119,12 @@ export default function AlbumDetailPage() {
               </div>
             ))
           : tracks.map((t, idx) => (
-              <div
+              <TrackRow
                 key={t.id}
-                onClick={() => playAll(idx)}
-                className="flex cursor-pointer items-center gap-3 border-b border-[var(--color-border)] px-4 py-2.5 last:border-0 hover:bg-[var(--color-muted)] transition-colors"
-              >
-                <span className="w-6 text-right text-sm text-[var(--color-muted-foreground)]">
-                  {t.trackNumber ?? idx + 1}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="truncate text-sm font-medium">{t.title}</p>
-                </div>
-                <span className="text-xs text-[var(--color-muted-foreground)]">
-                  {formatDuration(t.durationMs / 1000)}
-                </span>
-              </div>
+                track={t}
+                index={idx + 1}
+                onPlay={() => playAll(idx)}
+              />
             ))}
       </div>
     </div>

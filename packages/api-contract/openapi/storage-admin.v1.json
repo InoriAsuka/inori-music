@@ -1996,6 +1996,10 @@
           "presignedUrl": {
             "type": "string",
             "description": "AWS Signature Version 4 presigned GET URL, valid for 15 minutes. Present only when the backend supports presigned URLs and credentials are configured; omitted otherwise."
+          },
+          "streamUrl": {
+            "type": "string",
+            "description": "Server-proxied streaming URL for filesystem backends (local, NFS, SMB). Append ?token=<bearer> to authenticate. Present only when presignedUrl is absent and the backend supports server-side streaming."
           }
         }
       },
@@ -12629,6 +12633,55 @@
             "$ref": "#/components/responses/HistoryNotConfigured"
           }
         }
+      }
+    },
+    "/api/v1/catalog/tracks/{id}/stream": {
+      "get": {
+        "summary": "Stream track audio",
+        "description": "Proxies audio bytes with HTTP 206 Range support for filesystem-based storage backends. Authenticates via Bearer token in Authorization header or ?token= query parameter.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "token",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Viewer bearer token (fallback when Authorization header cannot be set)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Audio file content (may be partial for Range requests)"
+          },
+          "206": {
+            "description": "Partial audio content (Range request)"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "description": "Track or file not found"
+          },
+          "400": {
+            "description": "Backend type does not support streaming"
+          },
+          "503": {
+            "$ref": "#/components/responses/ServiceUnavailable"
+          }
+        },
+        "tags": [
+          "catalog",
+          "viewer"
+        ]
       }
     }
   },

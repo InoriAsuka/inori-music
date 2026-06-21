@@ -98,6 +98,13 @@ func (verifier *FilesystemMediaObjectVerifier) Verify(ctx context.Context, backe
 }
 
 func safeObjectPath(root string, objectKey string) (string, error) {
+	return SafeObjectPath(root, objectKey)
+}
+
+// SafeObjectPath resolves objectKey relative to root and ensures the result
+// does not escape root via path traversal. It is exported for use by the HTTP
+// streaming handler.
+func SafeObjectPath(root string, objectKey string) (string, error) {
 	cleanRoot, err := filepath.Abs(filepath.Clean(root))
 	if err != nil {
 		return "", fmt.Errorf("%w: resolve root: %v", ErrMediaObjectVerificationFailed, err)

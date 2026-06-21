@@ -2,18 +2,30 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Music2, LogOut, User, Search } from "lucide-react";
+import { useEffect } from "react";
+import { Music2, LogOut, User, Search, Menu } from "lucide-react";
 import { useAuthStore } from "@/store/auth";
 import { authedApi } from "@/lib/api/client";
 
-export function Topbar() {
+export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
   const router = useRouter();
   const { token, user, clearSession } = useAuthStore();
+
+  // ⌘K / Ctrl+K → /search
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        router.push("/search");
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [router]);
 
   async function handleLogout() {
     if (token) {
       const client = authedApi(token);
-      // Best-effort logout — ignore errors (token may already be expired).
       await client.POST("/api/v1/auth/logout").catch(() => {});
     }
     clearSession();
@@ -22,20 +34,27 @@ export function Topbar() {
 
   return (
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-card)] px-4">
-      {/* Logo */}
-      <Link href="/" className="flex items-center gap-2 font-semibold">
-        <Music2 size={20} className="text-[var(--color-primary)]" />
-        <span className="text-sm">Inori Music</span>
-      </Link>
+      {/* Logo + hamburger */}
+      <div className="flex items-center gap-2">
+        {onMenuClick && (
+          <button onClick={onMenuClick} className="rounded-md p-1.5 hover:bg-[var(--color-muted)] md:hidden" title="Menu">
+            <Menu size={18} />
+          </button>
+        )}
+        <Link href="/" className="flex items-center gap-2 font-semibold">
+          <Music2 size={20} className="text-[var(--color-primary)]" />
+          <span className="text-sm">Inori Music</span>
+        </Link>
+      </div>
 
-      {/* Search shortcut */}
+      {/* Search shortcut — clicking navigates too */}
       <Link
         href="/search"
         className="hidden flex-1 max-w-sm mx-8 items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-muted)] px-3 py-1.5 text-sm text-[var(--color-muted-foreground)] hover:bg-[var(--color-border)] transition-colors md:flex"
       >
         <Search size={14} />
         Search tracks, artists…
-        <kbd className="ml-auto text-xs opacity-60">⌘K</kbd>
+        <kbd className="ml-auto rounded border border-[var(--color-border)] bg-[var(--color-card)] px-1 text-xs opacity-60">⌘K</kbd>
       </Link>
 
       {/* User menu */}
