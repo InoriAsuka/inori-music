@@ -6,9 +6,10 @@
     "dev": "next dev --turbopack",
     "build": "npm run generate:api && next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "biome lint .",
     "type-check": "tsc --noEmit",
-    "generate:api": "openapi-typescript ../../packages/api-contract/openapi/storage-admin.v1.json -o ./types/api.gen.ts"
+    "generate:api": "openapi-typescript ../../packages/api-contract/openapi/storage-admin.v1.json -o ./types/api.gen.ts",
+    "format": "biome format --write ."
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",
@@ -25,7 +26,8 @@
     "react-dom": "^19.1.0",
     "react-i18next": "^17.0.8",
     "tailwind-merge": "^3.3.0",
-    "zustand": "^5.0.5"
+    "zustand": "^5.0.5",
+    "@inori/ui": "file:../../packages/ui"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.10",
@@ -36,6 +38,7 @@
     "eslint-config-next": "^15.3.3",
     "openapi-typescript": "^7.8.0",
     "tailwindcss": "^4.1.10",
-    "typescript": "^5"
+    "typescript": "^5",
+    "@biomejs/biome": "^1.9.4"
   }
 }

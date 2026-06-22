@@ -1,0 +1,26 @@
+{
+  "common": {
+    "appName": "Inori Admin",
+    "loading": "Loading…",
+    "save": "Save",
+    "delete": "Delete",
+    "signIn": "Sign in",
+    "signOut": "Log out"
+  },
+  "nav": {
+    "dashboard": "Dashboard",
+    "users": "Users",
+    "catalog": "Catalog",
+    "import": "Import",
+    "storage": "Storage",
+    "mediaObjects": "Media Objects",
+    "history": "History"
+  },
+  "admin": {
+    "bootstrapToken": "Bootstrap Admin Token",
+    "dashboard": "Dashboard",
+    "catalog": "Catalog",
+    "playback": "Playback",
+    "sections": "Sections"
+  }
+}

@@ -1,7 +1,10 @@
 import { cn } from "./utils";
 
-interface NeonCardProps extends React.HTMLAttributes<HTMLDivElement> {
+interface NeonCardProps {
+  children?: any;
+  className?: string;
   glow?: "primary" | "secondary" | "sakura" | "none";
+  [key: string]: any;
 }
 
 const GLOW_MAP = {

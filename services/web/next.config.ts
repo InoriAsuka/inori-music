@@ -2,7 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  // Proxy API calls to the backend during development
+  transpilePackages: ["@inori/ui"],
   async rewrites() {
     const apiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
     return [
@@ -13,7 +13,7 @@ const nextConfig: NextConfig = {
     ];
   },
   eslint: {
-    // We run ESLint in CI separately
+    // We run Biome in CI separately.
     ignoreDuringBuilds: true,
   },
 };

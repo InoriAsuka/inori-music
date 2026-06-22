@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { AdminI18nProvider } from "@/components/layout/AdminI18nProvider";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -15,7 +16,9 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body>{children}</body>
+      <body>
+        <AdminI18nProvider>{children}</AdminI18nProvider>
+      </body>
     </html>
   );
 }

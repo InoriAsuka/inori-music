@@ -1,0 +1,26 @@
+{
+  "common": {
+    "appName": "Inori Admin",
+    "loading": "加载中…",
+    "save": "保存",
+    "delete": "删除",
+    "signIn": "登录",
+    "signOut": "退出"
+  },
+  "nav": {
+    "dashboard": "仪表盘",
+    "users": "用户",
+    "catalog": "目录",
+    "import": "导入",
+    "storage": "存储",
+    "mediaObjects": "媒体对象",
+    "history": "历史"
+  },
+  "admin": {
+    "bootstrapToken": "Bootstrap 管理令牌",
+    "dashboard": "仪表盘",
+    "catalog": "目录",
+    "playback": "播放",
+    "sections": "模块"
+  }
+}

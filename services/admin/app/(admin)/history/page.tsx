@@ -26,12 +26,14 @@ export default function HistoryPage() {
   async function load() {
     if (!client) return;
     setLoading(true);
+    const until = new Date().toISOString();
+    const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
     const [histRes, statsRes, tracksRes, usersRes, tlRes] = await Promise.all([
       client.GET("/api/v1/admin/history", { params: { query: { limit: PAGE, offset, order: "desc" } } }),
       client.GET("/api/v1/admin/history/stats"),
       client.GET("/api/v1/admin/history/top-tracks", { params: { query: { limit: 5 } } }),
       client.GET("/api/v1/admin/history/top-users", { params: { query: { limit: 5 } } }),
-      client.GET("/api/v1/admin/history/timeline", { params: { query: { granularity } } }),
+      client.GET("/api/v1/admin/history/timeline", { params: { query: { since, until, granularity } } }),
     ]);
 
     if (histRes.data) {
@@ -42,8 +44,8 @@ export default function HistoryPage() {
     if (tracksRes.data?.tracks) setTopTracks(tracksRes.data.tracks.map((t) => ({ trackId: t.trackId, playCount: t.playCount })));
     if (usersRes.data) setTopUsers(((usersRes.data as { users?: { userId: string; playCount: number }[] }).users ?? []));
     if (tlRes.data) {
-      const tl = (tlRes.data as { buckets?: { period: string; count: number }[] }).buckets ?? [];
-      setBuckets(tl.map((b) => ({ label: b.period, count: b.count })));
+      const tl = (tlRes.data as unknown as { buckets?: { bucketStart: string; eventCount: number }[] }).buckets ?? [];
+      setBuckets(tl.map((b) => ({ label: b.bucketStart, count: b.eventCount })));
     }
     setLoading(false);
   }

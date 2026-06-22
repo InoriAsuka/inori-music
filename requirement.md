@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`1.41.0`
+`2.5.0`
 
 ## Product Goal
 
@@ -1366,3 +1366,19 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Add `?types` query param to both search paths in OpenAPI spec.
 - Bump VERSION and OpenAPI `info.version` to `1.39.0`.
 - The phase output is version-tracked and covered by the relevant tests or documentation checks.
+
+### v2.0.0 - 2026-06-21
+
+- **v2 Web UI launch**: inori-music now ships a full viewer web player alongside the v1 API server.
+- `services/web/`: Next.js 15 / React 19 viewer player — auth, catalog browse, search, playback, user library (favorites + history), settings.
+- `services/admin/`: Next.js 15 / React 19 admin console — users, catalog CRUD, import wizard, storage backends, media objects, history analytics.
+- `packages/ui/`: shared `@inori/ui` design token + component library (NeonCard, Badge, Skeleton, StorageHealthBadge, LifecyclePill).
+- **Neon Shrine** design language: dark `#070711` canvas, electric-violet `#9b5cff` primary, cyan `#0fd4c0` secondary, sakura `#ff5fa0` accent.
+- **Nginx gateway**: `infra/nginx/` replaces Caddy; `/api/v1/*` → api:8080, `/admin/*` → admin:3001, `/*` → web:3000.
+- **docker-compose.prod.yml**: four-service stack (postgres + api + web + admin + nginx).
+- **Streaming playback**: `GET /api/v1/catalog/tracks/{id}/stream` Go handler for local/NFS/SMB backends (HTTP 206 Range, `?token=` auth fallback for `<audio>`).
+- **Player upgrades**: 64-bar canvas visualizer, dnd-kit queue drawer, keyboard shortcuts (Space/←/→/↑/↓/N/P), mobile full-screen player, bottom tab nav.
+- **i18n**: i18next with en/zh-Hans/ja locale files for both services.
+- **Biome**: replaces ESLint as linter/formatter in both Next.js services.
+- **CI**: `build.yml` web + admin jobs; `docker.yml` api + web + admin image jobs.
+- The phase output is version-tracked and covered by type checks and Go tests.
