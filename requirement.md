@@ -1432,3 +1432,30 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - **Phase 250 — Track detail page + history batch delete**: New `/tracks/[id]` detail page (title, artist link, album link, duration, genre, track/disc number, isFavorite toggle, play button, play-count stats via `GET /api/v1/me/history/tracks/{trackId}/stats`). History Events tab: checkbox multi-select; batch delete toolbar consuming `POST /api/v1/me/history/batch-delete` (chunked at 100 IDs). `TrackRow` title links to `/tracks/[id]`.
 - **Phase 251 — E2E + version sync**: Playwright `@playwright/test` added to `services/web` devDependencies; `playwright.config.ts` targeting `http://localhost:3000`; `e2e/smoke.spec.ts` three smoke tests (login redirect, valid login, search input, player bar visible); `services/web/package.json` version bumped to `2.6.0`; `requirement.md` backfilled for v2.1.0–v2.6.0; `VERSION` updated to `2.6.0`.
 - The phase output is version-tracked and covered by TypeScript type checks, Go tests, and Playwright smoke tests.
+
+### v2.7.0 - 2026-06-22
+
+- **CI hardening — OpenAPI contract fix**: `/api/v1/catalog/tracks/{id}/stream` path-level parameter moved to `$ref: '#/components/parameters/CatalogId'`; `security: [{bearerAuth: []}]` added to GET operation; `?token` query param retained at operation level. All 39 OpenAPI contract tests pass.
+- **CI E2E job**: `build.yml` new `e2e` job (depends on `api` + `web`); starts API in in-memory mode (`INORI_INITIAL_ADMIN_USER/PASSWORD`); starts Next.js dev server; installs Playwright chromium; runs `e2e/smoke.spec.ts` (3 smoke tests); uploads `playwright-report/` artifact on every run (7-day retention).
+- **E2E smoke test hardening**: `#username`/`#password` exact locators; shared `login()` helper; default credentials match CI env (`ci-viewer` / `ci-password-123`).
+- The phase output is version-tracked and covered by TypeScript type checks, Go tests, and 39 contract tests.
+
+### v2.8.0 - 2026-06-22
+
+- **Phase 252 — 低难度 Gap 补全**:
+  - `services/web/settings/sessions`: Added "Revoke all devices" button (`POST /api/v1/me/sessions/revoke-all-devices`); clears local session and redirects to `/login`; explanatory copy distinguishing revoke-others vs revoke-all-devices.
+  - `services/admin/history`: Batch-delete multi-select toolbar (`POST /api/v1/admin/history/batch-delete`, chunked at 100 IDs); select-all toggle; selection cleared on reload.
+  - `services/admin/users`: Sessions drawer per user — `MonitorX` icon opens modal with `GET /api/v1/admin/users/{id}/sessions` list and "Revoke all" button (`DELETE /api/v1/admin/users/{id}/sessions`).
+- **Phase 253 — Admin catalog sub-relations + track relink**:
+  - Artists tab: expand chevron loads `GET /admin/catalog/artists/{id}/albums` + `GET .../tracks` inline.
+  - Albums tab: expand chevron loads `GET /admin/catalog/albums/{id}/tracks` inline.
+  - Playlists tab: expand chevron loads `GET /admin/catalog/playlists/{id}/tracks`; per-track remove (`DELETE .../tracks/{trackId}`); add-track input (`POST .../tracks`).
+  - Tracks tab: "Relink" button opens modal for `POST /admin/catalog/tracks/{id}/relink` with new `mediaObjectId`.
+- **Phase 254 — Admin media-objects 详情抽屉**:
+  - Stats bar: `GET /admin/media/objects/stats` (total count, total size, active count) + `GET .../duplicates` (duplicate group count).
+  - Row click opens detail drawer: metadata grid, lifecycle state dropdown (`POST .../lifecycle`), verify button (`POST .../verify`), timeline list (`GET .../timeline`).
+- **Phase 255 — Admin favorites 管理页**:
+  - New `/admin/favorites` page and `AdminSidebar` nav entry.
+  - User ID lookup form → `GET /admin/favorites/users/{userId}/tracks`.
+  - Per-track remove (`DELETE .../tracks/{trackId}`) and clear-all (`DELETE .../tracks`).
+- The phase output is version-tracked and covered by TypeScript type checks (0 errors in both services).

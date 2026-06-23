@@ -1,7 +1,10 @@
 /**
  * settings/sessions — Active sessions
  * SessionView: { userId, expiresAt, createdAt }
- * No id, lastSeenAt, userAgent, or isCurrent in the spec.
+ *
+ * Actions:
+ *   - Revoke other sessions (same user, other tokens) → POST /me/sessions/revoke-all
+ *   - Revoke all devices (all sessions including current) → POST /me/sessions/revoke-all-devices
  */
 "use client";
 
@@ -10,6 +13,7 @@ import { Monitor, Loader2 } from "lucide-react";
 import { useAuthStore } from "@/store/auth";
 import { authedApi } from "@/lib/api/client";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { useRouter } from "next/navigation";
 
 interface Session {
   userId: string;
@@ -19,6 +23,8 @@ interface Session {
 
 export default function SessionsPage() {
   const token = useAuthStore((s) => s.token);
+  const { clearSession } = useAuthStore();
+  const router = useRouter();
   const [sessions, setSessions] = useState<Session[]>([]);
   const [loading, setLoading] = useState(true);
   const [revoking, setRevoking] = useState(false);
@@ -46,19 +52,42 @@ export default function SessionsPage() {
     setRevoking(false);
   }
 
+  async function revokeAllDevices() {
+    if (!token) return;
+    if (!window.confirm("This will sign you out on ALL devices including this one. Continue?")) return;
+    setRevoking(true);
+    await authedApi(token).POST("/api/v1/me/sessions/revoke-all-devices");
+    clearSession();
+    router.replace("/login");
+  }
+
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-bold">Active Sessions</h1>
-        <button
-          onClick={revokeOthers}
-          disabled={revoking || sessions.length <= 1}
-          className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-3 py-1.5 text-sm hover:bg-[var(--color-muted)] disabled:opacity-50 transition-colors"
-        >
-          {revoking && <Loader2 size={12} className="animate-spin" />}
-          Revoke other sessions
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={revokeOthers}
+            disabled={revoking || sessions.length <= 1}
+            className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-3 py-1.5 text-sm hover:bg-[var(--color-muted)] disabled:opacity-50 transition-colors"
+          >
+            {revoking && <Loader2 size={12} className="animate-spin" />}
+            Revoke other sessions
+          </button>
+          <button
+            onClick={revokeAllDevices}
+            disabled={revoking}
+            className="flex items-center gap-1.5 rounded-md border border-[var(--color-danger)]/40 px-3 py-1.5 text-sm text-[var(--color-danger)] hover:bg-[var(--color-danger)]/10 disabled:opacity-50 transition-colors"
+          >
+            Revoke all devices
+          </button>
+        </div>
       </div>
+
+      <p className="text-xs text-[var(--color-text-muted)]">
+        "Revoke other sessions" signs out other tokens for this account.
+        "Revoke all devices" signs out every session including this one.
+      </p>
 
       <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] divide-y divide-[var(--color-border)]">
         {loading

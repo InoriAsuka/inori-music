@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Trash2, ChevronLeft, ChevronRight } from "lucide-react";
+import { Trash2, ChevronLeft, ChevronRight, CheckSquare, Square } from "lucide-react";
 import { useAdminClient } from "@/hooks/useAdminClient";
 import { HistoryTimelineChart } from "@/components/admin/HistoryTimelineChart";
 
@@ -10,10 +10,11 @@ type Granularity = "day" | "week" | "month";
 const PAGE = 50;
 
 interface TimelineBucket { label: string; count: number; }
+interface HistoryEvent { id: string; userId: string; trackId: string; playedAt: string; }
 
 export default function HistoryPage() {
   const client = useAdminClient();
-  const [events, setEvents] = useState<{ id: string; userId: string; trackId: string; playedAt: string }[]>([]);
+  const [events, setEvents] = useState<HistoryEvent[]>([]);
   const [stats, setStats] = useState<{ totalEvents: number; uniqueUsers: number; uniqueTracks: number } | null>(null);
   const [topTracks, setTopTracks] = useState<{ trackId: string; playCount: number }[]>([]);
   const [topUsers, setTopUsers] = useState<{ userId: string; playCount: number }[]>([]);
@@ -22,10 +23,13 @@ export default function HistoryPage() {
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [batchDeleting, setBatchDeleting] = useState(false);
 
   async function load() {
     if (!client) return;
     setLoading(true);
+    setSelected(new Set());
     const until = new Date().toISOString();
     const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
     const [histRes, statsRes, tracksRes, usersRes, tlRes] = await Promise.all([
@@ -58,6 +62,17 @@ export default function HistoryPage() {
     await load();
   }
 
+  async function batchDelete() {
+    if (!client || selected.size === 0 || batchDeleting) return;
+    setBatchDeleting(true);
+    const ids = [...selected];
+    for (let i = 0; i < ids.length; i += 100) {
+      await client.POST("/api/v1/admin/history/batch-delete", { body: { ids: ids.slice(i, i + 100) } });
+    }
+    setBatchDeleting(false);
+    await load();
+  }
+
   async function clearWindow() {
     const until = window.prompt("Delete all events until (ISO timestamp):");
     if (!until || !client) return;
@@ -65,8 +80,21 @@ export default function HistoryPage() {
     await load();
   }
 
+  function toggleSelect(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  }
+
+  function toggleAll() {
+    setSelected(selected.size === events.length ? new Set() : new Set(events.map((e) => e.id)));
+  }
+
   const totalPages = Math.ceil(total / PAGE);
   const page = Math.floor(offset / PAGE) + 1;
+  const allSelected = events.length > 0 && selected.size === events.length;
 
   return (
     <div className="space-y-6">
@@ -111,12 +139,32 @@ export default function HistoryPage() {
         ))}
       </div>
 
+      {/* Batch toolbar */}
+      <div className="flex items-center gap-3">
+        <button onClick={toggleAll} className="flex items-center gap-1.5 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors">
+          {allSelected
+            ? <CheckSquare size={14} className="text-[var(--color-primary)]" />
+            : <Square size={14} />}
+          {allSelected ? "Deselect all" : "Select all"}
+        </button>
+        {selected.size > 0 && (
+          <button onClick={batchDelete} disabled={batchDeleting}
+            className="flex items-center gap-1.5 rounded-md bg-[var(--color-danger)]/10 px-3 py-1.5 text-xs font-medium text-[var(--color-danger)] hover:bg-[var(--color-danger)]/20 disabled:opacity-50 transition-colors">
+            <Trash2 size={12} />
+            {batchDeleting ? "Deleting…" : `Delete ${selected.size}`}
+          </button>
+        )}
+      </div>
+
       {/* Events list */}
       <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
         {loading ? (
           <div className="py-8 text-center text-sm text-[var(--color-text-muted)]">Loading…</div>
         ) : events.map((e) => (
-          <div key={e.id} className="flex items-center gap-3 border-b border-[var(--color-border)] px-4 py-2.5 last:border-0 hover:bg-[var(--color-surface-raised)]">
+          <div key={e.id} className={`flex items-center gap-3 border-b border-[var(--color-border)] px-4 py-2.5 last:border-0 hover:bg-[var(--color-surface-raised)] transition-colors ${selected.has(e.id) ? "bg-[var(--color-primary)]/5" : ""}`}>
+            <button onClick={() => toggleSelect(e.id)} className="shrink-0 text-[var(--color-text-muted)] hover:text-[var(--color-primary)] transition-colors">
+              {selected.has(e.id) ? <CheckSquare size={14} className="text-[var(--color-primary)]" /> : <Square size={14} />}
+            </button>
             <div className="flex-1 grid grid-cols-2 gap-x-4">
               <p className="truncate font-mono text-xs"><span className="text-[var(--color-text-muted)]">user </span><span className="text-[var(--color-text)]">{e.userId}</span></p>
               <p className="truncate font-mono text-xs"><span className="text-[var(--color-text-muted)]">track </span><span className="text-[var(--color-text)]">{e.trackId}</span></p>

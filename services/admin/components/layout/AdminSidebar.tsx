@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Users, Database, Upload, HardDrive,
-  Activity, FileBox, ChevronLeft, ChevronRight,
+  Activity, FileBox, Heart, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -15,6 +15,7 @@ const NAV = [
   { href: "/import", label: "Import", icon: Upload },
   { href: "/storage", label: "Storage", icon: HardDrive },
   { href: "/media-objects", label: "Media Objects", icon: FileBox },
+  { href: "/favorites", label: "Favorites", icon: Heart },
   { href: "/history", label: "History", icon: Activity },
 ];
 

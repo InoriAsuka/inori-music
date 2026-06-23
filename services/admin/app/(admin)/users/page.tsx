@@ -1,11 +1,11 @@
 "use client";
 
 import { FormEvent, useEffect, useState } from "react";
-import { UserPlus, Trash2, Power, KeyRound, ChevronLeft, ChevronRight } from "lucide-react";
+import { UserPlus, Trash2, Power, KeyRound, ChevronLeft, ChevronRight, MonitorX, X } from "lucide-react";
 import { useAdminClient } from "@/hooks/useAdminClient";
-import { formatDateTime } from "@/lib/utils";
 
 interface UserRow { id: string; username: string; role: string; enabled: boolean; createdAt: string; }
+interface UserSession { userId: string; createdAt: string; expiresAt: string; }
 
 const PAGE = 50;
 
@@ -16,6 +16,11 @@ export default function UsersPage() {
   const [offset, setOffset] = useState(0);
   const [loading, setLoading] = useState(false);
   const [form, setForm] = useState({ username: "", password: "", role: "viewer" });
+
+  // Sessions drawer
+  const [sessionsUser, setSessionsUser] = useState<UserRow | null>(null);
+  const [sessions, setSessions] = useState<UserSession[]>([]);
+  const [sessionsLoading, setSessionsLoading] = useState(false);
 
   async function load() {
     if (!client) return;
@@ -61,6 +66,21 @@ export default function UsersPage() {
     if (!client) return;
     await client.PATCH("/api/v1/admin/users/{id}", { params: { path: { id: u.id } }, body: { role } });
     await load();
+  }
+
+  async function openSessions(u: UserRow) {
+    if (!client) return;
+    setSessionsUser(u);
+    setSessionsLoading(true);
+    const { data } = await client.GET("/api/v1/admin/users/{id}/sessions", { params: { path: { id: u.id } } });
+    setSessions((data?.sessions ?? []).map((s) => ({ userId: s.userId, createdAt: s.createdAt, expiresAt: s.expiresAt })));
+    setSessionsLoading(false);
+  }
+
+  async function revokeUserSessions(u: UserRow) {
+    if (!client || !window.confirm(`Revoke all sessions for ${u.username}?`)) return;
+    await client.DELETE("/api/v1/admin/users/{id}/sessions", { params: { path: { id: u.id } } });
+    setSessions([]);
   }
 
   const totalPages = Math.ceil(total / PAGE);
@@ -118,6 +138,7 @@ export default function UsersPage() {
             <div className="flex items-center gap-1">
               <Btn onClick={() => toggle(u)} title={u.enabled ? "Disable" : "Enable"}><Power size={13} /></Btn>
               <Btn onClick={() => forcePwd(u)} title="Force password"><KeyRound size={13} /></Btn>
+              <Btn onClick={() => openSessions(u)} title="View sessions"><MonitorX size={13} /></Btn>
               <Btn onClick={() => del(u.id)} title="Delete" danger><Trash2 size={13} /></Btn>
             </div>
           </div>
@@ -132,6 +153,40 @@ export default function UsersPage() {
             <button onClick={() => setOffset(Math.max(0, offset - PAGE))} disabled={page <= 1} className="rounded p-1 hover:bg-[var(--color-surface-raised)] disabled:opacity-30"><ChevronLeft size={16} /></button>
             <span>{page} / {totalPages}</span>
             <button onClick={() => setOffset(offset + PAGE)} disabled={page >= totalPages} className="rounded p-1 hover:bg-[var(--color-surface-raised)] disabled:opacity-30"><ChevronRight size={16} /></button>
+          </div>
+        </div>
+      )}
+
+      {/* Sessions drawer */}
+      {sessionsUser && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60" onClick={() => setSessionsUser(null)}>
+          <div className="w-full max-w-lg rounded-t-2xl sm:rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-[var(--color-text-muted)]">Sessions for</p>
+                <p className="font-semibold text-[var(--color-text)]">{sessionsUser.username}</p>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => revokeUserSessions(sessionsUser)}
+                  className="rounded-md border border-[var(--color-danger)]/40 px-3 py-1.5 text-xs text-[var(--color-danger)] hover:bg-[var(--color-danger)]/10 transition-colors">
+                  Revoke all
+                </button>
+                <button onClick={() => setSessionsUser(null)} className="rounded p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text)]"><X size={16} /></button>
+              </div>
+            </div>
+            <div className="divide-y divide-[var(--color-border)] rounded-xl border border-[var(--color-border)] bg-[var(--color-void)] max-h-64 overflow-y-auto">
+              {sessionsLoading ? (
+                <div className="px-4 py-6 text-center text-sm text-[var(--color-text-muted)]">Loading…</div>
+              ) : sessions.length === 0 ? (
+                <div className="px-4 py-6 text-center text-sm text-[var(--color-text-muted)]">No active sessions</div>
+              ) : sessions.map((s, i) => (
+                <div key={i} className="px-4 py-3">
+                  <p className="text-xs text-[var(--color-text-muted)]">
+                    Created {new Date(s.createdAt).toLocaleString()} · expires {new Date(s.expiresAt).toLocaleString()}
+                  </p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}
