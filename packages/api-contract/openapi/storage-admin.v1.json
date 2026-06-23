@@ -12636,18 +12636,20 @@
       }
     },
     "/api/v1/catalog/tracks/{id}/stream": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/CatalogId"
+        }
+      ],
       "get": {
         "summary": "Stream track audio",
         "description": "Proxies audio bytes with HTTP 206 Range support for filesystem-based storage backends. Authenticates via Bearer token in Authorization header or ?token= query parameter.",
-        "parameters": [
+        "security": [
           {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
-          },
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
           {
             "name": "token",
             "in": "query",
@@ -12655,7 +12657,7 @@
             "schema": {
               "type": "string"
             },
-            "description": "Viewer bearer token (fallback when Authorization header cannot be set)"
+            "description": "Viewer bearer token (fallback when Authorization header cannot be set, e.g. <audio> src)"
           }
         ],
         "responses": {

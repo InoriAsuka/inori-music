@@ -9,18 +9,28 @@
  *
  * Prerequisites:
  *   - Dev server running on http://localhost:3000 (or E2E_BASE_URL)
- *   - E2E_USERNAME / E2E_PASSWORD env vars set to a valid viewer account
- *   - API server reachable at NEXT_PUBLIC_API_BASE_URL
+ *   - E2E_USERNAME / E2E_PASSWORD env vars set to a valid account
+ *   - API server reachable at NEXT_PUBLIC_API_BASE_URL (default http://localhost:8080)
  *
  * Run: npx playwright test
+ * CI:  E2E_USERNAME=ci-viewer E2E_PASSWORD=ci-password-123 npx playwright test
  */
 
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 
-const USERNAME = process.env.E2E_USERNAME ?? "viewer@example.com";
-const PASSWORD = process.env.E2E_PASSWORD ?? "changeme";
+const USERNAME = process.env.E2E_USERNAME ?? "ci-viewer";
+const PASSWORD = process.env.E2E_PASSWORD ?? "ci-password-123";
 
-// ─── 1. Login ────────────────────────────────────────────────────────────────
+/** Shared login helper — fills the form and waits for redirect. */
+async function login(page: Page) {
+  await page.goto("/login");
+  await page.locator("#username").fill(USERNAME);
+  await page.locator("#password").fill(PASSWORD);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await expect(page).not.toHaveURL(/\/login/, { timeout: 10_000 });
+}
+
+// ─── 1. Auth ─────────────────────────────────────────────────────────────────
 
 test("unauthenticated visit redirects to /login", async ({ page }) => {
   await page.goto("/");
@@ -28,69 +38,41 @@ test("unauthenticated visit redirects to /login", async ({ page }) => {
 });
 
 test("login with valid credentials lands on home page", async ({ page }) => {
-  await page.goto("/login");
-
-  await page.getByLabel(/username|email/i).fill(USERNAME);
-  await page.getByLabel(/password/i).fill(PASSWORD);
-  await page.getByRole("button", { name: /sign in|log in/i }).click();
-
-  // After login the app redirects away from /login
-  await expect(page).not.toHaveURL(/\/login/, { timeout: 8_000 });
-
-  // Home page has a heading or a recognisable landmark
-  await expect(
-    page.getByRole("heading", { name: /home/i }).or(
-      page.locator("h1").filter({ hasText: /home/i })
-    )
-  ).toBeVisible({ timeout: 8_000 });
+  await login(page);
+  // Home page renders the "Home" heading
+  await expect(page.locator("h1").filter({ hasText: /home/i })).toBeVisible({
+    timeout: 8_000,
+  });
 });
 
 // ─── 2. Search ───────────────────────────────────────────────────────────────
 
 test("search page renders and accepts input", async ({ page }) => {
-  // Login first
-  await page.goto("/login");
-  await page.getByLabel(/username|email/i).fill(USERNAME);
-  await page.getByLabel(/password/i).fill(PASSWORD);
-  await page.getByRole("button", { name: /sign in|log in/i }).click();
-  await expect(page).not.toHaveURL(/\/login/, { timeout: 8_000 });
-
+  await login(page);
   await page.goto("/search");
 
-  const input = page.getByRole("searchbox").or(
-    page.getByPlaceholder(/search/i)
-  );
+  // The search input has placeholder "Search tracks, artists…"
+  const input = page.getByPlaceholder(/search/i);
   await expect(input).toBeVisible({ timeout: 6_000 });
   await input.fill("test");
-  // Input accepted — value is what we typed
   await expect(input).toHaveValue("test");
 });
 
-// ─── 3. Player bar visible on /tracks ────────────────────────────────────────
+// ─── 3. Player bar on /tracks ────────────────────────────────────────────────
 
-test("tracks page renders and player bar is present in layout", async ({
+test("tracks page renders and player bar shows idle state", async ({
   page,
 }) => {
-  // Login first
-  await page.goto("/login");
-  await page.getByLabel(/username|email/i).fill(USERNAME);
-  await page.getByLabel(/password/i).fill(PASSWORD);
-  await page.getByRole("button", { name: /sign in|log in/i }).click();
-  await expect(page).not.toHaveURL(/\/login/, { timeout: 8_000 });
-
+  await login(page);
   await page.goto("/tracks");
 
-  // The tracks heading must be visible
-  await expect(
-    page.getByRole("heading", { name: /tracks/i }).or(
-      page.locator("h1").filter({ hasText: /tracks/i })
-    )
-  ).toBeVisible({ timeout: 8_000 });
+  // Tracks heading
+  await expect(page.locator("h1").filter({ hasText: /tracks/i })).toBeVisible({
+    timeout: 8_000,
+  });
 
-  // The persistent player bar renders at the bottom (even before a track is
-  // selected it shows the "No track playing" placeholder)
-  const playerBar = page
-    .locator('[class*="PlayerBar"], [data-testid="player-bar"]')
-    .or(page.getByText(/no track playing/i));
-  await expect(playerBar.first()).toBeVisible({ timeout: 6_000 });
+  // Player bar shows "No track playing" before any track is selected
+  await expect(page.getByText(/no track playing/i)).toBeVisible({
+    timeout: 6_000,
+  });
 });
