@@ -1382,3 +1382,53 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - **Biome**: replaces ESLint as linter/formatter in both Next.js services.
 - **CI**: `build.yml` web + admin jobs; `docker.yml` api + web + admin image jobs.
 - The phase output is version-tracked and covered by type checks and Go tests.
+
+### v2.1.0 - 2026-06-21
+
+- **Phase 205 — User library**: `/library/favorites` (favorite tracks list, remove, play); `/library/history` (play events, stats card, top-5 tracks, clear all, per-event delete).
+- **Phase 206 — Admin dashboard**: `/admin` stats cards (catalog + history counts), quick-nav to all admin sections, AdminTokenPanel bootstrap support.
+- **Phase 207 — User management**: `/admin/users` list with offset pagination; create user (username/password/role); toggle enable/disable, force password reset, change role, delete.
+- **Phase 208 — Catalog management**: `/admin/catalog` tabbed artists/albums/tracks list; inline title edit, delete.
+- **Phase 209 — Import UI**: `/admin/import` single-track import form (title, mediaObjectId, artistId, albumId, trackNumber) and batch JSON import (array or `{items:[]}` wrapper).
+- **Phase 210 — Storage management**: `/admin/storage` backend cards with health/capacity indicator; probe, enable/disable, set-default, delete.
+- **Phase 211 — History management (Admin)**: `/admin/history` global stats, top-tracks, top-users; event list with delete; time-window clear.
+- Shared infra: `useAdminApi()` hook, `bearerAdminApi()` client, AdminStore (persisted bootstrap token), EmptyState shared component.
+- The phase output is version-tracked and covered by TypeScript type checks.
+
+### v2.2.0 - 2026-06-21
+
+- **Phase 215 — Streaming playback**: Go `GET /api/v1/catalog/tracks/{id}/stream` (HTTP 206 Range); authenticates via `Authorization` header or `?token=` query param; `storage.SafeObjectPath` for path-traversal safety; `useAudio` presignedUrl → streamUrl fallback.
+- **Phase 216 — Display quality**: `lib/api/catalog-cache.ts` in-memory artistId→name / albumId→title cache; `TrackRow` shared component with isFavorite heart toggle; `/tracks` uses TrackRow + artist name resolution; `/albums/[id]` resolves artistName and links to artist page; PlayerBar error state with skip button; Topbar ⌘K/Ctrl+K shortcut → `/search`.
+- **Phase 212 — Responsive + PWA**: `MobileSidebar.tsx` slide-in drawer; AppShell hamburger; `public/manifest.json` PWA manifest (standalone, icons); viewport themeColor; apple-web-app meta.
+- **Phase 214 — Production deploy**: `docker-compose.prod.yml` four-service stack (postgres + api + web + caddy); Caddyfile reverse proxy with ACME TLS; `docker.yml` publish-web job (ghcr.io, amd64+arm64).
+- The phase output is version-tracked and covered by TypeScript type checks.
+
+### v2.3.0 - 2026-06-21
+
+- **Phase 240 — Service split**: `services/admin/` extracted as independent Next.js 15 service on port 3001; standalone admin login (JWT or bootstrap token); AdminShell (collapsible sidebar + topbar); full admin route set; independent auth store, middleware, API client, Dockerfile. `services/web/` stripped of all admin routes/components.
+- **Phase 241 — Neon Shrine design system**: `globals.css` full palette (void `#070711`, surface `#0d0d1a`, primary `#9b5cff`, secondary `#0fd4c0`, accent `#ff5fa0`); Google Fonts: Orbitron + Inter + JetBrains Mono + Noto Sans JP; same palette applied to `services/admin/`.
+- **Phase 245 — Nginx gateway**: `infra/nginx/nginx.conf` tuned for audio streaming (proxy_buffering off, 300 s timeouts); `conf.d/inori.conf` routes `/api/v1/*` → api:8080, `/admin/*` → admin:3001, `/*` → web:3000, `/_next/static/` cached 7 d; `docker-compose.prod.yml` updated (Caddy removed); `build.yml` + `docker.yml` admin jobs added.
+- The phase output is version-tracked and covered by TypeScript type checks.
+
+### v2.4.0 - 2026-06-21
+
+- **Phase 242 — Player upgrade**: `Visualizer.tsx` 64-bar canvas FFT (primary→secondary gradient); `QueueDrawer.tsx` dnd-kit sortable sheet; `FullscreenPlayer.tsx` motion slide-up; `BottomNav.tsx` mobile 5-tab bottom nav; `usePlayerKeyboard.ts` Space/←/→/↑/↓/N/P shortcuts; `store/player.ts` `reorderQueue()` with currentIndex tracking.
+- **Phase 243+244 — Admin complete + packages/ui**: `packages/ui/` shared `@inori/ui` library (NeonCard, Badge, Skeleton, EmptyState, StorageHealthBadge, LifecyclePill, neon-shrine.css); admin `history/page.tsx` Recharts AreaChart with day/week/month granularity switcher; `storage/page.tsx` capacity bar + StorageHealthBadge.
+- **Phase 246 — i18n**: i18next + react-i18next in both services; `public/locales/{en,zh-Hans,ja}/common.json`; `lib/i18n.ts` initI18n/setLanguage/SUPPORTED_LANGS; `/settings/language` locale picker; Sidebar Settings nav.
+- **Phase 247 — Quality**: `scripts/gen-icons.mjs` canvas-based PWA icon generator; placeholder `icon-192.png` / `icon-512.png`; 0 TypeScript errors in both services; 732 Go tests pass.
+- The phase output is version-tracked and covered by TypeScript type checks and Go tests.
+
+### v2.5.0 - 2026-06-22
+
+- **Admin basePath**: `next.config.ts` `basePath='/admin'` + `transpilePackages=['@inori/ui']`; `middleware.ts` strips basePath for auth guard; Dockerfile + docker-compose healthchecks updated to `/admin/login`; Nginx 308 redirect `/admin` → `/admin/`.
+- **i18n initialization**: `I18nProvider.tsx` (web) and `AdminI18nProvider.tsx` (admin) lazy-init i18next on first client render; `services/admin/lib/i18n.ts` with `/admin/locales/` path prefix; admin locale files `{en,zh,ja}/common.json`.
+- **packages/ui hardening**: `utils.ts` zero-dependency `cn()`; Badge/NeonCard use `any` to avoid peer-dep issues; StorageHealthBadge re-export avoids circular imports.
+- **Biome**: `biome.json` a11y.useKeyWithClickEvents=off, suspicious.noArrayIndexKey=off; both services `npm run lint` = biome lint (0 errors).
+- The phase output is version-tracked and covered by TypeScript type checks and Go tests.
+
+### v2.6.0 - 2026-06-22
+
+- **Phase 249 — History stats UI**: `/library/history` redesigned with Stats/Events tabs. Stats tab: 30-day play timeline bar chart (SVG, zero-dependency `BarChart` component); top-10 tracks榜单 (all-time play count); total plays + unique tracks summary cards. Consumes `GET /api/v1/me/history/stats`, `/timeline` (since/until/granularity), `/top-tracks`.
+- **Phase 250 — Track detail page + history batch delete**: New `/tracks/[id]` detail page (title, artist link, album link, duration, genre, track/disc number, isFavorite toggle, play button, play-count stats via `GET /api/v1/me/history/tracks/{trackId}/stats`). History Events tab: checkbox multi-select; batch delete toolbar consuming `POST /api/v1/me/history/batch-delete` (chunked at 100 IDs). `TrackRow` title links to `/tracks/[id]`.
+- **Phase 251 — E2E + version sync**: Playwright `@playwright/test` added to `services/web` devDependencies; `playwright.config.ts` targeting `http://localhost:3000`; `e2e/smoke.spec.ts` three smoke tests (login redirect, valid login, search input, player bar visible); `services/web/package.json` version bumped to `2.6.0`; `requirement.md` backfilled for v2.1.0–v2.6.0; `VERSION` updated to `2.6.0`.
+- The phase output is version-tracked and covered by TypeScript type checks, Go tests, and Playwright smoke tests.

@@ -9,6 +9,7 @@
 "use client";
 
 import { Heart } from "lucide-react";
+import Link from "next/link";
 import { cn, formatDuration } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth";
 import { authedApi } from "@/lib/api/client";
@@ -83,7 +84,15 @@ export function TrackRow({
       )}
 
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{track.title}</p>
+        <p className="truncate text-sm font-medium">
+          <Link
+            href={`/tracks/${track.id}`}
+            onClick={(e) => e.stopPropagation()}
+            className="hover:text-[var(--color-primary)] transition-colors"
+          >
+            {track.title}
+          </Link>
+        </p>
         {(track.artistName || track.albumTitle) && (
           <p className="truncate text-xs text-[var(--color-muted-foreground)]">
             {[track.artistName, track.albumTitle].filter(Boolean).join(" · ")}
