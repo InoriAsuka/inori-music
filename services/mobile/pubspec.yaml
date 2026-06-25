@@ -1,0 +1,85 @@
+name: inori_music
+description: "Inori Music — cross-platform viewer"
+publish_to: 'none'
+
+version: 3.0.0+1
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+
+  # State management
+  riverpod: ^2.6.1
+  flutter_riverpod: ^2.6.1
+  hooks_riverpod: ^2.6.1
+  riverpod_annotation: ^2.6.1
+  flutter_hooks: ^0.20.5
+
+  # Routing
+  go_router: ^15.1.2
+
+  # Generated API client (openapi-generator dart-dio output)
+  inori_api:
+    path: lib/src/api/generated
+
+  # HTTP / API
+  dio: ^5.8.0+1
+  json_annotation: ^4.9.0
+  copy_with_extension: ^7.1.0
+
+  # Audio
+  just_audio: ^0.9.44
+  just_audio_background: ^0.0.1-beta.15
+  audio_service: ^0.18.15
+  audio_session: ^0.1.21
+
+  # Storage
+  flutter_secure_storage: ^9.2.4
+
+  # Images
+  cached_network_image: ^3.4.1
+
+  # Utils
+  freezed_annotation: ^2.4.4
+  collection: ^1.19.1
+
+  # Icons
+  cupertino_icons: ^1.0.8
+
+  # Charts (Phase 308)
+  fl_chart: ^0.71.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+  # Code generation
+  build_runner: ^2.4.14
+  riverpod_generator: ^2.6.3
+  freezed: ^2.5.8
+  json_serializable: ^6.9.5
+  # copy_with_extension_gen: generated code brings its own, resolved via inori_api path dep
+
+flutter:
+  uses-material-design: true
+  generate: true
+  assets:
+    - assets/images/
+    - assets/fonts/
+
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/Inter-Regular.ttf
+        - asset: assets/fonts/Inter-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/Inter-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/Inter-Bold.ttf
+          weight: 700
