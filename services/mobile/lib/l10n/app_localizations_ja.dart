@@ -129,6 +129,21 @@ class AppLocalizationsJa extends AppLocalizations {
   String get revokeAll => 'すべてのセッションを失効';
 
   @override
+  String get revokeAllConfirmBody => 'すべてのデバイスからサインアウトします。続行しますか？';
+
+  @override
+  String get fieldRequired => '必須です';
+
+  @override
+  String get passwordMinLength => '8文字以上';
+
+  @override
+  String get changePasswordSuccess => 'パスワードが変更されました';
+
+  @override
+  String get signOutConfirmBody => 'サインアウトしてもよろしいですか？';
+
+  @override
   String get language => '言語';
 
   @override

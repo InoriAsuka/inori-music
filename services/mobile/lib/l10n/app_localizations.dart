@@ -340,6 +340,36 @@ abstract class AppLocalizations {
   /// **'Revoke All Sessions'**
   String get revokeAll;
 
+  /// No description provided for @revokeAllConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'This will sign you out from all devices. Continue?'**
+  String get revokeAllConfirmBody;
+
+  /// No description provided for @fieldRequired.
+  ///
+  /// In en, this message translates to:
+  /// **'Required'**
+  String get fieldRequired;
+
+  /// No description provided for @passwordMinLength.
+  ///
+  /// In en, this message translates to:
+  /// **'Minimum 8 characters'**
+  String get passwordMinLength;
+
+  /// No description provided for @changePasswordSuccess.
+  ///
+  /// In en, this message translates to:
+  /// **'Password changed successfully'**
+  String get changePasswordSuccess;
+
+  /// No description provided for @signOutConfirmBody.
+  ///
+  /// In en, this message translates to:
+  /// **'Are you sure you want to sign out?'**
+  String get signOutConfirmBody;
+
   /// No description provided for @language.
   ///
   /// In en, this message translates to:

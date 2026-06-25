@@ -76,6 +76,43 @@ jobs:
         env:
           NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
 
+  mobile:
+    name: Flutter mobile checks
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/mobile
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.38.x'
+          channel: stable
+          cache: true
+
+      - name: Get dependencies
+        run: flutter pub get
+
+      - name: Generate API client
+        run: dart run build_runner build --delete-conflicting-outputs || true
+
+      - name: Run build_runner for l10n
+        run: flutter gen-l10n
+
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos
+
+      - name: Test
+        run: flutter test --no-pub
+
+      - name: Build APK (release smoke)
+        run: flutter build apk --release --no-pub
+        env:
+          FLUTTER_TARGET: lib/main.dart
+
   e2e:
     name: Web E2E smoke tests
     runs-on: ubuntu-latest

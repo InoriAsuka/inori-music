@@ -147,6 +147,16 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     );
   }
 
+  /// Revoke all active sessions except the current one.
+  Future<void> revokeAllOtherSessions() async {
+    final savedBase = await _storage.read(key: _kBaseUrlKey) ?? 'http://localhost:8080';
+    final token = await _storage.read(key: _kTokenKey);
+    await _dio.delete(
+      '$savedBase/api/v1/me/sessions/revoke-all',
+      options: Options(headers: {'Authorization': 'Bearer $token'}),
+    );
+  }
+
   Future<Map<String, dynamic>> _fetchMe(String token) async {
     final savedBase = await _storage.read(key: _kBaseUrlKey) ?? 'http://localhost:8080';
     final response = await _dio.get(

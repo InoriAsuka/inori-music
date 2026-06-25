@@ -1459,3 +1459,19 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
   - User ID lookup form → `GET /admin/favorites/users/{userId}/tracks`.
   - Per-track remove (`DELETE .../tracks/{trackId}`) and clear-all (`DELETE .../tracks`).
 - The phase output is version-tracked and covered by TypeScript type checks (0 errors in both services).
+
+### v3.0.0 - 2026-06-26
+
+- **Phase 300 — 脚手架**: `services/mobile/` Flutter 项目 (Android/iOS/macOS/Windows/Linux)；`pubspec.yaml` 集成 riverpod / hooks_riverpod / go_router / dio / just_audio / audio_service / flutter_secure_storage / cached_network_image / freezed；openapi-generator-cli `dart-dio` 生成 `lib/src/api/`；GitHub Actions CI (`flutter analyze` + `flutter test`)。
+- **Phase 301 — 认证**: `AuthNotifier`（Riverpod AsyncNotifier）：login / logout / token 持久化（flutter_secure_storage）；`POST /api/v1/auth/login` → token + `GET /api/v1/me` → UserModel；go_router redirect guard 未登录跳 `/login`；LoginScreen：username/password 表单、错误提示、loading 状态。
+- **Phase 302 — 目录浏览**: `ArtistsScreen` / `ArtistDetailScreen`（albums + tracks）；`AlbumsScreen` / `AlbumDetailScreen`；`TracksScreen`；`PlaylistsScreen` / `PlaylistDetailScreen`；分页 `InfiniteScrollController`（Riverpod family provider + keepAlive）；公共 `TrackListTile`（isFavorite 心形按钮、时长、artwork）。
+- **Phase 303 — 搜索**: `SearchScreen`：TextField debounce 300ms → `GET /catalog/search?q=`；分类结果展示：Artists / Albums / Tracks 三栏；键盘搜索触发 + 清空按钮。
+- **Phase 304 — just_audio 播放器引擎**: `PlayerNotifier`（Riverpod Notifier）：queue / currentIndex / status / position / volume / shuffle / repeat；`AudioHandler`（audio_service）：MediaItem、播放控制、background audio；播放 URL 解析 `GET /catalog/tracks/{id}/playback` → presignedUrl || streamUrl?token=；Queue 操作：playQueue / enqueue / enqueueNext / reorderQueue / removeFromQueue。
+- **Phase 305 — 播放器 UI**: `MiniPlayerBar`（底部吸附，全局 persistent）：artwork、标题、艺术家、play/pause、next；`FullPlayerScreen`（全屏，路由 `/player`）：大封面、进度条（seek）、完整控件；`QueueSheet`（底部 sheet）：DraggableScrollableSheet + ReorderableListView。
+- **Phase 306 — 键盘快捷键 + MediaSession**: 桌面端（macOS/Windows/Linux）：Space/←/→ 键盘快捷键（HardwareKeyboard listener）；MediaSession：audio_service 已注入，系统锁屏控制、通知栏控制；自动播放历史：`processingState == AudioProcessingState.completed` → `POST /me/history`。
+- **Phase 307 — 收藏**: `FavoritesScreen`：`GET /me/favorites/tracks` 列表；`isFavorite` 状态同步到 TrackListTile（TrackFavoriteNotifier per trackId）；POST / DELETE `/me/favorites/tracks/{trackId}`。
+- **Phase 308 — 历史**: `HistoryScreen`：`GET /me/history` 分页事件流；`HistoryStatsScreen` / Tab：stats + top-tracks + 30天 timeline（fl_chart BarChart）；批量删除：多选 + `POST /me/history/batch-delete`。
+- **Phase 309 — 设置**: `SettingsScreen`：密码修改 / 语言切换 / 会话管理（revoke-all）；多语言：`flutter_localizations` + ARB 文件（en / zh-Hans / ja）；主题：Neon Shrine 暗色调（ColorScheme.dark，primary violet `#9b5cff`）。
+- **Phase 310 — 响应式 + 自适应布局**: 手机（<600dp）：底部 NavigationBar 5 tab；平板（600–1199dp）：NavigationRail + 右侧内容区；桌面（≥1200dp）：永久侧边栏 + 内容区 + MiniPlayer 底栏。
+- **Phase 311 — CI + 打包**: GitHub Actions `mobile` job（`flutter analyze` + `flutter test` + `flutter build apk --release`）；Android keystore 签名配置（环境变量 / key.properties）。
+- **Phase 312 — v3.0.0 结案**: `services/mobile/pubspec.yaml` version: 3.0.0；`VERSION` 3.0.0；`requirement.md` v3.0.0 章节。

@@ -40,6 +40,11 @@
   "deleteAll": "すべて削除",
   "sessions": "セッション管理",
   "revokeAll": "すべてのセッションを失効",
+  "revokeAllConfirmBody": "すべてのデバイスからサインアウトします。続行しますか？",
+  "fieldRequired": "必須です",
+  "passwordMinLength": "8文字以上",
+  "changePasswordSuccess": "パスワードが変更されました",
+  "signOutConfirmBody": "サインアウトしてもよろしいですか？",
   "language": "言語",
   "theme": "テーマ",
   "darkMode": "ダークモード"

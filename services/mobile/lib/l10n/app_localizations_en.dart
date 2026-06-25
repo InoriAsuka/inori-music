@@ -129,6 +129,22 @@ class AppLocalizationsEn extends AppLocalizations {
   String get revokeAll => 'Revoke All Sessions';
 
   @override
+  String get revokeAllConfirmBody =>
+      'This will sign you out from all devices. Continue?';
+
+  @override
+  String get fieldRequired => 'Required';
+
+  @override
+  String get passwordMinLength => 'Minimum 8 characters';
+
+  @override
+  String get changePasswordSuccess => 'Password changed successfully';
+
+  @override
+  String get signOutConfirmBody => 'Are you sure you want to sign out?';
+
+  @override
   String get language => 'Language';
 
   @override

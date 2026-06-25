@@ -41,6 +41,11 @@
   "deleteAll": "Delete All",
   "sessions": "Sessions",
   "revokeAll": "Revoke All Sessions",
+  "revokeAllConfirmBody": "This will sign you out from all devices. Continue?",
+  "fieldRequired": "Required",
+  "passwordMinLength": "Minimum 8 characters",
+  "changePasswordSuccess": "Password changed successfully",
+  "signOutConfirmBody": "Are you sure you want to sign out?",
   "language": "Language",
   "theme": "Theme",
   "darkMode": "Dark Mode"

@@ -15,21 +15,51 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
         applicationId = "com.inori.music.inori_music"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
     }
 
+    // Release signing: reads keystore path/credentials from environment or
+    // local key.properties file (gitignored). Falls back to debug signing so
+    // `flutter build apk --release` works without credentials (e.g. in CI
+    // smoke tests).
+    val keystoreFile = System.getenv("ANDROID_KEYSTORE_PATH")?.let { file(it) }
+        ?: rootProject.file("key.properties").takeIf { it.exists() }?.let { props ->
+            java.util.Properties().also { it.load(props.inputStream()) }
+            null  // handled below
+        }
+
+    val keyProps = rootProject.file("key.properties").takeIf { it.exists() }?.let {
+        java.util.Properties().also { p -> p.load(it.inputStream()) }
+    }
+
+    signingConfigs {
+        if (System.getenv("ANDROID_KEYSTORE_PATH") != null) {
+            create("release") {
+                storeFile = file(System.getenv("ANDROID_KEYSTORE_PATH")!!)
+                storePassword = System.getenv("ANDROID_STORE_PASSWORD") ?: ""
+                keyAlias = System.getenv("ANDROID_KEY_ALIAS") ?: ""
+                keyPassword = System.getenv("ANDROID_KEY_PASSWORD") ?: ""
+            }
+        } else if (keyProps != null) {
+            create("release") {
+                storeFile = file(keyProps.getProperty("storeFile", ""))
+                storePassword = keyProps.getProperty("storePassword", "")
+                keyAlias = keyProps.getProperty("keyAlias", "")
+                keyPassword = keyProps.getProperty("keyPassword", "")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = if (signingConfigs.names.contains("release"))
+                signingConfigs.getByName("release")
+            else
+                signingConfigs.getByName("debug")
         }
     }
 }

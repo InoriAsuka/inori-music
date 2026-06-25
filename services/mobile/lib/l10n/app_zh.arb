@@ -40,6 +40,11 @@
   "deleteAll": "全部删除",
   "sessions": "会话管理",
   "revokeAll": "撤销所有会话",
+  "revokeAllConfirmBody": "这将会注销所有设备上的登录。确定继续？",
+  "fieldRequired": "必填",
+  "passwordMinLength": "至少 8 个字符",
+  "changePasswordSuccess": "密码修改成功",
+  "signOutConfirmBody": "确定要退出登录吗？",
   "language": "语言",
   "theme": "主题",
   "darkMode": "暗色模式"

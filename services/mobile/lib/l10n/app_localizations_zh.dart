@@ -129,6 +129,21 @@ class AppLocalizationsZh extends AppLocalizations {
   String get revokeAll => '撤销所有会话';
 
   @override
+  String get revokeAllConfirmBody => '这将会注销所有设备上的登录。确定继续？';
+
+  @override
+  String get fieldRequired => '必填';
+
+  @override
+  String get passwordMinLength => '至少 8 个字符';
+
+  @override
+  String get changePasswordSuccess => '密码修改成功';
+
+  @override
+  String get signOutConfirmBody => '确定要退出登录吗？';
+
+  @override
   String get language => '语言';
 
   @override
