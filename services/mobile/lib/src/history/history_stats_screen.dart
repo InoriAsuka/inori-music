@@ -7,6 +7,7 @@ import 'package:inori_api/src/model/track_play_count.dart';
 import 'package:inori_api/src/model/user_history_stats.dart';
 
 import 'package:inori_music/l10n/app_localizations.dart';
+import 'package:inori_music/src/history/track_title_resolver.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/theme/neon_shrine.dart';
 
@@ -132,8 +133,8 @@ class HistoryStatsScreen extends ConsumerWidget {
                 : Column(
                     children: tracks.asMap().entries.map((entry) {
                       final rank = entry.key + 1;
-                      final t = entry.value;
-                      return _TopTrackRow(rank: rank, trackId: t.trackId, playCount: t.playCount);
+                      final tc = entry.value;
+                      return _TopTrackRow(key: ValueKey(tc.trackId), rank: rank, trackId: tc.trackId, playCount: tc.playCount);
                     }).toList(),
                   ),
           ),
@@ -174,15 +175,33 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-class _TopTrackRow extends StatelessWidget {
-  const _TopTrackRow({required this.rank, required this.trackId, required this.playCount});
+class _TopTrackRow extends ConsumerStatefulWidget {
+  const _TopTrackRow({super.key, required this.rank, required this.trackId, required this.playCount});
 
   final int rank;
   final String trackId;
   final int playCount;
 
   @override
+  ConsumerState<_TopTrackRow> createState() => _TopTrackRowState();
+}
+
+class _TopTrackRowState extends ConsumerState<_TopTrackRow> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(trackTitleResolverProvider(widget.trackId).notifier).resolve();
+      }
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final title = ref.watch(trackTitleResolverProvider(widget.trackId));
+    final displayName = title ?? widget.trackId;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -195,7 +214,7 @@ class _TopTrackRow extends StatelessWidget {
           SizedBox(
             width: 28,
             child: Text(
-              '#$rank',
+              '#${widget.rank}',
               style: const TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
@@ -206,7 +225,7 @@ class _TopTrackRow extends StatelessWidget {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              trackId,
+              displayName,
               style: const TextStyle(
                 fontSize: 14,
                 color: NeonShrineColors.onSurface,
@@ -222,7 +241,7 @@ class _TopTrackRow extends StatelessWidget {
               const Icon(Icons.play_arrow, size: 14, color: NeonShrineColors.onSurfaceVariant),
               const SizedBox(width: 2),
               Text(
-                '$playCount',
+                '${widget.playCount}',
                 style: const TextStyle(fontSize: 13, color: NeonShrineColors.onSurfaceVariant),
               ),
             ],

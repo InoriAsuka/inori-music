@@ -4,10 +4,11 @@ import 'dart:async';
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:just_audio/just_audio.dart';
 import 'package:inori_api/src/api/catalog_api.dart';
 import 'package:inori_api/src/api/history_api.dart';
+import 'package:inori_api/src/model/catalog_track.dart';
 import 'package:inori_api/src/model/record_play_event_request.dart';
+import 'package:just_audio/just_audio.dart';
 
 import 'package:inori_music/main.dart' show audioHandler;
 import 'package:inori_music/src/api/api_client.dart';
@@ -34,6 +35,9 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
   late final AudioPlayer _audioPlayer;
   late final CatalogApi _catalog;
   late final HistoryApi _history;
+
+  // In-memory track metadata cache to avoid redundant catalog API calls.
+  final Map<String, CatalogTrack> _trackCache = {};
 
   // Store subscriptions so they can be cancelled on dispose.
   late final List<StreamSubscription> _subscriptions;
@@ -93,18 +97,22 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
     final url = await resolvePlaybackUrl(trackId);
     if (url == null) return;
 
-    // Build queue if provided
+    // Build queue with stub items immediately so the UI has something to render,
+    // then update the current item with real metadata once resolved.
     if (queueIds != null && queueIds.isNotEmpty) {
       final clampedIndex = index < 0 ? 0 : (index > queueIds.length - 1 ? queueIds.length - 1 : index);
       state = state.copyWith(
-        queue: queueIds.map((id) => _makeMediaItem(id)).toList(),
+        queue: queueIds.map((id) => _stubMediaItem(id)).toList(),
         currentIndex: clampedIndex,
       );
     }
 
+    // Resolve real track metadata (title, artist, album, duration) from catalog.
+    final track = await _resolveTrack(trackId);
+    final mediaItem = _makeMediaItem(trackId, track);
+
     final source = ProgressiveAudioSource(Uri.parse(url), tag: trackId);
     await _audioPlayer.setAudioSource(source);
-    final mediaItem = _makeMediaItem(trackId);
     // Push to AudioHandler so the OS notification shows the current track.
     audioHandler.mediaItem.add(mediaItem);
     state = state.copyWith(
@@ -118,20 +126,20 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
   Future<void> playQueue(List<String> trackIds, {int initialIndex = 0}) async {
     if (trackIds.isEmpty) return;
     final idx = initialIndex < 0 ? 0 : (initialIndex > trackIds.length - 1 ? trackIds.length - 1 : initialIndex);
-    state = state.copyWith(queue: trackIds.map((id) => _makeMediaItem(id)).toList());
+    state = state.copyWith(queue: trackIds.map((id) => _stubMediaItem(id)).toList());
     await playTrack(trackIds[idx], queueIds: trackIds, index: idx);
   }
 
   /// Enqueue tracks after the current position.
   Future<void> enqueue(List<String> trackIds) async {
-    final items = trackIds.map((id) => _makeMediaItem(id)).toList();
+    final items = trackIds.map((id) => _stubMediaItem(id)).toList();
     final newQueue = [...state.queue, ...items];
     state = state.copyWith(queue: newQueue);
   }
 
   /// Enqueue a single track immediately after the current one.
   Future<void> enqueueNext(String trackId) async {
-    final item = _makeMediaItem(trackId);
+    final item = _stubMediaItem(trackId);
     final newQueue = [...state.queue];
     final insertAt = state.currentIndex + 1;
     if (insertAt < newQueue.length) {
@@ -238,6 +246,40 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
 
   // ---- Private helpers ----
 
+  /// Fetch and cache CatalogTrack metadata. Returns null on failure.
+  Future<CatalogTrack?> _resolveTrack(String trackId) async {
+    if (_trackCache.containsKey(trackId)) return _trackCache[trackId];
+    try {
+      final resp = await _catalog.getCatalogTrack(id: trackId);
+      final track = resp.data;
+      if (track != null) _trackCache[trackId] = track;
+      return track;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Stub MediaItem used to populate the queue immediately before metadata resolves.
+  MediaItem _stubMediaItem(String trackId) => MediaItem(
+        id: trackId,
+        title: _trackCache[trackId]?.title ?? trackId,
+        artist: _trackCache[trackId]?.artistId ?? '',
+        extras: {'trackId': trackId},
+      );
+
+  /// Full MediaItem populated from resolved CatalogTrack metadata.
+  MediaItem _makeMediaItem(String trackId, CatalogTrack? track) => MediaItem(
+        id: trackId,
+        title: track?.title ?? trackId,
+        artist: track?.artistId ?? '',
+        album: '',
+        duration: track?.durationMs != null
+            ? Duration(milliseconds: track!.durationMs!)
+            : Duration.zero,
+        artUri: null,
+        extras: {'trackId': trackId},
+      );
+
   Future<void> _playAtIndex(int index) async {
     if (index < 0 || index >= state.queue.length) return;
     final trackId = state.queue[index].id;
@@ -245,16 +287,6 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
     final queueIds = state.queue.map((m) => m.id).toList();
     await playTrack(trackId, queueIds: queueIds, index: index);
   }
-
-  MediaItem _makeMediaItem(String trackId) => MediaItem(
-        id: trackId,
-        title: trackId,
-        artist: '',
-        album: '',
-        duration: const Duration(seconds: 0),
-        artUri: null,
-        extras: {'trackId': trackId},
-      );
 
   List<StreamSubscription> _setupPlayerListeners() {
     final subs = <StreamSubscription>[];

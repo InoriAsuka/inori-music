@@ -6,6 +6,7 @@ import 'package:inori_api/src/model/batch_delete_request.dart';
 import 'package:inori_api/src/model/play_event.dart';
 
 import 'package:inori_music/l10n/app_localizations.dart';
+import 'package:inori_music/src/history/track_title_resolver.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/theme/neon_shrine.dart';
@@ -170,33 +171,13 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                 itemBuilder: (context, i) {
                   final event = events[i];
                   final isSelected = _selected.contains(event.id);
-
-                  return ListTile(
-                    leading: _selectMode
-                        ? Checkbox(
-                            value: isSelected,
-                            onChanged: (_) => _toggleSelect(event.id),
-                            checkColor: Colors.white,
-                            activeColor: NeonShrineColors.primaryViolet,
-                          )
-                        : const CircleAvatar(
-                            backgroundColor: NeonShrineColors.surfaceContainer,
-                            child: Icon(Icons.music_note, color: NeonShrineColors.onSurfaceVariant, size: 18),
-                          ),
-                    title: Text(
-                      event.trackId,
-                      style: const TextStyle(color: NeonShrineColors.onSurface, fontSize: 14, fontWeight: FontWeight.w500),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    subtitle: Text(
-                      _formatEventDate(event.playedAt, t),
-                      style: const TextStyle(color: NeonShrineColors.onSurfaceVariant, fontSize: 12),
-                    ),
-                    selected: isSelected,
-                    selectedTileColor: NeonShrineColors.primaryVioletDark.withValues(alpha: 0.2),
-                    onTap: _selectMode ? () => _toggleSelect(event.id) : null,
-                    onLongPress: _selectMode ? null : () => _enterSelectMode(event.id),
+                  return _HistoryTile(
+                    key: ValueKey(event.id),
+                    event: event,
+                    isSelected: isSelected,
+                    selectMode: _selectMode,
+                    onToggleSelect: _toggleSelect,
+                    onEnterSelectMode: _enterSelectMode,
                   );
                 },
               ),
@@ -216,3 +197,72 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
     return '${dt.year}/${dt.month.toString().padLeft(2, '0')}/${dt.day.toString().padLeft(2, '0')}';
   }
 }
+
+/// Tile that resolves track title from the catalog API and displays it.
+class _HistoryTile extends ConsumerStatefulWidget {
+  const _HistoryTile({
+    super.key,
+    required this.event,
+    required this.isSelected,
+    required this.selectMode,
+    required this.onToggleSelect,
+    required this.onEnterSelectMode,
+  });
+  final PlayEvent event;
+  final bool isSelected;
+  final bool selectMode;
+  final void Function(String) onToggleSelect;
+  final void Function(String) onEnterSelectMode;
+
+  @override
+  ConsumerState<_HistoryTile> createState() => _HistoryTileState();
+}
+
+class _HistoryTileState extends ConsumerState<_HistoryTile> {
+  @override
+  void initState() {
+    super.initState();
+    // Seed the resolver so the title is fetched eagerly.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        ref.read(trackTitleResolverProvider(widget.event.trackId).notifier).resolve();
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+    final title = ref.watch(trackTitleResolverProvider(widget.event.trackId));
+    final displayName = title ?? widget.event.trackId;
+
+    return ListTile(
+      leading: widget.selectMode
+          ? Checkbox(
+              value: widget.isSelected,
+              onChanged: (_) => widget.onToggleSelect(widget.event.id),
+              checkColor: Colors.white,
+              activeColor: NeonShrineColors.primaryViolet,
+            )
+          : const CircleAvatar(
+              backgroundColor: NeonShrineColors.surfaceContainer,
+              child: Icon(Icons.music_note, color: NeonShrineColors.onSurfaceVariant, size: 18),
+            ),
+      title: Text(
+        displayName,
+        style: const TextStyle(color: NeonShrineColors.onSurface, fontSize: 14, fontWeight: FontWeight.w500),
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+      ),
+      subtitle: Text(
+        _HistoryScreenState._formatEventDate(widget.event.playedAt, t),
+        style: const TextStyle(color: NeonShrineColors.onSurfaceVariant, fontSize: 12),
+      ),
+      selected: widget.isSelected,
+      selectedTileColor: NeonShrineColors.primaryVioletDark.withValues(alpha: 0.2),
+      onTap: widget.selectMode ? () => widget.onToggleSelect(widget.event.id) : null,
+      onLongPress: widget.selectMode ? null : () => widget.onEnterSelectMode(widget.event.id),
+    );
+  }
+}
+

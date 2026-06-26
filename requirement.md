@@ -1475,3 +1475,9 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - **Phase 310 — 响应式 + 自适应布局**: 手机（<600dp）：底部 NavigationBar 5 tab；平板（600–1199dp）：NavigationRail + 右侧内容区；桌面（≥1200dp）：永久侧边栏 + 内容区 + MiniPlayer 底栏。
 - **Phase 311 — CI + 打包**: GitHub Actions `mobile` job（`flutter analyze` + `flutter test` + `flutter build apk --release`）；Android keystore 签名配置（环境变量 / key.properties）。
 - **Phase 312 — v3.0.0 结案**: `services/mobile/pubspec.yaml` version: 3.0.0；`VERSION` 3.0.0；`requirement.md` v3.0.0 章节。
+
+### v3.0.1 - 2026-06-26
+
+- **fix: 历史记录显示真实曲名**: 新增 `TrackTitleResolver`（`AutoDisposeFamilyNotifier`），`HistoryScreen` 和 `HistoryStatsScreen` 的列表项从仅显示 `trackId` 改为异步解析并展示真实标题，回退为 trackId。
+- **fix: PlayerNotifier 元数据缓存**: `PlayerNotifier` 引入 `_trackCache`（`Map<String, CatalogTrack>`），`_resolveTrack()` 异步获取并缓存 catalog 元数据；queue 入列时使用 `_stubMediaItem()`（可从缓存取已知标题），正式播放时再用 `_makeMediaItem()` 填充完整 title / artist / duration。
+- **fix: ArtistsScreen suppress lint**: 添加 `unnecessary_non_null_assertion` ignore，消除 flutter analyze 警告。
