@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:inori_music/src/favorites/track_favorite_notifier.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/player/player_state.dart' as ps;
 import 'package:inori_music/src/shared/theme/neon_shrine.dart';
@@ -187,8 +188,23 @@ class FullPlayerScreen extends ConsumerWidget {
                     onPressed: () => ref.read(playerProvider.notifier).next(),
                   ),
                   IconButton(
-                    icon: Icon(Icons.favorite_border, color: NeonShrineColors.onSurfaceVariant),
-                    onPressed: null, // Phase 307
+                    icon: Consumer(builder: (context2, ref2, child2) {
+                      final trackId = ref2.watch(playerProvider).mediaItem?.id;
+                      if (trackId == null) {
+                        return const Icon(Icons.favorite_border, color: NeonShrineColors.onSurfaceVariant);
+                      }
+                      final isFav = ref2.watch(trackFavoriteProvider(trackId));
+                      return Icon(
+                        isFav ? Icons.favorite : Icons.favorite_border,
+                        color: isFav ? NeonShrineColors.accentPink : NeonShrineColors.onSurfaceVariant,
+                      );
+                    }),
+                    onPressed: () {
+                      final trackId = ref.read(playerProvider).mediaItem?.id;
+                      if (trackId != null) {
+                        ref.read(trackFavoriteProvider(trackId).notifier).toggle();
+                      }
+                    },
                     tooltip: 'Favorite',
                   ),
                 ],
@@ -235,29 +251,50 @@ class FullPlayerScreen extends ConsumerWidget {
                 ),
               ),
               Expanded(
-                child: ListView.builder(
-                  controller: controller,
-                  itemCount: ref.watch(playerProvider).queue.length,
-                  itemBuilder: (_, i) {
-                    final queue = ref.watch(playerProvider).queue;
-                    final item = queue[i];
-                    final isCurrent = i == ref.watch(playerProvider).currentIndex;
-                    return ListTile(
-                      leading: Icon(
-                        Icons.music_note,
-                        color: isCurrent ? NeonShrineColors.primaryVioletLight : NeonShrineColors.onSurfaceVariant,
-                      ),
-                      title: Text(
-                        item.title,
-                        style: TextStyle(
-                          color: isCurrent ? NeonShrineColors.primaryVioletLight : NeonShrineColors.onSurface,
-                          fontWeight: isCurrent ? FontWeight.w600 : FontWeight.normal,
-                        ),
-                      ),
-                      subtitle: Text(item.artist ?? '', style: const TextStyle(color: NeonShrineColors.onSurfaceVariant)),
-                      trailing: isCurrent && ref.watch(playerProvider).isPlaying
-                          ? const Icon(Icons.equalizer, color: NeonShrineColors.primaryVioletLight, size: 20)
-                          : null,
+                child: Consumer(
+                  builder: (context2, ref2, child2) {
+                    final playerState = ref2.watch(playerProvider);
+                    final queue = playerState.queue;
+                    final currentIndex = playerState.currentIndex;
+                    return ReorderableListView.builder(
+                      scrollController: controller,
+                      itemCount: queue.length,
+                      onReorderItem: (oldIdx, newIdx) {
+                        ref2.read(playerProvider.notifier).reorderQueue(oldIdx, newIdx);
+                      },
+                      itemBuilder: (_, i) {
+                        final item = queue[i];
+                        final isCurrent = i == currentIndex;
+                        return ListTile(
+                          key: ValueKey(item.id),
+                          leading: Icon(
+                            Icons.music_note,
+                            color: isCurrent ? NeonShrineColors.primaryVioletLight : NeonShrineColors.onSurfaceVariant,
+                          ),
+                          title: Text(
+                            item.title,
+                            style: TextStyle(
+                              color: isCurrent ? NeonShrineColors.primaryVioletLight : NeonShrineColors.onSurface,
+                              fontWeight: isCurrent ? FontWeight.w600 : FontWeight.normal,
+                            ),
+                          ),
+                          subtitle: Text(item.artist ?? '', style: const TextStyle(color: NeonShrineColors.onSurfaceVariant)),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (isCurrent && playerState.isPlaying)
+                                const Icon(Icons.equalizer, color: NeonShrineColors.primaryVioletLight, size: 20),
+                              const Icon(Icons.drag_handle, color: NeonShrineColors.onSurfaceVariant, size: 20),
+                            ],
+                          ),
+                          onTap: () {
+                            ref2.read(playerProvider.notifier).playQueue(
+                              queue.map((m) => m.id).toList(),
+                              initialIndex: i,
+                            );
+                          },
+                        );
+                      },
                     );
                   },
                 ),

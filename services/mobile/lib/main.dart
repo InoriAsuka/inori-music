@@ -2,12 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:inori_music/l10n/app_localizations.dart';
+import 'package:inori_music/src/player/audio_handler.dart';
 import 'package:inori_music/src/shared/locale_provider.dart';
 import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/theme/neon_shrine.dart';
 
-void main() {
+/// Global [InoriAudioHandler] instance shared between main.dart and PlayerNotifier.
+late final InoriAudioHandler audioHandler;
+
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Initialize audio_service so background audio, lock-screen controls, and
+  // OS media sessions are available before any widget is created.
+  audioHandler = await InoriAudioHandler.create();
   runApp(
     const ProviderScope(
       child: InoriMusicApp(),

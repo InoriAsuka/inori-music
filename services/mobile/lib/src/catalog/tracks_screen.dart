@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:inori_api/src/model/catalog_track.dart';
 
 import 'package:inori_music/src/catalog/catalog_repository.dart';
+import 'package:inori_music/src/favorites/track_favorite_notifier.dart';
 import 'package:inori_music/src/shared/theme/neon_shrine.dart';
 import 'package:inori_music/src/shared/widgets/track_list_tile.dart';
 
@@ -40,12 +41,42 @@ class TracksScreen extends ConsumerWidget {
             ? const Center(child: Text('No tracks found'))
             : ListView.builder(
                 itemCount: tracks.length,
-                itemBuilder: (context, i) => TrackListTile(
-                  track: tracks[i],
-                  isFavorite: tracks[i].isFavorite ?? false,
-                ),
+                itemBuilder: (context, i) => _TrackTile(track: tracks[i]),
               ),
       ),
+    );
+  }
+}
+
+/// Wrapper that seeds [trackFavoriteProvider] from catalog data and wires the toggle.
+class _TrackTile extends ConsumerStatefulWidget {
+  const _TrackTile({required this.track});
+  final CatalogTrack track;
+
+  @override
+  ConsumerState<_TrackTile> createState() => _TrackTileState();
+}
+
+class _TrackTileState extends ConsumerState<_TrackTile> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref
+          .read(trackFavoriteProvider(widget.track.id).notifier)
+          .init(widget.track.isFavorite ?? false);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isFav = ref.watch(trackFavoriteProvider(widget.track.id));
+    return TrackListTile(
+      track: widget.track,
+      isFavorite: isFav,
+      onFavoriteTap: () =>
+          ref.read(trackFavoriteProvider(widget.track.id).notifier).toggle(),
     );
   }
 }

@@ -7,6 +7,7 @@ import 'package:inori_api/src/model/catalog_album.dart';
 import 'package:inori_api/src/model/catalog_track.dart';
 
 import 'package:inori_music/src/catalog/catalog_repository.dart';
+import 'package:inori_music/src/favorites/track_favorite_notifier.dart';
 import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/theme/neon_shrine.dart';
 import 'package:inori_music/src/shared/widgets/track_list_tile.dart';
@@ -122,16 +123,45 @@ class ArtistDetailScreen extends ConsumerWidget {
                 ? const SliverToBoxAdapter(child: Center(child: Text('No tracks')))
                 : SliverList(
                     delegate: SliverChildBuilderDelegate(
-                      (context, i) => TrackListTile(
-                        track: tracks[i],
-                        isFavorite: tracks[i].isFavorite ?? false,
-                      ),
+                      (context, i) => _TrackTile(track: tracks[i]),
                       childCount: tracks.length,
                     ),
                   ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _TrackTile extends ConsumerStatefulWidget {
+  const _TrackTile({required this.track});
+  final CatalogTrack track;
+
+  @override
+  ConsumerState<_TrackTile> createState() => _TrackTileState();
+}
+
+class _TrackTileState extends ConsumerState<_TrackTile> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref
+          .read(trackFavoriteProvider(widget.track.id).notifier)
+          .init(widget.track.isFavorite ?? false);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isFav = ref.watch(trackFavoriteProvider(widget.track.id));
+    return TrackListTile(
+      track: widget.track,
+      isFavorite: isFav,
+      onFavoriteTap: () =>
+          ref.read(trackFavoriteProvider(widget.track.id).notifier).toggle(),
     );
   }
 }

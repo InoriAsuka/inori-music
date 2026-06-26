@@ -7,6 +7,7 @@ import 'package:inori_api/src/api/catalog_api.dart';
 import 'package:inori_api/src/api/history_api.dart';
 import 'package:inori_api/src/model/record_play_event_request.dart';
 
+import 'package:inori_music/main.dart' show audioHandler;
 import 'package:inori_music/src/api/api_client.dart';
 import 'package:inori_music/src/catalog/catalog_repository.dart';
 import 'package:inori_music/src/player/player_state.dart' as pstate;
@@ -34,7 +35,9 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
 
   @override
   pstate.PlayerState build() {
-    _audioPlayer = AudioPlayer();
+    // Use the AudioPlayer instance owned by the AudioHandler so that
+    // audio_service (notifications, MediaSession, lock screen) stays in sync.
+    _audioPlayer = audioHandler.audioPlayer;
     _catalog = ref.read(catalogApiProvider);
     _history = ref.read(historyApiProvider);
     _setupPlayerListeners();
@@ -90,8 +93,11 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
 
     final source = ProgressiveAudioSource(Uri.parse(url), tag: trackId);
     await _audioPlayer.setAudioSource(source);
+    final mediaItem = _makeMediaItem(trackId);
+    // Push to AudioHandler so the OS notification shows the current track.
+    audioHandler.mediaItem.add(mediaItem);
     state = state.copyWith(
-      mediaItem: _makeMediaItem(trackId),
+      mediaItem: mediaItem,
       currentIndex: state.queue.isNotEmpty ? (state.currentIndex >= 0 ? state.currentIndex : index) : 0,
     );
     await _audioPlayer.play();

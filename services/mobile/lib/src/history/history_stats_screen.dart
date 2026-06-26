@@ -3,6 +3,7 @@ import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:inori_api/src/model/timeline_bucket.dart';
+import 'package:inori_api/src/model/track_play_count.dart';
 import 'package:inori_api/src/model/user_history_stats.dart';
 
 import 'package:inori_music/src/player/player_notifier.dart';
@@ -27,6 +28,12 @@ final historyTimelineProvider = FutureProvider<List<TimelineBucket>>((ref) async
   return resp.data?.buckets ?? [];
 });
 
+final historyTopTracksProvider = FutureProvider<List<TrackPlayCount>>((ref) async {
+  final api = ref.read(historyApiProvider);
+  final resp = await api.apiV1MeHistoryTopTracksGet(limit: 5);
+  return resp.data?.tracks ?? [];
+});
+
 // ---------------------------------------------------------------------------
 // History Stats Screen
 // ---------------------------------------------------------------------------
@@ -38,6 +45,7 @@ class HistoryStatsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final statsState = ref.watch(historyStatsProvider);
     final timelineState = ref.watch(historyTimelineProvider);
+    final topTracksState = ref.watch(historyTopTracksProvider);
 
     return Scaffold(
       appBar: AppBar(title: const Text('History Stats')),
@@ -102,11 +110,40 @@ class HistoryStatsScreen extends ConsumerWidget {
                     ),
                   ),
           ),
+
+          const SizedBox(height: 24),
+
+          // Top tracks
+          const Text(
+            'Top Tracks',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: NeonShrineColors.onBackground),
+          ),
+          const SizedBox(height: 8),
+          topTracksState.when(
+            loading: () => const SizedBox(height: 80, child: Center(child: CircularProgressIndicator())),
+            error: (e, _) => Text('$e', style: const TextStyle(color: NeonShrineColors.error)),
+            data: (tracks) => tracks.isEmpty
+                ? const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 16),
+                    child: Text('No history yet', style: TextStyle(color: NeonShrineColors.onSurfaceVariant)),
+                  )
+                : Column(
+                    children: tracks.asMap().entries.map((entry) {
+                      final rank = entry.key + 1;
+                      final t = entry.value;
+                      return _TopTrackRow(rank: rank, trackId: t.trackId, playCount: t.playCount);
+                    }).toList(),
+                  ),
+          ),
         ],
       ),
     );
   }
 }
+
+// ---------------------------------------------------------------------------
+// Widgets
+// ---------------------------------------------------------------------------
 
 class _StatCard extends StatelessWidget {
   const _StatCard({required this.label, required this.value});
@@ -129,6 +166,65 @@ class _StatCard extends StatelessWidget {
           Text(value, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700, color: NeonShrineColors.primaryVioletLight)),
           const SizedBox(height: 4),
           Text(label, style: const TextStyle(fontSize: 13, color: NeonShrineColors.onSurfaceVariant)),
+        ],
+      ),
+    );
+  }
+}
+
+class _TopTrackRow extends StatelessWidget {
+  const _TopTrackRow({required this.rank, required this.trackId, required this.playCount});
+
+  final int rank;
+  final String trackId;
+  final int playCount;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: NeonShrineColors.surfaceVariant,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 28,
+            child: Text(
+              '#$rank',
+              style: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+                color: NeonShrineColors.primaryVioletLight,
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              trackId,
+              style: const TextStyle(
+                fontSize: 14,
+                color: NeonShrineColors.onSurface,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.play_arrow, size: 14, color: NeonShrineColors.onSurfaceVariant),
+              const SizedBox(width: 2),
+              Text(
+                '$playCount',
+                style: const TextStyle(fontSize: 13, color: NeonShrineColors.onSurfaceVariant),
+              ),
+            ],
+          ),
         ],
       ),
     );
