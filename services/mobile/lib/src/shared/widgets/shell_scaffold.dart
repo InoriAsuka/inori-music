@@ -1,8 +1,10 @@
+// ignore_for_file: unnecessary_non_null_assertion
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/player/mini_player_bar.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/router.dart';
@@ -27,12 +29,21 @@ class ShellScaffold extends ConsumerStatefulWidget {
 }
 
 class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
-  static const _navItems = [
-    _NavItem(label: 'Artists', icon: Icons.people_outline, route: AppRoutes.artists),
-    _NavItem(label: 'Albums', icon: Icons.album_outlined, route: AppRoutes.albums),
-    _NavItem(label: 'Search', icon: Icons.search, route: AppRoutes.search),
-    _NavItem(label: 'Favorites', icon: Icons.favorite_outline, route: AppRoutes.favorites),
-    _NavItem(label: 'History', icon: Icons.history, route: AppRoutes.history),
+  // Routes are stable constants; labels are resolved at build-time from l10n.
+  static const _navRoutes = [
+    (icon: Icons.people_outline, route: AppRoutes.artists),
+    (icon: Icons.album_outlined, route: AppRoutes.albums),
+    (icon: Icons.search, route: AppRoutes.search),
+    (icon: Icons.favorite_outline, route: AppRoutes.favorites),
+    (icon: Icons.history, route: AppRoutes.history),
+  ];
+
+  List<_NavItem> _navItems(AppLocalizations t) => [
+    _NavItem(label: t.artists, icon: _navRoutes[0].icon, route: _navRoutes[0].route),
+    _NavItem(label: t.albums, icon: _navRoutes[1].icon, route: _navRoutes[1].route),
+    _NavItem(label: t.search, icon: _navRoutes[2].icon, route: _navRoutes[2].route),
+    _NavItem(label: t.favorites, icon: _navRoutes[3].icon, route: _navRoutes[3].route),
+    _NavItem(label: t.history, icon: _navRoutes[4].icon, route: _navRoutes[4].route),
   ];
 
   late final HardwareKeyboard _keyboard;
@@ -70,45 +81,47 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
     }
   }
 
-  int _selectedIndex(BuildContext context) {
+  int _selectedIndex(BuildContext context, List<_NavItem> items) {
     final location = GoRouterState.of(context).matchedLocation;
-    for (var i = 0; i < _navItems.length; i++) {
-      if (location.startsWith(_navItems[i].route)) return i;
+    for (var i = 0; i < items.length; i++) {
+      if (location.startsWith(items[i].route)) return i;
     }
     return 0;
   }
 
-  void _onItemTapped(BuildContext context, int index) {
-    context.go(_navItems[index].route);
+  void _onItemTapped(BuildContext context, List<_NavItem> items, int index) {
+    context.go(items[index].route);
   }
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context)!;
+    final items = _navItems(t);
     final width = MediaQuery.sizeOf(context).width;
-    final selectedIndex = _selectedIndex(context);
+    final selectedIndex = _selectedIndex(context, items);
     const bottomBar = MiniPlayerBar();
 
     if (width >= 1200) {
       return _DesktopLayout(
-        navItems: _navItems,
+        navItems: items,
         selectedIndex: selectedIndex,
-        onItemTapped: (i) => _onItemTapped(context, i),
+        onItemTapped: (i) => _onItemTapped(context, items, i),
         bottomBar: bottomBar,
         child: widget.child,
       );
     } else if (width >= 600) {
       return _TabletLayout(
-        navItems: _navItems,
+        navItems: items,
         selectedIndex: selectedIndex,
-        onItemTapped: (i) => _onItemTapped(context, i),
+        onItemTapped: (i) => _onItemTapped(context, items, i),
         bottomBar: bottomBar,
         child: widget.child,
       );
     } else {
       return _MobileLayout(
-        navItems: _navItems,
+        navItems: items,
         selectedIndex: selectedIndex,
-        onItemTapped: (i) => _onItemTapped(context, i),
+        onItemTapped: (i) => _onItemTapped(context, items, i),
         bottomBar: bottomBar,
         child: widget.child,
       );

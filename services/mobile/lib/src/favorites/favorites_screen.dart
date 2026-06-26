@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:inori_api/src/model/catalog_track.dart';
 
 import 'package:inori_music/src/catalog/catalog_repository.dart';
+import 'package:inori_music/src/favorites/track_favorite_notifier.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/theme/neon_shrine.dart';
 import 'package:inori_music/src/shared/widgets/track_list_tile.dart';
@@ -49,25 +50,6 @@ final favoritesProvider = FutureProvider<List<CatalogTrack>>((ref) async {
   return tracks;
 });
 
-/// Toggle a track's favorite status and refresh the list.
-Future<void> _toggleFavorite(WidgetRef ref, CatalogTrack track) async {
-  final api = ref.read(historyApiProvider);
-  final isFav = track.isFavorite ?? false;
-
-  try {
-    if (isFav) {
-      await api.removeFavoriteTrack(trackId: track.id);
-    } else {
-      await api.addFavoriteTrack(trackId: track.id);
-    }
-    // Refresh the full list — result is the future, which we ignore intentionally
-    // ignore: unused_result
-    ref.refresh(favoritesProvider);
-  } catch (_) {
-    // Silently fail — user can retry
-  }
-}
-
 // ---------------------------------------------------------------------------
 // Favorites Screen
 // ---------------------------------------------------------------------------
@@ -111,16 +93,60 @@ class FavoritesScreen extends ConsumerWidget {
               )
             : ListView.builder(
                 itemCount: tracks.length,
-                itemBuilder: (context, i) {
-                  final track = tracks[i];
-                  return TrackListTile(
-                    track: track,
-                    isFavorite: true,
-                    onFavoriteTap: () => _toggleFavorite(ref, track),
-                  );
-                },
+                itemBuilder: (context, i) => _FavTile(
+                  key: ValueKey(tracks[i].id),
+                  track: tracks[i],
+                  onRemoved: () => ref.refresh(favoritesProvider),
+                ),
               ),
       ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Per-tile widget — uses trackFavoriteProvider for optimistic toggle.
+// When a track is removed from favorites it triggers a full list refresh
+// so the tile disappears from the screen.
+// ---------------------------------------------------------------------------
+
+class _FavTile extends ConsumerStatefulWidget {
+  const _FavTile({super.key, required this.track, required this.onRemoved});
+  final CatalogTrack track;
+  final VoidCallback onRemoved;
+
+  @override
+  ConsumerState<_FavTile> createState() => _FavTileState();
+}
+
+class _FavTileState extends ConsumerState<_FavTile> {
+  @override
+  void initState() {
+    super.initState();
+    // Seed per-track notifier: all tracks in FavoritesScreen are favorites.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref.read(trackFavoriteProvider(widget.track.id).notifier).init(true);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isFav = ref.watch(trackFavoriteProvider(widget.track.id));
+
+    // If the optimistic toggle moved this track out of favorites, refresh
+    // the full list so it disappears without waiting for the user to navigate.
+    if (!isFav) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        widget.onRemoved();
+      });
+    }
+
+    return TrackListTile(
+      track: widget.track,
+      isFavorite: isFav,
+      onFavoriteTap: () =>
+          ref.read(trackFavoriteProvider(widget.track.id).notifier).toggle(),
     );
   }
 }

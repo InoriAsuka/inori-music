@@ -187,26 +187,28 @@ class FullPlayerScreen extends ConsumerWidget {
                     icon: const Icon(Icons.skip_next, size: 36, color: NeonShrineColors.onSurface),
                     onPressed: () => ref.read(playerProvider.notifier).next(),
                   ),
-                  IconButton(
-                    icon: Consumer(builder: (context2, ref2, child2) {
-                      final trackId = ref2.watch(playerProvider).mediaItem?.id;
-                      if (trackId == null) {
-                        return const Icon(Icons.favorite_border, color: NeonShrineColors.onSurfaceVariant);
-                      }
-                      final isFav = ref2.watch(trackFavoriteProvider(trackId));
-                      return Icon(
+                  // Favorite button — wrapped in Consumer so icon and onPressed
+                  // always use the same live trackId from the reactive ref.
+                  Consumer(builder: (context2, ref2, child2) {
+                    final trackId = ref2.watch(playerProvider).mediaItem?.id;
+                    final isFav = trackId != null
+                        ? ref2.watch(trackFavoriteProvider(trackId))
+                        : false;
+                    return IconButton(
+                      icon: Icon(
                         isFav ? Icons.favorite : Icons.favorite_border,
-                        color: isFav ? NeonShrineColors.accentPink : NeonShrineColors.onSurfaceVariant,
-                      );
-                    }),
-                    onPressed: () {
-                      final trackId = ref.read(playerProvider).mediaItem?.id;
-                      if (trackId != null) {
-                        ref.read(trackFavoriteProvider(trackId).notifier).toggle();
-                      }
-                    },
-                    tooltip: 'Favorite',
-                  ),
+                        color: isFav
+                            ? NeonShrineColors.accentPink
+                            : (trackId != null
+                                ? NeonShrineColors.onSurface
+                                : NeonShrineColors.onSurfaceVariant),
+                      ),
+                      onPressed: trackId == null
+                          ? null
+                          : () => ref2.read(trackFavoriteProvider(trackId).notifier).toggle(),
+                      tooltip: 'Favorite',
+                    );
+                  }),
                 ],
               ),
             ),

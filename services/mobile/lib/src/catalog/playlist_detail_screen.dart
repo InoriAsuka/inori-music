@@ -5,6 +5,7 @@ import 'package:inori_api/src/model/playlist.dart';
 import 'package:inori_api/src/model/catalog_track.dart';
 
 import 'package:inori_music/src/catalog/catalog_repository.dart';
+import 'package:inori_music/src/favorites/track_favorite_notifier.dart';
 import 'package:inori_music/src/shared/theme/neon_shrine.dart';
 import 'package:inori_music/src/shared/widgets/track_list_tile.dart';
 
@@ -12,13 +13,23 @@ final _playlistDetailProvider = FutureProvider.family<Playlist, String>((ref, id
   return ref.watch(catalogRepositoryProvider).getPlaylist(id);
 });
 
-// Loads each track by ID from the playlist's trackIds list
+// Loads each track by ID from the playlist's trackIds list.
+// Tracks that fail to load (e.g. deleted tracks still in the playlist) are
+// silently skipped rather than crashing the whole screen.
 final _playlistTracksProvider = FutureProvider.family<List<CatalogTrack>, String>((ref, id) async {
   final repo = ref.watch(catalogRepositoryProvider);
   final playlist = await repo.getPlaylist(id);
-  final futures = playlist.trackIds.map((tid) => repo.getTrack(tid));
-  final results = await Future.wait(futures, eagerError: false);
-  return results;
+  final tracks = <CatalogTrack>[];
+  await Future.wait(
+    playlist.trackIds.map((tid) async {
+      try {
+        tracks.add(await repo.getTrack(tid));
+      } catch (_) {
+        // Skip tracks that can no longer be resolved
+      }
+    }),
+  );
+  return tracks;
 });
 
 class PlaylistDetailScreen extends ConsumerWidget {
@@ -77,16 +88,45 @@ class PlaylistDetailScreen extends ConsumerWidget {
             ),
             data: (tracks) => SliverList(
               delegate: SliverChildBuilderDelegate(
-                (context, i) => TrackListTile(
-                  track: tracks[i],
-                  isFavorite: tracks[i].isFavorite ?? false,
-                ),
+                (context, i) => _TrackTile(key: ValueKey(tracks[i].id), track: tracks[i]),
                 childCount: tracks.length,
               ),
             ),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _TrackTile extends ConsumerStatefulWidget {
+  const _TrackTile({super.key, required this.track});
+  final CatalogTrack track;
+
+  @override
+  ConsumerState<_TrackTile> createState() => _TrackTileState();
+}
+
+class _TrackTileState extends ConsumerState<_TrackTile> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ref
+          .read(trackFavoriteProvider(widget.track.id).notifier)
+          .init(widget.track.isFavorite ?? false);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isFav = ref.watch(trackFavoriteProvider(widget.track.id));
+    return TrackListTile(
+      track: widget.track,
+      isFavorite: isFav,
+      onFavoriteTap: () =>
+          ref.read(trackFavoriteProvider(widget.track.id).notifier).toggle(),
     );
   }
 }

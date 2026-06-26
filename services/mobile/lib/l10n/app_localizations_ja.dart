@@ -151,4 +151,51 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get darkMode => 'ダークモード';
+
+  @override
+  String get nothingPlaying => '再生していません';
+
+  @override
+  String get noFavoritesYet => 'お気に入りがありません';
+
+  @override
+  String get historyStats => '再生統計';
+
+  @override
+  String get topTracks => 'よく聴くトラック';
+
+  @override
+  String get activityChart => '30日間の再生記録';
+
+  @override
+  String get totalPlays => '合計再生回数';
+
+  @override
+  String get uniqueTracks => 'ユニークトラック数';
+
+  @override
+  String get today => '今日';
+
+  @override
+  String get yesterday => '昨日';
+
+  @override
+  String daysAgo(int days) {
+    return '$days日前';
+  }
+
+  @override
+  String get searchHint => 'アーティスト・アルバム・トラックを検索…';
+
+  @override
+  String get searchPrompt => 'キーワードを入力して検索…';
+
+  @override
+  String get deleteHistory => '履歴を削除';
+
+  @override
+  String get noHistory => '再生履歴がありません';
+
+  @override
+  String get noData => 'データがありません';
 }

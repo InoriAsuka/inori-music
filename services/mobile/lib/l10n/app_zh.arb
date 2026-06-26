@@ -47,5 +47,25 @@
   "signOutConfirmBody": "确定要退出登录吗？",
   "language": "语言",
   "theme": "主题",
-  "darkMode": "暗色模式"
+  "darkMode": "暗色模式",
+  "nothingPlaying": "未在播放",
+  "noFavoritesYet": "暂无收藏",
+  "historyStats": "播放统计",
+  "topTracks": "最常播放",
+  "activityChart": "30天播放记录",
+  "totalPlays": "总播放次数",
+  "uniqueTracks": "不同曲目数",
+  "today": "今天",
+  "yesterday": "昨天",
+  "daysAgo": "{days} 天前",
+  "@daysAgo": {
+    "placeholders": {
+      "days": { "type": "int" }
+    }
+  },
+  "searchHint": "搜索艺术家、专辑、曲目…",
+  "searchPrompt": "输入关键词开始搜索…",
+  "deleteHistory": "删除历史",
+  "noHistory": "暂无播放记录",
+  "noData": "暂无数据"
 }

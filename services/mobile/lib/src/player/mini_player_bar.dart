@@ -1,7 +1,9 @@
+// ignore_for_file: unnecessary_non_null_assertion
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/theme/neon_shrine.dart';
@@ -16,8 +18,9 @@ class MiniPlayerBar extends ConsumerWidget {
     final mediaItem = playerState.mediaItem;
     final isPlaying = playerState.isPlaying;
     final isBuffering = playerState.isBuffering;
+    final t = AppLocalizations.of(context)!;
 
-    final title = mediaItem?.title ?? 'Nothing playing';
+    final title = mediaItem?.title ?? t.nothingPlaying;
     final artist = mediaItem?.artist ?? '';
 
     return Material(

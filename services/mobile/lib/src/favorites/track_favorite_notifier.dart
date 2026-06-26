@@ -4,14 +4,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 
 /// Per-track favorite-state notifier.
-/// Observes the current favorite state (from the track's `isFavorite` field)
-/// and can toggle it via POST / DELETE on the API.
-class TrackFavoriteNotifier extends FamilyNotifier<bool, String> {
+///
+/// Uses [autoDispose] so notifier instances are released when no widget is
+/// watching them (important for large track lists that create one per tile).
+class TrackFavoriteNotifier extends AutoDisposeFamilyNotifier<bool, String> {
   @override
-  bool build(String trackId) => false; // initialised externally via [init]
+  bool build(String trackId) => false; // seeded on first watch via [init]
 
-  /// Seed the initial state from the catalog's isFavorite value.
-  void init(bool value) => state = value;
+  /// Seed the initial state from the catalog model's isFavorite field.
+  /// Called once from initState via addPostFrameCallback.
+  void init(bool value) {
+    // Only update if state actually differs to avoid spurious rebuilds.
+    if (state != value) state = value;
+  }
 
   Future<void> toggle() async {
     final api = ref.read(historyApiProvider);
@@ -32,6 +37,6 @@ class TrackFavoriteNotifier extends FamilyNotifier<bool, String> {
 }
 
 final trackFavoriteProvider =
-    NotifierProviderFamily<TrackFavoriteNotifier, bool, String>(
+    NotifierProvider.autoDispose.family<TrackFavoriteNotifier, bool, String>(
   TrackFavoriteNotifier.new,
 );

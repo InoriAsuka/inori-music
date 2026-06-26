@@ -1,3 +1,4 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -45,17 +46,36 @@ abstract class AppRoutes {
 }
 
 // ---------------------------------------------------------------------------
+// Router listenable that bridges Riverpod → GoRouter refresh
+// ---------------------------------------------------------------------------
+
+/// A [ChangeNotifier] that listens to [authProvider] and notifies GoRouter
+/// when auth state changes. This avoids recreating the GoRouter on every
+/// auth state update — the router is created once and only its refresh signal
+/// triggers re-evaluation of the redirect callback.
+class _AuthChangeNotifier extends ChangeNotifier {
+  _AuthChangeNotifier(this._ref) {
+    _ref.listen(authProvider, (prev, next) => notifyListeners());
+  }
+  final Ref _ref;
+}
+
+// ---------------------------------------------------------------------------
 // Router provider
 // ---------------------------------------------------------------------------
 
 final routerProvider = Provider<GoRouter>((ref) {
-  final authState = ref.watch(authProvider);
+  final notifier = _AuthChangeNotifier(ref);
+  ref.onDispose(notifier.dispose);
 
   return GoRouter(
     initialLocation: AppRoutes.artists,
+    refreshListenable: notifier,
     redirect: (context, state) {
-      // While loading, show nothing (splash)
-      if (authState is AsyncLoading) return null;
+      final authState = ref.read(authProvider);
+
+      // While auth is loading, show a splash instead of flashing content.
+      if (authState is AsyncLoading) return AppRoutes.login;
 
       final isLoggedIn = authState.valueOrNull?.isAuthenticated ?? false;
       final isLoginRoute = state.matchedLocation == AppRoutes.login;

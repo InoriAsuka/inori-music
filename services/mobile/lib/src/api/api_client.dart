@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -5,6 +7,10 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 const _kBaseUrlKey = 'base_url';
 const _kTokenKey = 'auth_token';
 const _kDefaultBaseUrl = 'http://localhost:8080';
+
+/// Broadcast stream that fires when a 401 causes an automatic logout.
+/// [AuthNotifier] listens to this and invalidates itself to redirect the user.
+final forceLogoutStream = StreamController<void>.broadcast();
 
 /// Secure storage singleton
 final secureStorageProvider = Provider<FlutterSecureStorage>(
@@ -50,10 +56,12 @@ final dioProvider = Provider<Dio>((ref) {
       },
       onError: (error, handler) async {
         if (error.response?.statusCode == 401) {
-          // Token expired — clear and signal logout
+          // Token expired — clear storage and broadcast so AuthNotifier can
+          // transition to unauthenticated and trigger the login redirect.
           final storage = ref.read(secureStorageProvider);
           await storage.delete(key: _kTokenKey);
           ref.invalidate(tokenProvider);
+          forceLogoutStream.add(null);
         }
         handler.next(error);
       },

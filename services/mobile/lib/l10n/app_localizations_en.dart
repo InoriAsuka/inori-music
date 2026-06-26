@@ -152,4 +152,51 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get darkMode => 'Dark Mode';
+
+  @override
+  String get nothingPlaying => 'Nothing playing';
+
+  @override
+  String get noFavoritesYet => 'No favorites yet';
+
+  @override
+  String get historyStats => 'History Stats';
+
+  @override
+  String get topTracks => 'Top Tracks';
+
+  @override
+  String get activityChart => '30-day Activity';
+
+  @override
+  String get totalPlays => 'Total Plays';
+
+  @override
+  String get uniqueTracks => 'Unique Tracks';
+
+  @override
+  String get today => 'Today';
+
+  @override
+  String get yesterday => 'Yesterday';
+
+  @override
+  String daysAgo(int days) {
+    return '$days days ago';
+  }
+
+  @override
+  String get searchHint => 'Search artists, albums, tracks…';
+
+  @override
+  String get searchPrompt => 'Start typing to search…';
+
+  @override
+  String get deleteHistory => 'Delete History';
+
+  @override
+  String get noHistory => 'No history yet';
+
+  @override
+  String get noData => 'No data';
 }

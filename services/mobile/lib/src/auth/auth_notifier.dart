@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -59,6 +61,15 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
 
   @override
   Future<AuthState> build() async {
+    // When the Dio interceptor detects a 401 (token expired / revoked), it
+    // fires forceLogoutStream.  We listen here and transition to unauthenticated,
+    // which triggers the go_router redirect to /login.
+    final logoutSub = forceLogoutStream.stream.listen((_) async {
+      await _clearStorage();
+      state = const AsyncData(AuthState(status: AuthStatus.unauthenticated));
+    });
+    ref.onDispose(logoutSub.cancel);
+
     final token = await _storage.read(key: _kTokenKey);
     final userId = await _storage.read(key: _kUserIdKey);
     final username = await _storage.read(key: _kUsernameKey);

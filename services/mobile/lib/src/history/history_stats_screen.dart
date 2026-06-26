@@ -1,4 +1,4 @@
-// ignore_for_file: implementation_imports
+// ignore_for_file: implementation_imports, unnecessary_non_null_assertion
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,6 +6,7 @@ import 'package:inori_api/src/model/timeline_bucket.dart';
 import 'package:inori_api/src/model/track_play_count.dart';
 import 'package:inori_api/src/model/user_history_stats.dart';
 
+import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/theme/neon_shrine.dart';
 
@@ -46,9 +47,10 @@ class HistoryStatsScreen extends ConsumerWidget {
     final statsState = ref.watch(historyStatsProvider);
     final timelineState = ref.watch(historyTimelineProvider);
     final topTracksState = ref.watch(historyTopTracksProvider);
+    final t = AppLocalizations.of(context)!;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('History Stats')),
+      appBar: AppBar(title: Text(t.historyStats)),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -58,9 +60,9 @@ class HistoryStatsScreen extends ConsumerWidget {
             error: (e, _) => Text('$e', style: const TextStyle(color: NeonShrineColors.error)),
             data: (stats) => Row(
               children: [
-                Expanded(child: _StatCard(label: 'Total Plays', value: '${stats.totalEvents}')),
+                Expanded(child: _StatCard(label: t.totalPlays, value: '${stats.totalEvents}')),
                 const SizedBox(width: 12),
-                Expanded(child: _StatCard(label: 'Unique Tracks', value: '${stats.uniqueTracks}')),
+                Expanded(child: _StatCard(label: t.uniqueTracks, value: '${stats.uniqueTracks}')),
               ],
             ),
           ),
@@ -68,9 +70,9 @@ class HistoryStatsScreen extends ConsumerWidget {
           const SizedBox(height: 24),
 
           // 30-day chart
-          const Text(
-            '30-day Activity',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: NeonShrineColors.onBackground),
+          Text(
+            t.activityChart,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: NeonShrineColors.onBackground),
           ),
           const SizedBox(height: 12),
           timelineState.when(
@@ -114,9 +116,9 @@ class HistoryStatsScreen extends ConsumerWidget {
           const SizedBox(height: 24),
 
           // Top tracks
-          const Text(
-            'Top Tracks',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: NeonShrineColors.onBackground),
+          Text(
+            t.topTracks,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: NeonShrineColors.onBackground),
           ),
           const SizedBox(height: 8),
           topTracksState.when(

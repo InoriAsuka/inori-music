@@ -1,10 +1,11 @@
-// ignore_for_file: implementation_imports
+// ignore_for_file: implementation_imports, unnecessary_non_null_assertion
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inori_api/src/model/batch_delete_request.dart';
 import 'package:inori_api/src/model/play_event.dart';
 
+import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/theme/neon_shrine.dart';
@@ -55,19 +56,20 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
   Future<void> _deleteSelected() async {
     final ids = _selected.toList();
     if (ids.isEmpty) return;
+    final t = AppLocalizations.of(context)!;
 
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
+      builder: (ctx) => AlertDialog(
         backgroundColor: NeonShrineColors.surfaceVariant,
-        title: const Text('Delete History', style: TextStyle(color: NeonShrineColors.onSurface)),
+        title: Text(t.deleteHistory, style: const TextStyle(color: NeonShrineColors.onSurface)),
         content: Text(
           'Delete ${ids.length} event${ids.length > 1 ? 's' : ''}?',
           style: const TextStyle(color: NeonShrineColors.onSurfaceVariant),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(t.cancel)),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(t.delete)),
         ],
       ),
     );
@@ -101,10 +103,11 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(historyEventsProvider);
+    final t = AppLocalizations.of(context)!;
 
     return Scaffold(
       appBar: AppBar(
-        title: _selectMode ? Text('${_selected.length} selected') : const Text('History'),
+        title: _selectMode ? Text('${_selected.length} selected') : Text(t.history),
         actions: [
           if (_selectMode) ...[
             IconButton(
@@ -187,7 +190,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                       overflow: TextOverflow.ellipsis,
                     ),
                     subtitle: Text(
-                      _formatEventDate(event.playedAt),
+                      _formatEventDate(event.playedAt, t),
                       style: const TextStyle(color: NeonShrineColors.onSurfaceVariant, fontSize: 12),
                     ),
                     selected: isSelected,
@@ -201,13 +204,14 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
     );
   }
 
-  static String _formatEventDate(DateTime dt) {
+  static String _formatEventDate(DateTime dt, AppLocalizations t) {
     final now = DateTime.now();
     final diff = now.difference(dt);
+    final hhmm = '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
     if (diff.inDays == 0) {
-      return 'Today ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+      return '${t.today} $hhmm';
     } else if (diff.inDays == 1) {
-      return 'Yesterday ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+      return '${t.yesterday} $hhmm';
     }
     return '${dt.year}/${dt.month.toString().padLeft(2, '0')}/${dt.day.toString().padLeft(2, '0')}';
   }

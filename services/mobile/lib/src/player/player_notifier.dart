@@ -1,4 +1,6 @@
 // ignore_for_file: implementation_imports
+import 'dart:async';
+
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -33,6 +35,9 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
   late final CatalogApi _catalog;
   late final HistoryApi _history;
 
+  // Store subscriptions so they can be cancelled on dispose.
+  late final List<StreamSubscription> _subscriptions;
+
   @override
   pstate.PlayerState build() {
     // Use the AudioPlayer instance owned by the AudioHandler so that
@@ -40,7 +45,13 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
     _audioPlayer = audioHandler.audioPlayer;
     _catalog = ref.read(catalogApiProvider);
     _history = ref.read(historyApiProvider);
-    _setupPlayerListeners();
+    _subscriptions = _setupPlayerListeners();
+    // Cancel all stream subscriptions when the provider is disposed.
+    ref.onDispose(() {
+      for (final sub in _subscriptions) {
+        sub.cancel();
+      }
+    });
     return pstate.PlayerState();
   }
 
@@ -213,6 +224,18 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
     state = pstate.PlayerState();
   }
 
+  // ---- OS media button bridge ----
+  // audioHandler.customEvent carries skipToNext / skipToPrevious from
+  // lock-screen / notification / Bluetooth controls.
+
+  void _handleCustomEvent(dynamic payload) {
+    if (payload is Map<String, dynamic> && payload['action'] == 'next') {
+      next();
+    } else if (payload is Map<String, dynamic> && payload['action'] == 'previous') {
+      previous();
+    }
+  }
+
   // ---- Private helpers ----
 
   Future<void> _playAtIndex(int index) async {
@@ -233,19 +256,21 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
         extras: {'trackId': trackId},
       );
 
-  void _setupPlayerListeners() {
+  List<StreamSubscription> _setupPlayerListeners() {
+    final subs = <StreamSubscription>[];
+
     // Position
-    _audioPlayer.positionStream.listen((pos) {
+    subs.add(_audioPlayer.positionStream.listen((pos) {
       state = state.copyWith(position: pos);
-    });
+    }));
 
     // Duration
-    _audioPlayer.durationStream.listen((dur) {
+    subs.add(_audioPlayer.durationStream.listen((dur) {
       if (dur != null) state = state.copyWith(duration: dur);
-    });
+    }));
 
     // Processing state — auto-advance on completion
-    _audioPlayer.processingStateStream.listen((ps) {
+    subs.add(_audioPlayer.processingStateStream.listen((ps) {
       if (ps == ProcessingState.completed) {
         _postHistory();
         if (state.repeat == pstate.RepeatMode.one) {
@@ -255,10 +280,10 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
           next();
         }
       }
-    });
+    }));
 
     // Player state — playing/paused/buffering
-    _audioPlayer.playerStateStream.listen((ps) {
+    subs.add(_audioPlayer.playerStateStream.listen((ps) {
       state = state.copyWith(
         playbackState: PlaybackState(
           playing: ps.playing,
@@ -270,7 +295,12 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
           ],
         ),
       );
-    });
+    }));
+
+    // OS media button events (lock screen, notification, Bluetooth)
+    subs.add(audioHandler.customEvent.listen(_handleCustomEvent));
+
+    return subs;
   }
 
   AudioProcessingState _toAudioProcessingState(ProcessingState ps) {
@@ -290,6 +320,7 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
 
   Future<void> _postHistory() async {
     try {
+      if (state.queue.isEmpty || state.currentIndex < 0 || state.currentIndex >= state.queue.length) return;
       final trackId = state.queue[state.currentIndex].id;
       if (trackId.isNotEmpty) {
         await _history.recordPlayEvent(

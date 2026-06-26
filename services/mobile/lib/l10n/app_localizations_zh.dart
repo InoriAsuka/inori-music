@@ -151,4 +151,51 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get darkMode => '暗色模式';
+
+  @override
+  String get nothingPlaying => '未在播放';
+
+  @override
+  String get noFavoritesYet => '暂无收藏';
+
+  @override
+  String get historyStats => '播放统计';
+
+  @override
+  String get topTracks => '最常播放';
+
+  @override
+  String get activityChart => '30天播放记录';
+
+  @override
+  String get totalPlays => '总播放次数';
+
+  @override
+  String get uniqueTracks => '不同曲目数';
+
+  @override
+  String get today => '今天';
+
+  @override
+  String get yesterday => '昨天';
+
+  @override
+  String daysAgo(int days) {
+    return '$days 天前';
+  }
+
+  @override
+  String get searchHint => '搜索艺术家、专辑、曲目…';
+
+  @override
+  String get searchPrompt => '输入关键词开始搜索…';
+
+  @override
+  String get deleteHistory => '删除历史';
+
+  @override
+  String get noHistory => '暂无播放记录';
+
+  @override
+  String get noData => '暂无数据';
 }

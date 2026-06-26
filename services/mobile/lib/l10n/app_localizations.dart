@@ -387,6 +387,96 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Dark Mode'**
   String get darkMode;
+
+  /// No description provided for @nothingPlaying.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing playing'**
+  String get nothingPlaying;
+
+  /// No description provided for @noFavoritesYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No favorites yet'**
+  String get noFavoritesYet;
+
+  /// No description provided for @historyStats.
+  ///
+  /// In en, this message translates to:
+  /// **'History Stats'**
+  String get historyStats;
+
+  /// No description provided for @topTracks.
+  ///
+  /// In en, this message translates to:
+  /// **'Top Tracks'**
+  String get topTracks;
+
+  /// No description provided for @activityChart.
+  ///
+  /// In en, this message translates to:
+  /// **'30-day Activity'**
+  String get activityChart;
+
+  /// No description provided for @totalPlays.
+  ///
+  /// In en, this message translates to:
+  /// **'Total Plays'**
+  String get totalPlays;
+
+  /// No description provided for @uniqueTracks.
+  ///
+  /// In en, this message translates to:
+  /// **'Unique Tracks'**
+  String get uniqueTracks;
+
+  /// No description provided for @today.
+  ///
+  /// In en, this message translates to:
+  /// **'Today'**
+  String get today;
+
+  /// No description provided for @yesterday.
+  ///
+  /// In en, this message translates to:
+  /// **'Yesterday'**
+  String get yesterday;
+
+  /// No description provided for @daysAgo.
+  ///
+  /// In en, this message translates to:
+  /// **'{days} days ago'**
+  String daysAgo(int days);
+
+  /// No description provided for @searchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search artists, albums, tracks…'**
+  String get searchHint;
+
+  /// No description provided for @searchPrompt.
+  ///
+  /// In en, this message translates to:
+  /// **'Start typing to search…'**
+  String get searchPrompt;
+
+  /// No description provided for @deleteHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete History'**
+  String get deleteHistory;
+
+  /// No description provided for @noHistory.
+  ///
+  /// In en, this message translates to:
+  /// **'No history yet'**
+  String get noHistory;
+
+  /// No description provided for @noData.
+  ///
+  /// In en, this message translates to:
+  /// **'No data'**
+  String get noData;
 }
 
 class _AppLocalizationsDelegate

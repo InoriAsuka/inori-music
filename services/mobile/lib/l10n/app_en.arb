@@ -48,5 +48,25 @@
   "signOutConfirmBody": "Are you sure you want to sign out?",
   "language": "Language",
   "theme": "Theme",
-  "darkMode": "Dark Mode"
+  "darkMode": "Dark Mode",
+  "nothingPlaying": "Nothing playing",
+  "noFavoritesYet": "No favorites yet",
+  "historyStats": "History Stats",
+  "topTracks": "Top Tracks",
+  "activityChart": "30-day Activity",
+  "totalPlays": "Total Plays",
+  "uniqueTracks": "Unique Tracks",
+  "today": "Today",
+  "yesterday": "Yesterday",
+  "daysAgo": "{days} days ago",
+  "@daysAgo": {
+    "placeholders": {
+      "days": { "type": "int" }
+    }
+  },
+  "searchHint": "Search artists, albums, tracks…",
+  "searchPrompt": "Start typing to search…",
+  "deleteHistory": "Delete History",
+  "noHistory": "No history yet",
+  "noData": "No data"
 }
