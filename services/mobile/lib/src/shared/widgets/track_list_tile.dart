@@ -2,9 +2,11 @@
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:inori_api/src/model/catalog_track.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/theme/neon_shrine.dart';
+import 'package:inori_music/src/user_playlist/user_playlist_notifier.dart';
 
 class TrackListTile extends ConsumerWidget {
   const TrackListTile({
@@ -123,6 +125,14 @@ class TrackListTile extends ConsumerWidget {
           () {
             ref.read(playerProvider.notifier).playTrack(track.id);
           },
+      onLongPress: () => _showAddToPlaylistSheet(context, ref),
+    );
+  }
+
+  void _showAddToPlaylistSheet(BuildContext context, WidgetRef ref) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) => _AddToPlaylistSheet(trackId: track.id),
     );
   }
 }
@@ -137,6 +147,103 @@ class _ArtworkPlaceholder extends StatelessWidget {
       height: 40,
       color: NeonShrineColors.surfaceContainer,
       child: const Icon(Icons.music_note, size: 18, color: NeonShrineColors.onSurfaceVariant),
+    );
+  }
+}
+
+class _AddToPlaylistSheet extends ConsumerStatefulWidget {
+  const _AddToPlaylistSheet({required this.trackId});
+  final String trackId;
+
+  @override
+  ConsumerState<_AddToPlaylistSheet> createState() => _AddToPlaylistSheetState();
+}
+
+class _AddToPlaylistSheetState extends ConsumerState<_AddToPlaylistSheet> {
+  Future<void> _createAndAdd() async {
+    Navigator.of(context).pop();
+    final controller = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('New Playlist'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: 'Playlist name'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => ctx.pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => ctx.pop(controller.text.trim()),
+            child: const Text('Create'),
+          ),
+        ],
+      ),
+    );
+    if (name != null && name.isNotEmpty) {
+      final pl = await ref.read(userPlaylistProvider.notifier).create(name);
+      if (pl != null) {
+        await ref
+            .read(userPlaylistProvider.notifier)
+            .addTrack(pl.id, widget.trackId);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final playlists = ref.watch(userPlaylistProvider).valueOrNull ?? [];
+
+    return SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Padding(
+            padding: EdgeInsets.all(16),
+            child: Text(
+              'Add to Playlist',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+                color: NeonShrineColors.onSurface,
+              ),
+            ),
+          ),
+          if (playlists.isEmpty)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Text(
+                'No playlists yet.',
+                style: TextStyle(color: NeonShrineColors.onSurfaceVariant),
+              ),
+            )
+          else
+            ...playlists.map(
+              (pl) => ListTile(
+                leading: const Icon(Icons.queue_music,
+                    color: NeonShrineColors.primaryViolet),
+                title: Text(pl.name),
+                subtitle: Text('${pl.trackIds.length} tracks'),
+                onTap: () async {
+                  Navigator.of(context).pop();
+                  await ref
+                      .read(userPlaylistProvider.notifier)
+                      .addTrack(pl.id, widget.trackId);
+                },
+              ),
+            ),
+          ListTile(
+            leading: const Icon(Icons.add, color: NeonShrineColors.primaryViolet),
+            title: const Text('+ New Playlist'),
+            onTap: _createAndAdd,
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
     );
   }
 }
