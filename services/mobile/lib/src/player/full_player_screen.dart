@@ -65,7 +65,7 @@ class FullPlayerScreen extends ConsumerWidget {
                 ],
               ),
               child: _ArtworkPlaceholder(
-                mediaObjectId: mediaItem?.extras?['mediaObjectId'],
+                mediaObjectId: state.mediaItem?.extras?['mediaObjectId'],
               ),
             ),
 
@@ -339,17 +339,18 @@ class _ArtworkPlaceholder extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final artworkUrl = mediaObjectId != null
-        ? ref.watch(artworkUrlProvider(mediaObjectId!))
-        : null;
-
-    if (artworkUrl != null) {
-      return Image.network(
-        artworkUrl,
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => _FallbackIcon(),
-      );
-    }
+    // TODO: Implement artwork URL provider when backend supports cover art
+    // final artworkUrl = mediaObjectId != null
+    //     ? ref.watch(artworkUrlProvider(mediaObjectId!))
+    //     : null;
+    //
+    // if (artworkUrl != null) {
+    //   return Image.network(
+    //     artworkUrl,
+    //     fit: BoxFit.cover,
+    //     errorBuilder: (_, __, ___) => _FallbackIcon(),
+    //   );
+    // }
 
     return const _FallbackIcon();
   }
