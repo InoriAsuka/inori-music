@@ -24,6 +24,24 @@
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
+
+            <!-- Deep link: inori:// custom scheme (all paths) -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="inori" />
+            </intent-filter>
+
+            <!-- Deep link: inori://tracks, inori://albums, inori://artists -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="inori" android:host="tracks" />
+                <data android:scheme="inori" android:host="albums" />
+                <data android:scheme="inori" android:host="artists" />
+            </intent-filter>
         </activity>
 
         <!-- audio_service background playback service -->

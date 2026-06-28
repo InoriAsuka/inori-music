@@ -54,6 +54,10 @@ dependencies:
   # Charts (Phase 308)
   fl_chart: ^0.71.0
 
+  # Desktop integration (v3.3.0)
+  tray_manager: ^0.2.3
+  hotkey_manager: ^0.2.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/player/audio_handler.dart';
+import 'package:inori_music/src/shared/desktop_integration.dart';
 import 'package:inori_music/src/shared/locale_provider.dart';
 import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/theme/neon_shrine.dart';
@@ -22,11 +23,34 @@ void main() async {
   );
 }
 
-class InoriMusicApp extends ConsumerWidget {
+class InoriMusicApp extends ConsumerStatefulWidget {
   const InoriMusicApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<InoriMusicApp> createState() => _InoriMusicAppState();
+}
+
+class _InoriMusicAppState extends ConsumerState<InoriMusicApp> {
+  DesktopIntegration? _desktop;
+
+  @override
+  void initState() {
+    super.initState();
+    if (DesktopIntegration.isDesktop) {
+      _desktop = DesktopIntegration(ref);
+      // init is async; fire-and-forget — failures are logged inside the class.
+      _desktop!.init();
+    }
+  }
+
+  @override
+  void dispose() {
+    _desktop?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final router = ref.watch(routerProvider);
     final locale = ref.watch(localeProvider);
 

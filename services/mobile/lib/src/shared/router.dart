@@ -13,6 +13,7 @@ import 'package:inori_music/src/catalog/playlists_screen.dart';
 import 'package:inori_music/src/catalog/playlist_detail_screen.dart';
 import 'package:inori_music/src/catalog/search_screen.dart';
 import 'package:inori_music/src/player/full_player_screen.dart';
+import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/favorites/favorites_screen.dart';
 import 'package:inori_music/src/history/history_screen.dart';
 import 'package:inori_music/src/history/history_stats_screen.dart';
@@ -40,9 +41,15 @@ abstract class AppRoutes {
   static const historyStats = '/library/history/stats';
   static const settings = '/settings';
 
+  // Deep-link entry points (inori://tracks/:id, etc.)
+  static const deepTrack = '/tracks/:id';
+  static const deepAlbum = '/albums/:id';
+  static const deepArtist = '/artists/:id';
+
   static String artistDetailPath(String id) => '/artists/$id';
   static String albumDetailPath(String id) => '/albums/$id';
   static String playlistDetailPath(String id) => '/playlists/$id';
+  static String trackDeepLinkPath(String id) => '/tracks/$id';
 }
 
 // ---------------------------------------------------------------------------
@@ -58,6 +65,40 @@ class _AuthChangeNotifier extends ChangeNotifier {
     _ref.listen(authProvider, (prev, next) => notifyListeners());
   }
   final Ref _ref;
+}
+
+// ---------------------------------------------------------------------------
+// Deep-link play screen
+// ---------------------------------------------------------------------------
+
+/// Handles `inori://tracks/<id>` deep links.
+/// Immediately starts playback for the given track ID, then navigates to the
+/// full player screen so the user lands on a meaningful UI.
+class _DeepLinkTrackScreen extends ConsumerStatefulWidget {
+  const _DeepLinkTrackScreen({required this.trackId});
+  final String trackId;
+
+  @override
+  ConsumerState<_DeepLinkTrackScreen> createState() => _DeepLinkTrackScreenState();
+}
+
+class _DeepLinkTrackScreenState extends ConsumerState<_DeepLinkTrackScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await ref.read(playerProvider.notifier).playTrack(widget.trackId);
+      if (mounted) context.go(AppRoutes.player);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Briefly visible while the async play resolves.
+    return const Scaffold(
+      body: Center(child: CircularProgressIndicator()),
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -95,6 +136,14 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: AppRoutes.player,
         builder: (context, state) => const FullPlayerScreen(),
+      ),
+
+      // Deep link: inori://tracks/<id>  →  play track then go to /player
+      GoRoute(
+        path: '/tracks/:id',
+        builder: (context, state) => _DeepLinkTrackScreen(
+          trackId: state.pathParameters['id']!,
+        ),
       ),
 
       // Shell (persistent nav + mini player)
