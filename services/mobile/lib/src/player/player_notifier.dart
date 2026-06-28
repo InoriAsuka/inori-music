@@ -1,9 +1,11 @@
 // ignore_for_file: implementation_imports
 import 'dart:async';
+import 'dart:io';
 
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:inori_music/src/offline/offline_db.dart';
 import 'package:inori_api/src/api/catalog_api.dart';
 import 'package:inori_api/src/api/history_api.dart';
 import 'package:inori_api/src/model/catalog_track.dart';
@@ -64,6 +66,11 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
   /// Resolve the playback URL for a track and prepare the audio source.
   /// Returns the resolved URL or null if unavailable.
   Future<String?> resolvePlaybackUrl(String trackId) async {
+    // Check local offline cache first.
+    final offline = await OfflineDb.instance.query(trackId);
+    if (offline != null && File(offline.localPath).existsSync()) {
+      return 'file://${offline.localPath}';
+    }
     try {
       final resp = await _catalog.getTrackPlaybackDescriptor(id: trackId);
       final descriptor = resp.data;

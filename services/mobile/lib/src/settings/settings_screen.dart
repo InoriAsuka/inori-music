@@ -4,6 +4,8 @@ import 'package:go_router/go_router.dart';
 
 import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/auth/auth_notifier.dart';
+import 'package:inori_music/src/offline/download_notifier.dart';
+import 'package:inori_music/src/offline/offline_db.dart';
 import 'package:inori_music/src/shared/locale_provider.dart';
 import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/theme/neon_shrine.dart';
@@ -74,6 +76,11 @@ class SettingsScreen extends ConsumerWidget {
             subtitle: Text(_currentLabel(locale)),
             onTap: () => _showLanguagePicker(context, ref, t),
           ),
+          const Divider(),
+
+          // Offline Library section
+          const _SectionHeader(title: 'Offline Library'),
+          _OfflineLibrarySection(),
           const Divider(),
 
           // Sign out
@@ -281,6 +288,107 @@ class SettingsScreen extends ConsumerWidget {
       await ref.read(authProvider.notifier).logout();
       if (context.mounted) context.go(AppRoutes.login);
     }
+  }
+}
+
+class _OfflineLibrarySection extends ConsumerWidget {
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return FutureBuilder<List<OfflineTrack>>(
+      future: OfflineDb.instance.queryAll(),
+      builder: (context, snapshot) {
+        final tracks = snapshot.data ?? [];
+        if (tracks.isEmpty) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Text(
+              'No downloaded tracks.',
+              style: TextStyle(color: NeonShrineColors.onSurfaceVariant),
+            ),
+          );
+        }
+        final totalBytes = tracks.fold<int>(0, (sum, t) => sum + t.sizeBytes);
+        final totalMb = (totalBytes / (1024 * 1024)).toStringAsFixed(1);
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: Text(
+                '${tracks.length} track${tracks.length == 1 ? '' : 's'} · $totalMb MB',
+                style: const TextStyle(
+                  color: NeonShrineColors.onSurfaceVariant,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+            ...tracks.map(
+              (t) => ListTile(
+                contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                leading: const Icon(Icons.download_done,
+                    color: NeonShrineColors.primaryViolet),
+                title: Text(
+                  t.title,
+                  style: const TextStyle(
+                      color: NeonShrineColors.onSurface, fontSize: 14),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: Text(
+                  t.artistName,
+                  style: const TextStyle(
+                      color: NeonShrineColors.onSurfaceVariant, fontSize: 12),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                trailing: IconButton(
+                  icon: const Icon(Icons.delete_outline,
+                      color: NeonShrineColors.error),
+                  onPressed: () {
+                    ref
+                        .read(downloadProvider.notifier)
+                        .deleteDownload(t.trackId);
+                  },
+                ),
+              ),
+            ),
+            ListTile(
+              leading:
+                  const Icon(Icons.delete_sweep, color: NeonShrineColors.error),
+              title: const Text(
+                'Delete all downloads',
+                style: TextStyle(color: NeonShrineColors.error),
+              ),
+              onTap: () async {
+                final confirmed = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('Delete all downloads'),
+                    content: const Text(
+                        'This will remove all offline tracks from your device.'),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(ctx, false),
+                        child: const Text('Cancel'),
+                      ),
+                      FilledButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text('Delete all'),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirmed == true) {
+                  await ref
+                      .read(downloadProvider.notifier)
+                      .deleteAllDownloads();
+                }
+              },
+            ),
+          ],
+        );
+      },
+    );
   }
 }
 
