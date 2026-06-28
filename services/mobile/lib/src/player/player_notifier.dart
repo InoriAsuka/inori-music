@@ -12,6 +12,7 @@ import 'package:just_audio/just_audio.dart';
 
 import 'package:inori_music/main.dart' show audioHandler;
 import 'package:inori_music/src/api/api_client.dart';
+import 'package:inori_music/src/catalog/catalog_cache_providers.dart';
 import 'package:inori_music/src/catalog/catalog_repository.dart';
 import 'package:inori_music/src/player/player_state.dart' as pstate;
 
@@ -38,6 +39,10 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
 
   // In-memory track metadata cache to avoid redundant catalog API calls.
   final Map<String, CatalogTrack> _trackCache = {};
+
+  // Resolved display names — keyed by artistId / albumId.
+  final Map<String, String> _artistNameCache = {};
+  final Map<String, String> _albumTitleCache = {};
 
   // Store subscriptions so they can be cancelled on dispose.
   late final List<StreamSubscription> _subscriptions;
@@ -263,25 +268,73 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
   MediaItem _stubMediaItem(String trackId) => MediaItem(
         id: trackId,
         title: _trackCache[trackId]?.title ?? trackId,
-        artist: _trackCache[trackId]?.artistId ?? '',
+        artist: _artistNameCache[_trackCache[trackId]?.artistId ?? ''] ?? '',
         extras: {'trackId': trackId},
       );
 
   /// Full MediaItem populated from resolved CatalogTrack metadata.
-  MediaItem _makeMediaItem(String trackId, CatalogTrack? track) => MediaItem(
-        id: trackId,
-        title: track?.title ?? trackId,
-        artist: track?.artistId ?? '',
-        album: '',
-        duration: track?.durationMs != null
-            ? Duration(milliseconds: track!.durationMs!)
-            : Duration.zero,
-        artUri: null,
-        extras: {
-          'trackId': trackId,
-          'mediaObjectId': track?.mediaObjectId,
-        },
-      );
+  /// Artist name and album title are filled from the in-memory cache when
+  /// available; otherwise an async backfill updates the state after lookup.
+  MediaItem _makeMediaItem(String trackId, CatalogTrack? track) {
+    final artistId = track?.artistId ?? '';
+    final albumId = track?.albumId ?? '';
+    final artistName = artistId.isNotEmpty ? (_artistNameCache[artistId] ?? artistId) : '';
+    final albumTitle = albumId.isNotEmpty ? (_albumTitleCache[albumId] ?? '') : '';
+
+    // Trigger background lookups when names aren't cached yet.
+    if (artistId.isNotEmpty && !_artistNameCache.containsKey(artistId)) {
+      _backfillArtistName(trackId, artistId);
+    }
+    if (albumId.isNotEmpty && !_albumTitleCache.containsKey(albumId)) {
+      _backfillAlbumTitle(trackId, albumId);
+    }
+
+    return MediaItem(
+      id: trackId,
+      title: track?.title ?? trackId,
+      artist: artistName,
+      album: albumTitle,
+      duration: track?.durationMs != null
+          ? Duration(milliseconds: track!.durationMs!)
+          : Duration.zero,
+      artUri: null,
+      extras: {
+        'trackId': trackId,
+        'mediaObjectId': track?.mediaObjectId,
+      },
+    );
+  }
+
+  /// Fetch artist name in the background and update the current MediaItem if
+  /// it is the track being displayed.
+  Future<void> _backfillArtistName(String trackId, String artistId) async {
+    try {
+      final name = await ref.read(artistNameProvider(artistId).future);
+      _artistNameCache[artistId] = name;
+      if (state.mediaItem?.id == trackId) {
+        final updated = state.mediaItem!.copyWith(artist: name);
+        state = state.copyWith(mediaItem: updated);
+        audioHandler.mediaItem.add(updated);
+      }
+    } catch (_) {
+      // Non-fatal: UUID shown as fallback.
+    }
+  }
+
+  /// Fetch album title in the background and update the current MediaItem.
+  Future<void> _backfillAlbumTitle(String trackId, String albumId) async {
+    try {
+      final title = await ref.read(albumTitleProvider(albumId).future);
+      _albumTitleCache[albumId] = title;
+      if (state.mediaItem?.id == trackId) {
+        final updated = state.mediaItem!.copyWith(album: title);
+        state = state.copyWith(mediaItem: updated);
+        audioHandler.mediaItem.add(updated);
+      }
+    } catch (_) {
+      // Non-fatal.
+    }
+  }
 
   Future<void> _playAtIndex(int index) async {
     if (index < 0 || index >= state.queue.length) return;

@@ -3,6 +3,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:inori_api/src/model/catalog_track.dart';
+import 'package:inori_music/src/catalog/catalog_cache_providers.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/theme/neon_shrine.dart';
 
@@ -84,16 +85,28 @@ class TrackListTile extends ConsumerWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
-      subtitle: track.genre != null
-          ? Text(
-              track.genre!,
-              style: const TextStyle(
-                color: NeonShrineColors.onSurfaceVariant,
-                fontSize: 12,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            )
+      subtitle: track.artistId.isNotEmpty
+          ? ref.watch(artistNameProvider(track.artistId)).when(
+                data: (name) => Text(
+                  name,
+                  style: const TextStyle(
+                    color: NeonShrineColors.onSurfaceVariant,
+                    fontSize: 12,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                loading: () => const SizedBox.shrink(),
+                error: (e, st) => Text(
+                  track.artistId,
+                  style: const TextStyle(
+                    color: NeonShrineColors.onSurfaceVariant,
+                    fontSize: 12,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              )
           : null,
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
