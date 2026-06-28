@@ -1,9 +1,11 @@
 // ignore_for_file: unnecessary_non_null_assertion
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:inori_music/l10n/app_localizations.dart';
+import 'package:inori_music/src/catalog/artwork_provider.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/theme/neon_shrine.dart';
@@ -34,19 +36,9 @@ class MiniPlayerBar extends ConsumerWidget {
             borderRadius: BorderRadius.circular(8),
             child: Row(
               children: [
-                // Artwork placeholder
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: NeonShrineColors.surfaceContainer,
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: const Icon(
-                    Icons.music_note,
-                    color: NeonShrineColors.onSurfaceVariant,
-                    size: 22,
-                  ),
+                // Artwork
+                _MiniPlayerArtwork(
+                  albumId: mediaItem?.extras?['albumId'] as String?,
                 ),
                 const SizedBox(width: 12),
 
@@ -111,6 +103,56 @@ class MiniPlayerBar extends ConsumerWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Mini player artwork thumbnail — shows the album cover or a fallback icon.
+class _MiniPlayerArtwork extends ConsumerWidget {
+  const _MiniPlayerArtwork({this.albumId});
+
+  final String? albumId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final artworkAsync = albumId != null && albumId!.isNotEmpty
+        ? ref.watch(artworkUrlProvider(albumId!))
+        : null;
+
+    Widget child;
+    if (artworkAsync == null) {
+      child = const Icon(Icons.music_note, color: NeonShrineColors.onSurfaceVariant, size: 22);
+    } else {
+      child = artworkAsync.when(
+        data: (url) {
+          if (url == null || url.isEmpty) {
+            return const Icon(Icons.music_note, color: NeonShrineColors.onSurfaceVariant, size: 22);
+          }
+          return CachedNetworkImage(
+            imageUrl: url,
+            width: 44,
+            height: 44,
+            fit: BoxFit.cover,
+            placeholder: (context, _) =>
+                const Icon(Icons.music_note, color: NeonShrineColors.onSurfaceVariant, size: 22),
+            errorWidget: (context, _, error) =>
+                const Icon(Icons.music_note, color: NeonShrineColors.onSurfaceVariant, size: 22),
+          );
+        },
+        loading: () => const Icon(Icons.music_note, color: NeonShrineColors.onSurfaceVariant, size: 22),
+        error: (error, _) => const Icon(Icons.music_note, color: NeonShrineColors.onSurfaceVariant, size: 22),
+      );
+    }
+
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        color: NeonShrineColors.surfaceContainer,
+        borderRadius: BorderRadius.circular(6),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: child,
     );
   }
 }

@@ -1,6 +1,8 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:inori_music/src/catalog/artwork_provider.dart';
 import 'package:inori_music/src/favorites/track_favorite_notifier.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/player/player_state.dart' as ps;
@@ -64,8 +66,11 @@ class FullPlayerScreen extends ConsumerWidget {
                   ),
                 ],
               ),
-              child: _ArtworkPlaceholder(
-                mediaObjectId: state.mediaItem?.extras?['mediaObjectId'],
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: _FullPlayerArtwork(
+                  albumId: state.mediaItem?.extras?['albumId'] as String?,
+                ),
               ),
             ),
 
@@ -330,41 +335,49 @@ class FullPlayerScreen extends ConsumerWidget {
   }
 }
 
-/// Widget that shows artwork for a media object by ID.
-/// Falls back to a placeholder icon when no artwork is available.
-class _ArtworkPlaceholder extends ConsumerWidget {
-  const _ArtworkPlaceholder({this.mediaObjectId});
+/// Large artwork widget for the full player screen.
+/// Watches [artworkUrlProvider] for the album and shows CachedNetworkImage when
+/// a URL is available; falls back to a music-note icon otherwise.
+class _FullPlayerArtwork extends ConsumerWidget {
+  const _FullPlayerArtwork({this.albumId});
 
-  final String? mediaObjectId;
+  final String? albumId;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // TODO: Implement artwork URL provider when backend supports cover art
-    // final artworkUrl = mediaObjectId != null
-    //     ? ref.watch(artworkUrlProvider(mediaObjectId!))
-    //     : null;
-    //
-    // if (artworkUrl != null) {
-    //   return Image.network(
-    //     artworkUrl,
-    //     fit: BoxFit.cover,
-    //     errorBuilder: (_, __, ___) => _FallbackIcon(),
-    //   );
-    // }
-
-    return const _FallbackIcon();
+    if (albumId == null || albumId!.isEmpty) {
+      return const _ArtworkFallback();
+    }
+    final artworkAsync = ref.watch(artworkUrlProvider(albumId!));
+    return artworkAsync.when(
+      data: (url) {
+        if (url == null || url.isEmpty) return const _ArtworkFallback();
+        return CachedNetworkImage(
+          imageUrl: url,
+          width: 280,
+          height: 280,
+          fit: BoxFit.cover,
+          placeholder: (context, _) => const _ArtworkFallback(),
+          errorWidget: (context, _, error) => const _ArtworkFallback(),
+        );
+      },
+      loading: () => const _ArtworkFallback(),
+      error: (error, _) => const _ArtworkFallback(),
+    );
   }
 }
 
-class _FallbackIcon extends StatelessWidget {
-  const _FallbackIcon();
+class _ArtworkFallback extends StatelessWidget {
+  const _ArtworkFallback();
 
   @override
   Widget build(BuildContext context) {
-    return const Icon(
-      Icons.music_note_rounded,
-      size: 80,
-      color: NeonShrineColors.primaryViolet,
+    return const Center(
+      child: Icon(
+        Icons.music_note_rounded,
+        size: 80,
+        color: NeonShrineColors.primaryViolet,
+      ),
     );
   }
 }

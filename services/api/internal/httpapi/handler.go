@@ -372,6 +372,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/catalog/artists/{id}/tracks", handler.requireViewerAuth(handler.listTracksByArtist))
 	mux.HandleFunc("GET /api/v1/catalog/albums", handler.requireViewerAuth(handler.listAlbums))
 	mux.HandleFunc("GET /api/v1/catalog/albums/{id}", handler.requireViewerAuth(handler.getAlbum))
+	mux.HandleFunc("GET /api/v1/catalog/albums/{id}/artwork", handler.requireViewerAuth(handler.getAlbumArtwork))
 	mux.HandleFunc("GET /api/v1/catalog/albums/{id}/tracks", handler.requireViewerAuth(handler.listTracksByAlbum))
 	mux.HandleFunc("GET /api/v1/catalog/tracks", handler.requireViewerAuth(handler.listTracks))
 	mux.HandleFunc("GET /api/v1/catalog/tracks/{id}", handler.requireViewerAuth(handler.getTrack))
@@ -1801,10 +1802,11 @@ func (handler *Handler) listTracksByAlbum(w http.ResponseWriter, r *http.Request
 
 // patchAlbumRequest carries the fields that may be changed via PATCH.
 type patchAlbumRequest struct {
-	Title       *string `json:"title"`
-	SortTitle   *string `json:"sortTitle"`
-	ArtistID    *string `json:"artistId"`
-	ReleaseYear *int    `json:"releaseYear"`
+	Title                *string `json:"title"`
+	SortTitle            *string `json:"sortTitle"`
+	ArtistID             *string `json:"artistId"`
+	ReleaseYear          *int    `json:"releaseYear"`
+	ArtworkMediaObjectID *string `json:"artworkMediaObjectId"`
 }
 
 func (handler *Handler) patchAlbum(w http.ResponseWriter, r *http.Request) {
@@ -1817,16 +1819,53 @@ func (handler *Handler) patchAlbum(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	album, err := handler.catalogService.UpdateAlbum(r.Context(), r.PathValue("id"), catalog.UpdateAlbumRequest{
-		Title:       req.Title,
-		SortTitle:   req.SortTitle,
-		ArtistID:    req.ArtistID,
-		ReleaseYear: req.ReleaseYear,
+		Title:                req.Title,
+		SortTitle:            req.SortTitle,
+		ArtistID:             req.ArtistID,
+		ReleaseYear:          req.ReleaseYear,
+		ArtworkMediaObjectID: req.ArtworkMediaObjectID,
 	})
 	if err != nil {
 		writeError(w, err)
 		return
 	}
 	writeJSON(w, http.StatusOK, album)
+}
+
+type albumArtworkResponse struct {
+	URL       string `json:"url"`
+	ExpiresIn int    `json:"expiresIn"`
+}
+
+func (handler *Handler) getAlbumArtwork(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireCatalogService(w) {
+		return
+	}
+	album, err := handler.catalogService.GetAlbum(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if album.ArtworkMediaObjectID == "" {
+		writeAPIError(w, http.StatusNotFound, "no_artwork", "no artwork")
+		return
+	}
+	if handler.storage == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "storage_unavailable", "storage service not configured")
+		return
+	}
+	const artworkTTL = 900 * time.Second
+	mo, err := handler.mediaObjects.GetMediaObject(r.Context(), album.ArtworkMediaObjectID)
+	if err != nil {
+		writeAPIError(w, http.StatusNotFound, "artwork_not_found", "artwork media object not found")
+		return
+	}
+	url, err := handler.storage.GeneratePresignedURL(r.Context(), mo.BackendID, mo.ObjectKey, artworkTTL)
+	if err != nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "presign_failed", "failed to generate artwork URL")
+		return
+	}
+	writeJSON(w, http.StatusOK, albumArtworkResponse{URL: url, ExpiresIn: 900})
 }
 
 // ---- track handlers ----

@@ -137,7 +137,7 @@ func (r *Repository) ListAlbumsPage(ctx context.Context, q catalog.ListQuery) (c
 		}
 		where := " WHERE " + strings.Join(clauses, " AND ")
 		sql := fmt.Sprintf(`
-			SELECT id, title, sort_title, artist_id, release_year, created_at, updated_at,
+			SELECT id, title, sort_title, artist_id, release_year, COALESCE(artwork_media_object_id, ''), created_at, updated_at,
 			       COUNT(*) OVER () AS total_count
 			FROM albums%s
 			ORDER BY %s
@@ -145,7 +145,7 @@ func (r *Repository) ListAlbumsPage(ctx context.Context, q catalog.ListQuery) (c
 		return r.queryAlbumsPage(ctx, sql, args...)
 	}
 	sql := fmt.Sprintf(`
-		SELECT id, title, sort_title, artist_id, release_year, created_at, updated_at,
+		SELECT id, title, sort_title, artist_id, release_year, COALESCE(artwork_media_object_id, ''), created_at, updated_at,
 		       COUNT(*) OVER () AS total_count
 		FROM albums
 		ORDER BY %s
@@ -166,7 +166,7 @@ func (r *Repository) ListAlbumsByArtistPage(ctx context.Context, artistID string
 	}
 	where := strings.Join(clauses, " AND ")
 	sql := fmt.Sprintf(`
-		SELECT id, title, sort_title, artist_id, release_year, created_at, updated_at,
+		SELECT id, title, sort_title, artist_id, release_year, COALESCE(artwork_media_object_id, ''), created_at, updated_at,
 		       COUNT(*) OVER () AS total_count
 		FROM albums
 		WHERE %s
@@ -185,7 +185,7 @@ func (r *Repository) queryAlbumsPage(ctx context.Context, sql string, args ...an
 	total := 0
 	for rows.Next() {
 		var a catalog.Album
-		if err := rows.Scan(&a.ID, &a.Title, &a.SortTitle, &a.ArtistID, &a.ReleaseYear, &a.CreatedAt, &a.UpdatedAt, &total); err != nil {
+		if err := rows.Scan(&a.ID, &a.Title, &a.SortTitle, &a.ArtistID, &a.ReleaseYear, &a.ArtworkMediaObjectID, &a.CreatedAt, &a.UpdatedAt, &total); err != nil {
 			return catalog.ListPage[catalog.Album]{}, err
 		}
 		albums = append(albums, a)

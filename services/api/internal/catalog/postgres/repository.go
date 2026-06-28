@@ -75,21 +75,22 @@ func (r *Repository) DeleteArtist(ctx context.Context, id string) error {
 
 func (r *Repository) SaveAlbum(ctx context.Context, album catalog.Album) error {
 	_, err := r.pool.Exec(ctx, `
-		INSERT INTO albums (id, title, sort_title, artist_id, release_year, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		INSERT INTO albums (id, title, sort_title, artist_id, release_year, artwork_media_object_id, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), $7, $8)
 		ON CONFLICT (id) DO UPDATE SET
-		    title        = EXCLUDED.title,
-		    sort_title   = EXCLUDED.sort_title,
-		    artist_id    = EXCLUDED.artist_id,
-		    release_year = EXCLUDED.release_year,
-		    updated_at   = EXCLUDED.updated_at`,
-		album.ID, album.Title, album.SortTitle, album.ArtistID, album.ReleaseYear, album.CreatedAt.UTC(), album.UpdatedAt.UTC(),
+		    title                    = EXCLUDED.title,
+		    sort_title               = EXCLUDED.sort_title,
+		    artist_id                = EXCLUDED.artist_id,
+		    release_year             = EXCLUDED.release_year,
+		    artwork_media_object_id  = EXCLUDED.artwork_media_object_id,
+		    updated_at               = EXCLUDED.updated_at`,
+		album.ID, album.Title, album.SortTitle, album.ArtistID, album.ReleaseYear, album.ArtworkMediaObjectID, album.CreatedAt.UTC(), album.UpdatedAt.UTC(),
 	)
 	return err
 }
 
 func (r *Repository) GetAlbum(ctx context.Context, id string) (catalog.Album, error) {
-	row := r.pool.QueryRow(ctx, `SELECT id, title, sort_title, artist_id, release_year, created_at, updated_at FROM albums WHERE id = $1`, id)
+	row := r.pool.QueryRow(ctx, `SELECT id, title, sort_title, artist_id, release_year, COALESCE(artwork_media_object_id, ''), created_at, updated_at FROM albums WHERE id = $1`, id)
 	album, err := scanAlbum(row)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -101,11 +102,11 @@ func (r *Repository) GetAlbum(ctx context.Context, id string) (catalog.Album, er
 }
 
 func (r *Repository) ListAlbums(ctx context.Context) ([]catalog.Album, error) {
-	return r.queryAlbums(ctx, `SELECT id, title, sort_title, artist_id, release_year, created_at, updated_at FROM albums ORDER BY lower(sort_title), lower(title), id`)
+	return r.queryAlbums(ctx, `SELECT id, title, sort_title, artist_id, release_year, COALESCE(artwork_media_object_id, ''), created_at, updated_at FROM albums ORDER BY lower(sort_title), lower(title), id`)
 }
 
 func (r *Repository) ListAlbumsByArtist(ctx context.Context, artistID string) ([]catalog.Album, error) {
-	return r.queryAlbums(ctx, `SELECT id, title, sort_title, artist_id, release_year, created_at, updated_at FROM albums WHERE artist_id = $1 ORDER BY release_year, lower(sort_title), lower(title), id`, artistID)
+	return r.queryAlbums(ctx, `SELECT id, title, sort_title, artist_id, release_year, COALESCE(artwork_media_object_id, ''), created_at, updated_at FROM albums WHERE artist_id = $1 ORDER BY release_year, lower(sort_title), lower(title), id`, artistID)
 }
 
 func (r *Repository) queryAlbums(ctx context.Context, sql string, args ...any) ([]catalog.Album, error) {
@@ -239,7 +240,7 @@ func (r *Repository) SearchCatalog(ctx context.Context, query string) (catalog.C
 
 	// Albums
 	albumRows, err := r.pool.Query(ctx, `
-		SELECT id, title, sort_title, artist_id, release_year, created_at, updated_at
+		SELECT id, title, sort_title, artist_id, release_year, COALESCE(artwork_media_object_id, ''), created_at, updated_at
 		FROM albums
 		WHERE search_vector @@ plainto_tsquery('simple', $1)
 		ORDER BY ts_rank(search_vector, plainto_tsquery('simple', $1)) DESC, release_year, lower(sort_title), lower(title), id`,
@@ -300,7 +301,7 @@ func scanArtist(s scanner) (catalog.Artist, error) {
 
 func scanAlbum(s scanner) (catalog.Album, error) {
 	var a catalog.Album
-	if err := s.Scan(&a.ID, &a.Title, &a.SortTitle, &a.ArtistID, &a.ReleaseYear, &a.CreatedAt, &a.UpdatedAt); err != nil {
+	if err := s.Scan(&a.ID, &a.Title, &a.SortTitle, &a.ArtistID, &a.ReleaseYear, &a.ArtworkMediaObjectID, &a.CreatedAt, &a.UpdatedAt); err != nil {
 		return catalog.Album{}, err
 	}
 	return a, nil

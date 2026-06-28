@@ -181,6 +181,9 @@ func (s *Service) UpdateAlbum(ctx context.Context, id string, req UpdateAlbumReq
 		}
 		album.ReleaseYear = *req.ReleaseYear
 	}
+	if req.ArtworkMediaObjectID != nil {
+		album.ArtworkMediaObjectID = strings.TrimSpace(*req.ArtworkMediaObjectID)
+	}
 	album.UpdatedAt = s.now().UTC()
 	if err := s.repo.SaveAlbum(ctx, album); err != nil {
 		return Album{}, err

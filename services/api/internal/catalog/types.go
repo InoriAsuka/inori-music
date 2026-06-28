@@ -37,13 +37,14 @@ type Artist struct {
 
 // Album represents a music library release.
 type Album struct {
-	ID          string    `json:"id"`
-	Title       string    `json:"title"`
-	SortTitle   string    `json:"sortTitle,omitempty"`
-	ArtistID    string    `json:"artistId"`
-	ReleaseYear int       `json:"releaseYear,omitempty"`
-	CreatedAt   time.Time `json:"createdAt"`
-	UpdatedAt   time.Time `json:"updatedAt"`
+	ID                   string    `json:"id"`
+	Title                string    `json:"title"`
+	SortTitle            string    `json:"sortTitle,omitempty"`
+	ArtistID             string    `json:"artistId"`
+	ReleaseYear          int       `json:"releaseYear,omitempty"`
+	ArtworkMediaObjectID string    `json:"artworkMediaObjectId,omitempty"`
+	CreatedAt            time.Time `json:"createdAt"`
+	UpdatedAt            time.Time `json:"updatedAt"`
 }
 
 // Track represents a playable music item and links catalog metadata to a media object.
@@ -200,10 +201,11 @@ type UpdateArtistRequest struct {
 // UpdateAlbumRequest carries the fields that may be changed via a PATCH request.
 // Nil pointer fields are left unchanged.
 type UpdateAlbumRequest struct {
-	Title       *string
-	SortTitle   *string
-	ArtistID    *string
-	ReleaseYear *int
+	Title                *string
+	SortTitle            *string
+	ArtistID             *string
+	ReleaseYear          *int
+	ArtworkMediaObjectID *string
 }
 
 // UpdateTrackRequest carries the fields that may be changed via a PATCH request.
