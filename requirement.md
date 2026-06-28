@@ -1481,3 +1481,41 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - **fix: 历史记录显示真实曲名**: 新增 `TrackTitleResolver`（`AutoDisposeFamilyNotifier`），`HistoryScreen` 和 `HistoryStatsScreen` 的列表项从仅显示 `trackId` 改为异步解析并展示真实标题，回退为 trackId。
 - **fix: PlayerNotifier 元数据缓存**: `PlayerNotifier` 引入 `_trackCache`（`Map<String, CatalogTrack>`），`_resolveTrack()` 异步获取并缓存 catalog 元数据；queue 入列时使用 `_stubMediaItem()`（可从缓存取已知标题），正式播放时再用 `_makeMediaItem()` 填充完整 title / artist / duration。
 - **fix: ArtistsScreen suppress lint**: 添加 `unnecessary_non_null_assertion` ignore，消除 flutter analyze 警告。
+
+### v3.0.2 - TBD
+
+- **fix: 元数据显示质量** — Flutter 客户端中艺术家名和专辑名当前显示为 UUID；通过 ArtistCacheNotifier / AlbumCacheNotifier（AutoDisposeFamilyAsyncNotifier）异步批量解析并缓存，回退为 ID。
+- `PlayerNotifier._makeMediaItem` 从缓存填充真实 `artist` 名和 `album` 标题；`MiniPlayerBar` / `FullPlayerScreen` 展示解析后的字符串。
+- `TrackListTile` subtitle 从 `track.artistId` 查缓存展示 artist name，缓存未命中时发起 `GET /api/v1/catalog/artists/{id}` 请求。
+- `flutter analyze` 保持 0 errors；补充对应 widget 测试。
+- The phase output is version-tracked and covered by flutter analyze.
+
+### v3.1.0 - TBD
+
+- **feat: 封面图（Artwork）** — 服务端：Album / Artist 新增可选 `artworkMediaObjectId` 字段（数据库列 + OpenAPI schema + PATCH 端点支持设值）；新增 `GET /api/v1/catalog/albums/{id}/artwork` 端点，返回 `TrackPlaybackDescriptor` 同款 presigned URL（复用 `GeneratePresignedURL`，backend 能力检查同 Phase 60）；端点对 viewer 可见（requireViewerAuth）。
+- Flutter 客户端：`artworkUrlProvider(albumId)` Family AsyncNotifier，请求上述端点并缓存结果；`TrackListTile`、`MiniPlayerBar`、`FullPlayerScreen` 封面区域替换为 `CachedNetworkImage`，404/错误时降级到占位图标。
+- The phase output is version-tracked and covered by Go unit tests, OpenAPI contract tests, and flutter analyze.
+
+### v3.2.0 - TBD
+
+- **feat: 用户个人播放列表（viewer 自建，非 admin catalog）** — 服务端：新增 `user_playlists` 域；`POST/GET/PATCH/DELETE /api/v1/me/playlists`（viewer session 认证）；`POST/DELETE /api/v1/me/playlists/{id}/tracks`（追加 / 移除）；`GET /api/v1/me/playlists/{id}/tracks`（分页展开）；OpenAPI contract 更新。
+- Flutter 客户端：Library Tab 新增「我的播放列表」section；创建 / 编辑 / 删除对话框；播放列表详情页（TrackListTile 列表 + 播放全部）；长按 TrackListTile 弹出「添加到播放列表」sheet。
+- The phase output is version-tracked and covered by Go service unit tests, HTTP handler tests, OpenAPI contract tests, and flutter analyze.
+
+### v3.3.0 - TBD
+
+- **feat: 桌面平台增强** — macOS / Windows / Linux：`package:tray_manager` 系统托盘图标（Play/Pause/Next/Quit）；`package:hotkey_manager` 全局快捷键（Space / ← / →），非焦点窗口下也响应。
+- Android 深度链接：`AndroidManifest.xml` 添加 `intent-filter`（`inori://` scheme + HTTPS App Link）；iOS 深度链接：`Info.plist` `CFBundleURLSchemes` + Associated Domains；go_router 处理 `inori://tracks/{id}` 跳转至 TrackListTile 并触发播放。
+- The phase output is version-tracked and covered by flutter analyze and manual device verification.
+
+### v3.4.0 - TBD
+
+- **feat: 离线播放 + 下载管理** — `package:sqflite`：本地 SQLite 存储离线曲目元数据（trackId / title / artistName / albumTitle / localPath / downloadedAt）；`DownloadManager`（Riverpod Notifier）：`GET /api/v1/catalog/tracks/{id}/playback` → 下载到 `getApplicationDocumentsDirectory()`；just_audio `AudioSource.uri(localPath)` 优先本地，回退网络。
+- Flutter 客户端：Settings 新增「Offline Library」section；下载进度条（`http.Client` stream + StreamController）；离线标记（TrackListTile 角标）；离线模式检测（`connectivity_plus`）。
+- The phase output is version-tracked and covered by flutter analyze.
+
+### v3.5.0 - TBD
+
+- **feat: 测试覆盖 + CI 完善** — `PlayerNotifier` 单元测试（mock `AudioPlayer` + `InoriAudioHandler`）：playTrack / next / previous / reorderQueue / _postHistory；`TrackFavoriteNotifier` + `HistoryNotifier` 单元测试；`MiniPlayerBar` / `TrackListTile` Widget 测试（`flutter_test` + `ProviderScope`）。
+- CI `mobile` job：新增 `flutter build ipa --no-codesign`（iOS 无签名构建验证）；Maestro 或 Flutter Integration Test 流程：登录 → 搜索 → 播放 → 历史验证。
+- The phase output is version-tracked and covered by flutter test (≥ 30 test cases) and CI green on all three build targets (APK / IPA / macOS).
