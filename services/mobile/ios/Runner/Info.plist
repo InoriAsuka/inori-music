@@ -72,5 +72,17 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<!-- Deep link: inori:// custom URL scheme (v3.3.0) -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>inori</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>inori</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>
