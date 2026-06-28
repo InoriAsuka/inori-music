@@ -192,6 +192,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get searchPrompt => 'Start typing to search…';
 
   @override
+  String get serverUrl => 'Server URL';
+
+  @override
   String get deleteHistory => 'Delete History';
 
   @override

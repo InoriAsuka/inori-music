@@ -95,7 +95,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
 
   @override
   Widget build(BuildContext context) {
-    final t = AppLocalizations.of(context)!;
+    final t = AppLocalizations.of(context);
     final items = _navItems(t);
     final width = MediaQuery.sizeOf(context).width;
     final selectedIndex = _selectedIndex(context, items);

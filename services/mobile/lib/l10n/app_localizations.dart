@@ -460,6 +460,12 @@ abstract class AppLocalizations {
   /// **'Start typing to search…'**
   String get searchPrompt;
 
+  /// No description provided for @serverUrl.
+  ///
+  /// In en, this message translates to:
+  /// **'Server URL'**
+  String get serverUrl;
+
   /// No description provided for @deleteHistory.
   ///
   /// In en, this message translates to:

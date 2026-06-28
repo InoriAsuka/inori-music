@@ -65,6 +65,7 @@
   },
   "searchHint": "アーティスト・アルバム・トラックを検索…",
   "searchPrompt": "キーワードを入力して検索…",
+  "serverUrl": "サーバーURL",
   "deleteHistory": "履歴を削除",
   "noHistory": "再生履歴がありません",
   "noData": "データがありません"

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:inori_api/src/model/catalog_track.dart';
 
+import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/catalog/catalog_repository.dart';
 import 'package:inori_music/src/favorites/track_favorite_notifier.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
@@ -59,10 +60,11 @@ class FavoritesScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final t = AppLocalizations.of(context);
     final state = ref.watch(favoritesProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Favorites')),
+      appBar: AppBar(title: Text(t.favorites)),
       body: state.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(
@@ -75,7 +77,7 @@ class FavoritesScreen extends ConsumerWidget {
               const SizedBox(height: 12),
               FilledButton(
                 onPressed: () => ref.refresh(favoritesProvider),
-                child: const Text('Retry'),
+                child: Text(t.retry),
               ),
             ],
           ),

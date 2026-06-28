@@ -7,6 +7,7 @@ import 'package:inori_api/src/model/catalog_search_result.dart';
 import 'package:inori_api/src/model/search_result_item.dart';
 import 'package:inori_api/src/model/search_result_kind.dart';
 
+import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/catalog/catalog_repository.dart';
 import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/theme/neon_shrine.dart';
@@ -87,6 +88,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
     final state = ref.watch(_searchNotifierProvider);
     final artists = state.result?.items
             .where((i) => i.kind == SearchResultKind.artist)
@@ -107,7 +109,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
           controller: _ctrl,
           autofocus: true,
           decoration: InputDecoration(
-            hintText: 'Search artists, albums, tracks…',
+            hintText: t.searchHint,
             border: InputBorder.none,
             enabledBorder: InputBorder.none,
             focusedBorder: InputBorder.none,
@@ -127,9 +129,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
         bottom: TabBar(
           controller: _tabCtrl,
           tabs: [
-            Tab(text: 'Artists (${artists.length})'),
-            Tab(text: 'Albums (${albums.length})'),
-            Tab(text: 'Tracks (${tracks.length})'),
+            Tab(text: '${t.artists} (${artists.length})'),
+            Tab(text: '${t.albums} (${albums.length})'),
+            Tab(text: '${t.tracks} (${tracks.length})'),
           ],
         ),
       ),
@@ -138,16 +140,16 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
           : state.error != null
               ? Center(child: Text(state.error!))
               : state.query.isEmpty
-                  ? const Center(
-                      child: Text('Start typing to search…',
-                          style: TextStyle(color: NeonShrineColors.onSurfaceVariant)),
+                  ? Center(
+                      child: Text(t.searchPrompt,
+                          style: const TextStyle(color: NeonShrineColors.onSurfaceVariant)),
                     )
                   : TabBarView(
                       controller: _tabCtrl,
                       children: [
-                        _ArtistResults(items: artists),
-                        _AlbumResults(items: albums),
-                        _TrackResults(items: tracks),
+                        _ArtistResults(items: artists, t: t),
+                        _AlbumResults(items: albums, t: t),
+                        _TrackResults(items: tracks, t: t),
                       ],
                     ),
     );
@@ -159,13 +161,14 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
 // ---------------------------------------------------------------------------
 
 class _ArtistResults extends StatelessWidget {
-  const _ArtistResults({required this.items});
+  const _ArtistResults({required this.items, required this.t});
   final List<SearchResultItem> items;
+  final AppLocalizations t;
 
   @override
   Widget build(BuildContext context) {
     if (items.isEmpty) {
-      return const Center(child: Text('No artists found'));
+      return Center(child: Text(t.noResults));
     }
     return ListView.builder(
       itemCount: items.length,
@@ -186,13 +189,14 @@ class _ArtistResults extends StatelessWidget {
 }
 
 class _AlbumResults extends StatelessWidget {
-  const _AlbumResults({required this.items});
+  const _AlbumResults({required this.items, required this.t});
   final List<SearchResultItem> items;
+  final AppLocalizations t;
 
   @override
   Widget build(BuildContext context) {
     if (items.isEmpty) {
-      return const Center(child: Text('No albums found'));
+      return Center(child: Text(t.noResults));
     }
     return ListView.builder(
       itemCount: items.length,
@@ -219,13 +223,14 @@ class _AlbumResults extends StatelessWidget {
 }
 
 class _TrackResults extends StatelessWidget {
-  const _TrackResults({required this.items});
+  const _TrackResults({required this.items, required this.t});
   final List<SearchResultItem> items;
+  final AppLocalizations t;
 
   @override
   Widget build(BuildContext context) {
     if (items.isEmpty) {
-      return const Center(child: Text('No tracks found'));
+      return Center(child: Text(t.noResults));
     }
     return ListView.builder(
       itemCount: items.length,

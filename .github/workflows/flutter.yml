@@ -1,0 +1,122 @@
+name: Flutter CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'services/mobile/**'
+      - 'packages/api-contract/**'
+      - '.github/workflows/flutter.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'services/mobile/**'
+      - 'packages/api-contract/**'
+      - '.github/workflows/flutter.yml'
+
+jobs:
+  analyze:
+    name: Analyze on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.27.x'
+          channel: 'stable'
+          cache: true
+      - name: Get dependencies
+        working-directory: services/mobile
+        run: flutter pub get
+      - name: Generate API client
+        working-directory: services/mobile
+        run: make gen:api
+      - name: Run build_runner
+        working-directory: services/mobile
+        run: dart run build_runner build --delete-conflicting-outputs
+      - name: Analyze
+        working-directory: services/mobile
+        run: flutter analyze
+
+  test:
+    name: Test on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.27.x'
+          channel: 'stable'
+          cache: true
+      - name: Get dependencies
+        working-directory: services/mobile
+        run: flutter pub get
+      - name: Run tests
+        working-directory: services/mobile
+        run: flutter test
+
+  build-android:
+    name: Build APK
+    runs-on: ubuntu-latest
+    needs: [analyze, test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.27.x'
+          channel: 'stable'
+          cache: true
+      - name: Get dependencies
+        working-directory: services/mobile
+        run: flutter pub get
+      - name: Generate API client
+        working-directory: services/mobile
+        run: make gen:api
+      - name: Run build_runner
+        working-directory: services/mobile
+        run: dart run build_runner build --delete-conflicting-outputs
+      - name: Build APK
+        working-directory: services/mobile
+        run: flutter build apk --release
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: inori-music-apk
+          path: services/mobile/build/app/outputs/flutter-apk/app-release.apk
+
+  build-macos:
+    name: Build macOS
+    runs-on: macos-latest
+    needs: [analyze, test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.27.x'
+          channel: 'stable'
+          cache: true
+      - name: Get dependencies
+        working-directory: services/mobile
+        run: flutter pub get
+      - name: Generate API client
+        working-directory: services/mobile
+        run: make gen:api
+      - name: Run build_runner
+        working-directory: services/mobile
+        run: dart run build_runner build --delete-conflicting-outputs
+      - name: Build macOS
+        working-directory: services/mobile
+        run: flutter build macos --release
+      - name: Upload macOS app
+        uses: actions/upload-artifact@v4
+        with:
+          name: inori-music-macos
+          path: services/mobile/build/macos/Build/Products/Release/inori_music.app

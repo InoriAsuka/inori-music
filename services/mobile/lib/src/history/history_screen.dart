@@ -57,7 +57,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
   Future<void> _deleteSelected() async {
     final ids = _selected.toList();
     if (ids.isEmpty) return;
-    final t = AppLocalizations.of(context)!;
+    final t = AppLocalizations.of(context);
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -65,7 +65,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
         backgroundColor: NeonShrineColors.surfaceVariant,
         title: Text(t.deleteHistory, style: const TextStyle(color: NeonShrineColors.onSurface)),
         content: Text(
-          'Delete ${ids.length} event${ids.length > 1 ? 's' : ''}?',
+          'Delete ${ids.length} event${ids.length > 1 ? 's' : ''}? (ID: ${ids.take(3).join(', ')}${ids.length > 3 ? '...' : ''})',
           style: const TextStyle(color: NeonShrineColors.onSurfaceVariant),
         ),
         actions: [
@@ -104,7 +104,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(historyEventsProvider);
-    final t = AppLocalizations.of(context)!;
+    final t = AppLocalizations.of(context);
 
     return Scaffold(
       appBar: AppBar(
@@ -150,7 +150,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
               const SizedBox(height: 12),
               FilledButton(
                 onPressed: () => ref.refresh(historyEventsProvider),
-                child: const Text('Retry'),
+                child: Text(t.retry),
               ),
             ],
           ),
@@ -232,7 +232,7 @@ class _HistoryTileState extends ConsumerState<_HistoryTile> {
 
   @override
   Widget build(BuildContext context) {
-    final t = AppLocalizations.of(context)!;
+    final t = AppLocalizations.of(context);
     final title = ref.watch(trackTitleResolverProvider(widget.event.trackId));
     final displayName = title ?? widget.event.trackId;
 

@@ -191,6 +191,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get searchPrompt => '输入关键词开始搜索…';
 
   @override
+  String get serverUrl => '服务器地址';
+
+  @override
   String get deleteHistory => '删除历史';
 
   @override

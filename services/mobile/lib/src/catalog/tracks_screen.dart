@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:inori_api/src/model/catalog_track.dart';
 
+import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/catalog/catalog_repository.dart';
 import 'package:inori_music/src/favorites/track_favorite_notifier.dart';
 import 'package:inori_music/src/shared/theme/neon_shrine.dart';
@@ -17,9 +18,10 @@ class TracksScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final t = AppLocalizations.of(context);
     final state = ref.watch(_tracksProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Tracks')),
+      appBar: AppBar(title: Text(t.tracks)),
       body: state.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(
@@ -32,13 +34,13 @@ class TracksScreen extends ConsumerWidget {
               const SizedBox(height: 12),
               FilledButton(
                 onPressed: () => ref.refresh(_tracksProvider),
-                child: const Text('Retry'),
+                child: Text(t.retry),
               ),
             ],
           ),
         ),
         data: (tracks) => tracks.isEmpty
-            ? const Center(child: Text('No tracks found'))
+            ? Center(child: Text(t.noData))
             : ListView.builder(
                 itemCount: tracks.length,
                 itemBuilder: (context, i) => _TrackTile(track: tracks[i]),

@@ -18,9 +18,10 @@ class ArtistsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final t = AppLocalizations.of(context);
     final state = ref.watch(_artistsProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Artists')),
+      appBar: AppBar(title: Text(t.artists)),
       body: state.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(
@@ -33,13 +34,13 @@ class ArtistsScreen extends ConsumerWidget {
               const SizedBox(height: 12),
               FilledButton(
                 onPressed: () => ref.refresh(_artistsProvider),
-                child: const Text('Retry'),
+                child: Text(t.retry),
               ),
             ],
           ),
         ),
         data: (artists) => artists.isEmpty
-            ? const Center(child: Text('No artists found'))
+            ? Center(child: Text(t.noData))
             : GridView.builder(
                 padding: const EdgeInsets.all(12),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(

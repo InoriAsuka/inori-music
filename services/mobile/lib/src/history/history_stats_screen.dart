@@ -48,7 +48,7 @@ class HistoryStatsScreen extends ConsumerWidget {
     final statsState = ref.watch(historyStatsProvider);
     final timelineState = ref.watch(historyTimelineProvider);
     final topTracksState = ref.watch(historyTopTracksProvider);
-    final t = AppLocalizations.of(context)!;
+    final t = AppLocalizations.of(context);
 
     return Scaffold(
       appBar: AppBar(title: Text(t.historyStats)),

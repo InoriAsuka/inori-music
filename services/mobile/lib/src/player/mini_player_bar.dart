@@ -18,7 +18,7 @@ class MiniPlayerBar extends ConsumerWidget {
     final mediaItem = playerState.mediaItem;
     final isPlaying = playerState.isPlaying;
     final isBuffering = playerState.isBuffering;
-    final t = AppLocalizations.of(context)!;
+    final t = AppLocalizations.of(context);
 
     final title = mediaItem?.title ?? t.nothingPlaying;
     final artist = mediaItem?.artist ?? '';

@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inori_api/src/model/catalog_album.dart';
 
+import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/catalog/catalog_repository.dart';
 import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/theme/neon_shrine.dart';
@@ -17,9 +18,10 @@ class AlbumsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final t = AppLocalizations.of(context);
     final state = ref.watch(_albumsProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Albums')),
+      appBar: AppBar(title: Text(t.albums)),
       body: state.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(
@@ -32,13 +34,13 @@ class AlbumsScreen extends ConsumerWidget {
               const SizedBox(height: 12),
               FilledButton(
                 onPressed: () => ref.refresh(_albumsProvider),
-                child: const Text('Retry'),
+                child: Text(t.retry),
               ),
             ],
           ),
         ),
         data: (albums) => albums.isEmpty
-            ? const Center(child: Text('No albums found'))
+            ? Center(child: Text(t.noData))
             : GridView.builder(
                 padding: const EdgeInsets.all(12),
                 gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(

@@ -5,7 +5,7 @@ both browser/server and client/server deployment styles.
 
 ## Version
 
-Current architecture baseline version: `1.41.0`
+Current architecture baseline version: `3.0.1`
 
 ## Documentation Policy
 
@@ -325,6 +325,88 @@ Add `PATCH /api/v1/admin/media/objects/{id}` allowing in-place correction of `as
 Bring README to v1.41.0 baseline; add Phases 135–141 to the completed phases list; update
 OpenAPI operation count; annotate v1 completion milestone.
 
+### Phase 300: Flutter Mobile Scaffold
+
+Create `services/mobile/` Flutter project with Riverpod 2.x, go_router, dio, just_audio,
+audio_service, flutter_secure_storage, cached_network_image, freezed, and json_serializable.
+Integrate openapi-generator-cli (`dart-dio` generator) via Makefile `gen:api` target.
+GitHub Actions CI: `flutter analyze` + `flutter test`.
+
+### Phase 301: Authentication
+
+`AuthNotifier` (Riverpod AsyncNotifier) with login/logout/token persistence via
+`flutter_secure_storage`. POST `/api/v1/auth/login` → token + GET `/api/v1/me` → UserModel.
+go_router redirect guard: unauthenticated → `/login`. LoginScreen with username/password form,
+error handling, loading state, collapsible server URL field.
+
+### Phase 302: Catalog Browsing
+
+ArtistsScreen / ArtistDetailScreen (albums + tracks), AlbumsScreen / AlbumDetailScreen,
+TracksScreen, PlaylistsScreen / PlaylistDetailScreen. Pagination with InfiniteScrollController
+(Riverpod family provider + keepAlive). Common TrackListTile with isFavorite heart button,
+duration, artwork.
+
+### Phase 303: Search
+
+SearchScreen with 300ms debounced TextField → `GET /catalog/search?q=`. Three-column results
+(Artists / Albums / Tracks). Keyboard search trigger + clear button.
+
+### Phase 304: just_audio Player Engine
+
+`PlayerNotifier` (Riverpod Notifier) managing queue / currentIndex / status / position /
+volume / shuffle / repeat. `AudioHandler` (audio_service) with MediaItem, playback controls,
+background audio (Android foreground service / iOS AVAudioSession). Playback URL resolution:
+presignedUrl (S3) → streamUrl with JWT token → fallback. Queue operations: playQueue, enqueue,
+enqueueNext, reorderQueue, removeFromQueue.
+
+### Phase 305: Player UI
+
+MiniPlayerBar (bottom persistent bar with artwork, title, artist, play/pause, next).
+FullPlayerScreen (fullscreen route `/player` with large cover, seek bar, full controls).
+QueueSheet (DraggableScrollableSheet + ReorderableListView).
+
+### Phase 306: Keyboard Shortcuts + MediaSession
+
+Desktop keyboard shortcuts: Space (toggle play/pause), ←/→ (previous/next) via
+HardwareKeyboard listener. MediaSession integration (lock screen controls, notification bar,
+Bluetooth controls). Auto history posting on track completion → `POST /me/history`.
+
+### Phase 307: Favorites
+
+FavoritesScreen with `GET /me/favorites/tracks`. `isFavorite` state synced to TrackListTile
+via per-track TrackFavoriteNotifier. POST/DELETE `/me/favorites/tracks/{trackId}`.
+
+### Phase 308: History
+
+HistoryScreen with `GET /me/history` paginated event stream. HistoryStatsScreen with stats,
+top-tracks, and 30-day timeline (fl_chart BarChart). Batch delete: multi-select +
+`POST /me/history/batch-delete`.
+
+### Phase 309: Settings
+
+SettingsScreen: password change, language switch, session management (revoke-all / revoke-all-devices).
+Multilingual: `flutter_localizations` + ARB files (en / zh-Hans / ja). Neon Shrine dark theme
+(ColorScheme.dark, primary violet `#9b5cff`).
+
+### Phase 310: Adaptive Layout
+
+Mobile (bottom NavigationBar 5 tabs), Tablet (≥ 600dp: NavigationRail + content), Desktop
+(≥ 1200dp: permanent sidebar + content + MiniPlayerBar).
+
+### Phase 311: CI + Packaging
+
+GitHub Actions: `flutter analyze` + `flutter test` + `flutter build apk --release` +
+`flutter build macos --release`. Android keystore signing config.
+
+### Phase 312: v3.0.0 Release
+
+`pubspec.yaml` version 3.0.0, VERSION file, requirement.md v3 section, git tag v3.0.0.
+
+### Phase 313: v3.0.1 Patch
+
+Fix lint warnings, improve track title resolver, harden player metadata cache.
+
+
 ---
 
 ## Run the API Server
@@ -364,8 +446,9 @@ The server listens on `127.0.0.1:8080` by default (`INORI_HTTP_ADDR` overrides t
 - **inori-admin** (`packages/admin/`): React 19 management console for admin-role users — user
   management, catalog CRUD, media object administration, storage backend configuration, history
   analysis.
-- **inori-app** (`packages/app/`): Flutter 3.22+ cross-platform client (Android / iOS / macOS /
-  Windows) with Riverpod state management, `just_audio` + `audio_service` background playback,
-  and Drift SQLite offline cache.
+- **inori-app** (`services/mobile/`): Flutter 3.22+ cross-platform client (Android / iOS / macOS /
+  Windows / Linux) with Riverpod state management, `just_audio` + `audio_service` background
+  playback, adaptive layouts, multilingual support (en/zh/ja), and openapi-generated API client.
+  **Status: v3.0.1 complete.**
 - Shared TypeScript API client (`packages/api-client/`) auto-generated from the OpenAPI spec.
 - Shared shadcn/ui component library (`packages/ui/`) consumed by both web products.

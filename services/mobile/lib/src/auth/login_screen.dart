@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/auth/auth_notifier.dart';
 import 'package:inori_music/src/shared/theme/neon_shrine.dart';
 
@@ -39,6 +40,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
     final auth = ref.watch(authProvider);
     final isLoading = auth is AsyncLoading;
     final error = auth.valueOrNull?.error;
@@ -70,13 +72,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   // Username
                   TextFormField(
                     controller: _usernameCtrl,
-                    decoration: const InputDecoration(
-                      labelText: 'Username',
-                      prefixIcon: Icon(Icons.person_outline),
+                    decoration: InputDecoration(
+                      labelText: t.username,
+                      prefixIcon: const Icon(Icons.person_outline),
                     ),
                     textInputAction: TextInputAction.next,
                     autofillHints: const [AutofillHints.username],
-                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                    validator: (v) => (v == null || v.trim().isEmpty) ? t.fieldRequired : null,
                   ),
                   const SizedBox(height: 16),
 
@@ -84,7 +86,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   TextFormField(
                     controller: _passwordCtrl,
                     decoration: InputDecoration(
-                      labelText: 'Password',
+                      labelText: t.password,
                       prefixIcon: const Icon(Icons.lock_outline),
                       suffixIcon: IconButton(
                         icon: Icon(
@@ -97,7 +99,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     textInputAction: TextInputAction.done,
                     autofillHints: const [AutofillHints.password],
                     onFieldSubmitted: (_) => _submit(),
-                    validator: (v) => (v == null || v.isEmpty) ? 'Required' : null,
+                    validator: (v) => (v == null || v.isEmpty) ? t.fieldRequired : null,
                   ),
                   const SizedBox(height: 8),
 
@@ -125,7 +127,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             width: 20,
                             child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                           )
-                        : const Text('Sign In', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+                        : Text(t.login, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                   ),
                   const SizedBox(height: 24),
                 ],
@@ -178,7 +180,7 @@ class _AppLogo extends StatelessWidget {
   }
 }
 
-class _ServerUrlToggle extends StatelessWidget {
+class _ServerUrlToggle extends ConsumerStatefulWidget {
   const _ServerUrlToggle({
     required this.show,
     required this.controller,
@@ -190,16 +192,22 @@ class _ServerUrlToggle extends StatelessWidget {
   final VoidCallback onToggle;
 
   @override
+  ConsumerState<_ServerUrlToggle> createState() => _ServerUrlToggleState();
+}
+
+class _ServerUrlToggleState extends ConsumerState<_ServerUrlToggle> {
+  @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         GestureDetector(
-          onTap: onToggle,
+          onTap: widget.onToggle,
           child: Row(
             children: [
               Icon(
-                show ? Icons.expand_less : Icons.expand_more,
+                widget.show ? Icons.expand_less : Icons.expand_more,
                 size: 18,
                 color: NeonShrineColors.onSurfaceVariant,
               ),
@@ -211,19 +219,19 @@ class _ServerUrlToggle extends StatelessWidget {
             ],
           ),
         ),
-        if (show) ...[
+        if (widget.show) ...[
           const SizedBox(height: 8),
           TextFormField(
-            controller: controller,
-            decoration: const InputDecoration(
-              labelText: 'Server URL',
+            controller: widget.controller,
+            decoration: InputDecoration(
+              labelText: t.serverUrl,
               hintText: 'http://localhost:8080',
-              prefixIcon: Icon(Icons.dns_outlined),
+              prefixIcon: const Icon(Icons.dns_outlined),
             ),
             keyboardType: TextInputType.url,
             textInputAction: TextInputAction.next,
             validator: (v) {
-              if (v == null || v.trim().isEmpty) return 'Required';
+              if (v == null || v.trim().isEmpty) return t.fieldRequired;
               final uri = Uri.tryParse(v.trim());
               if (uri == null || !uri.hasScheme) return 'Invalid URL';
               return null;

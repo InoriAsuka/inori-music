@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inori_api/src/model/playlist.dart';
 
+import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/catalog/catalog_repository.dart';
 import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/theme/neon_shrine.dart';
@@ -17,9 +18,10 @@ class PlaylistsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final t = AppLocalizations.of(context);
     final state = ref.watch(_playlistsProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Playlists')),
+      appBar: AppBar(title: Text(t.playlists)),
       body: state.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(
@@ -32,13 +34,13 @@ class PlaylistsScreen extends ConsumerWidget {
               const SizedBox(height: 12),
               FilledButton(
                 onPressed: () => ref.refresh(_playlistsProvider),
-                child: const Text('Retry'),
+                child: Text(t.retry),
               ),
             ],
           ),
         ),
         data: (playlists) => playlists.isEmpty
-            ? const Center(child: Text('No playlists found'))
+            ? Center(child: Text(t.noData))
             : ListView.builder(
                 itemCount: playlists.length,
                 itemBuilder: (context, i) {

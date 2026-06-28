@@ -49,7 +49,7 @@ class FullPlayerScreen extends ConsumerWidget {
 
             const Spacer(),
 
-            // Large artwork placeholder
+            // Large artwork
             Container(
               width: 280,
               height: 280,
@@ -64,7 +64,9 @@ class FullPlayerScreen extends ConsumerWidget {
                   ),
                 ],
               ),
-              child: const Icon(Icons.music_note_rounded, size: 80, color: NeonShrineColors.primaryViolet),
+              child: _ArtworkPlaceholder(
+                mediaObjectId: mediaItem?.extras?['mediaObjectId'],
+              ),
             ),
 
             const Spacer(),
@@ -163,6 +165,19 @@ class FullPlayerScreen extends ConsumerWidget {
                       }
                     },
                     tooltip: 'Repeat: ${state.repeat.name}',
+                  ),
+                  Consumer(
+                    builder: (context2, ref2, child2) {
+                      final isShuffle = ref2.watch(playerProvider).shuffle;
+                      return IconButton(
+                        icon: Icon(
+                          Icons.shuffle,
+                          color: isShuffle ? NeonShrineColors.primaryVioletLight : NeonShrineColors.onSurfaceVariant,
+                        ),
+                        onPressed: () => ref2.read(playerProvider.notifier).setShuffle(!isShuffle),
+                        tooltip: 'Shuffle',
+                      );
+                    },
                   ),
                   IconButton(
                     icon: const Icon(Icons.skip_previous, size: 36, color: NeonShrineColors.onSurface),
@@ -312,5 +327,43 @@ class FullPlayerScreen extends ConsumerWidget {
     final mins = d.inMinutes;
     final secs = d.inSeconds % 60;
     return '$mins:${secs.toString().padLeft(2, '0')}';
+  }
+}
+
+/// Widget that shows artwork for a media object by ID.
+/// Falls back to a placeholder icon when no artwork is available.
+class _ArtworkPlaceholder extends ConsumerWidget {
+  const _ArtworkPlaceholder({this.mediaObjectId});
+
+  final String? mediaObjectId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final artworkUrl = mediaObjectId != null
+        ? ref.watch(artworkUrlProvider(mediaObjectId!))
+        : null;
+
+    if (artworkUrl != null) {
+      return Image.network(
+        artworkUrl,
+        fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => _FallbackIcon(),
+      );
+    }
+
+    return const _FallbackIcon();
+  }
+}
+
+class _FallbackIcon extends StatelessWidget {
+  const _FallbackIcon();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Icon(
+      Icons.music_note_rounded,
+      size: 80,
+      color: NeonShrineColors.primaryViolet,
+    );
   }
 }

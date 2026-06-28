@@ -66,6 +66,7 @@
   },
   "searchHint": "Search artists, albums, tracks…",
   "searchPrompt": "Start typing to search…",
+  "serverUrl": "Server URL",
   "deleteHistory": "Delete History",
   "noHistory": "No history yet",
   "noData": "No data"

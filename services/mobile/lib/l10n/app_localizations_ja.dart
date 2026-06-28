@@ -191,6 +191,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get searchPrompt => 'キーワードを入力して検索…';
 
   @override
+  String get serverUrl => 'サーバーURL';
+
+  @override
   String get deleteHistory => '履歴を削除';
 
   @override

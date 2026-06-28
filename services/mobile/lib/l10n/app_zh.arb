@@ -65,6 +65,7 @@
   },
   "searchHint": "搜索艺术家、专辑、曲目…",
   "searchPrompt": "输入关键词开始搜索…",
+  "serverUrl": "服务器地址",
   "deleteHistory": "删除历史",
   "noHistory": "暂无播放记录",
   "noData": "暂无数据"
