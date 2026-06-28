@@ -106,4 +106,33 @@ void main() {
     expect(find.text(artistId), findsOneWidget,
         reason: 'artistId is shown as fallback on error');
   });
+
+  testWidgets('TrackListTile shows no subtitle when artistId is empty',
+      (tester) async {
+    // When track.artistId is empty, subtitle should be null (no Text rendered).
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          catalogRepositoryProvider.overrideWithValue(
+            _StubCatalogRepository(resolvedName),
+          ),
+        ],
+        child: MaterialApp(
+          home: Scaffold(
+            body: TrackListTile(track: _makeTrack(artistId: '')),
+          ),
+        ),
+      ),
+    );
+
+    await tester.pump();
+    await tester.pump();
+
+    // No subtitle text — neither a resolved name nor the empty artist id.
+    expect(find.text(resolvedName), findsNothing,
+        reason: 'No subtitle should be rendered when artistId is empty');
+    // The title must still be present.
+    expect(find.text('Idol'), findsOneWidget,
+        reason: 'Track title is always visible');
+  });
 }

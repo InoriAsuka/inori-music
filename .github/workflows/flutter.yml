@@ -57,9 +57,20 @@ jobs:
       - name: Get dependencies
         working-directory: services/mobile
         run: flutter pub get
-      - name: Run tests
+      - name: Generate API client
         working-directory: services/mobile
-        run: flutter test
+        run: make gen:api
+      - name: Run build_runner
+        working-directory: services/mobile
+        run: dart run build_runner build --delete-conflicting-outputs
+      - name: Run tests with coverage
+        working-directory: services/mobile
+        run: flutter test --coverage
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        with:
+          name: flutter-coverage-${{ matrix.os }}
+          path: services/mobile/coverage/
 
   build-android:
     name: Build APK
@@ -120,3 +131,33 @@ jobs:
         with:
           name: inori-music-macos
           path: services/mobile/build/macos/Build/Products/Release/inori_music.app
+
+  build-ios:
+    name: Build IPA (no codesign)
+    runs-on: macos-15
+    needs: [analyze, test]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.27.x'
+          channel: 'stable'
+          cache: true
+      - name: Get dependencies
+        working-directory: services/mobile
+        run: flutter pub get
+      - name: Generate API client
+        working-directory: services/mobile
+        run: make gen:api
+      - name: Run build_runner
+        working-directory: services/mobile
+        run: dart run build_runner build --delete-conflicting-outputs
+      - name: Build IPA (no codesign)
+        working-directory: services/mobile
+        run: flutter build ipa --no-codesign
+      - name: Upload IPA archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: inori-music-ipa
+          path: services/mobile/build/ios/archive/
