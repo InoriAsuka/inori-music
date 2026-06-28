@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:inori_api/src/model/catalog_track.dart';
 import 'package:inori_music/src/catalog/catalog_cache_providers.dart';
+import 'package:inori_music/src/offline/download_notifier.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/theme/neon_shrine.dart';
 
@@ -37,6 +38,8 @@ class TrackListTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final durationStr = _formatDurationMs(track.durationMs);
+    final downloadStatus = ref.watch(downloadProvider.select((m) => m[track.id]));
+    final isDownloaded = downloadStatus is DownloadDone;
 
     Widget leading;
     if (artworkUrl != null && artworkUrl!.isNotEmpty) {
@@ -136,6 +139,36 @@ class TrackListTile extends ConsumerWidget {
           () {
             ref.read(playerProvider.notifier).playTrack(track.id);
           },
+      onLongPress: () {
+        showModalBottomSheet<void>(
+          context: context,
+          builder: (ctx) => Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              ListTile(
+                leading: Icon(
+                  isDownloaded ? Icons.delete_outline : Icons.download,
+                ),
+                title: Text(
+                  isDownloaded ? 'Delete download' : 'Download for offline',
+                ),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  if (isDownloaded) {
+                    ref
+                        .read(downloadProvider.notifier)
+                        .deleteDownload(track.id);
+                  } else {
+                    ref
+                        .read(downloadProvider.notifier)
+                        .startDownload(track.id);
+                  }
+                },
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
