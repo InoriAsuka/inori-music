@@ -220,4 +220,8 @@ CREATE TABLE IF NOT EXISTS user_track_favorites (
 CREATE INDEX IF NOT EXISTS user_track_favorites_user_id_created_at_idx
     ON user_track_favorites (user_id, created_at DESC);`,
 	},
+	{
+		name: "011_album_artwork",
+		sql:  `ALTER TABLE albums ADD COLUMN IF NOT EXISTS artwork_media_object_id TEXT;`,
+	},
 }

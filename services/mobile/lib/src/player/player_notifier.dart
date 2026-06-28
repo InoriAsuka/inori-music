@@ -277,7 +277,10 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
             ? Duration(milliseconds: track!.durationMs!)
             : Duration.zero,
         artUri: null,
-        extras: {'trackId': trackId},
+        extras: {
+          'trackId': trackId,
+          'albumId': track?.albumId,
+        },
       );
 
   Future<void> _playAtIndex(int index) async {

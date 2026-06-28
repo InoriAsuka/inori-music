@@ -3,6 +3,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:inori_api/src/model/catalog_track.dart';
+import 'package:inori_music/src/catalog/artwork_provider.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/theme/neon_shrine.dart';
 
@@ -37,12 +38,20 @@ class TrackListTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final durationStr = _formatDurationMs(track.durationMs);
 
+    // Prefer the explicit artworkUrl; fall back to artworkUrlProvider when albumId
+    // is available.
+    final albumId = track.albumId;
+    final resolvedUrl = artworkUrl ??
+        (albumId != null && albumId.isNotEmpty
+            ? ref.watch(artworkUrlProvider(albumId)).value
+            : null);
+
     Widget leading;
-    if (artworkUrl != null && artworkUrl!.isNotEmpty) {
+    if (resolvedUrl != null && resolvedUrl.isNotEmpty) {
       leading = ClipRRect(
         borderRadius: BorderRadius.circular(4),
         child: CachedNetworkImage(
-          imageUrl: artworkUrl!,
+          imageUrl: resolvedUrl,
           width: 40,
           height: 40,
           fit: BoxFit.cover,

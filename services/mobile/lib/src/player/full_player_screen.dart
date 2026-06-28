@@ -1,6 +1,8 @@
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:inori_music/src/catalog/artwork_provider.dart';
 import 'package:inori_music/src/favorites/track_favorite_notifier.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/player/player_state.dart' as ps;
@@ -49,7 +51,7 @@ class FullPlayerScreen extends ConsumerWidget {
 
             const Spacer(),
 
-            // Large artwork placeholder
+            // Large artwork
             Container(
               width: 280,
               height: 280,
@@ -64,7 +66,12 @@ class FullPlayerScreen extends ConsumerWidget {
                   ),
                 ],
               ),
-              child: const Icon(Icons.music_note_rounded, size: 80, color: NeonShrineColors.primaryViolet),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(16),
+                child: _FullPlayerArtwork(
+                  albumId: state.mediaItem?.extras?['albumId'] as String?,
+                ),
+              ),
             ),
 
             const Spacer(),
@@ -312,5 +319,52 @@ class FullPlayerScreen extends ConsumerWidget {
     final mins = d.inMinutes;
     final secs = d.inSeconds % 60;
     return '$mins:${secs.toString().padLeft(2, '0')}';
+  }
+}
+
+/// Large artwork widget for the full player screen.
+/// Watches [artworkUrlProvider] for the album and shows CachedNetworkImage when
+/// a URL is available; falls back to a music-note icon otherwise.
+class _FullPlayerArtwork extends ConsumerWidget {
+  const _FullPlayerArtwork({this.albumId});
+
+  final String? albumId;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (albumId == null || albumId!.isEmpty) {
+      return const _ArtworkFallback();
+    }
+    final artworkAsync = ref.watch(artworkUrlProvider(albumId!));
+    return artworkAsync.when(
+      data: (url) {
+        if (url == null || url.isEmpty) return const _ArtworkFallback();
+        return CachedNetworkImage(
+          imageUrl: url,
+          width: 280,
+          height: 280,
+          fit: BoxFit.cover,
+          placeholder: (context, _) => const _ArtworkFallback(),
+          errorWidget: (context, _, error) => const _ArtworkFallback(),
+        );
+      },
+      loading: () => const _ArtworkFallback(),
+      error: (error, _) => const _ArtworkFallback(),
+    );
+  }
+}
+
+class _ArtworkFallback extends StatelessWidget {
+  const _ArtworkFallback();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Center(
+      child: Icon(
+        Icons.music_note_rounded,
+        size: 80,
+        color: NeonShrineColors.primaryViolet,
+      ),
+    );
   }
 }
