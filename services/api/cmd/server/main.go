@@ -23,6 +23,8 @@ import (
 	"inori-music/services/api/internal/httpapi"
 	"inori-music/services/api/internal/storage"
 	pgstore "inori-music/services/api/internal/storage/postgres"
+	"inori-music/services/api/internal/userplaylist"
+	userplaylistpg "inori-music/services/api/internal/userplaylist/postgres"
 )
 
 var (
@@ -90,6 +92,10 @@ func main() {
 	favoritesRepo := favoritesRepository(pool)
 	favoritesService := favorites.NewService(favoritesRepo)
 
+	// User playlist service — PostgreSQL when pool is available, in-memory otherwise.
+	userPlaylistRepo := userPlaylistRepository(ctx, pool)
+	userPlaylistService := userplaylist.NewService(userPlaylistRepo)
+
 	if interval := storageRefreshInterval(); interval > 0 {
 		log.Printf("storage refresh scheduler enabled with interval %s", interval)
 		scheduler := storage.NewRefreshScheduler(storageService, interval, func(report storage.RefreshReport, err error) {
@@ -108,6 +114,7 @@ func main() {
 		httpapi.WithCatalogService(catalogService),
 		httpapi.WithHistoryService(historyService),
 		httpapi.WithFavoritesService(favoritesService),
+		httpapi.WithUserPlaylistService(userPlaylistService),
 		httpapi.WithCORSOrigins(corsOrigins()),
 		httpapi.WithServiceInfo(httpapi.ServiceInfo{Name: "inori-api", Version: version, Commit: commit, BuildTime: buildTime}),
 	}
@@ -234,6 +241,18 @@ func favoritesRepository(pool *pgxpool.Pool) favorites.Repository {
 		return favoritespg.NewRepository(pool)
 	}
 	return favorites.NewMemoryRepository()
+}
+
+// userPlaylistRepository returns a PostgreSQL-backed user playlist repository when a pool
+// is available, falling back to an in-memory repository for development and testing.
+func userPlaylistRepository(ctx context.Context, pool *pgxpool.Pool) userplaylist.Repository {
+	if pool != nil {
+		if err := userplaylistpg.Migrate(ctx, pool); err != nil {
+			log.Printf("user playlist migration: %v", err)
+		}
+		return userplaylistpg.NewRepository(pool)
+	}
+	return userplaylist.NewMemoryRepository()
 }
 
 // corsOrigins parses INORI_CORS_ORIGINS (comma-separated list of allowed origins).

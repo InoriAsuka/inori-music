@@ -19,6 +19,7 @@ import 'package:inori_music/src/history/history_screen.dart';
 import 'package:inori_music/src/history/history_stats_screen.dart';
 import 'package:inori_music/src/settings/settings_screen.dart';
 import 'package:inori_music/src/shared/widgets/shell_scaffold.dart';
+import 'package:inori_music/src/user_playlist/user_playlist_detail_screen.dart';
 
 // ---------------------------------------------------------------------------
 // Route paths
@@ -40,6 +41,8 @@ abstract class AppRoutes {
   static const history = '/library/history';
   static const historyStats = '/library/history/stats';
   static const settings = '/settings';
+  static const myPlaylists = '/library/my-playlists';
+  static const myPlaylistDetail = '/library/my-playlists/:id';
 
   // Deep-link entry points (inori://tracks/:id, etc.)
   static const deepTrack = '/tracks/:id';
@@ -50,6 +53,7 @@ abstract class AppRoutes {
   static String albumDetailPath(String id) => '/albums/$id';
   static String playlistDetailPath(String id) => '/playlists/$id';
   static String trackDeepLinkPath(String id) => '/tracks/$id';
+  static String myPlaylistDetailPath(String id) => '/library/my-playlists/$id';
 }
 
 // ---------------------------------------------------------------------------
@@ -205,6 +209,18 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.settings,
             builder: (context, state) => const SettingsScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.myPlaylists,
+            builder: (context, state) => const SizedBox.shrink(),
+            routes: [
+              GoRoute(
+                path: ':id',
+                builder: (_, state) => UserPlaylistDetailScreen(
+                  playlistId: state.pathParameters['id']!,
+                ),
+              ),
+            ],
           ),
         ],
       ),
