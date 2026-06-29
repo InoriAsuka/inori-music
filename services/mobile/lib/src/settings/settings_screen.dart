@@ -3,7 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:inori_music/l10n/app_localizations.dart';
+import 'package:inori_music/src/audio/crossfade_notifier.dart';
 import 'package:inori_music/src/audio/replay_gain_notifier.dart';
+import 'package:inori_music/src/audio/sleep_timer_notifier.dart';
 import 'package:inori_music/src/audio/speed_notifier.dart';
 import 'package:inori_music/src/auth/auth_notifier.dart';
 import 'package:inori_music/src/offline/download_notifier.dart';
@@ -113,6 +115,62 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               );
             },
           ),
+          // Sleep timer
+          Consumer(
+            builder: (context, ref, _) {
+              final timerState = ref.watch(sleepTimerProvider);
+              final String subtitle;
+              if (!timerState.active) {
+                subtitle = '未激活';
+              } else if (timerState.stopAfterTrack) {
+                subtitle = '当前曲目结束后停止';
+              } else if (timerState.remaining != null) {
+                final m = timerState.remaining!.inMinutes
+                    .remainder(60)
+                    .toString()
+                    .padLeft(2, '0');
+                final s = timerState.remaining!.inSeconds
+                    .remainder(60)
+                    .toString()
+                    .padLeft(2, '0');
+                subtitle = '剩余 $m:$s';
+              } else {
+                subtitle = '激活';
+              }
+              return ListTile(
+                leading: const Icon(Icons.bedtime),
+                title: const Text('睡眠定时器'),
+                subtitle: Text(subtitle),
+                onTap: () => _showSleepTimerSheet(context, ref),
+              );
+            },
+          ),
+          // Crossfade slider
+          Consumer(
+            builder: (context, ref, _) {
+              final seconds = ref.watch(crossfadeProvider);
+              return ListTile(
+                leading: const Icon(Icons.swap_horiz),
+                title: const Text('交叉淡入淡出'),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(seconds == 0 ? '关闭' : '$seconds 秒'),
+                    Slider(
+                      value: seconds.toDouble(),
+                      min: 0,
+                      max: 8,
+                      divisions: 8,
+                      label: seconds == 0 ? '关闭' : '$seconds 秒',
+                      onChanged: (v) => ref
+                          .read(crossfadeProvider.notifier)
+                          .setSeconds(v.round()),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
           const Divider(),
 
           // Sign out
@@ -123,6 +181,51 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             onTap: () => _confirmLogout(context, ref, t),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showSleepTimerSheet(BuildContext context, WidgetRef ref) {
+    final timerActive = ref.read(sleepTimerProvider).active;
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text('睡眠定时器',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ),
+            for (final mins in [15, 30, 45, 60])
+              ListTile(
+                title: Text('$mins 分钟'),
+                onTap: () {
+                  ref
+                      .read(sleepTimerProvider.notifier)
+                      .startFixed(Duration(minutes: mins));
+                  Navigator.pop(context);
+                },
+              ),
+            ListTile(
+              title: const Text('当前曲目结束后停止'),
+              onTap: () {
+                ref.read(sleepTimerProvider.notifier).startAfterTrack();
+                Navigator.pop(context);
+              },
+            ),
+            if (timerActive)
+              ListTile(
+                title: const Text('取消定时器',
+                    style: TextStyle(color: Colors.red)),
+                onTap: () {
+                  ref.read(sleepTimerProvider.notifier).cancel();
+                  Navigator.pop(context);
+                },
+              ),
+          ],
+        ),
       ),
     );
   }

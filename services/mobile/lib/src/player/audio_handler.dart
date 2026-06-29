@@ -1,4 +1,6 @@
 // ignore_for_file: implementation_imports
+import 'dart:async';
+
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart' show Color;
 import 'package:just_audio/just_audio.dart';
@@ -81,6 +83,43 @@ class InoriAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
 
   /// Expose the player so PlayerNotifier can share the same instance.
   AudioPlayer get audioPlayer => _player;
+
+  // ---- Crossfade support ----
+
+  /// Crossfade duration in seconds (0 = disabled).
+  int crossfadeSeconds = 0;
+
+  StreamSubscription<int?>? _indexSub;
+
+  /// Wire up crossfade on every track index change.
+  /// Call this once after [create], supplying the stream from CrossfadeNotifier.
+  void initCrossfade() {
+    _indexSub?.cancel();
+    _indexSub = _player.currentIndexStream.listen((index) {
+      if (crossfadeSeconds > 0) {
+        _runCrossfade(crossfadeSeconds);
+      }
+    });
+  }
+
+  /// Animate volume 1.0 → 0.0 → 1.0 over [seconds] each leg.
+  Future<void> _runCrossfade(int seconds) async {
+    final steps = seconds * 10; // 100 ms per step
+    final stepDuration = const Duration(milliseconds: 100);
+
+    // Fade out
+    for (int i = steps; i >= 0; i--) {
+      if (!_player.playing) return;
+      await _player.setVolume(i / steps);
+      await Future<void>.delayed(stepDuration);
+    }
+    // Fade in
+    for (int i = 0; i <= steps; i++) {
+      if (!_player.playing) return;
+      await _player.setVolume(i / steps);
+      await Future<void>.delayed(stepDuration);
+    }
+  }
 
   static AudioProcessingState _toAudioProcessingState(ProcessingState ps) {
     switch (ps) {

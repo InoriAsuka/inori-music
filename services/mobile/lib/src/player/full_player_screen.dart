@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:inori_music/src/audio/sleep_timer_notifier.dart';
 import 'package:inori_music/src/audio/speed_notifier.dart';
 import 'package:inori_music/src/catalog/artwork_provider.dart';
 import 'package:inori_music/src/favorites/track_favorite_notifier.dart';
@@ -274,6 +275,23 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                       );
                     },
                   ),
+                  // Sleep timer button
+                  Consumer(
+                    builder: (context, ref, _) {
+                      final timerState = ref.watch(sleepTimerProvider);
+                      final active = timerState.active;
+                      return IconButton(
+                        icon: Icon(
+                          Icons.bedtime,
+                          color: active
+                              ? NeonShrineColors.primaryVioletLight
+                              : NeonShrineColors.onSurfaceVariant,
+                        ),
+                        tooltip: 'Sleep timer',
+                        onPressed: () => _showSleepTimerSheet(context, ref),
+                      );
+                    },
+                  ),
                   // Favorite button — wrapped in Consumer so icon and onPressed
                   // always use the same live trackId from the reactive ref.
                   Consumer(builder: (context2, ref2, child2) {
@@ -301,6 +319,51 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
             ),
 
             const SizedBox(height: 32),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showSleepTimerSheet(BuildContext context, WidgetRef ref) {
+    final timerActive = ref.read(sleepTimerProvider).active;
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text('睡眠定时器',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ),
+            for (final mins in [15, 30, 45, 60])
+              ListTile(
+                title: Text('$mins 分钟'),
+                onTap: () {
+                  ref
+                      .read(sleepTimerProvider.notifier)
+                      .startFixed(Duration(minutes: mins));
+                  Navigator.pop(context);
+                },
+              ),
+            ListTile(
+              title: const Text('当前曲目结束后停止'),
+              onTap: () {
+                ref.read(sleepTimerProvider.notifier).startAfterTrack();
+                Navigator.pop(context);
+              },
+            ),
+            if (timerActive)
+              ListTile(
+                title: const Text('取消定时器',
+                    style: TextStyle(color: Colors.red)),
+                onTap: () {
+                  ref.read(sleepTimerProvider.notifier).cancel();
+                  Navigator.pop(context);
+                },
+              ),
           ],
         ),
       ),
