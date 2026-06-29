@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:inori_music/l10n/app_localizations.dart';
+import 'package:inori_music/src/audio/sleep_timer_notifier.dart';
 import 'package:inori_music/src/catalog/artwork_provider.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/router.dart';
@@ -98,6 +99,44 @@ class MiniPlayerBar extends ConsumerWidget {
                   onPressed: () => ref.read(playerProvider.notifier).next(),
                   tooltip: 'Next',
                 ),
+
+                // Sleep timer
+                Consumer(
+                  builder: (context, ref, _) {
+                    final timerState = ref.watch(sleepTimerProvider);
+                    final active = timerState.active;
+                    final remaining = timerState.remaining;
+                    final label = timerState.stopAfterTrack
+                        ? '♪'
+                        : (remaining != null
+                            ? _formatRemaining(remaining)
+                            : null);
+                    return active
+                        ? TextButton.icon(
+                            icon: Icon(Icons.alarm,
+                                size: 18,
+                                color:
+                                    Theme.of(context).colorScheme.primary),
+                            label: Text(
+                              label ?? '',
+                              style: TextStyle(
+                                  fontSize: 10,
+                                  color: Theme.of(context)
+                                      .colorScheme
+                                      .primary),
+                            ),
+                            onPressed: () =>
+                                _showSleepTimerSheet(context, ref),
+                          )
+                        : IconButton(
+                            icon: const Icon(Icons.alarm, size: 22),
+                            color: NeonShrineColors.onSurfaceVariant,
+                            tooltip: 'Sleep timer',
+                            onPressed: () =>
+                                _showSleepTimerSheet(context, ref),
+                          );
+                  },
+                ),
               ],
             ),
           ),
@@ -105,6 +144,58 @@ class MiniPlayerBar extends ConsumerWidget {
       ),
     );
   }
+
+  static String _formatRemaining(Duration d) {
+    final m = d.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
+    return '$m:$s';
+  }
+}
+
+void _showSleepTimerSheet(BuildContext context, WidgetRef ref) {
+  final timerActive = ref.read(sleepTimerProvider).active;
+  showModalBottomSheet<void>(
+    context: context,
+    builder: (_) => SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Padding(
+            padding: EdgeInsets.all(16),
+            child: Text('睡眠定时器',
+                style: TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.bold)),
+          ),
+          for (final mins in [15, 30, 45, 60])
+            ListTile(
+              title: Text('$mins 分钟'),
+              onTap: () {
+                ref
+                    .read(sleepTimerProvider.notifier)
+                    .startFixed(Duration(minutes: mins));
+                Navigator.pop(context);
+              },
+            ),
+          ListTile(
+            title: const Text('当前曲目结束后停止'),
+            onTap: () {
+              ref.read(sleepTimerProvider.notifier).startAfterTrack();
+              Navigator.pop(context);
+            },
+          ),
+          if (timerActive)
+            ListTile(
+              title: const Text('取消定时器',
+                  style: TextStyle(color: Colors.red)),
+              onTap: () {
+                ref.read(sleepTimerProvider.notifier).cancel();
+                Navigator.pop(context);
+              },
+            ),
+        ],
+      ),
+    ),
+  );
 }
 
 /// Mini player artwork thumbnail — shows the album cover or a fallback icon.
