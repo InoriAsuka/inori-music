@@ -82,6 +82,37 @@ class InoriAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
   /// Expose the player so PlayerNotifier can share the same instance.
   AudioPlayer get audioPlayer => _player;
 
+  // ---- Gapless playback ----
+
+  late ConcatenatingAudioSource _concatSource;
+
+  /// Rebuild the concatenating source with the given URLs and start playback.
+  Future<void> updateConcatQueue(List<String> urls) async {
+    final sources = urls
+        .map((u) => ProgressiveAudioSource(Uri.parse(u)))
+        .toList();
+    _concatSource = ConcatenatingAudioSource(children: sources);
+    await _player.setAudioSource(_concatSource);
+  }
+
+  // ---- Equalizer ----
+
+  /// Apply per-band gain values (in dB) to the underlying player.
+  void applyEqualizerBands(List<double> bands) {
+    try {
+      // ignore: avoid_dynamic_calls
+      (_player as dynamic).setBands(bands);
+    } catch (_) {}
+  }
+
+  /// Reset all EQ bands to 0 dB.
+  void resetEqualizer() {
+    try {
+      // ignore: avoid_dynamic_calls
+      (_player as dynamic).setBands(List<double>.filled(10, 0.0));
+    } catch (_) {}
+  }
+
   static AudioProcessingState _toAudioProcessingState(ProcessingState ps) {
     switch (ps) {
       case ProcessingState.idle:

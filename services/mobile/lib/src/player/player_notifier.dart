@@ -117,14 +117,19 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
         queue: queueIds.map((id) => _stubMediaItem(id)).toList(),
         currentIndex: clampedIndex,
       );
+      // Resolve all URLs for gapless playback via ConcatenatingAudioSource.
+      _buildConcatQueue(queueIds, index, url, trackId);
     }
 
     // Resolve real track metadata (title, artist, album, duration) from catalog.
     final track = await _resolveTrack(trackId);
     final mediaItem = _makeMediaItem(trackId, track);
 
-    final source = ProgressiveAudioSource(Uri.parse(url), tag: trackId);
-    await _audioPlayer.setAudioSource(source);
+    // If no queue was supplied, fall back to single ProgressiveAudioSource.
+    if (queueIds == null || queueIds.isEmpty) {
+      final source = ProgressiveAudioSource(Uri.parse(url), tag: trackId);
+      await _audioPlayer.setAudioSource(source);
+    }
     // Push to AudioHandler so the OS notification shows the current track.
     audioHandler.mediaItem.add(mediaItem);
     state = state.copyWith(
@@ -132,6 +137,34 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
       currentIndex: state.queue.isNotEmpty ? (state.currentIndex >= 0 ? state.currentIndex : index) : 0,
     );
     await _audioPlayer.play();
+  }
+
+  /// Asynchronously pre-resolves all queue URLs and calls [audioHandler.updateQueue]
+  /// so ConcatenatingAudioSource enables gapless transitions.
+  void _buildConcatQueue(List<String> queueIds, int startIndex, String resolvedUrl, String resolvedTrackId) {
+    Future<void>(() async {
+      final urls = <String>[];
+      for (final id in queueIds) {
+        if (id == resolvedTrackId) {
+          urls.add(resolvedUrl);
+        } else {
+          final u = await resolvePlaybackUrl(id);
+          urls.add(u ?? '');
+        }
+      }
+      // Filter out empty URLs but rebuild index accordingly.
+      final validPairs = <MapEntry<int, String>>[];
+      for (var i = 0; i < urls.length; i++) {
+        if (urls[i].isNotEmpty) validPairs.add(MapEntry(i, urls[i]));
+      }
+      if (validPairs.isEmpty) return;
+      await audioHandler.updateConcatQueue(validPairs.map((e) => e.value).toList());
+      // Seek to the correct position in the ConcatenatingAudioSource.
+      final concatIndex = validPairs.indexWhere((e) => e.key == startIndex);
+      if (concatIndex > 0) {
+        await _audioPlayer.seek(Duration.zero, index: concatIndex);
+      }
+    });
   }
 
   /// Play a list of track IDs starting at [initialIndex].
@@ -147,6 +180,8 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
     final items = trackIds.map((id) => _stubMediaItem(id)).toList();
     final newQueue = [...state.queue, ...items];
     state = state.copyWith(queue: newQueue);
+    // Refresh gapless source with all current queue URLs.
+    _refreshConcatSource(newQueue.map((m) => m.id).toList());
   }
 
   /// Enqueue a single track immediately after the current one.
@@ -160,6 +195,22 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
       newQueue.add(item);
     }
     state = state.copyWith(queue: newQueue);
+    _refreshConcatSource(newQueue.map((m) => m.id).toList());
+  }
+
+  /// Rebuild the ConcatenatingAudioSource to match the current queue.
+  void _refreshConcatSource(List<String> trackIds) {
+    Future<void>(() async {
+      final urls = <String>[];
+      for (final id in trackIds) {
+        final u = await resolvePlaybackUrl(id);
+        urls.add(u ?? '');
+      }
+      final valid = urls.where((u) => u.isNotEmpty).toList();
+      if (valid.isNotEmpty) {
+        await audioHandler.updateConcatQueue(valid);
+      }
+    });
   }
 
   Future<void> play() async => _audioPlayer.play();
@@ -219,10 +270,12 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
       }
       final newCurrent = index < queue.length ? index : queue.length - 1;
       state = state.copyWith(queue: queue, currentIndex: newCurrent, clearMediaItem: true);
+      _refreshConcatSource(queue.map((m) => m.id).toList());
       await _playAtIndex(newCurrent);
     } else {
       final newCurrent = state.currentIndex > index ? state.currentIndex - 1 : state.currentIndex;
       state = state.copyWith(queue: queue, currentIndex: newCurrent);
+      _refreshConcatSource(queue.map((m) => m.id).toList());
     }
   }
 
