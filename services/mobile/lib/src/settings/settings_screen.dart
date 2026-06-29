@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:inori_music/l10n/app_localizations.dart';
+import 'package:inori_music/src/audio/replay_gain_notifier.dart';
+import 'package:inori_music/src/audio/speed_notifier.dart';
 import 'package:inori_music/src/auth/auth_notifier.dart';
 import 'package:inori_music/src/offline/download_notifier.dart';
 import 'package:inori_music/src/offline/offline_db.dart';
@@ -27,11 +29,16 @@ const _langOptions = [
   _LangOption(Locale('ja'), '日本語'),
 ];
 
-class SettingsScreen extends ConsumerWidget {
+class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  @override
+  Widget build(BuildContext context) {
     final auth = ref.watch(authProvider);
     final username = auth.valueOrNull?.username ?? '';
     final locale = ref.read(localeProvider);
@@ -83,6 +90,31 @@ class SettingsScreen extends ConsumerWidget {
           _OfflineLibrarySection(),
           const Divider(),
 
+          // Audio section
+          const _SectionHeader(title: '音频'),
+          Consumer(
+            builder: (context, ref, _) {
+              final speed = ref.watch(speedNotifierProvider);
+              return ListTile(
+                title: const Text('播放速度'),
+                trailing: Text('${speed}×'),
+                onTap: () => _showSpeedSheet(context, ref),
+              );
+            },
+          ),
+          Consumer(
+            builder: (context, ref, _) {
+              final enabled = ref.watch(replayGainEnabledProvider);
+              return SwitchListTile(
+                title: const Text('响度归一化 (ReplayGain)'),
+                subtitle: const Text('自动调整音量，使不同曲目听感一致'),
+                value: enabled,
+                onChanged: (v) => ref.read(replayGainEnabledProvider.notifier).setEnabled(v),
+              );
+            },
+          ),
+          const Divider(),
+
           // Sign out
           const _SectionHeader(title: 'Account Actions'),
           ListTile(
@@ -91,6 +123,34 @@ class SettingsScreen extends ConsumerWidget {
             onTap: () => _confirmLogout(context, ref, t),
           ),
         ],
+      ),
+    );
+  }
+
+  void _showSpeedSheet(BuildContext context, WidgetRef ref) {
+    const speeds = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
+    final current = ref.read(speedNotifierProvider);
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text('播放速度', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ),
+            for (final s in speeds)
+              ListTile(
+                title: Text('${s}×'),
+                trailing: s == current ? const Icon(Icons.check) : null,
+                onTap: () {
+                  ref.read(speedNotifierProvider.notifier).setSpeed(s);
+                  Navigator.pop(context);
+                },
+              ),
+          ],
+        ),
       ),
     );
   }

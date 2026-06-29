@@ -60,6 +60,7 @@ type Track struct {
 	DurationMS          int       `json:"durationMs,omitempty"`
 	Genre               string    `json:"genre,omitempty"`
 	LyricsMediaObjectID string    `json:"lyricsMediaObjectId,omitempty"`
+	ReplayGainDb        *float64  `json:"replayGainDb,omitempty"`
 	CreatedAt           time.Time `json:"createdAt"`
 	UpdatedAt           time.Time `json:"updatedAt"`
 }
@@ -221,6 +222,7 @@ type UpdateTrackRequest struct {
 	DurationMS          *int
 	Genre               *string
 	LyricsMediaObjectID *string
+	ReplayGainDb        *float64
 }
 
 // BatchImportResultItem holds the outcome of a single import within a batch request.

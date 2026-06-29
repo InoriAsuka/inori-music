@@ -203,7 +203,7 @@ func (r *Repository) ListTracksPage(ctx context.Context, q catalog.ListQuery) (c
 	if q.Genre != "" {
 		sql := fmt.Sprintf(`
 			SELECT id, title, sort_title, artist_id, COALESCE(album_id,''), media_object_id,
-			       track_number, disc_number, duration_ms, COALESCE(genre,''), COALESCE(lyrics_media_object_id,''), created_at, updated_at,
+			       track_number, disc_number, duration_ms, COALESCE(genre,''), COALESCE(lyrics_media_object_id,''), replay_gain_db, created_at, updated_at,
 			       COUNT(*) OVER () AS total_count
 			FROM tracks
 			WHERE lower(COALESCE(genre,'')) = lower($3)
@@ -213,7 +213,7 @@ func (r *Repository) ListTracksPage(ctx context.Context, q catalog.ListQuery) (c
 	}
 	sql := fmt.Sprintf(`
 		SELECT id, title, sort_title, artist_id, COALESCE(album_id,''), media_object_id,
-		       track_number, disc_number, duration_ms, COALESCE(genre,''), COALESCE(lyrics_media_object_id,''), created_at, updated_at,
+		       track_number, disc_number, duration_ms, COALESCE(genre,''), COALESCE(lyrics_media_object_id,''), replay_gain_db, created_at, updated_at,
 		       COUNT(*) OVER () AS total_count
 		FROM tracks
 		ORDER BY %s
@@ -225,7 +225,7 @@ func (r *Repository) ListTracksByAlbumPage(ctx context.Context, albumID string, 
 	if q.Genre != "" {
 		sql := fmt.Sprintf(`
 			SELECT id, title, sort_title, artist_id, COALESCE(album_id,''), media_object_id,
-			       track_number, disc_number, duration_ms, COALESCE(genre,''), COALESCE(lyrics_media_object_id,''), created_at, updated_at,
+			       track_number, disc_number, duration_ms, COALESCE(genre,''), COALESCE(lyrics_media_object_id,''), replay_gain_db, created_at, updated_at,
 			       COUNT(*) OVER () AS total_count
 			FROM tracks
 			WHERE album_id = $3 AND lower(COALESCE(genre,'')) = lower($4)
@@ -235,7 +235,7 @@ func (r *Repository) ListTracksByAlbumPage(ctx context.Context, albumID string, 
 	}
 	sql := fmt.Sprintf(`
 		SELECT id, title, sort_title, artist_id, COALESCE(album_id,''), media_object_id,
-		       track_number, disc_number, duration_ms, COALESCE(genre,''), COALESCE(lyrics_media_object_id,''), created_at, updated_at,
+		       track_number, disc_number, duration_ms, COALESCE(genre,''), COALESCE(lyrics_media_object_id,''), replay_gain_db, created_at, updated_at,
 		       COUNT(*) OVER () AS total_count
 		FROM tracks
 		WHERE album_id = $3
@@ -248,7 +248,7 @@ func (r *Repository) ListTracksByArtistPage(ctx context.Context, artistID string
 	if q.Genre != "" {
 		sql := fmt.Sprintf(`
 			SELECT id, title, sort_title, artist_id, COALESCE(album_id,''), media_object_id,
-			       track_number, disc_number, duration_ms, COALESCE(genre,''), COALESCE(lyrics_media_object_id,''), created_at, updated_at,
+			       track_number, disc_number, duration_ms, COALESCE(genre,''), COALESCE(lyrics_media_object_id,''), replay_gain_db, created_at, updated_at,
 			       COUNT(*) OVER () AS total_count
 			FROM tracks
 			WHERE artist_id = $3 AND lower(COALESCE(genre,'')) = lower($4)
@@ -258,7 +258,7 @@ func (r *Repository) ListTracksByArtistPage(ctx context.Context, artistID string
 	}
 	sql := fmt.Sprintf(`
 		SELECT id, title, sort_title, artist_id, COALESCE(album_id,''), media_object_id,
-		       track_number, disc_number, duration_ms, COALESCE(genre,''), COALESCE(lyrics_media_object_id,''), created_at, updated_at,
+		       track_number, disc_number, duration_ms, COALESCE(genre,''), COALESCE(lyrics_media_object_id,''), replay_gain_db, created_at, updated_at,
 		       COUNT(*) OVER () AS total_count
 		FROM tracks
 		WHERE artist_id = $3
@@ -279,7 +279,7 @@ func (r *Repository) queryTracksPage(ctx context.Context, sql string, args ...an
 		var t catalog.Track
 		if err := rows.Scan(
 			&t.ID, &t.Title, &t.SortTitle, &t.ArtistID, &t.AlbumID, &t.MediaObjectID,
-			&t.TrackNumber, &t.DiscNumber, &t.DurationMS, &t.Genre, &t.LyricsMediaObjectID, &t.CreatedAt, &t.UpdatedAt, &total,
+			&t.TrackNumber, &t.DiscNumber, &t.DurationMS, &t.Genre, &t.LyricsMediaObjectID, &t.ReplayGainDb, &t.CreatedAt, &t.UpdatedAt, &total,
 		); err != nil {
 			return catalog.ListPage[catalog.Track]{}, err
 		}
