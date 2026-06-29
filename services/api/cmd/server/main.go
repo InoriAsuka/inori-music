@@ -21,6 +21,7 @@ import (
 	"inori-music/services/api/internal/history"
 	historypg "inori-music/services/api/internal/history/postgres"
 	"inori-music/services/api/internal/httpapi"
+	"inori-music/services/api/internal/search"
 	"inori-music/services/api/internal/storage"
 	pgstore "inori-music/services/api/internal/storage/postgres"
 	"inori-music/services/api/internal/userplaylist"
@@ -84,6 +85,20 @@ func main() {
 	catalogRepo := catalogRepository(pool)
 	catalogService := catalog.NewService(catalogRepo)
 
+	// Meilisearch search — optional, falls back to PG if not configured.
+	var searchSvc search.Service
+	if meiliHost := os.Getenv("MEILI_HOST"); meiliHost != "" {
+		ms, err := search.NewMeilisearch(meiliHost, os.Getenv("MEILI_SEARCH_KEY"))
+		if err != nil {
+			log.Printf("meilisearch init: %v", err)
+		}
+		if ms != nil {
+			searchSvc = ms
+			catalogService.WithSearchService(searchSvc)
+			log.Printf("meilisearch enabled at %s", meiliHost)
+		}
+	}
+
 	// History service — PostgreSQL when pool is available, in-memory otherwise.
 	historyRepo := historyRepository(pool)
 	historyService := history.NewService(historyRepo)
@@ -120,6 +135,9 @@ func main() {
 	}
 	if authService != nil {
 		handlerOpts = append(handlerOpts, httpapi.WithAuthService(authService))
+	}
+	if searchSvc != nil {
+		handlerOpts = append(handlerOpts, httpapi.WithSearchService(searchSvc))
 	}
 
 	server := &http.Server{

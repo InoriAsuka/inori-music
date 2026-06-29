@@ -4,6 +4,7 @@ go 1.25.1
 
 require (
 	github.com/jackc/pgx/v5 v5.10.0
+	github.com/meilisearch/meilisearch-go v0.36.3
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.42.0
 	golang.org/x/crypto v0.53.0
 )
