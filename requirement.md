@@ -1546,7 +1546,7 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Fix getAlbumArtwork error masking: distinguish ErrNotFound (404) from internal errors (500) in GetMediaObject path.
 - The phase output is version-tracked and covered by relevant tests.
 
-### v4.0.0 - TBD
+### v4.0.0 - 2026-06-29
 
 - **feat: 歌词支持（LRC / SRT 同步滚动歌词）** — 服务端：新增 asset kind `lyrics`；`POST /api/v1/catalog/tracks/{id}/lyrics`（admin，上传 LRC/SRT 文件到存储后端，返回 media object ID）；`GET /api/v1/catalog/tracks/{id}/lyrics`（viewer，返回 `LyricsResponse{format, content, mediaObjectId}`，content 为 UTF-8 明文，直接在响应体内返回，不走 presigned URL）；`DELETE /api/v1/catalog/tracks/{id}/lyrics`（admin）；OpenAPI contract 新增 `LyricsResponse`、`UploadLyricsRequest` schema 及三条路径，版本升至 4.0.0。
 - Flutter 客户端：`lyricsProvider(trackId)` Family AsyncNotifier，请求 GET 端点，解析 LRC/SRT 为 `List<LyricLine>{timestamp, text}` 模型；`FullPlayerScreen` 新增歌词层（可上下滚动），当前行高亮（随 `playerProvider.position` 实时定位）；歌词区与封面区可手势切换（PageView 左右滑）；无歌词时展示占位文字。

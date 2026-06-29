@@ -4,19 +4,43 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:inori_music/src/catalog/artwork_provider.dart';
 import 'package:inori_music/src/favorites/track_favorite_notifier.dart';
+import 'package:inori_music/src/lyrics/lyric_line.dart';
+import 'package:inori_music/src/lyrics/lyrics_provider.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/player/player_state.dart' as ps;
 import 'package:inori_music/src/shared/theme/neon_shrine.dart';
 
 /// Full-screen player overlay with progress bar, controls, and queue sheet.
-class FullPlayerScreen extends ConsumerWidget {
+class FullPlayerScreen extends ConsumerStatefulWidget {
   const FullPlayerScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<FullPlayerScreen> createState() => _FullPlayerScreenState();
+}
+
+class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
+  late final PageController _pageController;
+  int _pageIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController = PageController();
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(playerProvider);
     final isPlaying = state.isPlaying;
     final isBuffering = state.isBuffering;
+    final trackId = state.mediaItem?.id ?? '';
+    final position = ref.watch(playerProvider.select((s) => s.position));
 
     return Scaffold(
       backgroundColor: NeonShrineColors.background,
@@ -43,7 +67,7 @@ class FullPlayerScreen extends ConsumerWidget {
                   IconButton(
                     icon: const Icon(Icons.queue_music, color: NeonShrineColors.onSurfaceVariant),
                     tooltip: 'Queue',
-                    onPressed: () => _showQueueSheet(context, ref),
+                    onPressed: () => _showQueueSheet(context),
                   ),
                 ],
               ),
@@ -51,27 +75,59 @@ class FullPlayerScreen extends ConsumerWidget {
 
             const Spacer(),
 
-            // Large artwork
-            Container(
+            // Artwork / Lyrics PageView
+            SizedBox(
               width: 280,
               height: 280,
-              decoration: BoxDecoration(
-                color: NeonShrineColors.surfaceVariant,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [
-                  BoxShadow(
-                    color: NeonShrineColors.primaryViolet.withValues(alpha: 0.15),
-                    blurRadius: 32,
-                    offset: const Offset(0, 8),
+              child: PageView(
+                controller: _pageController,
+                onPageChanged: (i) => setState(() => _pageIndex = i),
+                children: [
+                  // Page 0: Artwork
+                  Container(
+                    width: 280,
+                    height: 280,
+                    decoration: BoxDecoration(
+                      color: NeonShrineColors.surfaceVariant,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: NeonShrineColors.primaryViolet.withValues(alpha: 0.15),
+                          blurRadius: 32,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(16),
+                      child: _FullPlayerArtwork(
+                        albumId: state.mediaItem?.extras?['albumId'] as String?,
+                      ),
+                    ),
                   ),
+                  // Page 1: Lyrics
+                  _LyricsPage(trackId: trackId, position: position),
                 ],
               ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: _FullPlayerArtwork(
-                  albumId: state.mediaItem?.extras?['albumId'] as String?,
-                ),
-              ),
+            ),
+
+            // Page indicator
+            const SizedBox(height: 8),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(2, (i) {
+                return Container(
+                  margin: const EdgeInsets.symmetric(horizontal: 3),
+                  width: _pageIndex == i ? 10 : 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: _pageIndex == i
+                        ? NeonShrineColors.primaryViolet
+                        : NeonShrineColors.onSurfaceVariant.withValues(alpha: 0.4),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                );
+              }),
             ),
 
             const Spacer(),
@@ -240,7 +296,7 @@ class FullPlayerScreen extends ConsumerWidget {
     );
   }
 
-  void _showQueueSheet(BuildContext context, WidgetRef ref) {
+  void _showQueueSheet(BuildContext context) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -378,6 +434,135 @@ class _ArtworkFallback extends StatelessWidget {
         size: 80,
         color: NeonShrineColors.primaryViolet,
       ),
+    );
+  }
+}
+
+/// Lyrics page widget shown in the second page of the FullPlayerScreen PageView.
+class _LyricsPage extends ConsumerWidget {
+  const _LyricsPage({required this.trackId, required this.position});
+
+  final String trackId;
+  final Duration position;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    if (trackId.isEmpty) {
+      return Center(
+        child: Text(
+          '暂无歌词',
+          style: TextStyle(
+            fontSize: 15,
+            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+          ),
+        ),
+      );
+    }
+    final lyricsAsync = ref.watch(lyricsProvider(trackId));
+    if (lyricsAsync.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    final lines = lyricsAsync.valueOrNull;
+    if (lines == null || lines.isEmpty) {
+      return Center(
+        child: Text(
+          '暂无歌词',
+          style: TextStyle(
+            fontSize: 15,
+            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+          ),
+        ),
+      );
+    }
+    final currentIndex =
+        lines.lastIndexWhere((l) => l.timestamp <= position);
+    return Container(
+      decoration: BoxDecoration(
+        color: NeonShrineColors.surfaceVariant,
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(16),
+        child: _LyricsList(
+          lines: lines,
+          currentIndex: currentIndex,
+        ),
+      ),
+    );
+  }
+}
+
+class _LyricsList extends StatefulWidget {
+  const _LyricsList({required this.lines, required this.currentIndex});
+  final List<LyricLine> lines;
+  final int currentIndex;
+
+  @override
+  State<_LyricsList> createState() => _LyricsListState();
+}
+
+class _LyricsListState extends State<_LyricsList> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void didUpdateWidget(_LyricsList oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.currentIndex != widget.currentIndex &&
+        widget.currentIndex >= 0) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!_scrollController.hasClients) return;
+        final itemHeight = 48.0;
+        final offset = (widget.currentIndex * itemHeight -
+                _scrollController.position.viewportDimension / 2 +
+                itemHeight / 2)
+            .clamp(
+          _scrollController.position.minScrollExtent,
+          _scrollController.position.maxScrollExtent,
+        );
+        _scrollController.animateTo(
+          offset,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeInOut,
+        );
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.builder(
+      controller: _scrollController,
+      padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+      itemCount: widget.lines.length,
+      itemBuilder: (context, i) {
+        final isCurrent = i == widget.currentIndex;
+        return SizedBox(
+          height: 48,
+          child: Center(
+            child: Text(
+              widget.lines[i].text,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: isCurrent ? 18 : 15,
+                fontWeight:
+                    isCurrent ? FontWeight.w600 : FontWeight.normal,
+                color: isCurrent
+                    ? Theme.of(context).colorScheme.primary
+                    : Theme.of(context)
+                        .colorScheme
+                        .onSurface
+                        .withValues(alpha: 0.5),
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

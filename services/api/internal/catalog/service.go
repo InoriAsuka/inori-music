@@ -329,6 +329,9 @@ func (s *Service) UpdateTrack(ctx context.Context, id string, req UpdateTrackReq
 	if req.Genre != nil {
 		track.Genre = strings.TrimSpace(*req.Genre)
 	}
+	if req.LyricsMediaObjectID != nil {
+		track.LyricsMediaObjectID = *req.LyricsMediaObjectID
+	}
 	track.UpdatedAt = s.now().UTC()
 	if err := s.repo.SaveTrack(ctx, track); err != nil {
 		return Track{}, err
