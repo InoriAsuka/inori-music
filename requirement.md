@@ -1545,3 +1545,16 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Fix getAlbumArtwork ExpiresIn derived from artworkTTL constant rather than hardcoded literal.
 - Fix getAlbumArtwork error masking: distinguish ErrNotFound (404) from internal errors (500) in GetMediaObject path.
 - The phase output is version-tracked and covered by relevant tests.
+
+### v4.0.0 - TBD
+
+- **feat: 歌词支持（LRC / SRT 同步滚动歌词）** — 服务端：新增 asset kind `lyrics`；`POST /api/v1/catalog/tracks/{id}/lyrics`（admin，上传 LRC/SRT 文件到存储后端，返回 media object ID）；`GET /api/v1/catalog/tracks/{id}/lyrics`（viewer，返回 `LyricsResponse{format, content, mediaObjectId}`，content 为 UTF-8 明文，直接在响应体内返回，不走 presigned URL）；`DELETE /api/v1/catalog/tracks/{id}/lyrics`（admin）；OpenAPI contract 新增 `LyricsResponse`、`UploadLyricsRequest` schema 及三条路径，版本升至 4.0.0。
+- Flutter 客户端：`lyricsProvider(trackId)` Family AsyncNotifier，请求 GET 端点，解析 LRC/SRT 为 `List<LyricLine>{timestamp, text}` 模型；`FullPlayerScreen` 新增歌词层（可上下滚动），当前行高亮（随 `playerProvider.position` 实时定位）；歌词区与封面区可手势切换（PageView 左右滑）；无歌词时展示占位文字。
+- The phase output is version-tracked and covered by Go unit tests (lyrics handler 成功/无歌词/格式错误), OpenAPI contract tests, and flutter analyze (0 issues).
+
+### v4.1.0 - TBD
+
+- **feat: 音频增强（EQ / 响度归一化 / gapless / 速度控制）** — Flutter 客户端音频引擎扩展：`just_audio` equalizer 插件（`just_audio_equalizer` 或平台原生 DSP）实现 10 段参数均衡器，预设（Flat / Bass Boost / Vocal / Electronic）+ 自定义；ReplayGain 响度归一化（服务端在 Track 元数据中存储 `replayGainDb float64` 字段，Flutter 在 AudioHandler 中读取并通过 `just_audio` volume 缩放应用）；gapless 无缝播放（ConcatenatingAudioSource 队列替换当前逐曲创建方式）；播放速度控制（0.5× / 0.75× / 1× / 1.25× / 1.5× / 2×，`AudioPlayer.setSpeed()`）。
+- 服务端：`tracks` 表新增 `replay_gain_db REAL` 列（migration）；`CatalogTrack` OpenAPI schema 新增 `replayGainDb` 字段（nullable float）；`PATCH /api/v1/catalog/tracks/{id}` 支持更新该字段；OpenAPI contract 版本升至 4.1.0。
+- Flutter 客户端 UI：Settings 新增「音频」section —— EQ 开关 + 频段滑块 + 预设选择器；速度控制按钮（FullPlayerScreen 控制栏追加）；ReplayGain 开关；所有音频设置持久化到 `SharedPreferences`，冷启动恢复。
+- The phase output is version-tracked and covered by Go unit tests (replayGain field migration + PATCH handler), OpenAPI contract tests, and flutter analyze (0 issues).
