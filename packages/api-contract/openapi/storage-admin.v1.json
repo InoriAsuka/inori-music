@@ -155,6 +155,10 @@
           "updatedAt": {
             "format": "date-time",
             "type": "string"
+          },
+          "artworkMediaObjectId": {
+            "type": "string",
+            "description": "ID of the media object used as cover artwork (optional)"
           }
         },
         "required": [
@@ -2276,7 +2280,7 @@
             },
             "minItems": 1,
             "maxItems": 100,
-            "description": "List of play event IDs to delete (1\u2013100 entries)."
+            "description": "List of play event IDs to delete (1–100 entries)."
           }
         }
       },
@@ -2502,6 +2506,112 @@
           }
         },
         "description": "Paginated list of favorited tracks. When catalog service is available, returns full CatalogTrack objects; otherwise falls back to trackIds only."
+      },
+      "AlbumArtworkResponse": {
+        "type": "object",
+        "required": [
+          "url",
+          "expiresIn"
+        ],
+        "properties": {
+          "url": {
+            "type": "string",
+            "description": "Presigned URL for the artwork"
+          },
+          "expiresIn": {
+            "type": "integer",
+            "description": "Seconds until the URL expires"
+          }
+        }
+      },
+      "UserPlaylist": {
+        "type": "object",
+        "required": [
+          "id",
+          "userId",
+          "name",
+          "trackIds",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "userId": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "trackIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CreateUserPlaylistRequest": {
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
+        }
+      },
+      "UpdateUserPlaylistRequest": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          }
+        }
+      },
+      "AddUserPlaylistTrackRequest": {
+        "type": "object",
+        "required": [
+          "trackId"
+        ],
+        "properties": {
+          "trackId": {
+            "type": "string"
+          }
+        }
+      },
+      "SetUserPlaylistTracksRequest": {
+        "type": "object",
+        "required": [
+          "trackIds"
+        ],
+        "properties": {
+          "trackIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -2513,7 +2623,7 @@
     },
     "responses": {
       "Unauthorized": {
-        "description": "Unauthorized \u2014 missing or invalid credentials",
+        "description": "Unauthorized — missing or invalid credentials",
         "content": {
           "application/json": {
             "schema": {
@@ -2523,7 +2633,7 @@
         }
       },
       "Forbidden": {
-        "description": "Forbidden \u2014 insufficient permissions",
+        "description": "Forbidden — insufficient permissions",
         "content": {
           "application/json": {
             "schema": {
@@ -2543,7 +2653,7 @@
         }
       },
       "BadRequest": {
-        "description": "Bad request \u2014 invalid parameters",
+        "description": "Bad request — invalid parameters",
         "content": {
           "application/json": {
             "schema": {
@@ -2587,7 +2697,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "1.41.0"
+    "version": "3.5.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -2610,7 +2720,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of items to return (1\u2013500, default 50)."
+            "description": "Maximum number of items to return (1–500, default 50)."
           },
           {
             "in": "query",
@@ -2957,7 +3067,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of items to return (1\u2013500, default 50)."
+            "description": "Maximum number of items to return (1–500, default 50)."
           },
           {
             "in": "query",
@@ -3292,7 +3402,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of items to return (1\u2013500, default 50)."
+            "description": "Maximum number of items to return (1–500, default 50)."
           },
           {
             "in": "query",
@@ -5148,7 +5258,7 @@
             "description": "Error"
           },
           "409": {
-            "description": "Error \u2014 backend is default (storage_backend_is_default) or has media objects (storage_backend_in_use)",
+            "description": "Error — backend is default (storage_backend_is_default) or has media objects (storage_backend_in_use)",
             "content": {
               "application/json": {
                 "schema": {
@@ -6150,7 +6260,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of items to return (1\u2013500, default 50)."
+            "description": "Maximum number of items to return (1–500, default 50)."
           },
           {
             "in": "query",
@@ -6277,7 +6387,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of items to return (1\u2013500, default 50)."
+            "description": "Maximum number of items to return (1–500, default 50)."
           },
           {
             "in": "query",
@@ -6474,7 +6584,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of items to return (1\u2013500, default 50)."
+            "description": "Maximum number of items to return (1–500, default 50)."
           },
           {
             "in": "query",
@@ -7120,7 +7230,7 @@
             }
           },
           "207": {
-            "description": "Partial success \u2014 some items failed",
+            "description": "Partial success — some items failed",
             "content": {
               "application/json": {
                 "schema": {
@@ -7208,7 +7318,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of items to return (1\u2013500, default 50)."
+            "description": "Maximum number of items to return (1–500, default 50)."
           },
           {
             "in": "query",
@@ -7507,7 +7617,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of tracks to return (1\u2013500, default 50)."
+            "description": "Maximum number of tracks to return (1–500, default 50)."
           },
           {
             "in": "query",
@@ -7612,7 +7722,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of items to return (1\u2013500, default 50)."
+            "description": "Maximum number of items to return (1–500, default 50)."
           },
           {
             "in": "query",
@@ -7820,7 +7930,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of tracks to return (1\u2013500, default 50)."
+            "description": "Maximum number of tracks to return (1–500, default 50)."
           },
           {
             "in": "query",
@@ -8127,7 +8237,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Max items to return (1\u2013500, default 50)."
+            "description": "Max items to return (1–500, default 50)."
           },
           {
             "in": "query",
@@ -8264,7 +8374,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Max items to return (1\u2013500, default 50)."
+            "description": "Max items to return (1–500, default 50)."
           },
           {
             "in": "query",
@@ -8390,7 +8500,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Max items to return (1\u2013500, default 50)."
+            "description": "Max items to return (1–500, default 50)."
           },
           {
             "in": "query",
@@ -8516,7 +8626,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Max items to return (1\u2013500, default 50)."
+            "description": "Max items to return (1–500, default 50)."
           },
           {
             "in": "query",
@@ -8653,7 +8763,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Max items to return (1\u2013500, default 50)."
+            "description": "Max items to return (1–500, default 50)."
           },
           {
             "in": "query",
@@ -8779,7 +8889,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Max items to return (1\u2013500, default 50)."
+            "description": "Max items to return (1–500, default 50)."
           },
           {
             "in": "query",
@@ -9759,7 +9869,7 @@
             "name": "limit",
             "in": "query",
             "required": false,
-            "description": "Maximum number of events to return (1\u2013500, default 50).",
+            "description": "Maximum number of events to return (1–500, default 50).",
             "schema": {
               "type": "integer",
               "minimum": 1,
@@ -10051,7 +10161,7 @@
             "name": "limit",
             "in": "query",
             "required": false,
-            "description": "Maximum number of events to return (1\u2013500, default 50).",
+            "description": "Maximum number of events to return (1–500, default 50).",
             "schema": {
               "type": "integer",
               "minimum": 1,
@@ -10536,7 +10646,7 @@
             "name": "limit",
             "in": "query",
             "required": false,
-            "description": "Maximum number of tracks to return (1\u2013100, default 10).",
+            "description": "Maximum number of tracks to return (1–100, default 10).",
             "schema": {
               "type": "integer",
               "minimum": 1,
@@ -12307,7 +12417,7 @@
             "name": "limit",
             "in": "query",
             "required": false,
-            "description": "Maximum number of top-tracks entries to return (1\u2013100; default 10).",
+            "description": "Maximum number of top-tracks entries to return (1–100; default 10).",
             "schema": {
               "type": "integer",
               "minimum": 1,
@@ -12388,7 +12498,7 @@
             "name": "limit",
             "in": "query",
             "required": false,
-            "description": "Maximum number of top-listeners entries to return (1\u2013100; default 10).",
+            "description": "Maximum number of top-listeners entries to return (1–100; default 10).",
             "schema": {
               "type": "integer",
               "minimum": 1,
@@ -12458,7 +12568,7 @@
             "name": "limit",
             "in": "query",
             "required": false,
-            "description": "Maximum number of top-tracks entries to return (1\u2013100; default 10).",
+            "description": "Maximum number of top-tracks entries to return (1–100; default 10).",
             "schema": {
               "type": "integer",
               "minimum": 1,
@@ -12684,6 +12794,673 @@
           "catalog",
           "viewer"
         ]
+      }
+    },
+    "/api/v1/catalog/albums/{id}/artwork": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/CatalogId"
+        }
+      ],
+      "get": {
+        "summary": "Get album artwork URL",
+        "operationId": "getAlbumArtwork",
+        "tags": [
+          "Catalog"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Presigned artwork URL",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AlbumArtworkResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No artwork or album not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me/playlists": {
+      "post": {
+        "summary": "Create user playlist",
+        "operationId": "createUserPlaylist",
+        "tags": [
+          "UserPlaylists"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUserPlaylistRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPlaylist"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "List user playlists",
+        "operationId": "listUserPlaylists",
+        "tags": [
+          "UserPlaylists"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "playlists": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/UserPlaylist"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me/playlists/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/CatalogId"
+        }
+      ],
+      "get": {
+        "summary": "Get user playlist",
+        "operationId": "getUserPlaylist",
+        "tags": [
+          "UserPlaylists"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPlaylist"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "summary": "Update user playlist metadata",
+        "operationId": "updateUserPlaylist",
+        "tags": [
+          "UserPlaylists"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateUserPlaylistRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPlaylist"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete user playlist",
+        "operationId": "deleteUserPlaylist",
+        "tags": [
+          "UserPlaylists"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "401": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me/playlists/{id}/tracks": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/CatalogId"
+        }
+      ],
+      "get": {
+        "summary": "Get user playlist tracks",
+        "operationId": "getUserPlaylistTracks",
+        "tags": [
+          "UserPlaylists"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "tracks": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CatalogTrack"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Add track to user playlist",
+        "operationId": "addUserPlaylistTrack",
+        "tags": [
+          "UserPlaylists"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddUserPlaylistTrackRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPlaylist"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "summary": "Replace all tracks in user playlist",
+        "operationId": "setUserPlaylistTracks",
+        "tags": [
+          "UserPlaylists"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetUserPlaylistTracksRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPlaylist"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me/playlists/{id}/tracks/{trackId}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/CatalogId"
+        },
+        {
+          "name": "trackId",
+          "in": "path",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "delete": {
+        "summary": "Remove track from user playlist",
+        "operationId": "removeUserPlaylistTrack",
+        "tags": [
+          "UserPlaylists"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPlaylist"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
       }
     }
   },
