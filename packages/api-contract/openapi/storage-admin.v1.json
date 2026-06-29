@@ -2295,7 +2295,7 @@
             },
             "minItems": 1,
             "maxItems": 100,
-            "description": "List of play event IDs to delete (1\u2013100 entries)."
+            "description": "List of play event IDs to delete (1–100 entries)."
           }
         }
       },
@@ -2662,7 +2662,7 @@
     },
     "responses": {
       "Unauthorized": {
-        "description": "Unauthorized \u2014 missing or invalid credentials",
+        "description": "Unauthorized — missing or invalid credentials",
         "content": {
           "application/json": {
             "schema": {
@@ -2672,7 +2672,7 @@
         }
       },
       "Forbidden": {
-        "description": "Forbidden \u2014 insufficient permissions",
+        "description": "Forbidden — insufficient permissions",
         "content": {
           "application/json": {
             "schema": {
@@ -2692,7 +2692,7 @@
         }
       },
       "BadRequest": {
-        "description": "Bad request \u2014 invalid parameters",
+        "description": "Bad request — invalid parameters",
         "content": {
           "application/json": {
             "schema": {
@@ -2736,7 +2736,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "4.1.0"
+    "version": "4.3.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -2759,7 +2759,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of items to return (1\u2013500, default 50)."
+            "description": "Maximum number of items to return (1–500, default 50)."
           },
           {
             "in": "query",
@@ -3106,7 +3106,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of items to return (1\u2013500, default 50)."
+            "description": "Maximum number of items to return (1–500, default 50)."
           },
           {
             "in": "query",
@@ -3441,7 +3441,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of items to return (1\u2013500, default 50)."
+            "description": "Maximum number of items to return (1–500, default 50)."
           },
           {
             "in": "query",
@@ -5297,7 +5297,7 @@
             "description": "Error"
           },
           "409": {
-            "description": "Error \u2014 backend is default (storage_backend_is_default) or has media objects (storage_backend_in_use)",
+            "description": "Error — backend is default (storage_backend_is_default) or has media objects (storage_backend_in_use)",
             "content": {
               "application/json": {
                 "schema": {
@@ -6299,7 +6299,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of items to return (1\u2013500, default 50)."
+            "description": "Maximum number of items to return (1–500, default 50)."
           },
           {
             "in": "query",
@@ -6426,7 +6426,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of items to return (1\u2013500, default 50)."
+            "description": "Maximum number of items to return (1–500, default 50)."
           },
           {
             "in": "query",
@@ -6623,7 +6623,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of items to return (1\u2013500, default 50)."
+            "description": "Maximum number of items to return (1–500, default 50)."
           },
           {
             "in": "query",
@@ -7269,7 +7269,7 @@
             }
           },
           "207": {
-            "description": "Partial success \u2014 some items failed",
+            "description": "Partial success — some items failed",
             "content": {
               "application/json": {
                 "schema": {
@@ -7357,7 +7357,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of items to return (1\u2013500, default 50)."
+            "description": "Maximum number of items to return (1–500, default 50)."
           },
           {
             "in": "query",
@@ -7656,7 +7656,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of tracks to return (1\u2013500, default 50)."
+            "description": "Maximum number of tracks to return (1–500, default 50)."
           },
           {
             "in": "query",
@@ -7761,7 +7761,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of items to return (1\u2013500, default 50)."
+            "description": "Maximum number of items to return (1–500, default 50)."
           },
           {
             "in": "query",
@@ -7969,7 +7969,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of tracks to return (1\u2013500, default 50)."
+            "description": "Maximum number of tracks to return (1–500, default 50)."
           },
           {
             "in": "query",
@@ -8276,7 +8276,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Max items to return (1\u2013500, default 50)."
+            "description": "Max items to return (1–500, default 50)."
           },
           {
             "in": "query",
@@ -8413,7 +8413,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Max items to return (1\u2013500, default 50)."
+            "description": "Max items to return (1–500, default 50)."
           },
           {
             "in": "query",
@@ -8539,7 +8539,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Max items to return (1\u2013500, default 50)."
+            "description": "Max items to return (1–500, default 50)."
           },
           {
             "in": "query",
@@ -8665,7 +8665,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Max items to return (1\u2013500, default 50)."
+            "description": "Max items to return (1–500, default 50)."
           },
           {
             "in": "query",
@@ -8802,7 +8802,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Max items to return (1\u2013500, default 50)."
+            "description": "Max items to return (1–500, default 50)."
           },
           {
             "in": "query",
@@ -8928,7 +8928,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Max items to return (1\u2013500, default 50)."
+            "description": "Max items to return (1–500, default 50)."
           },
           {
             "in": "query",
@@ -9908,7 +9908,7 @@
             "name": "limit",
             "in": "query",
             "required": false,
-            "description": "Maximum number of events to return (1\u2013500, default 50).",
+            "description": "Maximum number of events to return (1–500, default 50).",
             "schema": {
               "type": "integer",
               "minimum": 1,
@@ -10200,7 +10200,7 @@
             "name": "limit",
             "in": "query",
             "required": false,
-            "description": "Maximum number of events to return (1\u2013500, default 50).",
+            "description": "Maximum number of events to return (1–500, default 50).",
             "schema": {
               "type": "integer",
               "minimum": 1,
@@ -10685,7 +10685,7 @@
             "name": "limit",
             "in": "query",
             "required": false,
-            "description": "Maximum number of tracks to return (1\u2013100, default 10).",
+            "description": "Maximum number of tracks to return (1–100, default 10).",
             "schema": {
               "type": "integer",
               "minimum": 1,
@@ -12456,7 +12456,7 @@
             "name": "limit",
             "in": "query",
             "required": false,
-            "description": "Maximum number of top-tracks entries to return (1\u2013100; default 10).",
+            "description": "Maximum number of top-tracks entries to return (1–100; default 10).",
             "schema": {
               "type": "integer",
               "minimum": 1,
@@ -12537,7 +12537,7 @@
             "name": "limit",
             "in": "query",
             "required": false,
-            "description": "Maximum number of top-listeners entries to return (1\u2013100; default 10).",
+            "description": "Maximum number of top-listeners entries to return (1–100; default 10).",
             "schema": {
               "type": "integer",
               "minimum": 1,
@@ -12607,7 +12607,7 @@
             "name": "limit",
             "in": "query",
             "required": false,
-            "description": "Maximum number of top-tracks entries to return (1\u2013100; default 10).",
+            "description": "Maximum number of top-tracks entries to return (1–100; default 10).",
             "schema": {
               "type": "integer",
               "minimum": 1,

@@ -21,6 +21,7 @@ import (
 	"inori-music/services/api/internal/catalog"
 	"inori-music/services/api/internal/favorites"
 	"inori-music/services/api/internal/history"
+	"inori-music/services/api/internal/search"
 	"inori-music/services/api/internal/storage"
 	"inori-music/services/api/internal/userplaylist"
 )
@@ -128,6 +129,14 @@ func WithUserPlaylistService(svc *userplaylist.Service) HandlerOption {
 	}
 }
 
+// WithSearchService attaches an optional search backend; if nil the handler falls
+// back to catalogService.SearchCatalog for every search request.
+func WithSearchService(svc search.Service) HandlerOption {
+	return func(handler *Handler) {
+		handler.searchSvc = svc
+	}
+}
+
 // withCatalogMediaReader wires the media object service into the catalog service
 // as a MediaObjectReader after both have been set via options. Called from Routes().
 func (handler *Handler) withCatalogMediaReader() {
@@ -181,6 +190,7 @@ type Handler struct {
 	historyService      *history.Service
 	favoritesService    *favorites.Service
 	userPlaylistService *userplaylist.Service
+	searchSvc           search.Service
 	adminToken          string
 	corsOrigins      []string
 	info             ServiceInfo
@@ -1277,10 +1287,37 @@ func (handler *Handler) searchCatalog(w http.ResponseWriter, r *http.Request) {
 		writeAPIError(w, http.StatusBadRequest, "missing_query", "query parameter 'q' is required")
 		return
 	}
-	result, err := handler.catalogService.SearchCatalog(r.Context(), q)
-	if err != nil {
-		writeError(w, err)
-		return
+	var result catalog.CatalogSearchResult
+	if handler.searchSvc != nil {
+		limit := 50
+		sr, err := handler.searchSvc.Search(r.Context(), q, limit)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		result = catalog.CatalogSearchResult{Query: q}
+		for _, id := range sr.Artists {
+			if a, err := handler.catalogService.GetArtist(r.Context(), id); err == nil {
+				result.Items = append(result.Items, catalog.SearchResultItem{Kind: catalog.SearchResultArtist, Artist: &a})
+			}
+		}
+		for _, id := range sr.Albums {
+			if a, err := handler.catalogService.GetAlbum(r.Context(), id); err == nil {
+				result.Items = append(result.Items, catalog.SearchResultItem{Kind: catalog.SearchResultAlbum, Album: &a})
+			}
+		}
+		for _, id := range sr.Tracks {
+			if t, err := handler.catalogService.GetTrack(r.Context(), id); err == nil {
+				result.Items = append(result.Items, catalog.SearchResultItem{Kind: catalog.SearchResultTrack, Track: &t})
+			}
+		}
+	} else {
+		var err error
+		result, err = handler.catalogService.SearchCatalog(r.Context(), q)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
 	}
 	// Optional ?types= filter: comma-separated subset of "artist", "album", "track".
 	// When absent or empty the full result is returned unchanged.

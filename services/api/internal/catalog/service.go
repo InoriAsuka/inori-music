@@ -6,19 +6,35 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 )
+
+// IndexService is the subset of search.Service used by catalog write hooks.
+// Defined here to avoid an import cycle between the catalog and search packages.
+type IndexService interface {
+	IndexTrack(ctx context.Context, trackID, title, artistName, genre string) error
+	IndexAlbum(ctx context.Context, albumID, title, artistName string) error
+	IndexArtist(ctx context.Context, artistID, name string) error
+}
 
 // Service coordinates music catalog metadata validation and persistence.
 type Service struct {
 	repo        Repository
 	mediaReader MediaObjectReader // optional; required only for ImportTrack
+	searchSvc   IndexService     // optional, nil = no index push
 	now         func() time.Time
 }
 
 func NewService(repo Repository) *Service {
 	return &Service{repo: repo, now: time.Now}
+}
+
+// WithSearchService attaches a search backend so write operations push index updates.
+func (s *Service) WithSearchService(svc IndexService) *Service {
+	s.searchSvc = svc
+	return s
 }
 
 // WithClock replaces the time source used by the service. Intended for tests
@@ -49,6 +65,13 @@ func (s *Service) CreateArtist(ctx context.Context, name, sortName string) (Arti
 	artist := Artist{ID: id, Name: name, SortName: sortName, CreatedAt: now, UpdatedAt: now}
 	if err := s.repo.SaveArtist(ctx, artist); err != nil {
 		return Artist{}, err
+	}
+	if s.searchSvc != nil {
+		go func() {
+			if err := s.searchSvc.IndexArtist(context.Background(), artist.ID, artist.Name); err != nil {
+				log.Printf("search: index artist %s: %v", artist.ID, err)
+			}
+		}()
 	}
 	return artist, nil
 }
@@ -91,6 +114,13 @@ func (s *Service) UpdateArtist(ctx context.Context, id string, req UpdateArtistR
 	if err := s.repo.SaveArtist(ctx, artist); err != nil {
 		return Artist{}, err
 	}
+	if s.searchSvc != nil {
+		go func() {
+			if err := s.searchSvc.IndexArtist(context.Background(), artist.ID, artist.Name); err != nil {
+				log.Printf("search: index artist %s: %v", artist.ID, err)
+			}
+		}()
+	}
 	return artist, nil
 }
 
@@ -118,6 +148,13 @@ func (s *Service) CreateAlbum(ctx context.Context, title, sortTitle, artistID st
 	album := Album{ID: id, Title: title, SortTitle: sortTitle, ArtistID: artistID, ReleaseYear: releaseYear, CreatedAt: now, UpdatedAt: now}
 	if err := s.repo.SaveAlbum(ctx, album); err != nil {
 		return Album{}, err
+	}
+	if s.searchSvc != nil {
+		go func() {
+			if err := s.searchSvc.IndexAlbum(context.Background(), album.ID, album.Title, album.ArtistID); err != nil {
+				log.Printf("search: index album %s: %v", album.ID, err)
+			}
+		}()
 	}
 	return album, nil
 }
@@ -188,6 +225,13 @@ func (s *Service) UpdateAlbum(ctx context.Context, id string, req UpdateAlbumReq
 	if err := s.repo.SaveAlbum(ctx, album); err != nil {
 		return Album{}, err
 	}
+	if s.searchSvc != nil {
+		go func() {
+			if err := s.searchSvc.IndexAlbum(context.Background(), album.ID, album.Title, album.ArtistID); err != nil {
+				log.Printf("search: index album %s: %v", album.ID, err)
+			}
+		}()
+	}
 	return album, nil
 }
 
@@ -229,6 +273,13 @@ func (s *Service) CreateTrack(ctx context.Context, title, sortTitle, artistID, a
 	track := Track{ID: id, Title: title, SortTitle: sortTitle, ArtistID: artistID, AlbumID: albumID, MediaObjectID: mediaObjectID, TrackNumber: trackNumber, DiscNumber: discNumber, DurationMS: durationMS, Genre: strings.TrimSpace(genre), CreatedAt: now, UpdatedAt: now}
 	if err := s.repo.SaveTrack(ctx, track); err != nil {
 		return Track{}, err
+	}
+	if s.searchSvc != nil {
+		go func() {
+			if err := s.searchSvc.IndexTrack(context.Background(), track.ID, track.Title, track.ArtistID, track.Genre); err != nil {
+				log.Printf("search: index track %s: %v", track.ID, err)
+			}
+		}()
 	}
 	return track, nil
 }
@@ -339,6 +390,13 @@ func (s *Service) UpdateTrack(ctx context.Context, id string, req UpdateTrackReq
 	if err := s.repo.SaveTrack(ctx, track); err != nil {
 		return Track{}, err
 	}
+	if s.searchSvc != nil {
+		go func() {
+			if err := s.searchSvc.IndexTrack(context.Background(), track.ID, track.Title, track.ArtistID, track.Genre); err != nil {
+				log.Printf("search: index track %s: %v", track.ID, err)
+			}
+		}()
+	}
 	return track, nil
 }
 
@@ -412,6 +470,13 @@ func (s *Service) ImportTrack(ctx context.Context, req ImportTrackRequest) (Trac
 	}
 	if err := s.repo.SaveTrack(ctx, track); err != nil {
 		return Track{}, err
+	}
+	if s.searchSvc != nil {
+		go func() {
+			if err := s.searchSvc.IndexTrack(context.Background(), track.ID, track.Title, track.ArtistID, track.Genre); err != nil {
+				log.Printf("search: index track %s: %v", track.ID, err)
+			}
+		}()
 	}
 	return track, nil
 }
