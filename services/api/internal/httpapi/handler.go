@@ -2247,14 +2247,15 @@ func (handler *Handler) relinkTrack(w http.ResponseWriter, r *http.Request) {
 
 // patchTrackRequest carries the fields that may be changed via PATCH.
 type patchTrackRequest struct {
-	Title       *string `json:"title"`
-	SortTitle   *string `json:"sortTitle"`
-	ArtistID    *string `json:"artistId"`
-	AlbumID     *string `json:"albumId"`
-	TrackNumber *int    `json:"trackNumber"`
-	DiscNumber  *int    `json:"discNumber"`
-	DurationMS  *int    `json:"durationMs"`
-	Genre       *string `json:"genre"`
+	Title        *string  `json:"title"`
+	SortTitle    *string  `json:"sortTitle"`
+	ArtistID     *string  `json:"artistId"`
+	AlbumID      *string  `json:"albumId"`
+	TrackNumber  *int     `json:"trackNumber"`
+	DiscNumber   *int     `json:"discNumber"`
+	DurationMS   *int     `json:"durationMs"`
+	Genre        *string  `json:"genre"`
+	ReplayGainDb *float64 `json:"replayGainDb"`
 }
 
 func (handler *Handler) patchTrack(w http.ResponseWriter, r *http.Request) {
@@ -2267,14 +2268,15 @@ func (handler *Handler) patchTrack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	track, err := handler.catalogService.UpdateTrack(r.Context(), r.PathValue("id"), catalog.UpdateTrackRequest{
-		Title:       req.Title,
-		SortTitle:   req.SortTitle,
-		ArtistID:    req.ArtistID,
-		AlbumID:     req.AlbumID,
-		TrackNumber: req.TrackNumber,
-		DiscNumber:  req.DiscNumber,
-		DurationMS:  req.DurationMS,
-		Genre:       req.Genre,
+		Title:        req.Title,
+		SortTitle:    req.SortTitle,
+		ArtistID:     req.ArtistID,
+		AlbumID:      req.AlbumID,
+		TrackNumber:  req.TrackNumber,
+		DiscNumber:   req.DiscNumber,
+		DurationMS:   req.DurationMS,
+		Genre:        req.Genre,
+		ReplayGainDb: req.ReplayGainDb,
 	})
 	if err != nil {
 		writeError(w, err)

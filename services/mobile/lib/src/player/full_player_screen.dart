@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:inori_music/src/audio/speed_notifier.dart';
 import 'package:inori_music/src/catalog/artwork_provider.dart';
 import 'package:inori_music/src/favorites/track_favorite_notifier.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
@@ -9,11 +10,16 @@ import 'package:inori_music/src/player/player_state.dart' as ps;
 import 'package:inori_music/src/shared/theme/neon_shrine.dart';
 
 /// Full-screen player overlay with progress bar, controls, and queue sheet.
-class FullPlayerScreen extends ConsumerWidget {
+class FullPlayerScreen extends ConsumerStatefulWidget {
   const FullPlayerScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<FullPlayerScreen> createState() => _FullPlayerScreenState();
+}
+
+class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(playerProvider);
     final isPlaying = state.isPlaying;
     final isBuffering = state.isBuffering;
@@ -207,6 +213,16 @@ class FullPlayerScreen extends ConsumerWidget {
                     icon: const Icon(Icons.skip_next, size: 36, color: NeonShrineColors.onSurface),
                     onPressed: () => ref.read(playerProvider.notifier).next(),
                   ),
+                  // Speed control button
+                  Consumer(
+                    builder: (context, ref, _) {
+                      final speed = ref.watch(speedNotifierProvider);
+                      return TextButton(
+                        onPressed: () => _showSpeedSheet(context, ref),
+                        child: Text('${speed}×', style: const TextStyle(fontSize: 14)),
+                      );
+                    },
+                  ),
                   // Favorite button — wrapped in Consumer so icon and onPressed
                   // always use the same live trackId from the reactive ref.
                   Consumer(builder: (context2, ref2, child2) {
@@ -234,6 +250,34 @@ class FullPlayerScreen extends ConsumerWidget {
             ),
 
             const SizedBox(height: 32),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showSpeedSheet(BuildContext context, WidgetRef ref) {
+    const speeds = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
+    final current = ref.read(speedNotifierProvider);
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text('播放速度', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            ),
+            for (final s in speeds)
+              ListTile(
+                title: Text('${s}×'),
+                trailing: s == current ? const Icon(Icons.check) : null,
+                onTap: () {
+                  ref.read(speedNotifierProvider.notifier).setSpeed(s);
+                  Navigator.pop(context);
+                },
+              ),
           ],
         ),
       ),

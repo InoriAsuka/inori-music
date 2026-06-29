@@ -59,6 +59,7 @@ type Track struct {
 	DiscNumber    int       `json:"discNumber,omitempty"`
 	DurationMS    int       `json:"durationMs,omitempty"`
 	Genre         string    `json:"genre,omitempty"`
+	ReplayGainDb  *float64  `json:"replayGainDb,omitempty"`
 	CreatedAt     time.Time `json:"createdAt"`
 	UpdatedAt     time.Time `json:"updatedAt"`
 }
@@ -211,14 +212,15 @@ type UpdateAlbumRequest struct {
 // UpdateTrackRequest carries the fields that may be changed via a PATCH request.
 // Nil pointer fields are left unchanged.
 type UpdateTrackRequest struct {
-	Title       *string
-	SortTitle   *string
-	ArtistID    *string
-	AlbumID     *string
-	TrackNumber *int
-	DiscNumber  *int
-	DurationMS  *int
-	Genre       *string
+	Title        *string
+	SortTitle    *string
+	ArtistID     *string
+	AlbumID      *string
+	TrackNumber  *int
+	DiscNumber   *int
+	DurationMS   *int
+	Genre        *string
+	ReplayGainDb *float64
 }
 
 // BatchImportResultItem holds the outcome of a single import within a batch request.
