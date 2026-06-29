@@ -1558,3 +1558,20 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - 服务端：`tracks` 表新增 `replay_gain_db REAL` 列（migration）；`CatalogTrack` OpenAPI schema 新增 `replayGainDb` 字段（nullable float）；`PATCH /api/v1/catalog/tracks/{id}` 支持更新该字段；OpenAPI contract 版本升至 4.1.0。
 - Flutter 客户端 UI：Settings 新增「音频」section —— EQ 开关 + 频段滑块 + 预设选择器；速度控制按钮（FullPlayerScreen 控制栏追加）；ReplayGain 开关；所有音频设置持久化到 `SharedPreferences`，冷启动恢复。
 - The phase output is version-tracked and covered by Go unit tests (replayGain field migration + PATCH handler), OpenAPI contract tests, and flutter analyze (0 issues).
+
+### v4.1.1 - TBD
+
+- **feat: EQ 均衡器 + Gapless 无缝播放（v4.1.0 遗留项收尾）** — Flutter 客户端：引入 `just_audio_equalizer` 插件，实现 10 段参数均衡器（31Hz–16kHz，±12dB），预设 Flat / Bass Boost / Vocal / Electronic + 自定义；`EqSettings` 模型 + `EqNotifier`（Riverpod Notifier，SharedPreferences 持久化）；Settings 「音频」section EQ 区（开关 + 10 条垂直 Slider + 预设 SegmentedButton）；播放队列重构为 `ConcatenatingAudioSource`，实现 gapless 无缝衔接；presigned URL 提前 120s 刷新（`currentIndexStream` 监听，`ConcatenatingAudioSource.removeAt + insert`）。
+- 服务端：补充 Go 单元测试——`uploadLyrics` handler（201 成功 / 400 格式错误 / 404 track 不存在）；`getLyrics` handler（200 成功 / 404 无歌词 / 500 存储错误）；`patchTrack` handler（replayGainDb 更新成功 / null 清除）。
+- The phase output is version-tracked and covered by Go unit tests (lyrics + replayGain handlers), flutter analyze (0 issues), and flutter test (new EQ state-machine unit cases).
+
+### v4.2.0 - TBD
+
+- **feat: 睡眠定时器 + 交叉淡入淡出（Crossfade）** — Flutter 客户端：睡眠定时器（`SleepTimerNotifier`，Riverpod Notifier）支持固定时长（15 / 30 / 45 / 60 分钟）和「当前曲目结束后停止」两种模式；倒计时实时展示（MiniPlayerBar 角标 + FullPlayerScreen 控制栏图标）；定时器到期后调 `PlayerNotifier.pause()`，自动清除状态；Settings 「音频」section 追加睡眠定时器入口。交叉淡入淡出（crossfade）：曲目切换时 N 秒（0–8s，用户可配置）渐出 + 渐入，基于 `ConcatenatingAudioSource` 的 clip model 实现（依赖 v4.1.1 gapless 基础）；Settings 「音频」section 追加 crossfade 时长 Slider。
+- The phase output is version-tracked and covered by flutter analyze (0 issues) and SleepTimerNotifier unit tests（固定时长到期 / 曲目结束模式 / 取消定时器 / 并发重置）.
+
+### v4.3.0 - TBD
+
+- **feat: 搜索增强（Meilisearch 替换 PostgreSQL 全文搜索）** — 服务端：Docker Compose 新增 `meilisearch` 服务（`getmeili/meilisearch:latest`，`MEILI_MASTER_KEY` 注入）；新增 `internal/search` package，`SearchService` 接口 + Meilisearch 实现（`github.com/meilisearch/meilisearch-go`）；索引同步：`catalog.Service` 写入 Artist / Album / Track 后异步推送到 Meilisearch index（goroutine，失败仅记 log，不影响主流程）；`GET /api/v1/catalog/search` 路由切换为 Meilisearch 后端，`typoTolerance` 开启（支持拼写容错和 CJK 分词）；Meilisearch 不可用时自动降级到 PostgreSQL 全文搜索，响应 schema 不变（`CatalogSearchResult`），兼容现有 Flutter 客户端。
+- Flutter 客户端：SearchScreen 新增 autocomplete 下拉（debounce 150ms → GET 请求 → 展示前 5 条 Tracks 建议）；搜索结果页新增 Filter Tab（All / Artists / Albums / Tracks）；空结果状态插图（onSurfaceVariant 占位图 + 提示文字）。
+- The phase output is version-tracked and covered by Go search service unit tests（模糊匹配 / 空查询 / Meilisearch 不可用降级到 PG 全文搜索）, docker-compose smoke test, OpenAPI contract tests, and flutter analyze (0 issues).
