@@ -1938,9 +1938,9 @@ func (handler *Handler) uploadTrackLyrics(w http.ResponseWriter, r *http.Request
 		return
 	}
 	objectKey := "lyrics/" + trackID + "." + format
-	// Generate a content hash for deduplication.
+	// Generate a content hash for deduplication (algorithm:value format).
 	h := sha256.Sum256(content)
-	contentHash := fmt.Sprintf("%x", h)
+	contentHash := "sha256:" + fmt.Sprintf("%x", h)
 	mo, err := handler.mediaObjects.RegisterMediaObject(r.Context(), storage.MediaObject{
 		ID:             contentHash[:16],
 		BackendID:      defaultBackend.ID,

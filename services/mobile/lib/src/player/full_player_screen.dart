@@ -2,6 +2,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:inori_music/src/audio/eq_notifier.dart';
 import 'package:inori_music/src/audio/speed_notifier.dart';
 import 'package:inori_music/src/catalog/artwork_provider.dart';
 import 'package:inori_music/src/favorites/track_favorite_notifier.dart';
@@ -69,6 +70,22 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                     icon: const Icon(Icons.queue_music, color: NeonShrineColors.onSurfaceVariant),
                     tooltip: 'Queue',
                     onPressed: () => _showQueueSheet(context, ref),
+                  ),
+                  // EQ icon button
+                  Consumer(
+                    builder: (ctx, ref2, _) {
+                      final eqEnabled = ref2.watch(eqNotifierProvider).enabled;
+                      return IconButton(
+                        icon: Icon(
+                          Icons.equalizer,
+                          color: eqEnabled
+                              ? NeonShrineColors.primaryVioletLight
+                              : NeonShrineColors.onSurfaceVariant,
+                        ),
+                        tooltip: 'Equalizer',
+                        onPressed: () => ref2.read(eqNotifierProvider.notifier).setEnabled(!eqEnabled),
+                      );
+                    },
                   ),
                 ],
               ),

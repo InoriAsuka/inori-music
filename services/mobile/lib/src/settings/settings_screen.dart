@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:inori_music/l10n/app_localizations.dart';
+import 'package:inori_music/src/audio/eq_notifier.dart';
 import 'package:inori_music/src/audio/replay_gain_notifier.dart';
 import 'package:inori_music/src/audio/speed_notifier.dart';
 import 'package:inori_music/src/auth/auth_notifier.dart';
@@ -113,6 +114,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               );
             },
           ),
+          // EQ section
+          const _EqSection(),
           const Divider(),
 
           // Sign out
@@ -448,6 +451,86 @@ class _OfflineLibrarySection extends ConsumerWidget {
           ],
         );
       },
+    );
+  }
+}
+
+/// EQ 10-band equalizer section for the Settings screen.
+class _EqSection extends ConsumerWidget {
+  const _EqSection();
+
+  static const _presetKeys = ['flat', 'bassBoost', 'vocal', 'electronic'];
+  static const _presetLabels = ['Flat', 'Bass', 'Vocal', 'Electronic'];
+  static const _bandLabels = ['31', '62', '125', '250', '500', '1K', '2K', '4K', '8K', '16K'];
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final eq = ref.watch(eqNotifierProvider);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Consumer(
+          builder: (context, ref, _) {
+            final enabled = ref.watch(eqNotifierProvider).enabled;
+            return SwitchListTile(
+              title: const Text('均衡器 (EQ)'),
+              subtitle: const Text('10 频段均衡器'),
+              value: enabled,
+              onChanged: (v) => ref.read(eqNotifierProvider.notifier).setEnabled(v),
+            );
+          },
+        ),
+        if (eq.enabled) ...[
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            child: SegmentedButton<String>(
+              segments: List.generate(
+                _presetKeys.length,
+                (i) => ButtonSegment<String>(
+                  value: _presetKeys[i],
+                  label: Text(_presetLabels[i], style: const TextStyle(fontSize: 12)),
+                ),
+              ),
+              selected: {eq.preset.isEmpty || !_presetKeys.contains(eq.preset) ? 'flat' : eq.preset},
+              onSelectionChanged: (s) =>
+                  ref.read(eqNotifierProvider.notifier).setPreset(s.first),
+              multiSelectionEnabled: false,
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 160,
+            child: Row(
+              children: List.generate(10, (i) {
+                return Expanded(
+                  child: Column(
+                    children: [
+                      Expanded(
+                        child: RotatedBox(
+                          quarterTurns: 3,
+                          child: Slider(
+                            value: eq.bands[i].clamp(-12.0, 12.0),
+                            min: -12.0,
+                            max: 12.0,
+                            divisions: 48,
+                            onChanged: (v) =>
+                                ref.read(eqNotifierProvider.notifier).setBand(i, v),
+                          ),
+                        ),
+                      ),
+                      Text(
+                        _bandLabels[i],
+                        style: const TextStyle(fontSize: 10, color: NeonShrineColors.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                );
+              }),
+            ),
+          ),
+          const SizedBox(height: 4),
+        ],
+      ],
     );
   }
 }

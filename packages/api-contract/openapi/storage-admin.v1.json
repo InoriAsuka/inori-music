@@ -2295,7 +2295,7 @@
             },
             "minItems": 1,
             "maxItems": 100,
-            "description": "List of play event IDs to delete (1–100 entries)."
+            "description": "List of play event IDs to delete (1\u2013100 entries)."
           }
         }
       },
@@ -2541,11 +2541,26 @@
       },
       "LyricsResponse": {
         "type": "object",
-        "required": ["format", "content"],
+        "required": [
+          "format",
+          "content"
+        ],
         "properties": {
-          "format": {"type": "string", "enum": ["lrc", "srt"], "description": "Lyrics file format"},
-          "content": {"type": "string", "description": "Raw lyrics file content (UTF-8)"},
-          "mediaObjectId": {"type": "string"}
+          "format": {
+            "type": "string",
+            "enum": [
+              "lrc",
+              "srt"
+            ],
+            "description": "Lyrics file format"
+          },
+          "content": {
+            "type": "string",
+            "description": "Raw lyrics file content (UTF-8)"
+          },
+          "mediaObjectId": {
+            "type": "string"
+          }
         }
       },
       "UserPlaylist": {
@@ -2647,7 +2662,7 @@
     },
     "responses": {
       "Unauthorized": {
-        "description": "Unauthorized — missing or invalid credentials",
+        "description": "Unauthorized \u2014 missing or invalid credentials",
         "content": {
           "application/json": {
             "schema": {
@@ -2657,7 +2672,7 @@
         }
       },
       "Forbidden": {
-        "description": "Forbidden — insufficient permissions",
+        "description": "Forbidden \u2014 insufficient permissions",
         "content": {
           "application/json": {
             "schema": {
@@ -2677,7 +2692,7 @@
         }
       },
       "BadRequest": {
-        "description": "Bad request — invalid parameters",
+        "description": "Bad request \u2014 invalid parameters",
         "content": {
           "application/json": {
             "schema": {
@@ -2744,7 +2759,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of items to return (1–500, default 50)."
+            "description": "Maximum number of items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -3091,7 +3106,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of items to return (1–500, default 50)."
+            "description": "Maximum number of items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -3426,7 +3441,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of items to return (1–500, default 50)."
+            "description": "Maximum number of items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -5282,7 +5297,7 @@
             "description": "Error"
           },
           "409": {
-            "description": "Error — backend is default (storage_backend_is_default) or has media objects (storage_backend_in_use)",
+            "description": "Error \u2014 backend is default (storage_backend_is_default) or has media objects (storage_backend_in_use)",
             "content": {
               "application/json": {
                 "schema": {
@@ -6284,7 +6299,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of items to return (1–500, default 50)."
+            "description": "Maximum number of items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -6411,7 +6426,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of items to return (1–500, default 50)."
+            "description": "Maximum number of items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -6608,7 +6623,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of items to return (1–500, default 50)."
+            "description": "Maximum number of items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -7254,7 +7269,7 @@
             }
           },
           "207": {
-            "description": "Partial success — some items failed",
+            "description": "Partial success \u2014 some items failed",
             "content": {
               "application/json": {
                 "schema": {
@@ -7342,7 +7357,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of items to return (1–500, default 50)."
+            "description": "Maximum number of items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -7641,7 +7656,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of tracks to return (1–500, default 50)."
+            "description": "Maximum number of tracks to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -7746,7 +7761,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of items to return (1–500, default 50)."
+            "description": "Maximum number of items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -7954,7 +7969,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of tracks to return (1–500, default 50)."
+            "description": "Maximum number of tracks to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -8261,7 +8276,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Max items to return (1–500, default 50)."
+            "description": "Max items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -8398,7 +8413,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Max items to return (1–500, default 50)."
+            "description": "Max items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -8524,7 +8539,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Max items to return (1–500, default 50)."
+            "description": "Max items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -8650,7 +8665,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Max items to return (1–500, default 50)."
+            "description": "Max items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -8787,7 +8802,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Max items to return (1–500, default 50)."
+            "description": "Max items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -8913,7 +8928,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Max items to return (1–500, default 50)."
+            "description": "Max items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -9893,7 +9908,7 @@
             "name": "limit",
             "in": "query",
             "required": false,
-            "description": "Maximum number of events to return (1–500, default 50).",
+            "description": "Maximum number of events to return (1\u2013500, default 50).",
             "schema": {
               "type": "integer",
               "minimum": 1,
@@ -10185,7 +10200,7 @@
             "name": "limit",
             "in": "query",
             "required": false,
-            "description": "Maximum number of events to return (1–500, default 50).",
+            "description": "Maximum number of events to return (1\u2013500, default 50).",
             "schema": {
               "type": "integer",
               "minimum": 1,
@@ -10670,7 +10685,7 @@
             "name": "limit",
             "in": "query",
             "required": false,
-            "description": "Maximum number of tracks to return (1–100, default 10).",
+            "description": "Maximum number of tracks to return (1\u2013100, default 10).",
             "schema": {
               "type": "integer",
               "minimum": 1,
@@ -12441,7 +12456,7 @@
             "name": "limit",
             "in": "query",
             "required": false,
-            "description": "Maximum number of top-tracks entries to return (1–100; default 10).",
+            "description": "Maximum number of top-tracks entries to return (1\u2013100; default 10).",
             "schema": {
               "type": "integer",
               "minimum": 1,
@@ -12522,7 +12537,7 @@
             "name": "limit",
             "in": "query",
             "required": false,
-            "description": "Maximum number of top-listeners entries to return (1–100; default 10).",
+            "description": "Maximum number of top-listeners entries to return (1\u2013100; default 10).",
             "schema": {
               "type": "integer",
               "minimum": 1,
@@ -12592,7 +12607,7 @@
             "name": "limit",
             "in": "query",
             "required": false,
-            "description": "Maximum number of top-tracks entries to return (1–100; default 10).",
+            "description": "Maximum number of top-tracks entries to return (1\u2013100; default 10).",
             "schema": {
               "type": "integer",
               "minimum": 1,
@@ -12883,37 +12898,114 @@
     },
     "/api/v1/catalog/tracks/{id}/lyrics": {
       "post": {
-        "tags": ["catalog"],
+        "tags": [
+          "catalog"
+        ],
         "operationId": "uploadTrackLyrics",
         "summary": "Upload lyrics for a track (admin)",
-        "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}],
         "requestBody": {
           "required": true,
-          "content": {"multipart/form-data": {"schema": {"type": "object", "properties": {"file": {"type": "string", "format": "binary"}}, "required": ["file"]}}}
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary"
+                  }
+                },
+                "required": [
+                  "file"
+                ]
+              }
+            }
+          }
         },
         "responses": {
-          "201": {"description": "Lyrics uploaded", "content": {"application/json": {"schema": {"type": "object", "properties": {"mediaObjectId": {"type": "string"}}, "required": ["mediaObjectId"]}}}},
-          "400": {"description": "Invalid format"},
-          "404": {"description": "Track not found"}
-        }
+          "201": {
+            "description": "Lyrics uploaded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mediaObjectId": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "mediaObjectId"
+                  ]
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid format"
+          },
+          "404": {
+            "description": "Track not found"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       },
       "get": {
-        "tags": ["catalog"],
+        "tags": [
+          "catalog"
+        ],
         "operationId": "getTrackLyrics",
         "summary": "Get lyrics for a track",
-        "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}],
         "responses": {
-          "200": {"description": "Lyrics content", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/LyricsResponse"}}}},
-          "404": {"description": "No lyrics"}
-        }
+          "200": {
+            "description": "Lyrics content",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LyricsResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No lyrics"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
       },
       "delete": {
-        "tags": ["catalog"],
+        "tags": [
+          "catalog"
+        ],
         "operationId": "deleteTrackLyrics",
         "summary": "Delete lyrics for a track (admin)",
-        "parameters": [{"name": "id", "in": "path", "required": true, "schema": {"type": "string"}}],
-        "responses": {"204": {"description": "Deleted"}, "404": {"description": "Track not found"}}
-      }
+        "responses": {
+          "204": {
+            "description": "Deleted"
+          },
+          "404": {
+            "description": "Track not found"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/CatalogId"
+        }
+      ]
     },
     "/api/v1/me/playlists": {
       "post": {
@@ -13446,14 +13538,6 @@
       "parameters": [
         {
           "$ref": "#/components/parameters/CatalogId"
-        },
-        {
-          "name": "trackId",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "string"
-          }
         }
       ],
       "delete": {
@@ -13518,7 +13602,17 @@
               }
             }
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "trackId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
       }
     }
   },
