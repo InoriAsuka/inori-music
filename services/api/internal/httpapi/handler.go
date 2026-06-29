@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"crypto/subtle"
@@ -378,6 +379,9 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/catalog/tracks/{id}", handler.requireViewerAuth(handler.getTrack))
 	mux.HandleFunc("GET /api/v1/catalog/tracks/{id}/playback", handler.requireViewerAuth(handler.getTrackPlayback))
 	mux.HandleFunc("GET /api/v1/catalog/tracks/{id}/stream", handler.streamTrack)
+	mux.HandleFunc("POST /api/v1/catalog/tracks/{id}/lyrics", handler.requireAdminAuth(handler.uploadTrackLyrics))
+	mux.HandleFunc("GET /api/v1/catalog/tracks/{id}/lyrics", handler.requireViewerAuth(handler.getTrackLyrics))
+	mux.HandleFunc("DELETE /api/v1/catalog/tracks/{id}/lyrics", handler.requireAdminAuth(handler.deleteTrackLyrics))
 	mux.HandleFunc("GET /api/v1/catalog/search", handler.requireViewerAuth(handler.searchCatalog))
 	mux.HandleFunc("GET /api/v1/admin/catalog/stats", handler.requireAdminAuth(handler.getCatalogStats))
 	mux.HandleFunc("GET /api/v1/admin/catalog/stats/artists", handler.requireAdminAuth(handler.getArtistStatsBreakdown))
@@ -1870,6 +1874,181 @@ func (handler *Handler) getAlbumArtwork(w http.ResponseWriter, r *http.Request) 
 	}
 	// Derive ExpiresIn from the TTL constant so they never drift independently.
 	writeJSON(w, http.StatusOK, albumArtworkResponse{URL: url, ExpiresIn: int(artworkTTL / time.Second)})
+}
+
+type lyricsResponse struct {
+	Format  string `json:"format"`
+	Content string `json:"content"`
+}
+
+func (handler *Handler) uploadTrackLyrics(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireCatalogService(w) {
+		return
+	}
+	if handler.storage == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "storage_unavailable", "storage service not configured")
+		return
+	}
+	if handler.mediaObjects == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "media_registry_not_configured", "media object registry is not configured")
+		return
+	}
+	if err := r.ParseMultipartForm(2 << 20); err != nil {
+		writeAPIError(w, http.StatusBadRequest, "invalid_form", "failed to parse multipart form")
+		return
+	}
+	file, _, err := r.FormFile("file")
+	if err != nil {
+		writeAPIError(w, http.StatusBadRequest, "missing_file", "file field required")
+		return
+	}
+	defer file.Close()
+	content, err := io.ReadAll(io.LimitReader(file, 512*1024))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	contentStr := string(content)
+	format := detectLyricsFormat(contentStr)
+	if format == "" {
+		writeAPIError(w, http.StatusBadRequest, "invalid_format", "file must be LRC or SRT format")
+		return
+	}
+	trackID := r.PathValue("id")
+	if _, err := handler.catalogService.GetTrack(r.Context(), trackID); err != nil {
+		writeError(w, err)
+		return
+	}
+	// Find the default backend to store the lyrics object.
+	backends, err := handler.storage.ListBackends(r.Context())
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	var defaultBackend *storage.StorageBackend
+	for i := range backends {
+		if backends[i].IsDefault && backends[i].Enabled {
+			b := backends[i]
+			defaultBackend = &b
+			break
+		}
+	}
+	if defaultBackend == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "no_default_backend", "no enabled default storage backend configured")
+		return
+	}
+	objectKey := "lyrics/" + trackID + "." + format
+	// Generate a content hash for deduplication.
+	h := sha256.Sum256(content)
+	contentHash := fmt.Sprintf("%x", h)
+	mo, err := handler.mediaObjects.RegisterMediaObject(r.Context(), storage.MediaObject{
+		ID:             contentHash[:16],
+		BackendID:      defaultBackend.ID,
+		ObjectKey:      objectKey,
+		ContentHash:    contentHash,
+		SizeBytes:      int64(len(content)),
+		MIMEType:       "text/plain; charset=utf-8",
+		AssetKind:      string(storage.AssetKindLyrics),
+		LifecycleState: string(storage.LifecycleStateActive),
+	})
+	if err != nil {
+		// If already exists, fetch it to get its current ID.
+		existing, getErr := handler.mediaObjects.GetMediaObject(r.Context(), contentHash[:16])
+		if getErr != nil {
+			writeError(w, err)
+			return
+		}
+		mo = existing
+	}
+	if err := handler.storage.PutObject(r.Context(), mo.BackendID, mo.ObjectKey, bytes.NewReader(content), int64(len(content))); err != nil {
+		writeError(w, err)
+		return
+	}
+	moID := mo.ID
+	if _, err := handler.catalogService.UpdateTrack(r.Context(), trackID, catalog.UpdateTrackRequest{
+		LyricsMediaObjectID: &moID,
+	}); err != nil {
+		writeError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]string{"mediaObjectId": mo.ID})
+}
+
+func (handler *Handler) getTrackLyrics(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireCatalogService(w) {
+		return
+	}
+	track, err := handler.catalogService.GetTrack(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if track.LyricsMediaObjectID == "" {
+		writeAPIError(w, http.StatusNotFound, "no_lyrics", "no lyrics for this track")
+		return
+	}
+	if handler.storage == nil {
+		writeAPIError(w, http.StatusServiceUnavailable, "storage_unavailable", "storage service not configured")
+		return
+	}
+	mo, err := handler.mediaObjects.GetMediaObject(r.Context(), track.LyricsMediaObjectID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	rc, err := handler.storage.GetObject(r.Context(), mo.BackendID, mo.ObjectKey)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	defer rc.Close()
+	content, err := io.ReadAll(io.LimitReader(rc, 512*1024))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	contentStr := string(content)
+	format := detectLyricsFormat(contentStr)
+	writeJSON(w, http.StatusOK, lyricsResponse{Format: format, Content: contentStr})
+}
+
+func (handler *Handler) deleteTrackLyrics(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireCatalogService(w) {
+		return
+	}
+	track, err := handler.catalogService.GetTrack(r.Context(), r.PathValue("id"))
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+	if track.LyricsMediaObjectID == "" {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	empty := ""
+	if _, err := handler.catalogService.UpdateTrack(r.Context(), r.PathValue("id"), catalog.UpdateTrackRequest{
+		LyricsMediaObjectID: &empty,
+	}); err != nil {
+		writeError(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// detectLyricsFormat returns "lrc", "srt", or "" if unrecognized.
+func detectLyricsFormat(content string) string {
+	trimmed := strings.TrimSpace(content)
+	if strings.HasPrefix(trimmed, "[") {
+		return "lrc"
+	}
+	// SRT starts with a digit (sequence number)
+	for _, r := range trimmed {
+		if r >= '0' && r <= '9' {
+			return "srt"
+		}
+		break
+	}
+	return ""
 }
 
 // ---- track handlers ----

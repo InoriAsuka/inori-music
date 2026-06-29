@@ -4,6 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -262,4 +265,79 @@ func (service *Service) GeneratePresignedURL(ctx context.Context, backendID stri
 		return "", err
 	}
 	return presignS3URL(config, objectKey, accessKey, secretKey, ttl, service.now())
+}
+
+// localRootPath returns the local filesystem root for a backend (local/NFS/SMB).
+// Returns "", false for backends that don't map to a local path (e.g. S3).
+func localRootPath(backend StorageBackend) (string, bool) {
+	switch backend.Type {
+	case BackendTypeLocal:
+		if backend.Config.Local != nil {
+			return backend.Config.Local.RootPath, true
+		}
+	case BackendTypeNFS:
+		if backend.Config.NFS != nil {
+			return backend.Config.NFS.MountPath, true
+		}
+	case BackendTypeSMB:
+		if backend.Config.SMB != nil {
+			return backend.Config.SMB.MountPath, true
+		}
+	}
+	return "", false
+}
+
+// PutObject writes r to the object identified by (backendID, objectKey) on a
+// filesystem-backed storage backend (local / NFS / SMB). Returns an error for
+// backends that do not expose a local path (e.g. S3).
+func (service *Service) PutObject(ctx context.Context, backendID, objectKey string, r io.Reader, size int64) error {
+	backend, err := service.repository.Get(ctx, backendID)
+	if err != nil {
+		return err
+	}
+	root, ok := localRootPath(backend)
+	if !ok {
+		return fmt.Errorf("%w: backend %s does not support direct object writes", ErrProbeUnsupported, backendID)
+	}
+	fullPath, err := SafeObjectPath(root, objectKey)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(fullPath), 0o750); err != nil {
+		return fmt.Errorf("create object directory: %w", err)
+	}
+	f, err := os.Create(fullPath)
+	if err != nil {
+		return fmt.Errorf("create object file: %w", err)
+	}
+	defer f.Close()
+	if _, err := io.Copy(f, r); err != nil {
+		return fmt.Errorf("write object: %w", err)
+	}
+	return nil
+}
+
+// GetObject returns a ReadCloser for the object identified by (backendID, objectKey)
+// on a filesystem-backed storage backend (local / NFS / SMB).
+func (service *Service) GetObject(ctx context.Context, backendID, objectKey string) (io.ReadCloser, error) {
+	backend, err := service.repository.Get(ctx, backendID)
+	if err != nil {
+		return nil, err
+	}
+	root, ok := localRootPath(backend)
+	if !ok {
+		return nil, fmt.Errorf("%w: backend %s does not support direct object reads", ErrProbeUnsupported, backendID)
+	}
+	fullPath, err := SafeObjectPath(root, objectKey)
+	if err != nil {
+		return nil, err
+	}
+	f, err := os.Open(fullPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("%w: object %s not found", ErrNotFound, objectKey)
+		}
+		return nil, fmt.Errorf("open object: %w", err)
+	}
+	return f, nil
 }

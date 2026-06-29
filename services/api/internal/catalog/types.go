@@ -49,18 +49,19 @@ type Album struct {
 
 // Track represents a playable music item and links catalog metadata to a media object.
 type Track struct {
-	ID            string    `json:"id"`
-	Title         string    `json:"title"`
-	SortTitle     string    `json:"sortTitle,omitempty"`
-	ArtistID      string    `json:"artistId"`
-	AlbumID       string    `json:"albumId,omitempty"`
-	MediaObjectID string    `json:"mediaObjectId"`
-	TrackNumber   int       `json:"trackNumber,omitempty"`
-	DiscNumber    int       `json:"discNumber,omitempty"`
-	DurationMS    int       `json:"durationMs,omitempty"`
-	Genre         string    `json:"genre,omitempty"`
-	CreatedAt     time.Time `json:"createdAt"`
-	UpdatedAt     time.Time `json:"updatedAt"`
+	ID                  string    `json:"id"`
+	Title               string    `json:"title"`
+	SortTitle           string    `json:"sortTitle,omitempty"`
+	ArtistID            string    `json:"artistId"`
+	AlbumID             string    `json:"albumId,omitempty"`
+	MediaObjectID       string    `json:"mediaObjectId"`
+	TrackNumber         int       `json:"trackNumber,omitempty"`
+	DiscNumber          int       `json:"discNumber,omitempty"`
+	DurationMS          int       `json:"durationMs,omitempty"`
+	Genre               string    `json:"genre,omitempty"`
+	LyricsMediaObjectID string    `json:"lyricsMediaObjectId,omitempty"`
+	CreatedAt           time.Time `json:"createdAt"`
+	UpdatedAt           time.Time `json:"updatedAt"`
 }
 
 // SearchResultKind identifies which entity kind a search hit belongs to.
@@ -211,14 +212,15 @@ type UpdateAlbumRequest struct {
 // UpdateTrackRequest carries the fields that may be changed via a PATCH request.
 // Nil pointer fields are left unchanged.
 type UpdateTrackRequest struct {
-	Title       *string
-	SortTitle   *string
-	ArtistID    *string
-	AlbumID     *string
-	TrackNumber *int
-	DiscNumber  *int
-	DurationMS  *int
-	Genre       *string
+	Title               *string
+	SortTitle           *string
+	ArtistID            *string
+	AlbumID             *string
+	TrackNumber         *int
+	DiscNumber          *int
+	DurationMS          *int
+	Genre               *string
+	LyricsMediaObjectID *string
 }
 
 // BatchImportResultItem holds the outcome of a single import within a batch request.
