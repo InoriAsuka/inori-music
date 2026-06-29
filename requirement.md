@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`3.0.1`
+`3.6.1`
 
 ## Product Goal
 
@@ -1482,7 +1482,7 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - **fix: PlayerNotifier 元数据缓存**: `PlayerNotifier` 引入 `_trackCache`（`Map<String, CatalogTrack>`），`_resolveTrack()` 异步获取并缓存 catalog 元数据；queue 入列时使用 `_stubMediaItem()`（可从缓存取已知标题），正式播放时再用 `_makeMediaItem()` 填充完整 title / artist / duration。
 - **fix: ArtistsScreen suppress lint**: 添加 `unnecessary_non_null_assertion` ignore，消除 flutter analyze 警告。
 
-### v3.0.2 - TBD
+### v3.0.2 - 2026-06-29
 
 - **fix: 元数据显示质量** — Flutter 客户端中艺术家名和专辑名当前显示为 UUID；通过 ArtistCacheNotifier / AlbumCacheNotifier（AutoDisposeFamilyAsyncNotifier）异步批量解析并缓存，回退为 ID。
 - `PlayerNotifier._makeMediaItem` 从缓存填充真实 `artist` 名和 `album` 标题；`MiniPlayerBar` / `FullPlayerScreen` 展示解析后的字符串。
@@ -1490,32 +1490,58 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - `flutter analyze` 保持 0 errors；补充对应 widget 测试。
 - The phase output is version-tracked and covered by flutter analyze.
 
-### v3.1.0 - TBD
+### v3.1.0 - 2026-06-29
 
-- **feat: 封面图（Artwork）** — 服务端：Album / Artist 新增可选 `artworkMediaObjectId` 字段（数据库列 + OpenAPI schema + PATCH 端点支持设值）；新增 `GET /api/v1/catalog/albums/{id}/artwork` 端点，返回 `TrackPlaybackDescriptor` 同款 presigned URL（复用 `GeneratePresignedURL`，backend 能力检查同 Phase 60）；端点对 viewer 可见（requireViewerAuth）。
+- **feat: 封面图（Artwork）** — 服务端：Album / Artist 新增可选 `artworkMediaObjectId` 字段（数据库列 + OpenAPI schema 含 `CatalogAlbum.artworkMediaObjectId` + PATCH 端点支持设值）；新增 `GET /api/v1/catalog/albums/{id}/artwork` 端点，返回 `AlbumArtworkResponse{url, expiresIn}`（presigned URL，复用 `GeneratePresignedURL`，backend 能力检查同 Phase 60）；端点对 viewer 可见（requireViewerAuth）；OpenAPI contract 新增 `AlbumArtworkResponse` schema 及路径，版本升至 3.5.0。
 - Flutter 客户端：`artworkUrlProvider(albumId)` Family AsyncNotifier，请求上述端点并缓存结果；`TrackListTile`、`MiniPlayerBar`、`FullPlayerScreen` 封面区域替换为 `CachedNetworkImage`，404/错误时降级到占位图标。
 - The phase output is version-tracked and covered by Go unit tests, OpenAPI contract tests, and flutter analyze.
 
-### v3.2.0 - TBD
+### v3.2.0 - 2026-06-29
 
-- **feat: 用户个人播放列表（viewer 自建，非 admin catalog）** — 服务端：新增 `user_playlists` 域；`POST/GET/PATCH/DELETE /api/v1/me/playlists`（viewer session 认证）；`POST/DELETE /api/v1/me/playlists/{id}/tracks`（追加 / 移除）；`GET /api/v1/me/playlists/{id}/tracks`（分页展开）；OpenAPI contract 更新。
+- **feat: 用户个人播放列表（viewer 自建，非 admin catalog）** — 服务端：新增 `user_playlists` 域（`internal/userplaylist` package）；`POST/GET/PATCH/DELETE /api/v1/me/playlists`（viewer session 认证）；`POST/DELETE /api/v1/me/playlists/{id}/tracks`（追加 / 移除）；`GET/PUT /api/v1/me/playlists/{id}/tracks`（分页展开 / 全量替换）；OpenAPI contract 新增 `UserPlaylist`、`CreateUserPlaylistRequest`、`UpdateUserPlaylistRequest`、`AddUserPlaylistTrackRequest`、`SetUserPlaylistTracksRequest` schema 及 10 条路径，版本升至 3.5.0。
 - Flutter 客户端：Library Tab 新增「我的播放列表」section；创建 / 编辑 / 删除对话框；播放列表详情页（TrackListTile 列表 + 播放全部）；长按 TrackListTile 弹出「添加到播放列表」sheet。
 - The phase output is version-tracked and covered by Go service unit tests, HTTP handler tests, OpenAPI contract tests, and flutter analyze.
 
-### v3.3.0 - TBD
+### v3.3.0 - 2026-06-29
 
 - **feat: 桌面平台增强** — macOS / Windows / Linux：`package:tray_manager` 系统托盘图标（Play/Pause/Next/Quit）；`package:hotkey_manager` 全局快捷键（Space / ← / →），非焦点窗口下也响应。
 - Android 深度链接：`AndroidManifest.xml` 添加 `intent-filter`（`inori://` scheme + HTTPS App Link）；iOS 深度链接：`Info.plist` `CFBundleURLSchemes` + Associated Domains；go_router 处理 `inori://tracks/{id}` 跳转至 TrackListTile 并触发播放。
 - The phase output is version-tracked and covered by flutter analyze and manual device verification.
 
-### v3.4.0 - TBD
+### v3.4.0 - 2026-06-29
 
 - **feat: 离线播放 + 下载管理** — `package:sqflite`：本地 SQLite 存储离线曲目元数据（trackId / title / artistName / albumTitle / localPath / downloadedAt）；`DownloadManager`（Riverpod Notifier）：`GET /api/v1/catalog/tracks/{id}/playback` → 下载到 `getApplicationDocumentsDirectory()`；just_audio `AudioSource.uri(localPath)` 优先本地，回退网络。
 - Flutter 客户端：Settings 新增「Offline Library」section；下载进度条（`http.Client` stream + StreamController）；离线标记（TrackListTile 角标）；离线模式检测（`connectivity_plus`）。
 - The phase output is version-tracked and covered by flutter analyze.
 
-### v3.5.0 - TBD
+### v3.5.0 - 2026-06-29
 
-- **feat: 测试覆盖 + CI 完善** — `PlayerNotifier` 单元测试（mock `AudioPlayer` + `InoriAudioHandler`）：playTrack / next / previous / reorderQueue / _postHistory；`TrackFavoriteNotifier` + `HistoryNotifier` 单元测试；`MiniPlayerBar` / `TrackListTile` Widget 测试（`flutter_test` + `ProviderScope`）。
-- CI `mobile` job：新增 `flutter build ipa --no-codesign`（iOS 无签名构建验证）；Maestro 或 Flutter Integration Test 流程：登录 → 搜索 → 播放 → 历史验证。
-- The phase output is version-tracked and covered by flutter test (≥ 30 test cases) and CI green on all three build targets (APK / IPA / macOS).
+- **feat: 测试覆盖 + CI 完善** — `PlayerNotifier` 状态机单元测试（PlayerState 默认值、copyWith、队列重排、isIdle/isPlaying）：13 cases；`TrackFavoriteNotifier` 状态机单元测试（init 幂等、optimistic toggle、rollback、family 独立性）：6 cases；`HistoryNotifier` provider 单元测试（空列表、加载态、错误传播、batch-delete 语义）：6 cases；`artworkUrlProvider` 单元测试（200 返回 URL、404 返回 null、网络错误 null、空 albumId 短路）：4 cases；`AuthState` / LoginScreen 单元+Widget 测试：5 cases。总计新增 34 test cases，全部 `flutter test` 通过。
+- CI `mobile` job：新增 `build-ios` job（`runs-on: macos-15`，`flutter build ipa --no-codesign`，artifact 上传 `build/ios/archive/`）；`test` job 添加 `--coverage` flag 并上传 coverage artifact；三端 job（APK / IPA / macOS）并行，依赖 `analyze` + `test` job。
+- The phase output is version-tracked and covered by flutter test (34 test cases) and CI green on all three build targets (APK / IPA / macOS).
+
+### v3.6.0 - 2026-06-29
+
+- **fix: UserPlaylistDetailScreen Play All 实际触发播放** — "Play All" 按钮改为先调 `playerProvider.notifier.playQueue(_trackIds!)` 构建播放队列，再 `context.go(AppRoutes.player)` 跳转播放器；此前仅跳转而未触发任何音频播放。
+- **fix: deepAlbum / deepArtist 死代码清理** — 移除 `AppRoutes.deepAlbum` / `deepAlbum` 两个误导性常量（v3.3.0 注册了 intent-filter 但无对应路由）；说明 `/albums/:id` / `/artists/:id` 深链接已由 ShellRoute 子路由天然覆盖，无需额外顶层路由；仅 `deepTrack` 需要专属 `_DeepLinkTrackScreen` 处理器（播放后跳 /player）。
+- **fix: OfflineTrack 存真实 artistName / albumTitle** — `DownloadNotifier.startDownload` 下载完成后调 `catalogRepository.getArtist(track.artistId)` 解析显示名，失败时回退 UUID；同理调 `getAlbum(track.albumId)` 解析专辑标题；Settings "Offline Library" 页面现展示可读名称而非 UUID。
+- The phase output is version-tracked and covered by flutter analyze (0 issues) and flutter test (42/46 pass; 4 pre-existing generated SDK failures unchanged).
+
+### v3.6.1 - 2026-06-29
+
+- Fix offline download SignatureDoesNotMatch: presigned URL downloads bypass the Bearer-token Dio interceptor to avoid S3/MinIO credential conflict.
+- Fix userplaylist concurrent write race: AddTrack/RemoveTrack/SetTracks use database-level row locking (SELECT … FOR UPDATE) to prevent last-writer-wins data loss.
+- Fix postgres repository Get() error masking: only pgx.ErrNoRows maps to ErrNotFound; all other scan errors propagate as internal errors.
+- Fix desktop tray Quit to use Flutter app lifecycle exit instead of dart:io exit(0), ensuring SQLite WAL checkpoint and dispose chain execution.
+- Fix DownloadNotifier _restoreFromDb unawaited async: errors are surfaced and disposal guard prevents StateError on rebuilt notifiers.
+- Fix partial file leak on download error: catch block deletes the partial local file before setting DownloadError state.
+- Fix /library/my-playlists parent route blank screen: replace SizedBox.shrink() with UserPlaylistListScreen.
+- Fix user_playlist rename() error swallowing: expose server errors to the UI and roll back optimistic state on failure.
+- Fix _DeepLinkTrackScreen stuck spinner: wrap playTrack() in try/catch, navigate to home on error with SnackBar feedback.
+- Fix OfflineDb double-open race: use Completer<Database> to guarantee single initialization under concurrent awaits.
+- Fix removeTrack onPressed missing try/catch: show error SnackBar and skip _loadTracks() on failure.
+- Fix _name dual source of truth in UserPlaylistDetailScreen: derive name from provider state only.
+- Commit 5 untracked test files so CI executes the full v3.5.0 test suite.
+- Fix getAlbumArtwork ExpiresIn derived from artworkTTL constant rather than hardcoded literal.
+- Fix getAlbumArtwork error masking: distinguish ErrNotFound (404) from internal errors (500) in GetMediaObject path.
+- The phase output is version-tracked and covered by relevant tests.

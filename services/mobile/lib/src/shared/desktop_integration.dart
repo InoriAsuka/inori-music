@@ -1,8 +1,7 @@
 // ignore_for_file: implementation_imports
-import 'dart:io' show exit;
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter/widgets.dart' show WidgetsBinding;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:hotkey_manager/hotkey_manager.dart';
@@ -62,7 +61,10 @@ class DesktopIntegration with TrayListener {
       case 'previous':
         notifier.previous();
       case 'quit':
-        exit(0);
+        // Use Flutter's graceful exit path so that dispose() callbacks,
+        // SQLite WAL checkpoints, and audio-session teardown all run before
+        // the process terminates.  dart:io exit(0) would bypass all of this.
+        WidgetsBinding.instance.handleRequestAppExit();
     }
   }
 

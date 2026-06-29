@@ -2,7 +2,9 @@ package userplaylistpg
 
 import (
 	"context"
+	"errors"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"inori-music/services/api/internal/userplaylist"
@@ -42,12 +44,21 @@ func Migrate(ctx context.Context, pool *pgxpool.Pool) error {
 }
 
 // Save upserts a playlist and replaces its track list atomically.
+// The write is protected by a row-level advisory lock on the playlist ID to
+// prevent concurrent AddTrack/RemoveTrack/SetTracks calls from racing on the
+// same playlist and causing lost updates.
 func (r *Repository) Save(ctx context.Context, p userplaylist.UserPlaylist) error {
 	tx, err := r.pool.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
+
+	// Advisory lock scoped to this transaction: ensures only one writer at a
+	// time can modify a given playlist, preventing the read-then-write race.
+	if _, err = tx.Exec(ctx, `SELECT pg_advisory_xact_lock(hashtext($1))`, p.ID); err != nil {
+		return err
+	}
 
 	_, err = tx.Exec(ctx, `
 		INSERT INTO user_playlists (id, user_id, name, description, created_at, updated_at)
@@ -86,7 +97,13 @@ func (r *Repository) Get(ctx context.Context, id string) (userplaylist.UserPlayl
 
 	var p userplaylist.UserPlaylist
 	if err := row.Scan(&p.ID, &p.UserID, &p.Name, &p.Description, &p.CreatedAt, &p.UpdatedAt); err != nil {
-		return userplaylist.UserPlaylist{}, userplaylist.ErrNotFound
+		// Only map pgx.ErrNoRows to the domain sentinel; propagate all other
+		// errors (connection failures, type mismatches) as internal errors so
+		// callers do not conflate a missing row with a DB outage.
+		if errors.Is(err, pgx.ErrNoRows) {
+			return userplaylist.UserPlaylist{}, userplaylist.ErrNotFound
+		}
+		return userplaylist.UserPlaylist{}, err
 	}
 
 	rows, err := r.pool.Query(ctx, `

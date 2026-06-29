@@ -108,19 +108,15 @@ class UserPlaylistNotifier extends AsyncNotifier<List<UserPlaylist>> {
   }
 
   Future<UserPlaylist?> rename(String id, String newName) async {
-    try {
-      final resp = await _dio.patch<Map<String, dynamic>>(
-        '/api/v1/me/playlists/$id',
-        data: {'name': newName},
-      );
-      final updated = UserPlaylist.fromJson(resp.data!);
-      state = AsyncData(
-        (state.valueOrNull ?? []).map((p) => p.id == id ? updated : p).toList(),
-      );
-      return updated;
-    } catch (_) {
-      return null;
-    }
+    final resp = await _dio.patch<Map<String, dynamic>>(
+      '/api/v1/me/playlists/$id',
+      data: {'name': newName},
+    );
+    final updated = UserPlaylist.fromJson(resp.data!);
+    state = AsyncData(
+      (state.valueOrNull ?? []).map((p) => p.id == id ? updated : p).toList(),
+    );
+    return updated;
   }
 }
 

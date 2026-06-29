@@ -20,6 +20,7 @@ import 'package:inori_music/src/history/history_stats_screen.dart';
 import 'package:inori_music/src/settings/settings_screen.dart';
 import 'package:inori_music/src/shared/widgets/shell_scaffold.dart';
 import 'package:inori_music/src/user_playlist/user_playlist_detail_screen.dart';
+import 'package:inori_music/src/user_playlist/user_playlist_list_screen.dart';
 
 // ---------------------------------------------------------------------------
 // Route paths
@@ -45,9 +46,10 @@ abstract class AppRoutes {
   static const myPlaylistDetail = '/library/my-playlists/:id';
 
   // Deep-link entry points (inori://tracks/:id, etc.)
+  // tracks/:id  → handled by top-level GoRoute (_DeepLinkTrackScreen)
+  // albums/:id  → resolved by ShellRoute sub-route (AlbumDetailScreen)
+  // artists/:id → resolved by ShellRoute sub-route (ArtistDetailScreen)
   static const deepTrack = '/tracks/:id';
-  static const deepAlbum = '/albums/:id';
-  static const deepArtist = '/artists/:id';
 
   static String artistDetailPath(String id) => '/artists/$id';
   static String albumDetailPath(String id) => '/albums/$id';
@@ -91,8 +93,17 @@ class _DeepLinkTrackScreenState extends ConsumerState<_DeepLinkTrackScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) async {
-      await ref.read(playerProvider.notifier).playTrack(widget.trackId);
-      if (mounted) context.go(AppRoutes.player);
+      try {
+        await ref.read(playerProvider.notifier).playTrack(widget.trackId);
+        if (mounted) context.go(AppRoutes.player);
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not play track: $e')),
+          );
+          context.go(AppRoutes.artists);
+        }
+      }
     });
   }
 
@@ -104,6 +115,17 @@ class _DeepLinkTrackScreenState extends ConsumerState<_DeepLinkTrackScreen> {
     );
   }
 }
+
+/// Handles `inori://albums/<id>` and `inori://artists/<id>` deep links.
+///
+/// Both paths are already covered by the ShellRoute sub-routes:
+///   /albums/:id  →  AlbumDetailScreen (inside ShellScaffold)
+///   /artists/:id →  ArtistDetailScreen (inside ShellScaffold)
+///
+/// GoRouter resolves these paths directly to the shell widgets with no extra
+/// top-level route needed.  `deepAlbum` and `deepArtist` constants are kept
+/// for documentation purposes but require no dedicated handler.
+
 
 // ---------------------------------------------------------------------------
 // Router provider
@@ -149,6 +171,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           trackId: state.pathParameters['id']!,
         ),
       ),
+
+      // inori://albums/<id> and inori://artists/<id> are handled by GoRouter's
+      // shell sub-routes (/albums/:id, /artists/:id) without a top-level override.
+      // Adding duplicate top-level routes here would cause redirect loops.
 
       // Shell (persistent nav + mini player)
       ShellRoute(
@@ -212,7 +238,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           ),
           GoRoute(
             path: AppRoutes.myPlaylists,
-            builder: (context, state) => const SizedBox.shrink(),
+            builder: (context, state) => const UserPlaylistListScreen(),
             routes: [
               GoRoute(
                 path: ':id',

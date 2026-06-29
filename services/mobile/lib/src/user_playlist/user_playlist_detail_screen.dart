@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/theme/neon_shrine.dart';
+import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/user_playlist/user_playlist_notifier.dart';
 
 /// Playlist detail screen — loads tracks for a user playlist and allows
@@ -23,7 +24,19 @@ class _UserPlaylistDetailScreenState
   List<String>? _trackIds;
   bool _loading = true;
   String? _error;
-  String _name = '';
+  // _name is derived from userPlaylistProvider to avoid a dual-source-of-truth
+  // situation where a server-rejected rename would still update this field.
+  // The AppBar reads _currentName() instead, which always reflects the latest
+  // provider state.
+
+  String _currentName() {
+    final playlists = ref.read(userPlaylistProvider).valueOrNull ?? [];
+    return playlists
+            .where((p) => p.id == widget.playlistId)
+            .firstOrNull
+            ?.name ??
+        '';
+  }
 
   @override
   void initState() {
@@ -39,12 +52,8 @@ class _UserPlaylistDetailScreenState
     try {
       final notifier = ref.read(userPlaylistProvider.notifier);
       final ids = await notifier.getTrackIds(widget.playlistId);
-      // Get name from the cached list
-      final playlists = ref.read(userPlaylistProvider).valueOrNull ?? [];
-      final pl = playlists.where((p) => p.id == widget.playlistId).firstOrNull;
       setState(() {
         _trackIds = ids;
-        _name = pl?.name ?? '';
         _loading = false;
       });
     } catch (e) {
@@ -56,7 +65,8 @@ class _UserPlaylistDetailScreenState
   }
 
   Future<void> _showRenameDialog() async {
-    final controller = TextEditingController(text: _name);
+    final currentName = _currentName();
+    final controller = TextEditingController(text: currentName);
     final newName = await showDialog<String>(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -79,19 +89,28 @@ class _UserPlaylistDetailScreenState
       ),
     );
     if (newName != null && newName.isNotEmpty && mounted) {
-      await ref
-          .read(userPlaylistProvider.notifier)
-          .rename(widget.playlistId, newName);
-      setState(() => _name = newName);
+      try {
+        await ref
+            .read(userPlaylistProvider.notifier)
+            .rename(widget.playlistId, newName);
+        // Name is now derived from the provider — no local setState needed.
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Rename failed: $e')),
+          );
+        }
+      }
     }
   }
 
   Future<void> _confirmDelete() async {
+    final currentName = _currentName();
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Delete Playlist'),
-        content: Text('Delete "$_name"? This cannot be undone.'),
+        content: Text('Delete "$currentName"? This cannot be undone.'),
         actions: [
           TextButton(
             onPressed: () => ctx.pop(false),
@@ -105,10 +124,18 @@ class _UserPlaylistDetailScreenState
       ),
     );
     if (ok == true && mounted) {
-      await ref
-          .read(userPlaylistProvider.notifier)
-          .delete(widget.playlistId);
-      if (mounted) context.pop();
+      try {
+        await ref
+            .read(userPlaylistProvider.notifier)
+            .delete(widget.playlistId);
+        if (mounted) context.pop();
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Delete failed: $e')),
+          );
+        }
+      }
     }
   }
 
@@ -116,7 +143,7 @@ class _UserPlaylistDetailScreenState
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_name.isEmpty ? 'My Playlist' : _name),
+        title: Text(_currentName().isEmpty ? 'My Playlist' : _currentName()),
         actions: [
           IconButton(
             icon: const Icon(Icons.edit_outlined),
@@ -166,10 +193,13 @@ class _UserPlaylistDetailScreenState
                               FilledButton.icon(
                                 icon: const Icon(Icons.play_arrow, size: 18),
                                 label: const Text('Play All'),
-                                onPressed: () {
-                                  // PlayerNotifier.playQueue is available via playerProvider
-                                  // We just navigate to player after triggering queue
-                                  context.go(AppRoutes.player);
+                                onPressed: () async {
+                                  await ref
+                                      .read(playerProvider.notifier)
+                                      .playQueue(_trackIds!);
+                                  if (context.mounted) {
+                                    context.go(AppRoutes.player);
+                                  }
                                 },
                               ),
                             ],
@@ -206,10 +236,20 @@ class _UserPlaylistDetailScreenState
                                       size: 20,
                                       color: NeonShrineColors.onSurfaceVariant),
                                   onPressed: () async {
-                                    await ref
-                                        .read(userPlaylistProvider.notifier)
-                                        .removeTrack(widget.playlistId, tid);
-                                    await _loadTracks();
+                                    try {
+                                      await ref
+                                          .read(userPlaylistProvider.notifier)
+                                          .removeTrack(widget.playlistId, tid);
+                                      await _loadTracks();
+                                    } catch (e) {
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context)
+                                            .showSnackBar(SnackBar(
+                                          content: Text(
+                                              'Could not remove track: $e'),
+                                        ));
+                                      }
+                                    }
                                   },
                                 ),
                               );

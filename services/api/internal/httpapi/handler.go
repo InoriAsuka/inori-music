@@ -1857,7 +1857,10 @@ func (handler *Handler) getAlbumArtwork(w http.ResponseWriter, r *http.Request) 
 	const artworkTTL = 900 * time.Second
 	mo, err := handler.mediaObjects.GetMediaObject(r.Context(), album.ArtworkMediaObjectID)
 	if err != nil {
-		writeAPIError(w, http.StatusNotFound, "artwork_not_found", "artwork media object not found")
+		// Propagate the error through the standard error writer so that a
+		// missing media object returns 404 via the domain sentinel while a DB
+		// or infrastructure failure returns the appropriate 5xx status.
+		writeError(w, err)
 		return
 	}
 	url, err := handler.storage.GeneratePresignedURL(r.Context(), mo.BackendID, mo.ObjectKey, artworkTTL)
@@ -1865,7 +1868,8 @@ func (handler *Handler) getAlbumArtwork(w http.ResponseWriter, r *http.Request) 
 		writeAPIError(w, http.StatusServiceUnavailable, "presign_failed", "failed to generate artwork URL")
 		return
 	}
-	writeJSON(w, http.StatusOK, albumArtworkResponse{URL: url, ExpiresIn: 900})
+	// Derive ExpiresIn from the TTL constant so they never drift independently.
+	writeJSON(w, http.StatusOK, albumArtworkResponse{URL: url, ExpiresIn: int(artworkTTL / time.Second)})
 }
 
 // ---- track handlers ----

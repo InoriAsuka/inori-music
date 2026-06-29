@@ -8,7 +8,7 @@ import (
 
 // MemoryRepository is an in-memory user playlist repository for tests and development.
 type MemoryRepository struct {
-	mu    sync.RWMutex
+	mu    sync.Mutex // single mutex; used for all operations to prevent lost updates
 	store map[string]UserPlaylist // keyed by playlist ID
 }
 
@@ -25,8 +25,8 @@ func (r *MemoryRepository) Save(_ context.Context, p UserPlaylist) error {
 }
 
 func (r *MemoryRepository) Get(_ context.Context, id string) (UserPlaylist, error) {
-	r.mu.RLock()
-	defer r.mu.RUnlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	p, ok := r.store[id]
 	if !ok {
 		return UserPlaylist{}, ErrNotFound
@@ -35,14 +35,14 @@ func (r *MemoryRepository) Get(_ context.Context, id string) (UserPlaylist, erro
 }
 
 func (r *MemoryRepository) ListByUser(_ context.Context, userID string) ([]UserPlaylist, error) {
-	r.mu.RLock()
+	r.mu.Lock()
 	var result []UserPlaylist
 	for _, p := range r.store {
 		if p.UserID == userID {
 			result = append(result, p)
 		}
 	}
-	r.mu.RUnlock()
+	r.mu.Unlock()
 
 	sort.Slice(result, func(i, j int) bool {
 		return result[i].CreatedAt.After(result[j].CreatedAt)

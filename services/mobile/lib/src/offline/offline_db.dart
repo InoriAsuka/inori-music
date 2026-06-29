@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:sqflite/sqflite.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
@@ -52,11 +54,27 @@ class OfflineDb {
   OfflineDb._();
   static final OfflineDb instance = OfflineDb._();
 
-  Database? _db;
+  // Completer-based init guard: ensures _open() is called at most once even
+  // when multiple callers await `db` concurrently before the first open
+  // completes.  Without this, `_db ??= await _open()` is not atomic in
+  // Dart's async model — two concurrent awaits can both observe _db == null
+  // and call _open() twice, leaking a database handle.
+  Completer<Database>? _initCompleter;
 
   Future<Database> get db async {
-    _db ??= await _open();
-    return _db!;
+    if (_initCompleter == null) {
+      _initCompleter = Completer<Database>();
+      try {
+        final opened = await _open();
+        _initCompleter!.complete(opened);
+      } catch (e, st) {
+        _initCompleter!.completeError(e, st);
+        // Reset so a future caller can retry.
+        _initCompleter = null;
+        rethrow;
+      }
+    }
+    return _initCompleter!.future;
   }
 
   Future<Database> _open() async {
