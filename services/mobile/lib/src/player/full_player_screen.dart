@@ -68,7 +68,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                   IconButton(
                     icon: const Icon(Icons.queue_music, color: NeonShrineColors.onSurfaceVariant),
                     tooltip: 'Queue',
-                    onPressed: () => _showQueueSheet(context),
+                    onPressed: () => _showQueueSheet(context, ref),
                   ),
                 ],
               ),
