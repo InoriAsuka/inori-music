@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`4.3.0`
+`4.4.0`
 
 ## Product Goal
 
@@ -1576,7 +1576,7 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Flutter 客户端：SearchScreen 新增 autocomplete 下拉（debounce 150ms → GET 请求 → 展示前 5 条 Tracks 建议）；搜索结果页新增 Filter Tab（All / Artists / Albums / Tracks）；空结果状态插图（onSurfaceVariant 占位图 + 提示文字）。
 - The phase output is version-tracked and covered by Go search service unit tests（模糊匹配 / 空查询 / Meilisearch 不可用降级到 PG 全文搜索）, docker-compose smoke test, OpenAPI contract tests, and flutter analyze (0 issues).
 
-### v4.4.0 - TBD
+### v4.4.0 - 2026-07-05
 
 - **feat: 歌词深化（逐字高亮 + 双语翻译 + 后台管理）** — 服务端：`LyricsResponse` OpenAPI schema 新增 `translation string?`（双语翻译文本）及 `source string?`（歌词来源标注：`embedded` / `manual` / `lrclib` 等）字段；`POST /api/v1/catalog/tracks/{id}/lyrics` 请求体支持同时上传主歌词与翻译；migration `014_track_lyrics_translation.sql` 新增 `tracks.lyrics_translation_media_object_id` 列；OpenAPI 版本升至 4.4.0。
 - Flutter 客户端：`lrc_parser.dart` 新增逐字增强 LRC 解析（`<mm:ss.xx>` 内联时间戳切分 word-level spans）；`lyric_line.dart` 模型扩展 `words` 与 `translation` 字段；`full_player_screen.dart` 的 `_LyricsList` 重构为当前行逐字渐变高亮（无逐字数据时回退整行高亮），当前行下方渲染次要样式翻译文本；Settings 新增「双语歌词」开关。

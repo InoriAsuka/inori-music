@@ -2,7 +2,7 @@ name: inori_music
 description: "Inori Music — cross-platform viewer"
 publish_to: 'none'
 
-version: 4.3.0+1
+version: 4.4.0+1
 
 environment:
   sdk: ^3.12.2
