@@ -119,6 +119,30 @@ func buildLyricsMultipart(t *testing.T, filename, content string) (*bytes.Buffer
 	return &buf, w.FormDataContentType()
 }
 
+// buildLyricsMultipartWithTranslation builds a multipart/form-data body with both a
+// lyrics file and an optional translation file field.
+func buildLyricsMultipartWithTranslation(t *testing.T, filename, content, translationFilename, translationContent string) (*bytes.Buffer, string) {
+	t.Helper()
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	fw, err := w.CreateFormFile("file", filename)
+	if err != nil {
+		t.Fatalf("create form file: %v", err)
+	}
+	if _, err := fw.Write([]byte(content)); err != nil {
+		t.Fatalf("write form file: %v", err)
+	}
+	tw, err := w.CreateFormFile("translation", translationFilename)
+	if err != nil {
+		t.Fatalf("create translation form file: %v", err)
+	}
+	if _, err := tw.Write([]byte(translationContent)); err != nil {
+		t.Fatalf("write translation form file: %v", err)
+	}
+	w.Close()
+	return &buf, w.FormDataContentType()
+}
+
 // performMultipartRequest performs a request with a multipart body.
 func performMultipartRequest(t *testing.T, h http.Handler, method, path string, body *bytes.Buffer, contentType, authHeader string) *httptest.ResponseRecorder {
 	t.Helper()
@@ -234,4 +258,130 @@ func TestDeleteTrackLyrics_Success(t *testing.T) {
 	if delResp.Code != http.StatusNoContent {
 		t.Fatalf("delete lyrics status = %d, body = %s", delResp.Code, delResp.Body.String())
 	}
+}
+
+// TestUploadTrackLyrics_WithTranslation_Success verifies that uploading lyrics with a
+// translation field returns 201 with both mediaObjectId and translationMediaObjectId.
+func TestUploadTrackLyrics_WithTranslation_Success(t *testing.T) {
+	const audioMO = "audio-lrc-translation-1"
+	h, _, adminToken := newLyricsTestHandler(t, audioMO, t.TempDir())
+	trackID := seedLyricsTrack(t, h, adminToken, audioMO)
+
+	lrc := "[00:01.00]Hello world\n[00:05.00]Second line\n"
+	translation := "你好世界\n第二行\n"
+	body, ct := buildLyricsMultipartWithTranslation(t, "lyrics.lrc", lrc, "lyrics.translation.lrc", translation)
+	resp := performMultipartRequest(t, h, http.MethodPost, "/api/v1/catalog/tracks/"+trackID+"/lyrics", body, ct, "Bearer "+adminToken)
+	if resp.Code != http.StatusCreated {
+		t.Fatalf("upload lyrics status = %d, body = %s", resp.Code, resp.Body.String())
+	}
+	var result map[string]any
+	decodeResponse(t, resp, &result)
+	if result["mediaObjectId"] == nil {
+		t.Fatal("expected mediaObjectId in response")
+	}
+	if result["translationMediaObjectId"] == nil {
+		t.Fatal("expected translationMediaObjectId in response")
+	}
+}
+
+// TestUploadTrackLyrics_TranslationBadFormat verifies that a non-UTF-8 translation field
+// returns 400 invalid_format.
+func TestUploadTrackLyrics_TranslationBadFormat(t *testing.T) {
+	const audioMO = "audio-lrc-translation-badformat-1"
+	h, _, adminToken := newLyricsTestHandler(t, audioMO, t.TempDir())
+	trackID := seedLyricsTrack(t, h, adminToken, audioMO)
+
+	lrc := "[00:01.00]Hello world\n"
+	invalidUTF8 := string([]byte{0xff, 0xfe, 0xfd})
+	body, ct := buildLyricsMultipartWithTranslation(t, "lyrics.lrc", lrc, "lyrics.translation.lrc", invalidUTF8)
+	resp := performMultipartRequest(t, h, http.MethodPost, "/api/v1/catalog/tracks/"+trackID+"/lyrics", body, ct, "Bearer "+adminToken)
+	assertAPIError(t, resp, http.StatusBadRequest, "invalid_format")
+}
+
+// TestGetTrackLyrics_WithTranslation verifies that GET returns translation and source
+// fields when a translation was uploaded.
+func TestGetTrackLyrics_WithTranslation(t *testing.T) {
+	const audioMO = "audio-lrc-get-translation-1"
+	h, viewerToken, adminToken := newLyricsTestHandler(t, audioMO, t.TempDir())
+	trackID := seedLyricsTrack(t, h, adminToken, audioMO)
+
+	lrc := "[00:01.00]Hello world\n[00:05.00]Second line\n"
+	translation := "你好世界\n第二行\n"
+	body, ct := buildLyricsMultipartWithTranslation(t, "lyrics.lrc", lrc, "lyrics.translation.lrc", translation)
+	upResp := performMultipartRequest(t, h, http.MethodPost, "/api/v1/catalog/tracks/"+trackID+"/lyrics", body, ct, "Bearer "+adminToken)
+	if upResp.Code != http.StatusCreated {
+		t.Fatalf("upload lyrics: %d %s", upResp.Code, upResp.Body.String())
+	}
+
+	getResp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/tracks/"+trackID+"/lyrics",
+		"", "Bearer "+viewerToken)
+	if getResp.Code != http.StatusOK {
+		t.Fatalf("get lyrics status = %d, body = %s", getResp.Code, getResp.Body.String())
+	}
+	var result map[string]any
+	decodeResponse(t, getResp, &result)
+	if result["translation"] != translation {
+		t.Fatalf("translation = %v, want %q", result["translation"], translation)
+	}
+	if result["source"] != "manual" {
+		t.Fatalf("source = %v, want manual", result["source"])
+	}
+	if result["translationMediaObjectId"] == nil {
+		t.Fatal("expected translationMediaObjectId in response")
+	}
+}
+
+// TestGetTrackLyrics_NoTranslation verifies that GET omits the translation field when
+// no translation was uploaded, while still reporting source.
+func TestGetTrackLyrics_NoTranslation(t *testing.T) {
+	const audioMO = "audio-lrc-get-notranslation-1"
+	h, viewerToken, adminToken := newLyricsTestHandler(t, audioMO, t.TempDir())
+	trackID := seedLyricsTrack(t, h, adminToken, audioMO)
+
+	lrc := "[00:01.00]Hello world\n"
+	body, ct := buildLyricsMultipart(t, "lyrics.lrc", lrc)
+	upResp := performMultipartRequest(t, h, http.MethodPost, "/api/v1/catalog/tracks/"+trackID+"/lyrics", body, ct, "Bearer "+adminToken)
+	if upResp.Code != http.StatusCreated {
+		t.Fatalf("upload lyrics: %d %s", upResp.Code, upResp.Body.String())
+	}
+
+	getResp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/tracks/"+trackID+"/lyrics",
+		"", "Bearer "+viewerToken)
+	if getResp.Code != http.StatusOK {
+		t.Fatalf("get lyrics status = %d, body = %s", getResp.Code, getResp.Body.String())
+	}
+	var result map[string]any
+	decodeResponse(t, getResp, &result)
+	if _, ok := result["translation"]; ok {
+		t.Fatalf("expected no translation field, got %v", result["translation"])
+	}
+	if result["source"] != "manual" {
+		t.Fatalf("source = %v, want manual", result["source"])
+	}
+}
+
+// TestDeleteTrackLyrics_CascadesTranslation verifies that DELETE clears the translation
+// reference alongside the primary lyrics reference.
+func TestDeleteTrackLyrics_CascadesTranslation(t *testing.T) {
+	const audioMO = "audio-lrc-delete-translation-1"
+	h, viewerToken, adminToken := newLyricsTestHandler(t, audioMO, t.TempDir())
+	trackID := seedLyricsTrack(t, h, adminToken, audioMO)
+
+	lrc := "[00:01.00]Delete me\n"
+	translation := "删除我\n"
+	body, ct := buildLyricsMultipartWithTranslation(t, "lyrics.lrc", lrc, "lyrics.translation.lrc", translation)
+	upResp := performMultipartRequest(t, h, http.MethodPost, "/api/v1/catalog/tracks/"+trackID+"/lyrics", body, ct, "Bearer "+adminToken)
+	if upResp.Code != http.StatusCreated {
+		t.Fatalf("upload lyrics: %d %s", upResp.Code, upResp.Body.String())
+	}
+
+	delResp := performRequestWithAuthHeader(t, h, http.MethodDelete, "/api/v1/catalog/tracks/"+trackID+"/lyrics",
+		"", "Bearer "+adminToken)
+	if delResp.Code != http.StatusNoContent {
+		t.Fatalf("delete lyrics status = %d, body = %s", delResp.Code, delResp.Body.String())
+	}
+
+	getResp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/tracks/"+trackID+"/lyrics",
+		"", "Bearer "+viewerToken)
+	assertAPIError(t, getResp, http.StatusNotFound, "no_lyrics")
 }

@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Trash2, Save, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Link2, Plus, X } from "lucide-react";
+import { Trash2, Save, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Link2, Plus, X, FileText, Upload } from "lucide-react";
 import { useAdminClient } from "@/hooks/useAdminClient";
+import { uploadTrackLyrics } from "@/lib/api/client";
 
 type Tab = "artists" | "albums" | "tracks" | "playlists";
 type Row = { id: string; label: string; sub?: string };
@@ -27,6 +28,15 @@ export default function CatalogPage() {
   // Relink dialog (tracks tab)
   const [relinkId, setRelinkId] = useState<string | null>(null);
   const [relinkMediaId, setRelinkMediaId] = useState("");
+
+  // Lyrics dialog (tracks tab)
+  const [lyricsTrackId, setLyricsTrackId] = useState<string | null>(null);
+  const [lyrics, setLyrics] = useState<{ format: string; content: string; translation?: string; source?: string } | null>(null);
+  const [lyricsLoading, setLyricsLoading] = useState(false);
+  const [lyricsFile, setLyricsFile] = useState<File | null>(null);
+  const [lyricsTranslationFile, setLyricsTranslationFile] = useState<File | null>(null);
+  const [lyricsUploading, setLyricsUploading] = useState(false);
+  const [lyricsError, setLyricsError] = useState<string | null>(null);
 
   // Playlist track add
   const [addTrackId, setAddTrackId] = useState("");
@@ -107,6 +117,39 @@ export default function CatalogPage() {
     await load();
   }
 
+  async function openLyrics(id: string) {
+    setLyricsTrackId(id);
+    setLyrics(null);
+    setLyricsFile(null);
+    setLyricsTranslationFile(null);
+    setLyricsError(null);
+    if (!client) return;
+    setLyricsLoading(true);
+    const { data } = await client.GET("/api/v1/catalog/tracks/{id}/lyrics", { params: { path: { id } } });
+    if (data) setLyrics(data);
+    setLyricsLoading(false);
+  }
+
+  async function uploadLyrics() {
+    if (!client || !lyricsTrackId || !lyricsFile) return;
+    setLyricsUploading(true);
+    setLyricsError(null);
+    const { error } = await uploadTrackLyrics(client, lyricsTrackId, lyricsFile, lyricsTranslationFile ?? undefined);
+    setLyricsUploading(false);
+    if (error) { setLyricsError("Upload failed — check file format (LRC/SRT, UTF-8, <=512KB)"); return; }
+    setLyricsFile(null);
+    setLyricsTranslationFile(null);
+    await openLyrics(lyricsTrackId);
+    await load();
+  }
+
+  async function deleteLyrics() {
+    if (!client || !lyricsTrackId || !window.confirm("Delete lyrics?")) return;
+    await client.DELETE("/api/v1/catalog/tracks/{id}/lyrics", { params: { path: { id: lyricsTrackId } } });
+    setLyrics(null);
+    await load();
+  }
+
   async function addPlaylistTrack(playlistId: string) {
     if (!client || !addTrackId.trim()) return;
     await client.POST("/api/v1/admin/catalog/playlists/{id}/tracks", {
@@ -174,6 +217,9 @@ export default function CatalogPage() {
                 )}
                 {tab === "tracks" && (
                   <Btn onClick={() => { setRelinkId(r.id); setRelinkMediaId(""); }} title="Relink media object"><Link2 size={13} /></Btn>
+                )}
+                {tab === "tracks" && (
+                  <Btn onClick={() => openLyrics(r.id)} title="Manage lyrics"><FileText size={13} /></Btn>
                 )}
                 {hasExpand && (
                   <Btn onClick={() => expand(r.id)} title={expandedId === r.id ? "Collapse" : "Expand"}>
@@ -255,6 +301,69 @@ export default function CatalogPage() {
               className="w-full flex items-center justify-center gap-1.5 rounded-md bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-[var(--color-primary-fg)] hover:opacity-90 disabled:opacity-40">
               <Link2 size={14} /> Relink
             </button>
+          </div>
+        </div>
+      )}
+      {/* Lyrics dialog */}
+      {lyricsTrackId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={() => setLyricsTrackId(null)}>
+          <div className="w-full max-w-lg rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6 space-y-4 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h2 className="font-semibold text-[var(--color-text)]">Lyrics</h2>
+              <button type="button" onClick={() => setLyricsTrackId(null)} className="rounded p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-text)]"><X size={16} /></button>
+            </div>
+            <p className="text-xs text-[var(--color-text-muted)]">Track ID: <code className="text-[var(--color-text)]">{lyricsTrackId}</code></p>
+
+            {lyricsLoading ? (
+              <p className="text-sm text-[var(--color-text-muted)]">Loading…</p>
+            ) : lyrics ? (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="rounded-md bg-[var(--color-primary)]/10 px-2 py-0.5 text-xs font-semibold uppercase text-[var(--color-primary)]">{lyrics.format}</span>
+                  {lyrics.source && <span className="rounded-md border border-[var(--color-border)] px-2 py-0.5 text-xs text-[var(--color-text-muted)]">{lyrics.source}</span>}
+                </div>
+                <textarea readOnly value={lyrics.content} rows={8}
+                  className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-void)] px-3 py-2 text-xs font-mono text-[var(--color-text)] outline-none resize-none" />
+                {lyrics.translation && (
+                  <>
+                    <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">Translation</p>
+                    <textarea readOnly value={lyrics.translation} rows={8}
+                      className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-void)] px-3 py-2 text-xs font-mono text-[var(--color-text)] outline-none resize-none" />
+                  </>
+                )}
+                <button type="button" onClick={deleteLyrics}
+                  className="flex items-center gap-1.5 rounded-md border border-[var(--color-danger)]/40 px-3 py-1.5 text-xs text-[var(--color-danger)] hover:bg-[var(--color-danger)]/10 transition-colors">
+                  <Trash2 size={13} /> Delete lyrics
+                </button>
+              </div>
+            ) : (
+              <p className="text-sm text-[var(--color-text-muted)]">No lyrics for this track.</p>
+            )}
+
+            <div className="space-y-2 border-t border-[var(--color-border)] pt-4">
+              <p className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">Upload {lyrics ? "replacement" : ""}</p>
+              <div className="space-y-1">
+                <label className="block text-xs text-[var(--color-text-muted)]">
+                  Lyrics file (LRC or SRT, UTF-8, ≤512KB)
+                  <input type="file" accept=".lrc,.srt,text/plain"
+                    onChange={(e) => setLyricsFile(e.target.files?.[0] ?? null)}
+                    className="mt-1 block w-full text-xs text-[var(--color-text)]" />
+                </label>
+              </div>
+              <div className="space-y-1">
+                <label className="block text-xs text-[var(--color-text-muted)]">
+                  Translation file (optional)
+                  <input type="file" accept=".lrc,.srt,text/plain"
+                    onChange={(e) => setLyricsTranslationFile(e.target.files?.[0] ?? null)}
+                    className="mt-1 block w-full text-xs text-[var(--color-text)]" />
+                </label>
+              </div>
+              {lyricsError && <p className="text-xs text-[var(--color-danger)]">{lyricsError}</p>}
+              <button type="button" onClick={uploadLyrics} disabled={!lyricsFile || lyricsUploading}
+                className="w-full flex items-center justify-center gap-1.5 rounded-md bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-[var(--color-primary-fg)] hover:opacity-90 disabled:opacity-40">
+                <Upload size={14} /> {lyricsUploading ? "Uploading…" : "Upload"}
+              </button>
+            </div>
           </div>
         </div>
       )}

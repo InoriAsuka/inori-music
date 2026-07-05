@@ -9,6 +9,7 @@ import 'package:inori_music/src/audio/replay_gain_notifier.dart';
 import 'package:inori_music/src/audio/sleep_timer_notifier.dart';
 import 'package:inori_music/src/audio/speed_notifier.dart';
 import 'package:inori_music/src/auth/auth_notifier.dart';
+import 'package:inori_music/src/lyrics/bilingual_lyrics_notifier.dart';
 import 'package:inori_music/src/offline/download_notifier.dart';
 import 'package:inori_music/src/offline/offline_db.dart';
 import 'package:inori_music/src/shared/locale_provider.dart';
@@ -91,6 +92,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           // Offline Library section
           const _SectionHeader(title: 'Offline Library'),
           _OfflineLibrarySection(),
+          const Divider(),
+
+          // Lyrics section
+          const _SectionHeader(title: '歌词'),
+          Consumer(
+            builder: (context, ref, _) {
+              final enabled = ref.watch(bilingualLyricsProvider);
+              return SwitchListTile(
+                title: const Text('双语歌词'),
+                subtitle: const Text('在原文下方显示翻译歌词'),
+                value: enabled,
+                onChanged: (v) => ref.read(bilingualLyricsProvider.notifier).setEnabled(v),
+              );
+            },
+          ),
           const Divider(),
 
           // Audio section

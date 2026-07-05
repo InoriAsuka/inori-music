@@ -2560,6 +2560,22 @@
           },
           "mediaObjectId": {
             "type": "string"
+          },
+          "translation": {
+            "type": "string",
+            "description": "Raw translation file content (UTF-8), present when a translation has been uploaded"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "embedded",
+              "manual",
+              "lrclib"
+            ],
+            "description": "Where the lyrics content originated"
+          },
+          "translationMediaObjectId": {
+            "type": "string"
           }
         }
       },
@@ -2736,7 +2752,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "4.3.0"
+    "version": "4.4.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -12913,6 +12929,11 @@
                   "file": {
                     "type": "string",
                     "format": "binary"
+                  },
+                  "translation": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "Optional translation file, same format constraints as file (UTF-8 text, <=512KB)"
                   }
                 },
                 "required": [
@@ -12931,6 +12952,9 @@
                   "type": "object",
                   "properties": {
                     "mediaObjectId": {
+                      "type": "string"
+                    },
+                    "translationMediaObjectId": {
                       "type": "string"
                     }
                   },

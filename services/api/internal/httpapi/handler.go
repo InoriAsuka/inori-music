@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"inori-music/services/api/internal/auth"
 	"inori-music/services/api/internal/catalog"
@@ -1914,8 +1915,11 @@ func (handler *Handler) getAlbumArtwork(w http.ResponseWriter, r *http.Request) 
 }
 
 type lyricsResponse struct {
-	Format  string `json:"format"`
-	Content string `json:"content"`
+	Format                   string `json:"format"`
+	Content                  string `json:"content"`
+	Translation              string `json:"translation,omitempty"`
+	Source                   string `json:"source,omitempty"`
+	TranslationMediaObjectID string `json:"translationMediaObjectId,omitempty"`
 }
 
 func (handler *Handler) uploadTrackLyrics(w http.ResponseWriter, r *http.Request) {
@@ -1949,6 +1953,24 @@ func (handler *Handler) uploadTrackLyrics(w http.ResponseWriter, r *http.Request
 	format := detectLyricsFormat(contentStr)
 	if format == "" {
 		writeAPIError(w, http.StatusBadRequest, "invalid_format", "file must be LRC or SRT format")
+		return
+	}
+	var translationContent []byte
+	hasTranslation := false
+	if tfile, _, terr := r.FormFile("translation"); terr == nil {
+		hasTranslation = true
+		defer tfile.Close()
+		translationContent, err = io.ReadAll(io.LimitReader(tfile, 512*1024))
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		if !utf8.Valid(translationContent) {
+			writeAPIError(w, http.StatusBadRequest, "invalid_format", "translation must be UTF-8 text")
+			return
+		}
+	} else if !errors.Is(terr, http.ErrMissingFile) {
+		writeAPIError(w, http.StatusBadRequest, "invalid_form", "failed to read translation field")
 		return
 	}
 	trackID := r.PathValue("id")
@@ -2002,13 +2024,50 @@ func (handler *Handler) uploadTrackLyrics(w http.ResponseWriter, r *http.Request
 		return
 	}
 	moID := mo.ID
-	if _, err := handler.catalogService.UpdateTrack(r.Context(), trackID, catalog.UpdateTrackRequest{
+	source := "manual"
+	updateReq := catalog.UpdateTrackRequest{
 		LyricsMediaObjectID: &moID,
-	}); err != nil {
+		LyricsSource:        &source,
+	}
+	var translationMOID string
+	if hasTranslation {
+		tObjectKey := "lyrics/" + trackID + ".translation." + format
+		th := sha256.Sum256(translationContent)
+		tContentHash := "sha256:" + fmt.Sprintf("%x", th)
+		tmo, err := handler.mediaObjects.RegisterMediaObject(r.Context(), storage.MediaObject{
+			ID:             tContentHash[:16],
+			BackendID:      defaultBackend.ID,
+			ObjectKey:      tObjectKey,
+			ContentHash:    tContentHash,
+			SizeBytes:      int64(len(translationContent)),
+			MIMEType:       "text/plain; charset=utf-8",
+			AssetKind:      string(storage.AssetKindLyrics),
+			LifecycleState: string(storage.LifecycleStateActive),
+		})
+		if err != nil {
+			existing, getErr := handler.mediaObjects.GetMediaObject(r.Context(), tContentHash[:16])
+			if getErr != nil {
+				writeError(w, err)
+				return
+			}
+			tmo = existing
+		}
+		if err := handler.storage.PutObject(r.Context(), tmo.BackendID, tmo.ObjectKey, bytes.NewReader(translationContent), int64(len(translationContent))); err != nil {
+			writeError(w, err)
+			return
+		}
+		translationMOID = tmo.ID
+		updateReq.LyricsTranslationMediaObjectID = &translationMOID
+	}
+	if _, err := handler.catalogService.UpdateTrack(r.Context(), trackID, updateReq); err != nil {
 		writeError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusCreated, map[string]string{"mediaObjectId": mo.ID})
+	resp := map[string]string{"mediaObjectId": mo.ID}
+	if translationMOID != "" {
+		resp["translationMediaObjectId"] = translationMOID
+	}
+	writeJSON(w, http.StatusCreated, resp)
 }
 
 func (handler *Handler) getTrackLyrics(w http.ResponseWriter, r *http.Request) {
@@ -2046,7 +2105,28 @@ func (handler *Handler) getTrackLyrics(w http.ResponseWriter, r *http.Request) {
 	}
 	contentStr := string(content)
 	format := detectLyricsFormat(contentStr)
-	writeJSON(w, http.StatusOK, lyricsResponse{Format: format, Content: contentStr})
+	resp := lyricsResponse{Format: format, Content: contentStr, Source: track.LyricsSource}
+	if track.LyricsTranslationMediaObjectID != "" {
+		tmo, err := handler.mediaObjects.GetMediaObject(r.Context(), track.LyricsTranslationMediaObjectID)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		trc, err := handler.storage.GetObject(r.Context(), tmo.BackendID, tmo.ObjectKey)
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		defer trc.Close()
+		translationContent, err := io.ReadAll(io.LimitReader(trc, 512*1024))
+		if err != nil {
+			writeError(w, err)
+			return
+		}
+		resp.Translation = string(translationContent)
+		resp.TranslationMediaObjectID = tmo.ID
+	}
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func (handler *Handler) deleteTrackLyrics(w http.ResponseWriter, r *http.Request) {
@@ -2064,7 +2144,9 @@ func (handler *Handler) deleteTrackLyrics(w http.ResponseWriter, r *http.Request
 	}
 	empty := ""
 	if _, err := handler.catalogService.UpdateTrack(r.Context(), r.PathValue("id"), catalog.UpdateTrackRequest{
-		LyricsMediaObjectID: &empty,
+		LyricsMediaObjectID:            &empty,
+		LyricsTranslationMediaObjectID: &empty,
+		LyricsSource:                   &empty,
 	}); err != nil {
 		writeError(w, err)
 		return

@@ -383,6 +383,12 @@ func (s *Service) UpdateTrack(ctx context.Context, id string, req UpdateTrackReq
 	if req.LyricsMediaObjectID != nil {
 		track.LyricsMediaObjectID = *req.LyricsMediaObjectID
 	}
+	if req.LyricsTranslationMediaObjectID != nil {
+		track.LyricsTranslationMediaObjectID = *req.LyricsTranslationMediaObjectID
+	}
+	if req.LyricsSource != nil {
+		track.LyricsSource = *req.LyricsSource
+	}
 	if req.ReplayGainDb != nil {
 		track.ReplayGainDb = req.ReplayGainDb
 	}

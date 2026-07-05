@@ -49,20 +49,22 @@ type Album struct {
 
 // Track represents a playable music item and links catalog metadata to a media object.
 type Track struct {
-	ID                  string    `json:"id"`
-	Title               string    `json:"title"`
-	SortTitle           string    `json:"sortTitle,omitempty"`
-	ArtistID            string    `json:"artistId"`
-	AlbumID             string    `json:"albumId,omitempty"`
-	MediaObjectID       string    `json:"mediaObjectId"`
-	TrackNumber         int       `json:"trackNumber,omitempty"`
-	DiscNumber          int       `json:"discNumber,omitempty"`
-	DurationMS          int       `json:"durationMs,omitempty"`
-	Genre               string    `json:"genre,omitempty"`
-	LyricsMediaObjectID string    `json:"lyricsMediaObjectId,omitempty"`
-	ReplayGainDb        *float64  `json:"replayGainDb,omitempty"`
-	CreatedAt           time.Time `json:"createdAt"`
-	UpdatedAt           time.Time `json:"updatedAt"`
+	ID                             string    `json:"id"`
+	Title                          string    `json:"title"`
+	SortTitle                      string    `json:"sortTitle,omitempty"`
+	ArtistID                       string    `json:"artistId"`
+	AlbumID                        string    `json:"albumId,omitempty"`
+	MediaObjectID                  string    `json:"mediaObjectId"`
+	TrackNumber                    int       `json:"trackNumber,omitempty"`
+	DiscNumber                     int       `json:"discNumber,omitempty"`
+	DurationMS                     int       `json:"durationMs,omitempty"`
+	Genre                          string    `json:"genre,omitempty"`
+	LyricsMediaObjectID            string    `json:"lyricsMediaObjectId,omitempty"`
+	LyricsTranslationMediaObjectID string    `json:"lyricsTranslationMediaObjectId,omitempty"`
+	LyricsSource                   string    `json:"lyricsSource,omitempty"`
+	ReplayGainDb                   *float64  `json:"replayGainDb,omitempty"`
+	CreatedAt                      time.Time `json:"createdAt"`
+	UpdatedAt                      time.Time `json:"updatedAt"`
 }
 
 // SearchResultKind identifies which entity kind a search hit belongs to.
@@ -91,13 +93,13 @@ type CatalogSearchResult struct {
 // ListQuery carries sort and pagination parameters for catalog list operations.
 // SortBy and SortOrder default to the entity's natural order when empty.
 type ListQuery struct {
-	SortBy           string // entity-specific sort field constant; "" = entity default
-	SortOrder        string // "asc" | "desc"; "" = "asc"
-	Limit            int    // > 0
-	Offset           int    // >= 0
-	Genre            string // optional genre filter for track list queries; "" = no filter
-	ReleaseYearMin   int    // optional lower bound (inclusive) for album release year; 0 = no lower bound
-	ReleaseYearMax   int    // optional upper bound (inclusive) for album release year; 0 = no upper bound
+	SortBy         string // entity-specific sort field constant; "" = entity default
+	SortOrder      string // "asc" | "desc"; "" = "asc"
+	Limit          int    // > 0
+	Offset         int    // >= 0
+	Genre          string // optional genre filter for track list queries; "" = no filter
+	ReleaseYearMin int    // optional lower bound (inclusive) for album release year; 0 = no lower bound
+	ReleaseYearMax int    // optional upper bound (inclusive) for album release year; 0 = no upper bound
 }
 
 // ListPage carries one page of results together with the total unfiltered count.
@@ -213,16 +215,18 @@ type UpdateAlbumRequest struct {
 // UpdateTrackRequest carries the fields that may be changed via a PATCH request.
 // Nil pointer fields are left unchanged.
 type UpdateTrackRequest struct {
-	Title               *string
-	SortTitle           *string
-	ArtistID            *string
-	AlbumID             *string
-	TrackNumber         *int
-	DiscNumber          *int
-	DurationMS          *int
-	Genre               *string
-	LyricsMediaObjectID *string
-	ReplayGainDb        *float64
+	Title                          *string
+	SortTitle                      *string
+	ArtistID                       *string
+	AlbumID                        *string
+	TrackNumber                    *int
+	DiscNumber                     *int
+	DurationMS                     *int
+	Genre                          *string
+	LyricsMediaObjectID            *string
+	LyricsTranslationMediaObjectID *string
+	LyricsSource                   *string
+	ReplayGainDb                   *float64
 }
 
 // BatchImportResultItem holds the outcome of a single import within a batch request.
@@ -382,14 +386,14 @@ const (
 	AlbumSortByUpdatedAt   = "updatedAt"
 
 	// Track sortBy fields
-	TrackSortByTitle        = "title"
-	TrackSortBySortTitle    = "sortTitle"
-	TrackSortByTrackNumber  = "trackNumber"
-	TrackSortByDiscNumber   = "discNumber"
-	TrackSortByDurationMS   = "durationMs"
-	TrackSortByGenre        = "genre"
-	TrackSortByCreatedAt    = "createdAt"
-	TrackSortByUpdatedAt    = "updatedAt"
+	TrackSortByTitle       = "title"
+	TrackSortBySortTitle   = "sortTitle"
+	TrackSortByTrackNumber = "trackNumber"
+	TrackSortByDiscNumber  = "discNumber"
+	TrackSortByDurationMS  = "durationMs"
+	TrackSortByGenre       = "genre"
+	TrackSortByCreatedAt   = "createdAt"
+	TrackSortByUpdatedAt   = "updatedAt"
 
 	// Playlist sortBy fields
 	PlaylistSortByName      = "name"

@@ -7,6 +7,7 @@ import 'package:inori_music/src/audio/sleep_timer_notifier.dart';
 import 'package:inori_music/src/audio/speed_notifier.dart';
 import 'package:inori_music/src/catalog/artwork_provider.dart';
 import 'package:inori_music/src/favorites/track_favorite_notifier.dart';
+import 'package:inori_music/src/lyrics/bilingual_lyrics_notifier.dart';
 import 'package:inori_music/src/lyrics/lyric_line.dart';
 import 'package:inori_music/src/lyrics/lyrics_provider.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
@@ -595,6 +596,7 @@ class _LyricsPage extends ConsumerWidget {
     }
     final currentIndex =
         lines.lastIndexWhere((l) => l.timestamp <= position);
+    final bilingual = ref.watch(bilingualLyricsProvider);
     return Container(
       decoration: BoxDecoration(
         color: NeonShrineColors.surfaceVariant,
@@ -605,6 +607,8 @@ class _LyricsPage extends ConsumerWidget {
         child: _LyricsList(
           lines: lines,
           currentIndex: currentIndex,
+          position: position,
+          bilingual: bilingual,
         ),
       ),
     );
@@ -612,9 +616,16 @@ class _LyricsPage extends ConsumerWidget {
 }
 
 class _LyricsList extends StatefulWidget {
-  const _LyricsList({required this.lines, required this.currentIndex});
+  const _LyricsList({
+    required this.lines,
+    required this.currentIndex,
+    required this.position,
+    required this.bilingual,
+  });
   final List<LyricLine> lines;
   final int currentIndex;
+  final Duration position;
+  final bool bilingual;
 
   @override
   State<_LyricsList> createState() => _LyricsListState();
@@ -623,6 +634,8 @@ class _LyricsList extends StatefulWidget {
 class _LyricsListState extends State<_LyricsList> {
   final ScrollController _scrollController = ScrollController();
 
+  double get _itemHeight => widget.bilingual ? 64.0 : 48.0;
+
   @override
   void didUpdateWidget(_LyricsList oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -630,7 +643,7 @@ class _LyricsListState extends State<_LyricsList> {
         widget.currentIndex >= 0) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!_scrollController.hasClients) return;
-        final itemHeight = 48.0;
+        final itemHeight = _itemHeight;
         final offset = (widget.currentIndex * itemHeight -
                 _scrollController.position.viewportDimension / 2 +
                 itemHeight / 2)
@@ -661,27 +674,84 @@ class _LyricsListState extends State<_LyricsList> {
       itemCount: widget.lines.length,
       itemBuilder: (context, i) {
         final isCurrent = i == widget.currentIndex;
+        final line = widget.lines[i];
+        final showTranslation =
+            widget.bilingual && line.translation != null && line.translation!.isNotEmpty;
         return SizedBox(
-          height: 48,
+          height: _itemHeight,
           child: Center(
-            child: Text(
-              widget.lines[i].text,
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: isCurrent ? 18 : 15,
-                fontWeight:
-                    isCurrent ? FontWeight.w600 : FontWeight.normal,
-                color: isCurrent
-                    ? Theme.of(context).colorScheme.primary
-                    : Theme.of(context)
-                        .colorScheme
-                        .onSurface
-                        .withValues(alpha: 0.5),
-              ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _buildLineText(context, line, isCurrent),
+                if (showTranslation)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      line.translation!,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: isCurrent ? 13 : 11,
+                        color: Theme.of(context)
+                            .colorScheme
+                            .onSurfaceVariant
+                            .withValues(alpha: isCurrent ? 0.85 : 0.4),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
         );
       },
+    );
+  }
+
+  /// Renders a lyric line, using per-word gradient highlighting for the
+  /// current line when word-level timing is available, and falling back to
+  /// whole-line highlighting otherwise.
+  Widget _buildLineText(BuildContext context, LyricLine line, bool isCurrent) {
+    final dimColor = Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5);
+    final activeColor = Theme.of(context).colorScheme.primary;
+    final words = line.words;
+    if (isCurrent && words != null && words.isNotEmpty) {
+      final spans = <TextSpan>[];
+      for (var i = 0; i < words.length; i++) {
+        final word = words[i];
+        final wordEnd = i + 1 < words.length ? words[i + 1].offset : null;
+        double progress;
+        if (widget.position <= word.offset) {
+          progress = 0.0;
+        } else if (wordEnd == null) {
+          progress = 1.0;
+        } else if (widget.position >= wordEnd) {
+          progress = 1.0;
+        } else {
+          final totalMs = (wordEnd - word.offset).inMilliseconds;
+          final doneMs = (widget.position - word.offset).inMilliseconds;
+          progress = totalMs > 0 ? (doneMs / totalMs).clamp(0.0, 1.0) : 1.0;
+        }
+        spans.add(TextSpan(
+          text: word.text,
+          style: TextStyle(color: Color.lerp(dimColor, activeColor, progress)),
+        ));
+      }
+      return RichText(
+        textAlign: TextAlign.center,
+        text: TextSpan(
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+          children: spans,
+        ),
+      );
+    }
+    return Text(
+      line.text,
+      textAlign: TextAlign.center,
+      style: TextStyle(
+        fontSize: isCurrent ? 18 : 15,
+        fontWeight: isCurrent ? FontWeight.w600 : FontWeight.normal,
+        color: isCurrent ? activeColor : dimColor,
+      ),
     );
   }
 }
