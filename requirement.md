@@ -1575,3 +1575,17 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - **feat: 搜索增强（Meilisearch 替换 PostgreSQL 全文搜索）** — 服务端：Docker Compose 新增 `meilisearch` 服务（`getmeili/meilisearch:latest`，`MEILI_MASTER_KEY` 注入）；新增 `internal/search` package，`SearchService` 接口 + Meilisearch 实现（`github.com/meilisearch/meilisearch-go`）；索引同步：`catalog.Service` 写入 Artist / Album / Track 后异步推送到 Meilisearch index（goroutine，失败仅记 log，不影响主流程）；`GET /api/v1/catalog/search` 路由切换为 Meilisearch 后端，`typoTolerance` 开启（支持拼写容错和 CJK 分词）；Meilisearch 不可用时自动降级到 PostgreSQL 全文搜索，响应 schema 不变（`CatalogSearchResult`），兼容现有 Flutter 客户端。
 - Flutter 客户端：SearchScreen 新增 autocomplete 下拉（debounce 150ms → GET 请求 → 展示前 5 条 Tracks 建议）；搜索结果页新增 Filter Tab（All / Artists / Albums / Tracks）；空结果状态插图（onSurfaceVariant 占位图 + 提示文字）。
 - The phase output is version-tracked and covered by Go search service unit tests（模糊匹配 / 空查询 / Meilisearch 不可用降级到 PG 全文搜索）, docker-compose smoke test, OpenAPI contract tests, and flutter analyze (0 issues).
+
+### v4.4.0 - TBD
+
+- **feat: 歌词深化（逐字高亮 + 双语翻译 + 后台管理）** — 服务端：`LyricsResponse` OpenAPI schema 新增 `translation string?`（双语翻译文本）及 `source string?`（歌词来源标注：`embedded` / `manual` / `lrclib` 等）字段；`POST /api/v1/catalog/tracks/{id}/lyrics` 请求体支持同时上传主歌词与翻译；migration `014_track_lyrics_translation.sql` 新增 `tracks.lyrics_translation_media_object_id` 列；OpenAPI 版本升至 4.4.0。
+- Flutter 客户端：`lrc_parser.dart` 新增逐字增强 LRC 解析（`<mm:ss.xx>` 内联时间戳切分 word-level spans）；`lyric_line.dart` 模型扩展 `words` 与 `translation` 字段；`full_player_screen.dart` 的 `_LyricsList` 重构为当前行逐字渐变高亮（无逐字数据时回退整行高亮），当前行下方渲染次要样式翻译文本；Settings 新增「双语歌词」开关。
+- 管理端 Admin Web：`services/admin/app/(admin)/catalog/page.tsx` tracks tab 新增歌词管理入口（镜像现有 Relink 对话框模式），支持上传/预览/删除歌词与翻译文件、展示来源标注。
+- The phase output is version-tracked and covered by Go unit tests (歌词翻译字段 + migration), OpenAPI contract tests, and flutter analyze (0 issues).
+
+### v4.5.0 - TBD
+
+- **feat: 搜索收尾（高亮 / 拼音 / 历史）+ ReplayGain 自动分析 + 全量重建索引** — 服务端：`internal/search.Service` 接口扩展高亮支持，`Search()` 返回值携带匹配片段（`MeilisearchService` 接入 `SearchRequest` 已支持的 `AttributesToHighlight`/`HighlightPreTag`/`HighlightPostTag`）；新增 `cmd/reindex/main.go` CLI 工具（复用 `cmd/server/main.go` 的 repo/service 构建模式，遍历全量 Artist/Album/Track 调用 `IndexTrack/Album/Artist` 重建 Meilisearch 索引）；拼音搜索：引入 Go 拼音库为中文标题生成拼音索引字段，写入 Meilisearch 附加字段并参与匹配。
+- ReplayGain 自动分析：曲目上传/导入完成后触发后台任务调用外部工具（ffmpeg/loudgain 或等价）分析响度，结果写入 `tracks.replay_gain_db`（复用 `catalog.Service.UpdateTrack` 既有写入路径）；分析失败不阻塞上传流程，仅记 log。
+- Flutter 客户端：`search_screen.dart` 新增搜索历史（`SharedPreferences` 持久化最近 N 条查询，聚焦时展示，可清除单条/全部）；搜索结果高亮渲染（`RichText`/`TextSpan` 按后端返回的高亮片段着色匹配子串）。
+- The phase output is version-tracked and covered by Go unit tests (highlight 字段解析、reindex CLI、ReplayGain 分析 fallback), OpenAPI contract tests, and flutter analyze (0 issues).
