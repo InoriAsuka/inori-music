@@ -1440,6 +1440,11 @@
           },
           "track": {
             "$ref": "#/components/schemas/CatalogTrack"
+          },
+          "highlight": {
+            "type": "string",
+            "nullable": true,
+            "description": "HTML snippet (with <mark> tags around matched terms) for this item's matched field, when the search backend supports highlighting. Empty when the backend is degraded to PostgreSQL full-text search."
           }
         }
       },
@@ -2752,7 +2757,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "4.4.0"
+    "version": "4.5.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -7645,12 +7650,19 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PlaylistTracksResult",
-                  "properties": {
-                    "pagination": {
-                      "$ref": "#/components/schemas/CatalogPaginationMeta"
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/PlaylistTracksResult"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "pagination": {
+                          "$ref": "#/components/schemas/CatalogPaginationMeta"
+                        }
+                      }
                     }
-                  }
+                  ]
                 }
               }
             }
@@ -7958,12 +7970,19 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PlaylistTracksResult",
-                  "properties": {
-                    "pagination": {
-                      "$ref": "#/components/schemas/CatalogPaginationMeta"
+                  "allOf": [
+                    {
+                      "$ref": "#/components/schemas/PlaylistTracksResult"
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "pagination": {
+                          "$ref": "#/components/schemas/CatalogPaginationMeta"
+                        }
+                      }
                     }
-                  }
+                  ]
                 }
               }
             }

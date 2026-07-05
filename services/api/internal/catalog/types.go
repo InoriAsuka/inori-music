@@ -78,10 +78,11 @@ const (
 
 // SearchResultItem is a single catalog entity returned from a full-text search.
 type SearchResultItem struct {
-	Kind   SearchResultKind `json:"kind"`
-	Artist *Artist          `json:"artist,omitempty"`
-	Album  *Album           `json:"album,omitempty"`
-	Track  *Track           `json:"track,omitempty"`
+	Kind      SearchResultKind `json:"kind"`
+	Artist    *Artist          `json:"artist,omitempty"`
+	Album     *Album           `json:"album,omitempty"`
+	Track     *Track           `json:"track,omitempty"`
+	Highlight string           `json:"highlight,omitempty"`
 }
 
 // CatalogSearchResult holds the ordered result set from a catalog full-text search.

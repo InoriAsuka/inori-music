@@ -202,4 +202,10 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get noData => 'No data';
+
+  @override
+  String get recentSearches => 'Recent Searches';
+
+  @override
+  String get clearSearchHistory => 'Clear search history';
 }

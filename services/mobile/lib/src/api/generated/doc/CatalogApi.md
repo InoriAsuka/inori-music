@@ -25,9 +25,12 @@ Method | HTTP request | Description
 [**apiV1CatalogPlaylistsIdGet**](CatalogApi.md#apiv1catalogplaylistsidget) | **GET** /api/v1/catalog/playlists/{id} | Get a playlist by ID (viewer)
 [**apiV1CatalogPlaylistsIdTracksGet**](CatalogApi.md#apiv1catalogplaylistsidtracksget) | **GET** /api/v1/catalog/playlists/{id}/tracks | List the tracks of a playlist in playlist order (viewer)
 [**apiV1CatalogTracksIdStreamGet**](CatalogApi.md#apiv1catalogtracksidstreamget) | **GET** /api/v1/catalog/tracks/{id}/stream | Stream track audio
+[**deleteTrackLyrics**](CatalogApi.md#deletetracklyrics) | **DELETE** /api/v1/catalog/tracks/{id}/lyrics | Delete lyrics for a track (admin)
+[**getAlbumArtwork**](CatalogApi.md#getalbumartwork) | **GET** /api/v1/catalog/albums/{id}/artwork | Get album artwork URL
 [**getCatalogAlbum**](CatalogApi.md#getcatalogalbum) | **GET** /api/v1/catalog/albums/{id} | Get album
 [**getCatalogArtist**](CatalogApi.md#getcatalogartist) | **GET** /api/v1/catalog/artists/{id} | Get artist
 [**getCatalogTrack**](CatalogApi.md#getcatalogtrack) | **GET** /api/v1/catalog/tracks/{id} | Get track
+[**getTrackLyrics**](CatalogApi.md#gettracklyrics) | **GET** /api/v1/catalog/tracks/{id}/lyrics | Get lyrics for a track
 [**getTrackPlaybackDescriptor**](CatalogApi.md#gettrackplaybackdescriptor) | **GET** /api/v1/catalog/tracks/{id}/playback | Get track playback descriptor
 [**getViewerCatalogAlbumStats**](CatalogApi.md#getviewercatalogalbumstats) | **GET** /api/v1/catalog/stats/albums | Get per-album stats breakdown
 [**getViewerCatalogArtistStats**](CatalogApi.md#getviewercatalogartiststats) | **GET** /api/v1/catalog/stats/artists | Get per-artist stats breakdown
@@ -43,6 +46,7 @@ Method | HTTP request | Description
 [**listTracksByAlbum**](CatalogApi.md#listtracksbyalbum) | **GET** /api/v1/catalog/albums/{id}/tracks | List tracks by album
 [**listTracksByArtist**](CatalogApi.md#listtracksbyartist) | **GET** /api/v1/catalog/artists/{id}/tracks | List tracks by artist
 [**searchCatalog**](CatalogApi.md#searchcatalog) | **GET** /api/v1/admin/catalog/search | Search catalog
+[**uploadTrackLyrics**](CatalogApi.md#uploadtracklyrics) | **POST** /api/v1/catalog/tracks/{id}/lyrics | Upload lyrics for a track (admin)
 
 
 # **adminListAlbumsByArtist**
@@ -773,6 +777,87 @@ void (empty response body)
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
 
+# **deleteTrackLyrics**
+> deleteTrackLyrics(id)
+
+Delete lyrics for a track (admin)
+
+### Example
+```dart
+import 'package:inori_api/api.dart';
+
+final api = InoriApi().getCatalogApi();
+final String id = id_example; // String | Catalog entity identifier
+
+try {
+    api.deleteTrackLyrics(id);
+} on DioException catch (e) {
+    print('Exception when calling CatalogApi->deleteTrackLyrics: $e\n');
+}
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **id** | **String**| Catalog entity identifier | 
+
+### Return type
+
+void (empty response body)
+
+### Authorization
+
+[bearerAuth](../README.md#bearerAuth)
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
+ - **Accept**: Not defined
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **getAlbumArtwork**
+> AlbumArtworkResponse getAlbumArtwork(id)
+
+Get album artwork URL
+
+### Example
+```dart
+import 'package:inori_api/api.dart';
+
+final api = InoriApi().getCatalogApi();
+final String id = id_example; // String | Catalog entity identifier
+
+try {
+    final response = api.getAlbumArtwork(id);
+    print(response);
+} on DioException catch (e) {
+    print('Exception when calling CatalogApi->getAlbumArtwork: $e\n');
+}
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **id** | **String**| Catalog entity identifier | 
+
+### Return type
+
+[**AlbumArtworkResponse**](AlbumArtworkResponse.md)
+
+### Authorization
+
+[bearerAuth](../README.md#bearerAuth)
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
+ - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
 # **getCatalogAlbum**
 > CatalogAlbum getCatalogAlbum(id)
 
@@ -884,6 +969,47 @@ Name | Type | Description  | Notes
 ### Return type
 
 [**CatalogTrack**](CatalogTrack.md)
+
+### Authorization
+
+[bearerAuth](../README.md#bearerAuth)
+
+### HTTP request headers
+
+ - **Content-Type**: Not defined
+ - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **getTrackLyrics**
+> LyricsResponse getTrackLyrics(id)
+
+Get lyrics for a track
+
+### Example
+```dart
+import 'package:inori_api/api.dart';
+
+final api = InoriApi().getCatalogApi();
+final String id = id_example; // String | Catalog entity identifier
+
+try {
+    final response = api.getTrackLyrics(id);
+    print(response);
+} on DioException catch (e) {
+    print('Exception when calling CatalogApi->getTrackLyrics: $e\n');
+}
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **id** | **String**| Catalog entity identifier | 
+
+### Return type
+
+[**LyricsResponse**](LyricsResponse.md)
 
 ### Authorization
 
@@ -1581,6 +1707,51 @@ Name | Type | Description  | Notes
 ### HTTP request headers
 
  - **Content-Type**: Not defined
+ - **Accept**: application/json
+
+[[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)
+
+# **uploadTrackLyrics**
+> UploadTrackLyrics201Response uploadTrackLyrics(id, file, translation)
+
+Upload lyrics for a track (admin)
+
+### Example
+```dart
+import 'package:inori_api/api.dart';
+
+final api = InoriApi().getCatalogApi();
+final String id = id_example; // String | Catalog entity identifier
+final MultipartFile file = BINARY_DATA_HERE; // MultipartFile | 
+final MultipartFile translation = BINARY_DATA_HERE; // MultipartFile | Optional translation file, same format constraints as file (UTF-8 text, <=512KB)
+
+try {
+    final response = api.uploadTrackLyrics(id, file, translation);
+    print(response);
+} on DioException catch (e) {
+    print('Exception when calling CatalogApi->uploadTrackLyrics: $e\n');
+}
+```
+
+### Parameters
+
+Name | Type | Description  | Notes
+------------- | ------------- | ------------- | -------------
+ **id** | **String**| Catalog entity identifier | 
+ **file** | **MultipartFile**|  | 
+ **translation** | **MultipartFile**| Optional translation file, same format constraints as file (UTF-8 text, <=512KB) | [optional] 
+
+### Return type
+
+[**UploadTrackLyrics201Response**](UploadTrackLyrics201Response.md)
+
+### Authorization
+
+[bearerAuth](../README.md#bearerAuth)
+
+### HTTP request headers
+
+ - **Content-Type**: multipart/form-data
  - **Accept**: application/json
 
 [[Back to top]](#) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to Model list]](../README.md#documentation-for-models) [[Back to README]](../README.md)

@@ -31,6 +31,8 @@ class SearchResultItem {
      this.album,
 
      this.track,
+
+     this.highlight,
   });
 
   @JsonKey(
@@ -81,6 +83,19 @@ class SearchResultItem {
 
 
 
+      /// HTML snippet (with <mark> tags around matched terms) for this item's matched field, when the search backend supports highlighting. Empty when the backend is degraded to PostgreSQL full-text search.
+  @JsonKey(
+    
+    name: r'highlight',
+    required: false,
+    includeIfNull: false,
+  )
+
+
+  final String? highlight;
+
+
+
 
 
     @override
@@ -88,14 +103,16 @@ class SearchResultItem {
       other.kind == kind &&
       other.artist == artist &&
       other.album == album &&
-      other.track == track;
+      other.track == track &&
+      other.highlight == highlight;
 
     @override
     int get hashCode =>
         kind.hashCode +
         artist.hashCode +
         album.hashCode +
-        track.hashCode;
+        track.hashCode +
+        highlight.hashCode;
 
   factory SearchResultItem.fromJson(Map<String, dynamic> json) => _$SearchResultItemFromJson(json);
 

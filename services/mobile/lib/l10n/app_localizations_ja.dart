@@ -201,4 +201,10 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get noData => 'データがありません';
+
+  @override
+  String get recentSearches => '最近の検索';
+
+  @override
+  String get clearSearchHistory => '検索履歴を削除';
 }

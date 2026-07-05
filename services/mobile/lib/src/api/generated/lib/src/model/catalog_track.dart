@@ -45,6 +45,10 @@ class CatalogTrack {
      this.genre,
 
      this.isFavorite = false,
+
+     this.lyricsMediaObjectId,
+
+     this.replayGainDb,
   });
 
   @JsonKey(
@@ -208,6 +212,32 @@ class CatalogTrack {
 
 
 
+      /// ID of the media object used as lyrics (optional)
+  @JsonKey(
+    
+    name: r'lyricsMediaObjectId',
+    required: false,
+    includeIfNull: false,
+  )
+
+
+  final String? lyricsMediaObjectId;
+
+
+
+      /// ReplayGain normalization value in dB (null = not analyzed)
+  @JsonKey(
+    
+    name: r'replayGainDb',
+    required: false,
+    includeIfNull: false,
+  )
+
+
+  final double? replayGainDb;
+
+
+
 
 
     @override
@@ -224,7 +254,9 @@ class CatalogTrack {
       other.trackNumber == trackNumber &&
       other.updatedAt == updatedAt &&
       other.genre == genre &&
-      other.isFavorite == isFavorite;
+      other.isFavorite == isFavorite &&
+      other.lyricsMediaObjectId == lyricsMediaObjectId &&
+      other.replayGainDb == replayGainDb;
 
     @override
     int get hashCode =>
@@ -240,7 +272,9 @@ class CatalogTrack {
         trackNumber.hashCode +
         updatedAt.hashCode +
         genre.hashCode +
-        isFavorite.hashCode;
+        isFavorite.hashCode +
+        lyricsMediaObjectId.hashCode +
+        replayGainDb.hashCode;
 
   factory CatalogTrack.fromJson(Map<String, dynamic> json) => _$CatalogTrackFromJson(json);
 

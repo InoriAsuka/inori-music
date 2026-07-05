@@ -16,6 +16,7 @@ Name | Type | Description | Notes
 **discNumber** | **int** |  | [optional] 
 **durationMs** | **int** | Track duration in milliseconds. | [optional] 
 **genre** | **String** |  | [optional] 
+**replayGainDb** | **double** |  | [optional] 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
 

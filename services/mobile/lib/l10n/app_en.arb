@@ -69,5 +69,7 @@
   "serverUrl": "Server URL",
   "deleteHistory": "Delete History",
   "noHistory": "No history yet",
-  "noData": "No data"
+  "noData": "No data",
+  "recentSearches": "Recent Searches",
+  "clearSearchHistory": "Clear search history"
 }

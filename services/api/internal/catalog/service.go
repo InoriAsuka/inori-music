@@ -19,11 +19,19 @@ type IndexService interface {
 	IndexArtist(ctx context.Context, artistID, name string) error
 }
 
+// AudioAnalyzer triggers asynchronous ReplayGain loudness analysis for a track's
+// underlying media object. Defined here to avoid an import cycle between the
+// catalog, storage, and audioanalysis packages.
+type AudioAnalyzer interface {
+	AnalyzeTrack(ctx context.Context, trackID, mediaObjectID string) error
+}
+
 // Service coordinates music catalog metadata validation and persistence.
 type Service struct {
 	repo        Repository
 	mediaReader MediaObjectReader // optional; required only for ImportTrack
-	searchSvc   IndexService     // optional, nil = no index push
+	searchSvc   IndexService      // optional, nil = no index push
+	analyzer    AudioAnalyzer     // optional, nil = no ReplayGain analysis
 	now         func() time.Time
 }
 
@@ -48,6 +56,13 @@ func (s *Service) WithClock(fn func() time.Time) *Service {
 // ImportTrack can validate media objects before creating track records.
 func (s *Service) WithMediaObjectReader(r MediaObjectReader) *Service {
 	s.mediaReader = r
+	return s
+}
+
+// WithAudioAnalyzer attaches a ReplayGain loudness analyzer so that CreateTrack
+// and ImportTrack trigger asynchronous analysis of newly added tracks.
+func (s *Service) WithAudioAnalyzer(a AudioAnalyzer) *Service {
+	s.analyzer = a
 	return s
 }
 
@@ -281,6 +296,13 @@ func (s *Service) CreateTrack(ctx context.Context, title, sortTitle, artistID, a
 			}
 		}()
 	}
+	if s.analyzer != nil {
+		go func() {
+			if err := s.analyzer.AnalyzeTrack(context.Background(), track.ID, track.MediaObjectID); err != nil {
+				log.Printf("audioanalysis: analyze track %s: %v", track.ID, err)
+			}
+		}()
+	}
 	return track, nil
 }
 
@@ -481,6 +503,13 @@ func (s *Service) ImportTrack(ctx context.Context, req ImportTrackRequest) (Trac
 		go func() {
 			if err := s.searchSvc.IndexTrack(context.Background(), track.ID, track.Title, track.ArtistID, track.Genre); err != nil {
 				log.Printf("search: index track %s: %v", track.ID, err)
+			}
+		}()
+	}
+	if s.analyzer != nil {
+		go func() {
+			if err := s.analyzer.AnalyzeTrack(context.Background(), track.ID, track.MediaObjectID); err != nil {
+				log.Printf("audioanalysis: analyze track %s: %v", track.ID, err)
 			}
 		}()
 	}

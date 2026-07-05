@@ -1299,17 +1299,17 @@ func (handler *Handler) searchCatalog(w http.ResponseWriter, r *http.Request) {
 		result = catalog.CatalogSearchResult{Query: q}
 		for _, id := range sr.Artists {
 			if a, err := handler.catalogService.GetArtist(r.Context(), id); err == nil {
-				result.Items = append(result.Items, catalog.SearchResultItem{Kind: catalog.SearchResultArtist, Artist: &a})
+				result.Items = append(result.Items, catalog.SearchResultItem{Kind: catalog.SearchResultArtist, Artist: &a, Highlight: sr.Highlights[id]})
 			}
 		}
 		for _, id := range sr.Albums {
 			if a, err := handler.catalogService.GetAlbum(r.Context(), id); err == nil {
-				result.Items = append(result.Items, catalog.SearchResultItem{Kind: catalog.SearchResultAlbum, Album: &a})
+				result.Items = append(result.Items, catalog.SearchResultItem{Kind: catalog.SearchResultAlbum, Album: &a, Highlight: sr.Highlights[id]})
 			}
 		}
 		for _, id := range sr.Tracks {
 			if t, err := handler.catalogService.GetTrack(r.Context(), id); err == nil {
-				result.Items = append(result.Items, catalog.SearchResultItem{Kind: catalog.SearchResultTrack, Track: &t})
+				result.Items = append(result.Items, catalog.SearchResultItem{Kind: catalog.SearchResultTrack, Track: &t, Highlight: sr.Highlights[id]})
 			}
 		}
 	} else {

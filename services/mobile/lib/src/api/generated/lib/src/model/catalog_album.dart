@@ -33,6 +33,8 @@ class CatalogAlbum {
     required  this.title,
 
     required  this.updatedAt,
+
+     this.artworkMediaObjectId,
   });
 
   @JsonKey(
@@ -120,6 +122,19 @@ class CatalogAlbum {
 
 
 
+      /// ID of the media object used as cover artwork (optional)
+  @JsonKey(
+    
+    name: r'artworkMediaObjectId',
+    required: false,
+    includeIfNull: false,
+  )
+
+
+  final String? artworkMediaObjectId;
+
+
+
 
 
     @override
@@ -130,7 +145,8 @@ class CatalogAlbum {
       other.releaseYear == releaseYear &&
       other.sortTitle == sortTitle &&
       other.title == title &&
-      other.updatedAt == updatedAt;
+      other.updatedAt == updatedAt &&
+      other.artworkMediaObjectId == artworkMediaObjectId;
 
     @override
     int get hashCode =>
@@ -140,7 +156,8 @@ class CatalogAlbum {
         releaseYear.hashCode +
         sortTitle.hashCode +
         title.hashCode +
-        updatedAt.hashCode;
+        updatedAt.hashCode +
+        artworkMediaObjectId.hashCode;
 
   factory CatalogAlbum.fromJson(Map<String, dynamic> json) => _$CatalogAlbumFromJson(json);
 

@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`4.4.0`
+`4.5.0`
 
 ## Product Goal
 
@@ -1583,7 +1583,7 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - 管理端 Admin Web：`services/admin/app/(admin)/catalog/page.tsx` tracks tab 新增歌词管理入口（镜像现有 Relink 对话框模式），支持上传/预览/删除歌词与翻译文件、展示来源标注。
 - The phase output is version-tracked and covered by Go unit tests (歌词翻译字段 + migration), OpenAPI contract tests, and flutter analyze (0 issues).
 
-### v4.5.0 - TBD
+### v4.5.0 - 2026-07-06
 
 - **feat: 搜索收尾（高亮 / 拼音 / 历史）+ ReplayGain 自动分析 + 全量重建索引** — 服务端：`internal/search.Service` 接口扩展高亮支持，`Search()` 返回值携带匹配片段（`MeilisearchService` 接入 `SearchRequest` 已支持的 `AttributesToHighlight`/`HighlightPreTag`/`HighlightPostTag`）；新增 `cmd/reindex/main.go` CLI 工具（复用 `cmd/server/main.go` 的 repo/service 构建模式，遍历全量 Artist/Album/Track 调用 `IndexTrack/Album/Artist` 重建 Meilisearch 索引）；拼音搜索：引入 Go 拼音库为中文标题生成拼音索引字段，写入 Meilisearch 附加字段并参与匹配。
 - ReplayGain 自动分析：曲目上传/导入完成后触发后台任务调用外部工具（ffmpeg/loudgain 或等价）分析响度，结果写入 `tracks.replay_gain_db`（复用 `catalog.Service.UpdateTrack` 既有写入路径）；分析失败不阻塞上传流程，仅记 log。

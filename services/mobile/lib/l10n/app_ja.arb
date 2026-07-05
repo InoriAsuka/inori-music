@@ -68,5 +68,7 @@
   "serverUrl": "サーバーURL",
   "deleteHistory": "履歴を削除",
   "noHistory": "再生履歴がありません",
-  "noData": "データがありません"
+  "noData": "データがありません",
+  "recentSearches": "最近の検索",
+  "clearSearchHistory": "検索履歴を削除"
 }

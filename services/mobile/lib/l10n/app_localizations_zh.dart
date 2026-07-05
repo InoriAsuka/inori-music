@@ -201,4 +201,10 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get noData => '暂无数据';
+
+  @override
+  String get recentSearches => '最近搜索';
+
+  @override
+  String get clearSearchHistory => '清除搜索历史';
 }

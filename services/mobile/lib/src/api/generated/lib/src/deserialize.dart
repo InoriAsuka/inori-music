@@ -1,6 +1,8 @@
 import 'package:inori_api/src/model/add_playlist_track_request.dart';
+import 'package:inori_api/src/model/add_user_playlist_track_request.dart';
 import 'package:inori_api/src/model/admin_list_user_favorites200_response.dart';
 import 'package:inori_api/src/model/admin_list_user_favorites200_response_pagination.dart';
+import 'package:inori_api/src/model/album_artwork_response.dart';
 import 'package:inori_api/src/model/api_v1_admin_catalog_albums_get200_response.dart';
 import 'package:inori_api/src/model/api_v1_admin_catalog_artists_get200_response.dart';
 import 'package:inori_api/src/model/api_v1_admin_catalog_playlists_get200_response.dart';
@@ -38,6 +40,7 @@ import 'package:inori_api/src/model/catalog_update_artist_request.dart';
 import 'package:inori_api/src/model/catalog_update_track_request.dart';
 import 'package:inori_api/src/model/change_password_request.dart';
 import 'package:inori_api/src/model/create_playlist_request.dart';
+import 'package:inori_api/src/model/create_user_playlist_request.dart';
 import 'package:inori_api/src/model/create_user_request.dart';
 import 'package:inori_api/src/model/delete_admin_user_sessions200_response.dart';
 import 'package:inori_api/src/model/distributed_config.dart';
@@ -47,13 +50,16 @@ import 'package:inori_api/src/model/favorites_page.dart';
 import 'package:inori_api/src/model/force_change_password_request.dart';
 import 'package:inori_api/src/model/get_admin_user_sessions200_response.dart';
 import 'package:inori_api/src/model/get_my_history_summary200_response.dart';
+import 'package:inori_api/src/model/get_user_playlist_tracks200_response.dart';
 import 'package:inori_api/src/model/global_history_summary.dart';
 import 'package:inori_api/src/model/healthz_get200_response.dart';
 import 'package:inori_api/src/model/history_stats.dart';
 import 'package:inori_api/src/model/list_my_track_history200_response.dart';
+import 'package:inori_api/src/model/list_user_playlists200_response.dart';
 import 'package:inori_api/src/model/local_config.dart';
 import 'package:inori_api/src/model/login_request.dart';
 import 'package:inori_api/src/model/login_response.dart';
+import 'package:inori_api/src/model/lyrics_response.dart';
 import 'package:inori_api/src/model/media_object.dart';
 import 'package:inori_api/src/model/media_object_bulk_lifecycle_request.dart';
 import 'package:inori_api/src/model/media_object_duplicate_group.dart';
@@ -93,6 +99,7 @@ import 'package:inori_api/src/model/search_result_item.dart';
 import 'package:inori_api/src/model/service_info.dart';
 import 'package:inori_api/src/model/session_view.dart';
 import 'package:inori_api/src/model/set_playlist_tracks_request.dart';
+import 'package:inori_api/src/model/set_user_playlist_tracks_request.dart';
 import 'package:inori_api/src/model/storage_backend.dart';
 import 'package:inori_api/src/model/storage_backend_request.dart';
 import 'package:inori_api/src/model/timeline_bucket.dart';
@@ -105,11 +112,14 @@ import 'package:inori_api/src/model/track_play_count.dart';
 import 'package:inori_api/src/model/track_playback_descriptor.dart';
 import 'package:inori_api/src/model/update_play_event_request.dart';
 import 'package:inori_api/src/model/update_playlist_request.dart';
+import 'package:inori_api/src/model/update_user_playlist_request.dart';
 import 'package:inori_api/src/model/updated_catalog_item.dart';
 import 'package:inori_api/src/model/updated_catalog_result.dart';
+import 'package:inori_api/src/model/upload_track_lyrics201_response.dart';
 import 'package:inori_api/src/model/user_history_stats.dart';
 import 'package:inori_api/src/model/user_history_summary.dart';
 import 'package:inori_api/src/model/user_play_count.dart';
+import 'package:inori_api/src/model/user_playlist.dart';
 import 'package:inori_api/src/model/user_track_stats.dart';
 import 'package:inori_api/src/model/user_view.dart';
 
@@ -133,10 +143,14 @@ final _regMap = RegExp(r'^Map<String,(.*)>$');
           return (value is double ? value : double.parse('$value')) as ReturnType;
         case 'AddPlaylistTrackRequest':
           return AddPlaylistTrackRequest.fromJson(value as Map<String, dynamic>) as ReturnType;
+        case 'AddUserPlaylistTrackRequest':
+          return AddUserPlaylistTrackRequest.fromJson(value as Map<String, dynamic>) as ReturnType;
         case 'AdminListUserFavorites200Response':
           return AdminListUserFavorites200Response.fromJson(value as Map<String, dynamic>) as ReturnType;
         case 'AdminListUserFavorites200ResponsePagination':
           return AdminListUserFavorites200ResponsePagination.fromJson(value as Map<String, dynamic>) as ReturnType;
+        case 'AlbumArtworkResponse':
+          return AlbumArtworkResponse.fromJson(value as Map<String, dynamic>) as ReturnType;
         case 'ApiV1AdminCatalogAlbumsGet200Response':
           return ApiV1AdminCatalogAlbumsGet200Response.fromJson(value as Map<String, dynamic>) as ReturnType;
         case 'ApiV1AdminCatalogArtistsGet200Response':
@@ -214,6 +228,8 @@ final _regMap = RegExp(r'^Map<String,(.*)>$');
           return ChangePasswordRequest.fromJson(value as Map<String, dynamic>) as ReturnType;
         case 'CreatePlaylistRequest':
           return CreatePlaylistRequest.fromJson(value as Map<String, dynamic>) as ReturnType;
+        case 'CreateUserPlaylistRequest':
+          return CreateUserPlaylistRequest.fromJson(value as Map<String, dynamic>) as ReturnType;
         case 'CreateUserRequest':
           return CreateUserRequest.fromJson(value as Map<String, dynamic>) as ReturnType;
         case 'DeleteAdminUserSessions200Response':
@@ -232,6 +248,8 @@ final _regMap = RegExp(r'^Map<String,(.*)>$');
           return GetAdminUserSessions200Response.fromJson(value as Map<String, dynamic>) as ReturnType;
         case 'GetMyHistorySummary200Response':
           return GetMyHistorySummary200Response.fromJson(value as Map<String, dynamic>) as ReturnType;
+        case 'GetUserPlaylistTracks200Response':
+          return GetUserPlaylistTracks200Response.fromJson(value as Map<String, dynamic>) as ReturnType;
         case 'GlobalHistorySummary':
           return GlobalHistorySummary.fromJson(value as Map<String, dynamic>) as ReturnType;
         case 'HealthStatus':
@@ -243,12 +261,16 @@ final _regMap = RegExp(r'^Map<String,(.*)>$');
           return HistoryStats.fromJson(value as Map<String, dynamic>) as ReturnType;
         case 'ListMyTrackHistory200Response':
           return ListMyTrackHistory200Response.fromJson(value as Map<String, dynamic>) as ReturnType;
+        case 'ListUserPlaylists200Response':
+          return ListUserPlaylists200Response.fromJson(value as Map<String, dynamic>) as ReturnType;
         case 'LocalConfig':
           return LocalConfig.fromJson(value as Map<String, dynamic>) as ReturnType;
         case 'LoginRequest':
           return LoginRequest.fromJson(value as Map<String, dynamic>) as ReturnType;
         case 'LoginResponse':
           return LoginResponse.fromJson(value as Map<String, dynamic>) as ReturnType;
+        case 'LyricsResponse':
+          return LyricsResponse.fromJson(value as Map<String, dynamic>) as ReturnType;
         case 'MediaObject':
           return MediaObject.fromJson(value as Map<String, dynamic>) as ReturnType;
         case 'MediaObjectBulkLifecycleRequest':
@@ -333,6 +355,8 @@ final _regMap = RegExp(r'^Map<String,(.*)>$');
           return SessionView.fromJson(value as Map<String, dynamic>) as ReturnType;
         case 'SetPlaylistTracksRequest':
           return SetPlaylistTracksRequest.fromJson(value as Map<String, dynamic>) as ReturnType;
+        case 'SetUserPlaylistTracksRequest':
+          return SetUserPlaylistTracksRequest.fromJson(value as Map<String, dynamic>) as ReturnType;
         case 'StorageBackend':
           return StorageBackend.fromJson(value as Map<String, dynamic>) as ReturnType;
         case 'StorageBackendRequest':
@@ -357,16 +381,22 @@ final _regMap = RegExp(r'^Map<String,(.*)>$');
           return UpdatePlayEventRequest.fromJson(value as Map<String, dynamic>) as ReturnType;
         case 'UpdatePlaylistRequest':
           return UpdatePlaylistRequest.fromJson(value as Map<String, dynamic>) as ReturnType;
+        case 'UpdateUserPlaylistRequest':
+          return UpdateUserPlaylistRequest.fromJson(value as Map<String, dynamic>) as ReturnType;
         case 'UpdatedCatalogItem':
           return UpdatedCatalogItem.fromJson(value as Map<String, dynamic>) as ReturnType;
         case 'UpdatedCatalogResult':
           return UpdatedCatalogResult.fromJson(value as Map<String, dynamic>) as ReturnType;
+        case 'UploadTrackLyrics201Response':
+          return UploadTrackLyrics201Response.fromJson(value as Map<String, dynamic>) as ReturnType;
         case 'UserHistoryStats':
           return UserHistoryStats.fromJson(value as Map<String, dynamic>) as ReturnType;
         case 'UserHistorySummary':
           return UserHistorySummary.fromJson(value as Map<String, dynamic>) as ReturnType;
         case 'UserPlayCount':
           return UserPlayCount.fromJson(value as Map<String, dynamic>) as ReturnType;
+        case 'UserPlaylist':
+          return UserPlaylist.fromJson(value as Map<String, dynamic>) as ReturnType;
         case 'UserRole':
           
           

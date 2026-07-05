@@ -35,6 +35,8 @@ class CatalogUpdateTrackRequest {
      this.durationMs,
 
      this.genre,
+
+     this.replayGainDb,
   });
 
       /// Track title. Must not be empty if provided.
@@ -141,6 +143,18 @@ class CatalogUpdateTrackRequest {
 
 
 
+  @JsonKey(
+    
+    name: r'replayGainDb',
+    required: false,
+    includeIfNull: false,
+  )
+
+
+  final double? replayGainDb;
+
+
+
 
 
     @override
@@ -152,7 +166,8 @@ class CatalogUpdateTrackRequest {
       other.trackNumber == trackNumber &&
       other.discNumber == discNumber &&
       other.durationMs == durationMs &&
-      other.genre == genre;
+      other.genre == genre &&
+      other.replayGainDb == replayGainDb;
 
     @override
     int get hashCode =>
@@ -163,7 +178,8 @@ class CatalogUpdateTrackRequest {
         trackNumber.hashCode +
         discNumber.hashCode +
         durationMs.hashCode +
-        genre.hashCode;
+        genre.hashCode +
+        replayGainDb.hashCode;
 
   factory CatalogUpdateTrackRequest.fromJson(Map<String, dynamic> json) => _$CatalogUpdateTrackRequestFromJson(json);
 

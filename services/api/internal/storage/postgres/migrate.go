@@ -224,4 +224,18 @@ CREATE INDEX IF NOT EXISTS user_track_favorites_user_id_created_at_idx
 		name: "011_album_artwork",
 		sql:  `ALTER TABLE albums ADD COLUMN IF NOT EXISTS artwork_media_object_id TEXT;`,
 	},
+	{
+		name: "012_track_lyrics",
+		sql:  `ALTER TABLE tracks ADD COLUMN IF NOT EXISTS lyrics_media_object_id TEXT;`,
+	},
+	{
+		name: "013_track_replaygain",
+		sql:  `ALTER TABLE tracks ADD COLUMN IF NOT EXISTS replay_gain_db REAL;`,
+	},
+	{
+		name: "014_track_lyrics_translation",
+		sql: `
+ALTER TABLE tracks ADD COLUMN IF NOT EXISTS lyrics_translation_media_object_id TEXT;
+ALTER TABLE tracks ADD COLUMN IF NOT EXISTS lyrics_source TEXT;`,
+	},
 }

@@ -16,6 +16,7 @@ import 'package:inori_api/src/api/default_api.dart';
 import 'package:inori_api/src/api/history_api.dart';
 import 'package:inori_api/src/api/me_api.dart';
 import 'package:inori_api/src/api/playlists_api.dart';
+import 'package:inori_api/src/api/user_playlists_api.dart';
 import 'package:inori_api/src/api/viewer_api.dart';
 
 class InoriApi {
@@ -161,6 +162,12 @@ class InoriApi {
   /// by doing that all interceptors will not be executed
   PlaylistsApi getPlaylistsApi() {
     return PlaylistsApi(dio);
+  }
+
+  /// Get UserPlaylistsApi instance, base route and serializer can be overridden by a given but be careful,
+  /// by doing that all interceptors will not be executed
+  UserPlaylistsApi getUserPlaylistsApi() {
+    return UserPlaylistsApi(dio);
   }
 
   /// Get ViewerApi instance, base route and serializer can be overridden by a given but be careful,

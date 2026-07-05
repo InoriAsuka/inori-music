@@ -39,7 +39,10 @@ func (s *PostgresService) Search(ctx context.Context, q string, limit int) (Sear
 	if err != nil {
 		return SearchResult{}, err
 	}
-	out := SearchResult{}
+	// Highlights stays an empty (non-nil) map: PG full-text search has no
+	// snippet/highlight capability, so callers see "no highlight" uniformly
+	// rather than having to distinguish nil-vs-empty across backends.
+	out := SearchResult{Highlights: map[string]string{}}
 	for _, item := range result.Items {
 		switch {
 		case item.ArtistID != "":

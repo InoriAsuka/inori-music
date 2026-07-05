@@ -7,6 +7,11 @@ type SearchResult struct {
 	Artists []string
 	Albums  []string
 	Tracks  []string
+	// Highlights maps an entity ID to its highlighted match snippet (HTML with
+	// <mark> tags), when the backend supports highlighting. Empty when the
+	// backend does not support it (e.g. PG fallback) or an entity had no
+	// highlightable match.
+	Highlights map[string]string
 }
 
 // Service abstracts the search backend.

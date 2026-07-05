@@ -68,5 +68,7 @@
   "serverUrl": "服务器地址",
   "deleteHistory": "删除历史",
   "noHistory": "暂无播放记录",
-  "noData": "暂无数据"
+  "noData": "暂无数据",
+  "recentSearches": "最近搜索",
+  "clearSearchHistory": "清除搜索历史"
 }

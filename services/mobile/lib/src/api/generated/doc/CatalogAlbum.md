@@ -15,6 +15,7 @@ Name | Type | Description | Notes
 **sortTitle** | **String** |  | [optional] 
 **title** | **String** |  | 
 **updatedAt** | [**DateTime**](DateTime.md) |  | 
+**artworkMediaObjectId** | **String** | ID of the media object used as cover artwork (optional) | [optional] 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
 

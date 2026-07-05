@@ -12,6 +12,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"inori-music/services/api/internal/audioanalysis"
 	"inori-music/services/api/internal/auth"
 	authpg "inori-music/services/api/internal/auth/postgres"
 	"inori-music/services/api/internal/catalog"
@@ -84,6 +85,7 @@ func main() {
 	// Catalog service — PostgreSQL when pool is available, in-memory otherwise.
 	catalogRepo := catalogRepository(pool)
 	catalogService := catalog.NewService(catalogRepo)
+	catalogService.WithAudioAnalyzer(audioanalysis.New(mediaObjectService, storageService, catalogService))
 
 	// Meilisearch search — optional, falls back to PG if not configured.
 	var searchSvc search.Service
