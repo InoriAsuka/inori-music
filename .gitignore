@@ -1,0 +1,7 @@
+# local runtime artifacts
+.codegraph/*.pid
+.codegraph/*.db
+.codegraph/*.db-shm
+.codegraph/*.db-wal
+.codegraph/daemon.sock
+.claude/
