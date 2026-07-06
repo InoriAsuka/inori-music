@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`4.5.0`
+`4.6.0`
 
 ## Product Goal
 
@@ -1590,7 +1590,7 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Flutter 客户端：`search_screen.dart` 新增搜索历史（`SharedPreferences` 持久化最近 N 条查询，聚焦时展示，可清除单条/全部）；搜索结果高亮渲染（`RichText`/`TextSpan` 按后端返回的高亮片段着色匹配子串）。
 - The phase output is version-tracked and covered by Go unit tests (highlight 字段解析、reindex CLI、ReplayGain 分析 fallback), OpenAPI contract tests, and flutter analyze (0 issues).
 
-### v4.6.0 - TBD
+### v4.6.0 - 2026-07-06
 
 - **fix: 播放器封面图未透传 albumId 导致的静默失效** — `PlayerNotifier._makeMediaItem`/`_stubMediaItem` 解析出的 `albumId` 从未写入 `MediaItem.extras`，导致 `MiniPlayerBar`/`FullPlayerScreen` 读取 `extras['albumId']` 恒为 null，播放器内封面图自 v3.1.0 起从未正确显示，始终回退占位图标；修复为在两处 `extras` map 中补齐 `albumId` 字段。
 - **feat: MiniPlayer 拖拽进度条** — `MiniPlayerBar` 此前完全没有进度指示控件，新增可拖拽的紧凑进度条，支持点击/拖动跳转播放位置，缓冲中禁用交互。
