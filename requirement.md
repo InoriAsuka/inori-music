@@ -1596,3 +1596,28 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - **feat: MiniPlayer 拖拽进度条** — `MiniPlayerBar` 此前完全没有进度指示控件，新增可拖拽的紧凑进度条，支持点击/拖动跳转播放位置，缓冲中禁用交互。
 - **feat: EQ 自定义预设保存与命名** — `EqSettings` 新增 `customPresets` 字段，`EqNotifier` 支持保存当前频段为具名预设、切换、删除，持久化经 SharedPreferences；Settings EQ 区新增预设管理入口。
 - The phase output is version-tracked and covered by flutter analyze (0 issues) and flutter test (EqNotifier 自定义预设保存/删除/持久化单元测试).
+
+### v4.7.0 - TBD
+
+- **fix: 播放器音频真实性修复（gapless 状态同步 / ReplayGain 应用 / Shuffle / EQ 真实接线 / crossfade 如实化）** — 2026-07-06 全量代码审查发现 v4.1.0–v4.2.0 多项音频特性为假实现：EQ 依赖的 `just_audio_equalizer` 从未加入 `pubspec.yaml`，`audio_handler.dart` 经 `(_player as dynamic).setBands` 调用不存在的方法且异常被静默吞掉（EQ UI 对音频输出零影响）；ReplayGain 开关从未被 `PlayerNotifier` 读取，`replayGainDb` 在客户端无消费方；`setShuffle` 仅翻转状态位不改变播放顺序；`_runCrossfade` 是切歌后同 player 的音量 V 形凹陷而非双轨交叉淡化；`PlayerNotifier` 未监听 `currentIndexStream`，gapless 队列自动前进时 UI/通知栏/历史上报全部脱轨，且 `next()` 取模回绕无视 `RepeatMode.off`。本阶段逐项修复：`currentIndexStream` 订阅同步状态与逐曲历史上报、repeat 语义映射 `setLoopMode`、手动切歌改增量 `seekToNext/Previous`（不再全队列重建）、ReplayGain 增益实际应用（`10^(db/20)` 与用户音量正交）、shuffle 经 `setShuffleModeEnabled` 真实生效、EQ 改用 `AudioPipeline` + `AndroidEqualizer`（不支持平台明确禁用标注）、crossfade 如实降级为「切歌淡入淡出」并同步文案。
+- The phase output is version-tracked and covered by flutter analyze (0 issues), flutter test（PlayerNotifier 队列状态机集成测试 / ReplayGain 增益计算 / shuffle 顺序 / repeat 语义）, and 人工听感验收清单（真机 EQ 听感 / 连播元数据 / 逐曲历史）.
+
+### v4.8.0 - TBD
+
+- **chore: 测试与结构还债（v4 封版收官）** — Go：`internal/httpapi/handler.go`（5218 行）与 `handler_test.go`（9255 行）按域拆分为 storage/media/auth/catalog/history/favorites/userplaylist/search 多文件（同 package 纯移动，773 测试护航零行为变更）。Flutter：`AuthNotifier`/`SearchHistoryNotifier` 等 provider 单测补齐 + `MiniPlayerBar`/`TrackListTile`/`SearchScreen` widget 测试。Web：Playwright e2e 扩展为登录→浏览→播放→收藏→历史完整主流程，引入 Vitest 覆盖 `store/player.ts` 队列逻辑。Admin：建立 Playwright e2e 最小回归（登录/用户管理/catalog/storage 页）。仓库卫生：`git rm --cached .codegraph/daemon.pid`、README 重写至 v4.8.0 基线（修正技术栈与目录路径描述）、web/admin/mobile 版本号与根 VERSION 对齐、CI 补 biome lint step。本阶段完成后 v4 线封版，仅接受 bug 修复 patch。
+- The phase output is version-tracked and covered by 全部 CI job（api/web/mobile/admin/e2e）绿灯 and README 快速开始人工走查.
+
+### v5.0.0 - TBD
+
+- **feat: 安全加固与对外可用基线（v5 产品化主轴开篇）** — v5 主轴为「产品化/对外开放」。签名流媒体 URL：新增 `internal/streamsign` package（HMAC-SHA256 对 trackId+exp 签名，`INORI_STREAM_SIGNING_KEY` 配置，15 分钟有效期），`TrackPlaybackDescriptor.streamUrl` 直接返回已签名 URL，`streamTrack` 验签替代 `?token=` 会话校验，三端客户端删除 token 拼接逻辑——会话 token（24h 有效、全账户权限）不再进入 URL/代理日志。登录限速：per-IP + per-username 双维度内存限速器，连续失败 5 次指数退避，429 `too_many_requests`。会话清理：接线既有 `DeleteExpiredSessions` 为每小时后台任务。部署硬化：`MEILI_MASTER_KEY` 移除不安全默认值改为必填、nginx 追加 HSTS/nosniff/X-Frame-Options/基线 CSP 安全头、生产模式 CORS 未配置时 ERROR 警告。OpenAPI 契约版本升至 5.0.0。
+- The phase output is version-tracked and covered by Go unit tests（签名/过期/篡改/限速/清理）, OpenAPI contract tests, web e2e 播放主流程回归, and 人工验证（access log 无会话 token、过期流 URL 返回 401）.
+
+### v5.1.0 - TBD
+
+- **feat: Web 体验对齐 I（歌词面板 + 搜索高亮/历史）** — 纯前端消费既有服务端能力，无服务端变更。歌词：`lib/lyrics/lrcParser.ts` 移植 mobile 端 LRC 解析（行级/逐字 `<mm:ss.xx>` spans/翻译配对），`LyricsPanel` 组件随播放位置同步滚动、当前行高亮、逐字渐变（无 word 数据回退整行）、双语翻译展示与开关。搜索：`highlight` 字段（`<mark>` 片段）以字符串切分转 React 元素渲染（禁用 `dangerouslySetInnerHTML` 防 XSS，PG 降级空值回退纯文本）；localStorage 搜索历史（最近 20 条去重、聚焦展示、单删/清空、键盘可达），行为对齐 mobile 端；拼音搜索为服务端能力，web 零成本受益。
+- The phase output is version-tracked and covered by Vitest（lrcParser 表驱动测试）, Playwright e2e（高亮元素/历史条目/歌词滚动断言）, and type-check + biome lint.
+
+### v5.2.0 - TBD
+
+- **feat: Web 音频引擎对齐 II（ReplayGain / gapless / 状态持久化）** — WebAudio 增益管线：`AudioContext` + `MediaElementAudioSourceNode` + `GainNode`，ReplayGain 按 `10^(db/20)` 应用（与用户音量正交），audio 元素 `crossOrigin="anonymous"`，CORS 不满足时优雅降级直连播放；S3 presigned 场景的 bucket CORS 配置要求写入 operations 文档。双元素 gapless：备用 `HTMLAudioElement` 预载下一曲（进度 >50% 或剩余 <30s 触发），`ended` 时毫秒级切换，可选切歌淡入淡出（`linearRampToValueAtTime`），签名 URL 过期自动重取。状态持久化：zustand persist 保存队列/currentIndex/position（节流 5s）/音量/repeat/shuffle，刷新恢复不自动播放，登出清空。依赖 v5.0.0 签名 URL 先行（统一 CORS 语义），与 v5.1.0 可并行。
+- The phase output is version-tracked and covered by Vitest（增益计算/预载条件/持久化序列化）, Playwright e2e（连播自动接续/刷新恢复断言）, and 人工验收（响度对比/间隙听感/预载时机）.
