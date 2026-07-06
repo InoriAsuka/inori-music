@@ -1589,3 +1589,10 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - ReplayGain 自动分析：曲目上传/导入完成后触发后台任务调用外部工具（ffmpeg/loudgain 或等价）分析响度，结果写入 `tracks.replay_gain_db`（复用 `catalog.Service.UpdateTrack` 既有写入路径）；分析失败不阻塞上传流程，仅记 log。
 - Flutter 客户端：`search_screen.dart` 新增搜索历史（`SharedPreferences` 持久化最近 N 条查询，聚焦时展示，可清除单条/全部）；搜索结果高亮渲染（`RichText`/`TextSpan` 按后端返回的高亮片段着色匹配子串）。
 - The phase output is version-tracked and covered by Go unit tests (highlight 字段解析、reindex CLI、ReplayGain 分析 fallback), OpenAPI contract tests, and flutter analyze (0 issues).
+
+### v4.6.0 - TBD
+
+- **fix: 播放器封面图未透传 albumId 导致的静默失效** — `PlayerNotifier._makeMediaItem`/`_stubMediaItem` 解析出的 `albumId` 从未写入 `MediaItem.extras`，导致 `MiniPlayerBar`/`FullPlayerScreen` 读取 `extras['albumId']` 恒为 null，播放器内封面图自 v3.1.0 起从未正确显示，始终回退占位图标；修复为在两处 `extras` map 中补齐 `albumId` 字段。
+- **feat: MiniPlayer 拖拽进度条** — `MiniPlayerBar` 此前完全没有进度指示控件，新增可拖拽的紧凑进度条，支持点击/拖动跳转播放位置，缓冲中禁用交互。
+- **feat: EQ 自定义预设保存与命名** — `EqSettings` 新增 `customPresets` 字段，`EqNotifier` 支持保存当前频段为具名预设、切换、删除，持久化经 SharedPreferences；Settings EQ 区新增预设管理入口。
+- The phase output is version-tracked and covered by flutter analyze (0 issues) and flutter test (EqNotifier 自定义预设保存/删除/持久化单元测试).
