@@ -647,10 +647,89 @@ class _EqSection extends ConsumerWidget {
               }),
             ),
           ),
+          const SizedBox(height: 8),
+          if (eq.customPresets.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: eq.customPresets.keys.map((name) {
+                  return InputChip(
+                    label: Text(name, style: const TextStyle(fontSize: 12)),
+                    selected: eq.preset == name,
+                    onPressed: () => ref.read(eqNotifierProvider.notifier).selectCustomPreset(name),
+                    onDeleted: () => _confirmDeletePreset(context, ref, name),
+                  );
+                }).toList(),
+              ),
+            ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                icon: const Icon(Icons.add, size: 18),
+                label: const Text('保存为自定义预设', style: TextStyle(fontSize: 12)),
+                onPressed: () => _showSavePresetDialog(context, ref),
+              ),
+            ),
+          ),
           const SizedBox(height: 4),
         ],
       ],
     );
+  }
+
+  static Future<void> _showSavePresetDialog(BuildContext context, WidgetRef ref) async {
+    final controller = TextEditingController();
+    final name = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('保存自定义预设'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: '预设名称'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, controller.text.trim()),
+            child: const Text('保存'),
+          ),
+        ],
+      ),
+    );
+    if (name != null && name.isNotEmpty) {
+      await ref.read(eqNotifierProvider.notifier).saveCurrentAsPreset(name);
+    }
+  }
+
+  static Future<void> _confirmDeletePreset(BuildContext context, WidgetRef ref, String name) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('删除预设'),
+        content: Text('确定删除自定义预设「$name」？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('删除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await ref.read(eqNotifierProvider.notifier).deleteCustomPreset(name);
+    }
   }
 }
 

@@ -329,7 +329,10 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
         id: trackId,
         title: _trackCache[trackId]?.title ?? trackId,
         artist: _artistNameCache[_trackCache[trackId]?.artistId ?? ''] ?? '',
-        extras: {'trackId': trackId},
+        extras: {
+          'trackId': trackId,
+          'albumId': _trackCache[trackId]?.albumId,
+        },
       );
 
   /// Full MediaItem populated from resolved CatalogTrack metadata.
@@ -361,6 +364,7 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
       extras: {
         'trackId': trackId,
         'mediaObjectId': track?.mediaObjectId,
+        'albumId': albumId.isNotEmpty ? albumId : null,
       },
     );
   }

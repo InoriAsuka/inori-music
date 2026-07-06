@@ -59,6 +59,43 @@ class EqNotifier extends Notifier<EqSettings> {
     await _persist();
   }
 
+  /// Save the current band configuration as a named custom preset.
+  Future<void> saveCurrentAsPreset(String name) async {
+    final trimmed = name.trim();
+    if (trimmed.isEmpty) return;
+    final updated = Map<String, List<double>>.from(state.customPresets);
+    updated[trimmed] = List<double>.from(state.bands);
+    state = state.copyWith(customPresets: updated, preset: trimmed);
+    await _persist();
+  }
+
+  /// Switch to a previously saved custom preset.
+  Future<void> selectCustomPreset(String name) async {
+    final bands = state.customPresets[name];
+    if (bands == null) return;
+    state = state.copyWith(preset: name, bands: List<double>.from(bands));
+    if (state.enabled) {
+      audioHandler.applyEqualizerBands(state.bands);
+    }
+    await _persist();
+  }
+
+  /// Delete a saved custom preset. Falls back to 'flat' if it was selected.
+  Future<void> deleteCustomPreset(String name) async {
+    if (!state.customPresets.containsKey(name)) return;
+    final updated = Map<String, List<double>>.from(state.customPresets)..remove(name);
+    final wasSelected = state.preset == name;
+    state = state.copyWith(
+      customPresets: updated,
+      preset: wasSelected ? 'flat' : state.preset,
+      bands: wasSelected ? List<double>.from(eqPresets['flat']!) : state.bands,
+    );
+    if (wasSelected && state.enabled) {
+      audioHandler.applyEqualizerBands(state.bands);
+    }
+    await _persist();
+  }
+
   // ---- Persistence ----
 
   Future<void> _restore() async {
@@ -73,7 +110,13 @@ class EqNotifier extends Notifier<EqSettings> {
       final bands = rawBands != null
           ? rawBands.map((e) => (e as num).toDouble()).toList()
           : List<double>.from(eqPresets['flat']!);
-      state = EqSettings(enabled: enabled, bands: bands, preset: preset);
+      final rawCustom = map['customPresets'] as Map<String, dynamic>?;
+      final customPresets = <String, List<double>>{
+        if (rawCustom != null)
+          for (final entry in rawCustom.entries)
+            entry.key: (entry.value as List<dynamic>).map((e) => (e as num).toDouble()).toList(),
+      };
+      state = EqSettings(enabled: enabled, bands: bands, preset: preset, customPresets: customPresets);
       if (enabled) {
         audioHandler.applyEqualizerBands(bands);
       }
@@ -91,6 +134,7 @@ class EqNotifier extends Notifier<EqSettings> {
           'enabled': state.enabled,
           'preset': state.preset,
           'bands': state.bands,
+          'customPresets': state.customPresets,
         }),
       );
     } catch (_) {}

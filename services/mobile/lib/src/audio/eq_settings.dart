@@ -15,6 +15,7 @@ class EqSettings {
     required this.enabled,
     required this.bands,
     required this.preset,
+    this.customPresets = const {},
   });
 
   final bool enabled;
@@ -22,23 +23,30 @@ class EqSettings {
   /// Gain values in dB for each of the 10 bands.
   final List<double> bands;
 
-  /// Key into [eqPresets], or a custom label.
+  /// Key into [eqPresets], a key into [customPresets], or `'custom'` for an
+  /// unsaved ad-hoc adjustment.
   final String preset;
+
+  /// User-saved presets, keyed by user-chosen name.
+  final Map<String, List<double>> customPresets;
 
   factory EqSettings.defaults() => EqSettings(
         enabled: false,
         bands: List<double>.from(eqPresets['flat']!),
         preset: 'flat',
+        customPresets: const {},
       );
 
   EqSettings copyWith({
     bool? enabled,
     List<double>? bands,
     String? preset,
+    Map<String, List<double>>? customPresets,
   }) =>
       EqSettings(
         enabled: enabled ?? this.enabled,
         bands: bands ?? List<double>.from(this.bands),
         preset: preset ?? this.preset,
+        customPresets: customPresets ?? this.customPresets,
       );
 }

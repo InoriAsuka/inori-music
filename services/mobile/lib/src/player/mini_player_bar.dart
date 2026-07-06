@@ -29,7 +29,11 @@ class MiniPlayerBar extends ConsumerWidget {
     return Material(
       color: NeonShrineColors.playerBar,
       elevation: 8,
-      child: SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const _MiniPlayerProgressBar(),
+          SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           child: InkWell(
@@ -141,6 +145,8 @@ class MiniPlayerBar extends ConsumerWidget {
             ),
           ),
         ),
+          ),
+        ],
       ),
     );
   }
@@ -196,6 +202,57 @@ void _showSleepTimerSheet(BuildContext context, WidgetRef ref) {
       ),
     ),
   );
+}
+
+/// Compact draggable progress bar shown above the mini player controls.
+class _MiniPlayerProgressBar extends ConsumerStatefulWidget {
+  const _MiniPlayerProgressBar();
+
+  @override
+  ConsumerState<_MiniPlayerProgressBar> createState() => _MiniPlayerProgressBarState();
+}
+
+class _MiniPlayerProgressBarState extends ConsumerState<_MiniPlayerProgressBar> {
+  // Local override while the user is actively dragging, so incoming
+  // positionStream updates don't fight the gesture and cause jitter.
+  double? _dragValue;
+
+  @override
+  Widget build(BuildContext context) {
+    final playerState = ref.watch(playerProvider);
+    final disabled = playerState.isBuffering || playerState.isIdle;
+    final maxMs = playerState.duration.inMilliseconds.toDouble() > 0
+        ? playerState.duration.inMilliseconds.toDouble()
+        : 1.0;
+    final positionMs = playerState.position.inMilliseconds.toDouble().clamp(0.0, maxMs);
+    final value = (_dragValue ?? positionMs).clamp(0.0, maxMs);
+
+    return SizedBox(
+      height: 14,
+      child: SliderTheme(
+        data: SliderTheme.of(context).copyWith(
+          trackHeight: 2,
+          activeTrackColor: NeonShrineColors.primaryViolet,
+          inactiveTrackColor: NeonShrineColors.outline,
+          thumbColor: NeonShrineColors.primaryVioletLight,
+          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4),
+          overlayShape: const RoundSliderOverlayShape(overlayRadius: 10),
+        ),
+        child: Slider(
+          value: value,
+          max: maxMs,
+          onChangeStart: disabled ? null : (v) => setState(() => _dragValue = v),
+          onChanged: disabled ? null : (v) => setState(() => _dragValue = v),
+          onChangeEnd: disabled
+              ? null
+              : (v) {
+                  ref.read(playerProvider.notifier).seekTo(Duration(milliseconds: v.toInt()));
+                  setState(() => _dragValue = null);
+                },
+        ),
+      ),
+    );
+  }
 }
 
 /// Mini player artwork thumbnail — shows the album cover or a fallback icon.
