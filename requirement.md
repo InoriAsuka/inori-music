@@ -1621,3 +1621,13 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 
 - **feat: Web 音频引擎对齐 II（ReplayGain / gapless / 状态持久化）** — WebAudio 增益管线：`AudioContext` + `MediaElementAudioSourceNode` + `GainNode`，ReplayGain 按 `10^(db/20)` 应用（与用户音量正交），audio 元素 `crossOrigin="anonymous"`，CORS 不满足时优雅降级直连播放；S3 presigned 场景的 bucket CORS 配置要求写入 operations 文档。双元素 gapless：备用 `HTMLAudioElement` 预载下一曲（进度 >50% 或剩余 <30s 触发），`ended` 时毫秒级切换，可选切歌淡入淡出（`linearRampToValueAtTime`），签名 URL 过期自动重取。状态持久化：zustand persist 保存队列/currentIndex/position（节流 5s）/音量/repeat/shuffle，刷新恢复不自动播放，登出清空。依赖 v5.0.0 签名 URL 先行（统一 CORS 语义），与 v5.1.0 可并行。
 - The phase output is version-tracked and covered by Vitest（增益计算/预载条件/持久化序列化）, Playwright e2e（连播自动接续/刷新恢复断言）, and 人工验收（响度对比/间隙听感/预载时机）.
+
+### v5.3.0 - TBD
+
+- **feat: Web 体验对齐 III（用户播放列表 + 速度控制 + 睡眠定时器）** — 三块服务端能力已就绪但 web 零消费的缺口（2026-07-06 审查确认 `me/playlists`/`playbackRate`/sleep timer 在 `services/web/` 全部零命中）。用户播放列表：`library/playlists` 列表页 + 详情页（GET/POST/PATCH/DELETE `/api/v1/me/playlists` 及曲目增删排序端点，v3.2.0 已有），dnd-kit 拖拽排序（依赖已在 package.json），`TrackRow` 上下文菜单「添加到播放列表」。速度控制：PlayerBar 速度菜单 0.5×–2×（档位对齐 mobile v4.1.0），`audio.playbackRate` 双元素引擎下同步设置，localStorage 持久化。睡眠定时器：固定时长（15/30/45/60min）+「当前曲目结束后停止」双模式、倒计时角标、到期 pause——语义对齐 mobile `SleepTimerNotifier`（v4.2.0）。无服务端变更。
+- The phase output is version-tracked and covered by Playwright e2e（播放列表全流程/playbackRate 断言）, Vitest（sleepTimer 状态机，用例对齐 mobile 端）, and type-check + biome lint.
+
+### v5.4.0 - TBD
+
+- **feat: 跨设备一致性（播放续播 + 搜索历史同步）—— v5 封版收官** — 服务端 viewer 域新增播放状态端点：migration `user_player_state` 单行 upsert 表（queue/currentIndex/positionMs/repeat/shuffle/updatedAt），`internal/playerstate` package（memory + PostgreSQL 双实现），`GET/PUT /api/v1/me/player-state`（last-write-wins，服务端时钟），`/readyz` 追加检查；搜索历史端点：`user_search_history` 表 + `GET/PUT/DELETE /api/v1/me/search-history`（服务端裁剪 20 条）。Web 与 Flutter 双端：播放中 30s 节流 + 切歌/暂停触发上报；启动时服务端状态较新则提示「在另一台设备听到 X，继续播放？」，确认后重建队列 seek 恢复（不自动播放）；搜索历史本地∪远端合并去重回写。OpenAPI 契约版本升至 5.4.0。本阶段完成后 v5 线封版：安全基线 + 双端对齐 + 跨设备一致构成产品化闭环，后续新方向按 v6+ 升大版本。
+- The phase output is version-tracked and covered by Go unit tests（playerstate/searchhistory 裁剪与冲突语义）, OpenAPI contract tests, Playwright e2e（恢复提示流程）, flutter test（节流/合并策略）, and 人工验收（手机→web 续播误差 <5s）.
