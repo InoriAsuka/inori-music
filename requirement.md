@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`4.6.0`
+`4.7.0`
 
 ## Product Goal
 
@@ -1597,7 +1597,7 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - **feat: EQ 自定义预设保存与命名** — `EqSettings` 新增 `customPresets` 字段，`EqNotifier` 支持保存当前频段为具名预设、切换、删除，持久化经 SharedPreferences；Settings EQ 区新增预设管理入口。
 - The phase output is version-tracked and covered by flutter analyze (0 issues) and flutter test (EqNotifier 自定义预设保存/删除/持久化单元测试).
 
-### v4.7.0 - TBD
+### v4.7.0 - 2026-07-07
 
 - **fix: 播放器音频真实性修复（gapless 状态同步 / ReplayGain 应用 / Shuffle / EQ 真实接线 / crossfade 如实化）** — 2026-07-06 全量代码审查发现 v4.1.0–v4.2.0 多项音频特性为假实现：EQ 依赖的 `just_audio_equalizer` 从未加入 `pubspec.yaml`，`audio_handler.dart` 经 `(_player as dynamic).setBands` 调用不存在的方法且异常被静默吞掉（EQ UI 对音频输出零影响）；ReplayGain 开关从未被 `PlayerNotifier` 读取，`replayGainDb` 在客户端无消费方；`setShuffle` 仅翻转状态位不改变播放顺序；`_runCrossfade` 是切歌后同 player 的音量 V 形凹陷而非双轨交叉淡化；`PlayerNotifier` 未监听 `currentIndexStream`，gapless 队列自动前进时 UI/通知栏/历史上报全部脱轨，且 `next()` 取模回绕无视 `RepeatMode.off`。本阶段逐项修复：`currentIndexStream` 订阅同步状态与逐曲历史上报、repeat 语义映射 `setLoopMode`、手动切歌改增量 `seekToNext/Previous`（不再全队列重建）、ReplayGain 增益实际应用（`10^(db/20)` 与用户音量正交）、shuffle 经 `setShuffleModeEnabled` 真实生效、EQ 改用 `AudioPipeline` + `AndroidEqualizer`（不支持平台明确禁用标注）、crossfade 如实降级为「切歌淡入淡出」并同步文案。
 - The phase output is version-tracked and covered by flutter analyze (0 issues), flutter test（PlayerNotifier 队列状态机集成测试 / ReplayGain 增益计算 / shuffle 顺序 / repeat 语义）, and 人工听感验收清单（真机 EQ 听感 / 连播元数据 / 逐曲历史）.
