@@ -1,6 +1,8 @@
+import 'dart:convert';
+import 'dart:io' show Platform;
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
 
 import 'package:inori_music/main.dart' show audioHandler;
 import 'package:inori_music/src/audio/eq_settings.dart';
@@ -29,11 +31,16 @@ class EqNotifier extends Notifier<EqSettings> {
   // ---- Public API ----
 
   Future<void> setEnabled(bool enabled) async {
+    if (enabled && !Platform.isAndroid) {
+      // Non-Android platforms have no wired equalizer effect — refuse to enable.
+      return;
+    }
     state = state.copyWith(enabled: enabled);
+    await audioHandler.androidEqualizer.setEnabled(enabled);
     if (enabled) {
-      audioHandler.applyEqualizerBands(state.bands);
+      await _applyEqualizerBands(state.bands);
     } else {
-      audioHandler.resetEqualizer();
+      await _resetEqualizerBands();
     }
     await _persist();
   }
@@ -43,7 +50,7 @@ class EqNotifier extends Notifier<EqSettings> {
     if (bands == null) return;
     state = state.copyWith(preset: presetKey, bands: List<double>.from(bands));
     if (state.enabled) {
-      audioHandler.applyEqualizerBands(state.bands);
+      await _applyEqualizerBands(state.bands);
     }
     await _persist();
   }
@@ -54,7 +61,7 @@ class EqNotifier extends Notifier<EqSettings> {
     updated[index] = gainDb;
     state = state.copyWith(bands: updated, preset: 'custom');
     if (state.enabled) {
-      audioHandler.applyEqualizerBands(state.bands);
+      await _applyEqualizerBands(state.bands);
     }
     await _persist();
   }
@@ -75,7 +82,7 @@ class EqNotifier extends Notifier<EqSettings> {
     if (bands == null) return;
     state = state.copyWith(preset: name, bands: List<double>.from(bands));
     if (state.enabled) {
-      audioHandler.applyEqualizerBands(state.bands);
+      await _applyEqualizerBands(state.bands);
     }
     await _persist();
   }
@@ -91,9 +98,36 @@ class EqNotifier extends Notifier<EqSettings> {
       bands: wasSelected ? List<double>.from(eqPresets['flat']!) : state.bands,
     );
     if (wasSelected && state.enabled) {
-      audioHandler.applyEqualizerBands(state.bands);
+      await _applyEqualizerBands(state.bands);
     }
     await _persist();
+  }
+
+  // ---- Equalizer device I/O ----
+
+  /// Map the UI's 10 fixed bands onto the device's actual band count
+  /// (commonly 5 on Android) via nearest-neighbor, and push gains.
+  Future<void> _applyEqualizerBands(List<double> bands) async {
+    if (!Platform.isAndroid) return;
+    try {
+      final params = await audioHandler.androidEqualizer.parameters;
+      for (var i = 0; i < params.bands.length; i++) {
+        final uiIdx = (i * bands.length / params.bands.length).floor();
+        await params.bands[i].setGain(
+          bands[uiIdx].clamp(params.minDecibels, params.maxDecibels),
+        );
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _resetEqualizerBands() async {
+    if (!Platform.isAndroid) return;
+    try {
+      final params = await audioHandler.androidEqualizer.parameters;
+      for (final band in params.bands) {
+        await band.setGain(0);
+      }
+    } catch (_) {}
   }
 
   // ---- Persistence ----
@@ -116,9 +150,11 @@ class EqNotifier extends Notifier<EqSettings> {
           for (final entry in rawCustom.entries)
             entry.key: (entry.value as List<dynamic>).map((e) => (e as num).toDouble()).toList(),
       };
-      state = EqSettings(enabled: enabled, bands: bands, preset: preset, customPresets: customPresets);
-      if (enabled) {
-        audioHandler.applyEqualizerBands(bands);
+      final effectiveEnabled = enabled && Platform.isAndroid;
+      state = EqSettings(enabled: effectiveEnabled, bands: bands, preset: preset, customPresets: customPresets);
+      if (effectiveEnabled) {
+        await audioHandler.androidEqualizer.setEnabled(true);
+        await _applyEqualizerBands(bands);
       }
     } catch (_) {
       // Ignore corrupt prefs.

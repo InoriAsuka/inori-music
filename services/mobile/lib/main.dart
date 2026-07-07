@@ -16,6 +16,7 @@ void main() async {
   // Initialize audio_service so background audio, lock-screen controls, and
   // OS media sessions are available before any widget is created.
   audioHandler = await InoriAudioHandler.create();
+  audioHandler.initCrossfade();
   runApp(
     const ProviderScope(
       child: InoriMusicApp(),

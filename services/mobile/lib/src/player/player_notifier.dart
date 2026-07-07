@@ -1,6 +1,7 @@
 // ignore_for_file: implementation_imports
 import 'dart:async';
 import 'dart:io';
+import 'dart:math' show pow;
 
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/foundation.dart';
@@ -14,6 +15,7 @@ import 'package:just_audio/just_audio.dart';
 
 import 'package:inori_music/main.dart' show audioHandler;
 import 'package:inori_music/src/api/api_client.dart';
+import 'package:inori_music/src/audio/replay_gain_notifier.dart';
 import 'package:inori_music/src/catalog/catalog_cache_providers.dart';
 import 'package:inori_music/src/catalog/catalog_repository.dart';
 import 'package:inori_music/src/player/player_state.dart' as pstate;
@@ -63,6 +65,8 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
         sub.cancel();
       }
     });
+    // Recompute effective volume immediately when the ReplayGain toggle flips.
+    ref.listen(replayGainEnabledProvider, (_, _) => _applyVolumeWithGain(state.volume));
     return pstate.PlayerState();
   }
 
@@ -95,7 +99,8 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
       // Fallback: viewer stream endpoint
       final token = await ref.read(tokenProvider.future);
       if (token != null) {
-        return '/api/v1/catalog/tracks/$trackId/stream?token=$token';
+        final base = await ref.read(baseUrlProvider.future);
+        return '$base/api/v1/catalog/tracks/$trackId/stream?token=$token';
       }
       return null;
     } catch (e) {
@@ -180,8 +185,10 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
     final items = trackIds.map((id) => _stubMediaItem(id)).toList();
     final newQueue = [...state.queue, ...items];
     state = state.copyWith(queue: newQueue);
-    // Refresh gapless source with all current queue URLs.
-    _refreshConcatSource(newQueue.map((m) => m.id).toList());
+    for (final id in trackIds) {
+      final url = await resolvePlaybackUrl(id);
+      if (url != null) await audioHandler.addSource(url);
+    }
   }
 
   /// Enqueue a single track immediately after the current one.
@@ -189,28 +196,21 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
     final item = _stubMediaItem(trackId);
     final newQueue = [...state.queue];
     final insertAt = state.currentIndex + 1;
-    if (insertAt < newQueue.length) {
-      newQueue.insert(insertAt, item);
-    } else {
+    final append = insertAt >= newQueue.length;
+    if (append) {
       newQueue.add(item);
+    } else {
+      newQueue.insert(insertAt, item);
     }
     state = state.copyWith(queue: newQueue);
-    _refreshConcatSource(newQueue.map((m) => m.id).toList());
-  }
-
-  /// Rebuild the ConcatenatingAudioSource to match the current queue.
-  void _refreshConcatSource(List<String> trackIds) {
-    Future<void>(() async {
-      final urls = <String>[];
-      for (final id in trackIds) {
-        final u = await resolvePlaybackUrl(id);
-        urls.add(u ?? '');
+    final url = await resolvePlaybackUrl(trackId);
+    if (url != null) {
+      if (append) {
+        await audioHandler.addSource(url);
+      } else {
+        await audioHandler.insertSource(insertAt, url);
       }
-      final valid = urls.where((u) => u.isNotEmpty).toList();
-      if (valid.isNotEmpty) {
-        await audioHandler.updateConcatQueue(valid);
-      }
-    });
+    }
   }
 
   Future<void> play() async => _audioPlayer.play();
@@ -234,10 +234,20 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
 
   Future<void> next() async {
     if (state.queue.isEmpty || state.currentIndex < 0) return;
-    final nextIdx = state.repeat == pstate.RepeatMode.one
-        ? state.currentIndex
-        : (state.currentIndex + 1) % state.queue.length;
-    await _playAtIndex(nextIdx);
+    if (state.repeat == pstate.RepeatMode.one) {
+      await _audioPlayer.seek(Duration.zero);
+      await _audioPlayer.play();
+      return;
+    }
+    final nextIdx = state.currentIndex + 1;
+    if (nextIdx >= state.queue.length) {
+      if (state.repeat == pstate.RepeatMode.all) {
+        await _playAtIndex(0);
+      }
+      // RepeatMode.none 播完自然停止 — 什么也不做，concat 源会自己播完停
+      return;
+    }
+    await _audioPlayer.seekToNext();
   }
 
   Future<void> previous() async {
@@ -245,8 +255,7 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
     if (state.position.inSeconds > 3) {
       await seekTo(Duration.zero);
     } else {
-      final prevIdx = (state.currentIndex - 1 + state.queue.length) % state.queue.length;
-      await _playAtIndex(prevIdx);
+      await _audioPlayer.seekToPrevious();
     }
   }
 
@@ -255,7 +264,17 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
     if (newIndex > oldIndex) newIndex--;
     final item = queue.removeAt(oldIndex);
     queue.insert(newIndex, item);
-    state = state.copyWith(queue: queue);
+    final oldCurrent = state.currentIndex;
+    int newCurrent = oldCurrent;
+    if (oldCurrent == oldIndex) {
+      newCurrent = newIndex;
+    } else if (oldIndex < oldCurrent && newIndex >= oldCurrent) {
+      newCurrent = oldCurrent - 1;
+    } else if (oldIndex > oldCurrent && newIndex <= oldCurrent) {
+      newCurrent = oldCurrent + 1;
+    }
+    state = state.copyWith(queue: queue, currentIndex: newCurrent);
+    await audioHandler.moveSource(oldIndex, newIndex);
   }
 
   Future<void> removeFromQueue(int index) async {
@@ -270,26 +289,53 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
       }
       final newCurrent = index < queue.length ? index : queue.length - 1;
       state = state.copyWith(queue: queue, currentIndex: newCurrent, clearMediaItem: true);
-      _refreshConcatSource(queue.map((m) => m.id).toList());
+      await audioHandler.removeSourceAt(index);
       await _playAtIndex(newCurrent);
     } else {
       final newCurrent = state.currentIndex > index ? state.currentIndex - 1 : state.currentIndex;
       state = state.copyWith(queue: queue, currentIndex: newCurrent);
-      _refreshConcatSource(queue.map((m) => m.id).toList());
+      await audioHandler.removeSourceAt(index);
     }
   }
 
   Future<void> setVolume(double volume) async {
-    await _audioPlayer.setVolume(volume);
-    state = state.copyWith(volume: volume);
+    state = state.copyWith(volume: volume); // 只存用户意图
+    await _applyVolumeWithGain(volume);
+  }
+
+  Future<void> _applyVolumeWithGain(double userVol) async {
+    var gain = 1.0;
+    if (ref.read(replayGainEnabledProvider)) {
+      final id = state.currentIndex >= 0 && state.currentIndex < state.queue.length
+          ? state.queue[state.currentIndex].id
+          : null;
+      final db = id != null ? _trackCache[id]?.replayGainDb : null;
+      if (db != null) gain = pow(10, db / 20).toDouble().clamp(0.1, 2.0);
+    }
+    final effective = (userVol * gain).clamp(0.0, 1.0);
+    audioHandler.targetVolume = effective; // Step 5 的 fade 基准同步
+    await _audioPlayer.setVolume(effective);
   }
 
   Future<void> setRepeat(pstate.RepeatMode repeat) async {
     state = state.copyWith(repeat: repeat);
+    switch (repeat) {
+      case pstate.RepeatMode.one:
+        await _audioPlayer.setLoopMode(LoopMode.one);
+        break;
+      case pstate.RepeatMode.all:
+        await _audioPlayer.setLoopMode(LoopMode.all);
+        break;
+      case pstate.RepeatMode.none:
+        await _audioPlayer.setLoopMode(LoopMode.off);
+        break;
+    }
   }
 
   Future<void> setShuffle(bool shuffle) async {
     state = state.copyWith(shuffle: shuffle);
+    await _audioPlayer.setShuffleModeEnabled(shuffle);
+    if (shuffle) await _audioPlayer.shuffle();
   }
 
   Future<void> stop() async {
@@ -421,16 +467,44 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
       if (dur != null) state = state.copyWith(duration: dur);
     }));
 
-    // Processing state — auto-advance on completion
+    // Concat source index — gapless auto-advance and manual seekToNext/Previous
+    // both surface here. Keeps state.currentIndex, notification metadata, and
+    // per-track history in sync with what just_audio is actually playing.
+    subs.add((() {
+      int? lastIndex;
+      return _audioPlayer.currentIndexStream.listen((idx) async {
+        if (idx == null || idx < 0 || idx >= state.queue.length) return;
+        if (idx == state.currentIndex) {
+          lastIndex = idx;
+          return;
+        }
+        // 上报"刚离开"的曲目（gapless 自动前进时逐曲触发）
+        if (lastIndex != null && lastIndex! >= 0 && lastIndex! < state.queue.length) {
+          await _postHistoryFor(state.queue[lastIndex!].id);
+        }
+        lastIndex = idx;
+        final trackId = state.queue[idx].id;
+        final track = await _resolveTrack(trackId);
+        final resolved = _makeMediaItem(trackId, track);
+        state = state.copyWith(currentIndex: idx, mediaItem: resolved);
+        audioHandler.mediaItem.add(resolved);
+        await _applyVolumeWithGain(state.volume);
+      });
+    })());
+
+    // Processing state — fires only when the whole concat queue has finished
+    // playing (native LoopMode already handles one/all looping internally
+    // without ever reaching `completed`).
     subs.add(_audioPlayer.processingStateStream.listen((ps) {
       if (ps == ProcessingState.completed) {
-        _postHistory();
+        if (state.currentIndex >= 0 && state.currentIndex < state.queue.length) {
+          _postHistoryFor(state.queue[state.currentIndex].id);
+        }
         if (state.repeat == pstate.RepeatMode.one) {
           _audioPlayer.seek(Duration.zero);
           _audioPlayer.play();
-        } else {
-          next();
         }
+        // RepeatMode.all/none: native loopMode already handled wrap/stop.
       }
     }));
 
@@ -470,10 +544,8 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
     }
   }
 
-  Future<void> _postHistory() async {
+  Future<void> _postHistoryFor(String trackId) async {
     try {
-      if (state.queue.isEmpty || state.currentIndex < 0 || state.currentIndex >= state.queue.length) return;
-      final trackId = state.queue[state.currentIndex].id;
       if (trackId.isNotEmpty) {
         await _history.recordPlayEvent(
           recordPlayEventRequest: RecordPlayEventRequest(trackId: trackId),

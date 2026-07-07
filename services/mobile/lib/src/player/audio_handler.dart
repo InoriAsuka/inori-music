@@ -97,59 +97,88 @@ class InoriAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
     await _player.setAudioSource(_concatSource);
   }
 
+  /// Append a single track URL to the end of the gapless queue.
+  Future<void> addSource(String url) async {
+    await _concatSource.add(ProgressiveAudioSource(Uri.parse(url)));
+  }
+
+  /// Insert a single track URL at [index] in the gapless queue.
+  Future<void> insertSource(int index, String url) async {
+    await _concatSource.insert(index, ProgressiveAudioSource(Uri.parse(url)));
+  }
+
+  /// Remove the track at [index] from the gapless queue.
+  Future<void> removeSourceAt(int index) async {
+    await _concatSource.removeAt(index);
+  }
+
+  /// Move a track from [oldIndex] to [newIndex] in the gapless queue.
+  Future<void> moveSource(int oldIndex, int newIndex) async {
+    await _concatSource.move(oldIndex, newIndex);
+  }
+
   // ---- Equalizer ----
 
-  /// Apply per-band gain values (in dB) to the underlying player.
-  void applyEqualizerBands(List<double> bands) {
-    try {
-      // ignore: avoid_dynamic_calls
-      (_player as dynamic).setBands(bands);
-    } catch (_) {}
-  }
+  late final AndroidEqualizer _equalizer;
 
-  /// Reset all EQ bands to 0 dB.
-  void resetEqualizer() {
-    try {
-      // ignore: avoid_dynamic_calls
-      (_player as dynamic).setBands(List<double>.filled(10, 0.0));
-    } catch (_) {}
-  }
+  /// Native Android equalizer effect. Only meaningful on Android — callers
+  /// must guard with `Platform.isAndroid` before use.
+  AndroidEqualizer get androidEqualizer => _equalizer;
 
-  // ---- Crossfade support ----
+  // ---- Crossfade support (fade-out at track end, fade-in on track change) ----
 
   /// Crossfade duration in seconds (0 = disabled).
   int crossfadeSeconds = 0;
 
-  StreamSubscription<int?>? _indexSub;
+  /// Volume basis for fades — the user's intended volume × ReplayGain,
+  /// kept in sync by [PlayerNotifier._applyVolumeWithGain].
+  double targetVolume = 1.0;
 
-  /// Wire up crossfade on every track index change.
-  /// Call this once after [create], supplying the stream from CrossfadeNotifier.
+  bool _fading = false;
+  bool _fadeOutDone = false;
+  StreamSubscription<Duration>? _fadePosSub;
+  StreamSubscription<int?>? _fadeIdxSub;
+
+  /// Wire up crossfade listeners. Call once after [create].
   void initCrossfade() {
-    _indexSub?.cancel();
-    _indexSub = _player.currentIndexStream.listen((index) {
-      if (crossfadeSeconds > 0) {
-        _runCrossfade(crossfadeSeconds);
-      }
+    _fadePosSub?.cancel();
+    _fadeIdxSub?.cancel();
+    _fadePosSub = _player.positionStream.listen(_maybeFadeOut);
+    _fadeIdxSub = _player.currentIndexStream.listen((idx) {
+      if (idx == null) return;
+      _fadeOutDone = false;
+      if (crossfadeSeconds > 0) _fadeIn();
     });
   }
 
-  /// Animate volume 1.0 → 0.0 → 1.0 over [seconds] each leg.
-  Future<void> _runCrossfade(int seconds) async {
-    final steps = seconds * 10; // 100 ms per step
-    final stepDuration = const Duration(milliseconds: 100);
-
-    // Fade out
+  Future<void> _maybeFadeOut(Duration position) async {
+    if (crossfadeSeconds <= 0 || _fading || _fadeOutDone) return;
+    final dur = _player.duration;
+    if (dur == null || dur == Duration.zero) return;
+    final remaining = dur - position;
+    if (remaining.inMilliseconds > crossfadeSeconds * 1000 || remaining <= Duration.zero) return;
+    _fading = true;
+    _fadeOutDone = true;
+    final steps = (remaining.inMilliseconds ~/ 100).clamp(1, crossfadeSeconds * 10);
     for (int i = steps; i >= 0; i--) {
-      if (!_player.playing) return;
-      await _player.setVolume(i / steps);
-      await Future<void>.delayed(stepDuration);
+      if (!_player.playing) break;
+      await _player.setVolume(targetVolume * i / steps);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
     }
-    // Fade in
+    _fading = false;
+  }
+
+  Future<void> _fadeIn() async {
+    if (_fading) return;
+    _fading = true;
+    final steps = crossfadeSeconds * 10;
     for (int i = 0; i <= steps; i++) {
-      if (!_player.playing) return;
-      await _player.setVolume(i / steps);
-      await Future<void>.delayed(stepDuration);
+      if (!_player.playing) break;
+      await _player.setVolume(targetVolume * i / steps);
+      await Future<void>.delayed(const Duration(milliseconds: 100));
     }
+    await _player.setVolume(targetVolume); // 兜底恢复基准，避免停在半音量
+    _fading = false;
   }
 
   static AudioProcessingState _toAudioProcessingState(ProcessingState ps) {
@@ -168,9 +197,14 @@ class InoriAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
   }
 
   static Future<InoriAudioHandler> create() async {
-    final player = AudioPlayer();
+    final equalizer = AndroidEqualizer();
+    final player = AudioPlayer(
+      audioPipeline: AudioPipeline(androidAudioEffects: [equalizer]),
+    );
+    final handler = InoriAudioHandler(player);
+    handler._equalizer = equalizer;
     return AudioService.init(
-      builder: () => InoriAudioHandler(player),
+      builder: () => handler,
       config: AudioServiceConfig(
         androidNotificationChannelId: 'com.inori.music.channel.audio',
         androidNotificationChannelName: 'Inori Music',

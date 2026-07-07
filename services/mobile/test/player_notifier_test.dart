@@ -1,4 +1,6 @@
 // ignore_for_file: implementation_imports, unused_import
+import 'dart:math' show pow;
+
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -15,6 +17,14 @@ import 'package:inori_music/src/player/player_state.dart' as pstate;
 //   • RepeatMode / shuffle helpers
 //   • Queue arithmetic (reorderQueue semantics)
 //   • isPlaying / isBuffering / isIdle computed properties
+//   • next()/previous() repeat-mode branching (mirrors the real methods)
+//   • ReplayGain gain formula (mirrors _applyVolumeWithGain)
+//
+// Not covered here: setShuffle()'s native setShuffleModeEnabled()+shuffle()
+// call pair, and currentIndexStream's state/mediaItem sync. Both require a
+// real AudioPlayer platform instance to observe, which this repo has no
+// fake/mock for (no mocktail, no platform-channel test double) — they're
+// exercised manually via the v4.7.0 plan's acceptance checklist instead.
 // ---------------------------------------------------------------------------
 
 void main() {
@@ -89,21 +99,92 @@ void main() {
           ['track-2', 'track-0', 'track-1']);
     });
 
-    test('next index wraps around with RepeatMode.none', () {
-      final currentIndex = 2;
-      final queueLength = 3;
-      // Mirrors: (currentIndex + 1) % queue.length
-      final nextIdx = (currentIndex + 1) % queueLength;
-      expect(nextIdx, 0); // wraps
+  });
+
+  // ---------------------------------------------------------------------
+  // next()/previous() repeat-mode branching.
+  //
+  // Mirrors the decision tree in PlayerNotifier.next() (player_notifier.dart)
+  // without touching _audioPlayer: given (repeat, currentIndex, queue.length),
+  // what does the method decide to do?
+  //   - RepeatMode.one -> always seek(0) + play(), never advances index
+  //   - last track + RepeatMode.none -> no-op (natural stop)
+  //   - last track + RepeatMode.all -> wrap to index 0 via _playAtIndex
+  //   - otherwise -> seekToNext()
+  // ---------------------------------------------------------------------
+  group('next() repeat-mode decision (mirrors PlayerNotifier.next)', () {
+    // Mirrors PlayerNotifier.next()'s branching without the _audioPlayer call.
+    String decide(pstate.RepeatMode repeat, int currentIndex, int queueLength) {
+      if (repeat == pstate.RepeatMode.one) return 'seekZeroAndPlay';
+      final nextIdx = currentIndex + 1;
+      if (nextIdx >= queueLength) {
+        return repeat == pstate.RepeatMode.all ? 'playAtIndex(0)' : 'noop';
+      }
+      return 'seekToNext';
+    }
+
+    test('T1: RepeatMode.none on last track -> no-op (natural stop)', () {
+      expect(decide(pstate.RepeatMode.none, 2, 3), 'noop');
     });
 
-    test('next index stays same with RepeatMode.one', () {
-      final currentIndex = 1;
-      final queueLength = 3;
-      final nextIdx = pstate.RepeatMode.one == pstate.RepeatMode.one
-          ? currentIndex
-          : (currentIndex + 1) % queueLength;
-      expect(nextIdx, 1);
+    test('T2: RepeatMode.all on last track -> wraps to index 0', () {
+      expect(decide(pstate.RepeatMode.all, 2, 3), 'playAtIndex(0)');
+    });
+
+    test('T3: RepeatMode.one -> always restarts current track, never advances', () {
+      // Even on the last track, or mid-queue, RepeatMode.one short-circuits
+      // before the "last track" check, so it never returns playAtIndex/noop.
+      expect(decide(pstate.RepeatMode.one, 2, 3), 'seekZeroAndPlay');
+      expect(decide(pstate.RepeatMode.one, 0, 3), 'seekZeroAndPlay');
+    });
+
+    test('mid-queue + RepeatMode.none advances via seekToNext', () {
+      expect(decide(pstate.RepeatMode.none, 0, 3), 'seekToNext');
+    });
+  });
+
+  // ---------------------------------------------------------------------
+  // ReplayGain gain formula.
+  //
+  // Mirrors PlayerNotifier._applyVolumeWithGain's math: gain = 10^(dB/20),
+  // clamped to [0.1, 2.0], then effective = (userVol * gain) clamped to
+  // [0.0, 1.0]. Verified independently of the ReplayGain toggle/track cache
+  // plumbing, which requires the live provider graph to exercise.
+  // ---------------------------------------------------------------------
+  group('ReplayGain gain formula (mirrors _applyVolumeWithGain)', () {
+    double effectiveVolume(double userVol, double? replayGainDb, {required bool enabled}) {
+      var gain = 1.0;
+      if (enabled && replayGainDb != null) {
+        gain = pow(10, replayGainDb / 20).toDouble().clamp(0.1, 2.0);
+      }
+      return (userVol * gain).clamp(0.0, 1.0);
+    }
+
+    test('T4: enabled + +6dB track + setVolume(0.5) -> boosted to ~0.9975', () {
+      final result = effectiveVolume(0.5, 6.0, enabled: true);
+      expect(result, closeTo(0.9975, 0.0005));
+    });
+
+    test('T5: replayGainDb null -> gain is 1.0, volume passes through unchanged', () {
+      final result = effectiveVolume(0.5, null, enabled: true);
+      expect(result, 0.5);
+    });
+
+    test('disabled toggle ignores replayGainDb entirely', () {
+      final result = effectiveVolume(0.5, 6.0, enabled: false);
+      expect(result, 0.5);
+    });
+
+    test('gain is clamped to 2.0 ceiling for very quiet tracks (very positive dB)', () {
+      // +40dB track would compute gain = 10^(40/20) = 100.0, clamped to 2.0.
+      final result = effectiveVolume(1.0, 40.0, enabled: true);
+      expect(result, 1.0); // 1.0 * 2.0 clamped back down to 1.0 (volume ceiling)
+    });
+
+    test('gain is clamped to 0.1 floor for very loud tracks (very negative dB)', () {
+      // -40dB track would compute gain = 10^(-40/20) = 0.01, clamped to 0.1.
+      final result = effectiveVolume(1.0, -40.0, enabled: true);
+      expect(result, 0.1);
     });
   });
 

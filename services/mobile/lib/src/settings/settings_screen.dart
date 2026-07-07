@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -170,7 +172,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               final seconds = ref.watch(crossfadeProvider);
               return ListTile(
                 leading: const Icon(Icons.swap_horiz),
-                title: const Text('交叉淡入淡出'),
+                title: const Text('切歌淡入淡出'),
                 subtitle: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -584,6 +586,15 @@ class _EqSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    if (!Platform.isAndroid) {
+      return const ListTile(
+        leading: Icon(Icons.equalizer),
+        title: Text('均衡器'),
+        subtitle: Text('当前平台暂不在支持列表'),
+        trailing: Icon(Icons.lock_outline),
+        enabled: false,
+      );
+    }
     final eq = ref.watch(eqNotifierProvider);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
