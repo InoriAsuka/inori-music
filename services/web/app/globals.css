@@ -1,49 +1,49 @@
+@import url("https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400&family=Noto+Sans+JP:wght@400;700&display=swap");
 @import "tailwindcss";
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400&family=Noto+Sans+JP:wght@400;700&display=swap');
 
 @theme {
   /* ── Canvas layers ─────────────────────────────────────────────────── */
-  --color-void:           #070711;
-  --color-surface:        #0d0d1a;
+  --color-void: #070711;
+  --color-surface: #0d0d1a;
   --color-surface-raised: #12122b;
-  --color-border:         #1e1e3f;
-  --color-border-glow:    #2d2d6b;
+  --color-border: #1e1e3f;
+  --color-border-glow: #2d2d6b;
 
   /* ── Primary — electric violet ──────────────────────────────────────── */
-  --color-primary:        #9b5cff;
-  --color-primary-hover:  #b97dff;
-  --color-primary-dim:    #1a0533;
-  --color-primary-fg:     #f0e8ff;
+  --color-primary: #9b5cff;
+  --color-primary-hover: #b97dff;
+  --color-primary-dim: #1a0533;
+  --color-primary-fg: #f0e8ff;
 
   /* ── Secondary — cyan-teal ──────────────────────────────────────────── */
-  --color-secondary:      #0fd4c0;
-  --color-secondary-hover:#22e5d4;
-  --color-secondary-dim:  #022926;
+  --color-secondary: #0fd4c0;
+  --color-secondary-hover: #22e5d4;
+  --color-secondary-dim: #022926;
 
   /* ── Sakura pink ─────────────────────────────────────────────────────  */
-  --color-sakura:         #ff5fa0;
-  --color-sakura-dim:     #2a0014;
+  --color-sakura: #ff5fa0;
+  --color-sakura-dim: #2a0014;
 
   /* ── Semantic ────────────────────────────────────────────────────────  */
-  --color-success:        #00e5a0;
-  --color-warning:        #ffd23f;
-  --color-danger:         #ff4d6d;
-  --color-danger-dim:     #2a000e;
-  --color-info:           #38bdf8;
+  --color-success: #00e5a0;
+  --color-warning: #ffd23f;
+  --color-danger: #ff4d6d;
+  --color-danger-dim: #2a000e;
+  --color-info: #38bdf8;
 
   /* ── Text ────────────────────────────────────────────────────────────  */
-  --color-text:           #e8e8f4;
+  --color-text: #e8e8f4;
   --color-text-secondary: #9090b8;
-  --color-text-muted:     #4a4a7a;
+  --color-text-muted: #4a4a7a;
 
   /* ── Backward-compat aliases (used by existing components) ──────────── */
-  --color-background:     #070711;
-  --color-foreground:     #e8e8f4;
-  --color-card:           #0d0d1a;
-  --color-card-foreground:#e8e8f4;
-  --color-muted:          #12122b;
-  --color-muted-foreground:#9090b8;
-  --color-destructive:    #ff4d6d;
+  --color-background: #070711;
+  --color-foreground: #e8e8f4;
+  --color-card: #0d0d1a;
+  --color-card-foreground: #e8e8f4;
+  --color-muted: #12122b;
+  --color-muted-foreground: #9090b8;
+  --color-destructive: #ff4d6d;
   --color-destructive-foreground: #f0e8ff;
 
   /* ── Radii ───────────────────────────────────────────────────────────  */
@@ -54,12 +54,14 @@
 
   /* ── Fonts ───────────────────────────────────────────────────────────  */
   --font-display: "Orbitron", sans-serif;
-  --font-sans:    "Inter", "Noto Sans JP", ui-sans-serif, system-ui, sans-serif;
-  --font-mono:    "JetBrains Mono", ui-monospace, monospace;
+  --font-sans: "Inter", "Noto Sans JP", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
 }
 
 /* ── Base ──────────────────────────────────────────────────────────────── */
-html { color-scheme: dark; }
+html {
+  color-scheme: dark;
+}
 
 body {
   background-color: var(--color-void);
@@ -70,16 +72,26 @@ body {
 }
 
 /* ── Scrollbar ─────────────────────────────────────────────────────────── */
-::-webkit-scrollbar { width: 4px; height: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
 ::-webkit-scrollbar-thumb {
   background: var(--color-border-glow);
   border-radius: 9999px;
 }
-::-webkit-scrollbar-thumb:hover { background: var(--color-primary); }
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-primary);
+}
 
 /* ── Selection ─────────────────────────────────────────────────────────── */
-::selection { background: var(--color-primary-dim); color: var(--color-primary-fg); }
+::selection {
+  background: var(--color-primary-dim);
+  color: var(--color-primary-fg);
+}
 
 /* ── Glow utilities ────────────────────────────────────────────────────── */
 .glow-primary {
@@ -90,14 +102,20 @@ body {
 }
 
 /* ── Scanline overlay ───────────────────────────────────────────────────── */
-.scanlines { position: relative; overflow: hidden; }
+.scanlines {
+  position: relative;
+  overflow: hidden;
+}
 .scanlines::after {
   content: "";
   position: absolute;
   inset: 0;
   background: repeating-linear-gradient(
-    0deg, transparent, transparent 1px,
-    rgba(255,255,255,0.012) 1px, rgba(255,255,255,0.012) 2px
+    0deg,
+    transparent,
+    transparent 1px,
+    rgba(255, 255, 255, 0.012) 1px,
+    rgba(255, 255, 255, 0.012) 2px
   );
   pointer-events: none;
   z-index: 1;
@@ -105,7 +123,9 @@ body {
 
 /* ── Reduced motion ─────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
+  *,
+  *::before,
+  *::after {
     animation-duration: 0ms !important;
     transition-duration: 0ms !important;
   }

@@ -40,11 +40,13 @@ export default function FavoritesPage() {
     });
     if (data) {
       setTrackIds(data.trackIds ?? []);
-      setTracks((data.tracks ?? []).map((t) => ({
-        id: t.id,
-        title: t.title,
-        durationMs: t.durationMs ?? 0,
-      })));
+      setTracks(
+        (data.tracks ?? []).map((t) => ({
+          id: t.id,
+          title: t.title,
+          durationMs: t.durationMs ?? 0,
+        }))
+      );
       if (data.pagination) {
         const p = data.pagination;
         if (p.limit != null && p.offset != null && p.total != null && p.hasMore != null) {
@@ -55,7 +57,9 @@ export default function FavoritesPage() {
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, [token, page]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    load();
+  }, [token, page]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function removeFavorite(trackId: string) {
     if (!token) return;
@@ -78,7 +82,7 @@ export default function FavoritesPage() {
   }
 
   const hasCatalogTracks = tracks.length > 0;
-  const empty = !loading && trackIds.length === 0;
+  const empty = !loading && trackIds.length === 0 && tracks.length === 0;
 
   return (
     <div className="space-y-6">
@@ -93,26 +97,50 @@ export default function FavoritesPage() {
         <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-card)]">
           {loading
             ? Array.from({ length: 8 }).map((_, i) => (
-                <div key={i} className="border-b border-[var(--color-border)] px-4 last:border-0"><TrackRowSkeleton /></div>
+                <div key={i} className="border-b border-[var(--color-border)] px-4 last:border-0">
+                  <TrackRowSkeleton />
+                </div>
               ))
             : hasCatalogTracks
               ? tracks.map((t, idx) => (
-                  <div key={t.id} className="flex items-center gap-3 border-b border-[var(--color-border)] px-4 py-2.5 last:border-0 hover:bg-[var(--color-muted)] transition-colors">
-                    <span className="w-6 text-right text-sm text-[var(--color-muted-foreground)]">{offsetFromPage(page, PAGE_SIZE) + idx + 1}</span>
-                    <button onClick={() => playFrom(idx)} className="min-w-0 flex-1 text-left">
+                  <div
+                    key={t.id}
+                    className="flex items-center gap-3 border-b border-[var(--color-border)] px-4 py-2.5 last:border-0 hover:bg-[var(--color-muted)] transition-colors"
+                  >
+                    <span className="w-6 text-right text-sm text-[var(--color-muted-foreground)]">
+                      {offsetFromPage(page, PAGE_SIZE) + idx + 1}
+                    </span>
+                    <button type="button" onClick={() => playFrom(idx)} className="min-w-0 flex-1 text-left">
                       <p className="truncate text-sm font-medium">{t.title}</p>
                     </button>
-                    <span className="text-xs text-[var(--color-muted-foreground)]">{formatDuration(t.durationMs / 1000)}</span>
-                    <button onClick={() => removeFavorite(t.id)} className="rounded p-1.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-destructive)]" title="Remove favorite">
+                    <span className="text-xs text-[var(--color-muted-foreground)]">
+                      {formatDuration(t.durationMs / 1000)}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeFavorite(t.id)}
+                      className="rounded p-1.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-destructive)]"
+                      title="Remove favorite"
+                    >
                       <Trash2 size={15} />
                     </button>
                   </div>
                 ))
               : trackIds.map((id, idx) => (
-                  <div key={id} className="flex items-center gap-3 border-b border-[var(--color-border)] px-4 py-2.5 last:border-0">
-                    <span className="w-6 text-right text-sm text-[var(--color-muted-foreground)]">{offsetFromPage(page, PAGE_SIZE) + idx + 1}</span>
+                  <div
+                    key={id}
+                    className="flex items-center gap-3 border-b border-[var(--color-border)] px-4 py-2.5 last:border-0"
+                  >
+                    <span className="w-6 text-right text-sm text-[var(--color-muted-foreground)]">
+                      {offsetFromPage(page, PAGE_SIZE) + idx + 1}
+                    </span>
                     <code className="min-w-0 flex-1 truncate text-xs">{id}</code>
-                    <button onClick={() => removeFavorite(id)} className="rounded p-1.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-destructive)]" title="Remove favorite">
+                    <button
+                      type="button"
+                      onClick={() => removeFavorite(id)}
+                      className="rounded p-1.5 text-[var(--color-muted-foreground)] hover:text-[var(--color-destructive)]"
+                      title="Remove favorite"
+                    >
                       <Trash2 size={15} />
                     </button>
                   </div>

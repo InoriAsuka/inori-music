@@ -65,21 +65,25 @@ func main() {
 	}
 	mediaObjectService := storage.NewMediaObjectService(repository, mediaObjectRepository)
 
-	// Auth service — only available when PostgreSQL is configured.
-	var authService *auth.Service
+	// Auth service — PostgreSQL when pool is available, in-memory otherwise
+	// (mirrors the catalog/history/favorites/storage/userplaylist fallback below).
+	var authUsers auth.UserRepository
+	var authSessions auth.SessionRepository
 	if pool != nil {
-		authService = auth.NewService(
-			authpg.NewUserRepository(pool),
-			authpg.NewSessionRepository(pool),
-			auth.ServiceConfig{SessionTTL: sessionTTL()},
-		)
-		if err := authService.EnsureInitialAdmin(
-			ctx,
-			os.Getenv("INORI_INITIAL_ADMIN_USER"),
-			os.Getenv("INORI_INITIAL_ADMIN_PASSWORD"),
-		); err != nil {
-			log.Printf("initial admin setup: %v", err)
-		}
+		authUsers = authpg.NewUserRepository(pool)
+		authSessions = authpg.NewSessionRepository(pool)
+	} else {
+		log.Print("INORI_DATABASE_URL is not set; auth service running with in-memory (non-persistent) user/session storage")
+		authUsers = auth.NewMemoryUserRepository()
+		authSessions = auth.NewMemorySessionRepository()
+	}
+	authService := auth.NewService(authUsers, authSessions, auth.ServiceConfig{SessionTTL: sessionTTL()})
+	if err := authService.EnsureInitialAdmin(
+		ctx,
+		os.Getenv("INORI_INITIAL_ADMIN_USER"),
+		os.Getenv("INORI_INITIAL_ADMIN_PASSWORD"),
+	); err != nil {
+		log.Printf("initial admin setup: %v", err)
 	}
 
 	// Catalog service — PostgreSQL when pool is available, in-memory otherwise.
@@ -127,6 +131,7 @@ func main() {
 
 	handlerOpts := []httpapi.HandlerOption{
 		httpapi.WithAdminToken(adminToken),
+		httpapi.WithAuthService(authService),
 		httpapi.WithMediaObjectService(mediaObjectService),
 		httpapi.WithCatalogService(catalogService),
 		httpapi.WithHistoryService(historyService),
@@ -134,9 +139,6 @@ func main() {
 		httpapi.WithUserPlaylistService(userPlaylistService),
 		httpapi.WithCORSOrigins(corsOrigins()),
 		httpapi.WithServiceInfo(httpapi.ServiceInfo{Name: "inori-api", Version: version, Commit: commit, BuildTime: buildTime}),
-	}
-	if authService != nil {
-		handlerOpts = append(handlerOpts, httpapi.WithAuthService(authService))
 	}
 	if searchSvc != nil {
 		handlerOpts = append(handlerOpts, httpapi.WithSearchService(searchSvc))

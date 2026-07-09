@@ -61,20 +61,26 @@ class OfflineDb {
   // and call _open() twice, leaking a database handle.
   Completer<Database>? _initCompleter;
 
-  Future<Database> get db async {
-    if (_initCompleter == null) {
-      _initCompleter = Completer<Database>();
-      try {
-        final opened = await _open();
-        _initCompleter!.complete(opened);
-      } catch (e, st) {
-        _initCompleter!.completeError(e, st);
-        // Reset so a future caller can retry.
-        _initCompleter = null;
-        rethrow;
-      }
-    }
-    return _initCompleter!.future;
+  Future<Database> get db {
+    final existing = _initCompleter;
+    if (existing != null) return existing.future;
+
+    final completer = Completer<Database>();
+    _initCompleter = completer;
+    // Complete `completer` from a callback rather than `await`ing inside this
+    // getter — that way `db` always returns the exact Future that gets
+    // completed (success or error), for every caller including the one that
+    // triggered _open(). An `await`+`rethrow` structure would let the
+    // rethrow bypass returning _initCompleter!.future on the error path,
+    // leaving that future's completeError orphaned with no listener — which
+    // surfaces as a separate unhandled-Zone-error rather than a clean
+    // propagation to whoever is awaiting `db`.
+    _open().then(completer.complete, onError: (Object e, StackTrace st) {
+      // Reset so a future caller can retry.
+      _initCompleter = null;
+      completer.completeError(e, st);
+    });
+    return completer.future;
   }
 
   Future<Database> _open() async {

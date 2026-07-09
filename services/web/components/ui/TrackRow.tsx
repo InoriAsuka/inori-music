@@ -33,14 +33,7 @@ interface TrackRowProps {
   className?: string;
 }
 
-export function TrackRow({
-  track,
-  index,
-  onPlay,
-  onFavoriteChange,
-  showIndex = true,
-  className,
-}: TrackRowProps) {
+export function TrackRow({ track, index, onPlay, onFavoriteChange, showIndex = true, className }: TrackRowProps) {
   const token = useAuthStore((s) => s.token);
   const [fav, setFav] = useState(track.isFavorite ?? false);
   const [favLoading, setFavLoading] = useState(false);
@@ -78,9 +71,7 @@ export function TrackRow({
       )}
     >
       {showIndex && index != null && (
-        <span className="w-6 shrink-0 text-right text-sm text-[var(--color-muted-foreground)]">
-          {index}
-        </span>
+        <span className="w-6 shrink-0 text-right text-sm text-[var(--color-muted-foreground)]">{index}</span>
       )}
 
       <div className="min-w-0 flex-1">
@@ -101,6 +92,7 @@ export function TrackRow({
       </div>
 
       <button
+        type="button"
         onClick={toggleFavorite}
         disabled={favLoading}
         className={cn(

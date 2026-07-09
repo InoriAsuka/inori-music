@@ -55,5 +55,5 @@ export function Visualizer() {
     return () => cancelAnimationFrame(raf);
   }, [status]);
 
-  return <canvas ref={canvasRef} className="h-8 w-full opacity-90" aria-hidden="true" />;
+  return <canvas ref={canvasRef} className="h-8 w-full opacity-90" />;
 }

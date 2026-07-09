@@ -7,8 +7,11 @@ import { formatBytes, cn } from "@/lib/utils";
 import { StorageHealthBadge } from "@/components/admin/StorageHealthBadge";
 
 interface Backend {
-  id: string; displayName: string; type: string;
-  enabled: boolean; isDefault: boolean;
+  id: string;
+  displayName: string;
+  type: string;
+  enabled: boolean;
+  isDefault: boolean;
   healthStatus?: string;
   capacity?: { totalBytes: number; usedBytes: number; availableBytes: number };
 }
@@ -25,35 +28,50 @@ export default function StoragePage() {
     setLoading(true);
     const { data } = await client.GET("/api/v1/admin/storage/backends");
     if (data?.backends) {
-      setBackends(data.backends.map((b) => ({
-        id: b.id, displayName: b.displayName, type: b.type,
-        enabled: b.enabled ?? false, isDefault: b.isDefault ?? false,
-        healthStatus: (b as { healthStatus?: string }).healthStatus,
-        capacity: (b as { lastCapacity?: { totalBytes: number; usedBytes: number; availableBytes: number } }).lastCapacity,
-      })));
+      setBackends(
+        data.backends.map((b) => ({
+          id: b.id,
+          displayName: b.displayName,
+          type: b.type,
+          enabled: b.enabled ?? false,
+          isDefault: b.isDefault ?? false,
+          healthStatus: (b as { healthStatus?: string }).healthStatus,
+          capacity: (b as { lastCapacity?: { totalBytes: number; usedBytes: number; availableBytes: number } })
+            .lastCapacity,
+        }))
+      );
     }
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, [client]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    load();
+  }, [client]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function refresh() {
     if (!client) return;
     setRefreshing(true);
     await client.POST("/api/v1/admin/storage/backends/refresh");
-    await load(); setRefreshing(false);
+    await load();
+    setRefreshing(false);
   }
 
   async function probe(id: string) {
     if (!client) return;
     const { data } = await client.POST("/api/v1/admin/storage/backends/{id}/probe", { params: { path: { id } } });
-    if (data) setProbeResults((r) => ({ ...r, [id]: `${data.status}: ${data.message ?? "ok"}${data.checkedAt ? ` @ ${new Date(data.checkedAt).toLocaleTimeString()}` : ""}` }));
+    if (data)
+      setProbeResults((r) => ({
+        ...r,
+        [id]: `${data.status}: ${data.message ?? "ok"}${data.checkedAt ? ` @ ${new Date(data.checkedAt).toLocaleTimeString()}` : ""}`,
+      }));
     await load();
   }
 
   async function toggle(b: Backend) {
     if (!client) return;
-    const path = b.enabled ? "/api/v1/admin/storage/backends/{id}/disable" : "/api/v1/admin/storage/backends/{id}/enable";
+    const path = b.enabled
+      ? "/api/v1/admin/storage/backends/{id}/disable"
+      : "/api/v1/admin/storage/backends/{id}/enable";
     await client.POST(path, { params: { path: { id: b.id } } });
     await load();
   }
@@ -74,8 +92,12 @@ export default function StoragePage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="font-display text-xl font-bold tracking-wider text-[var(--color-primary)]">STORAGE</h1>
-        <button onClick={refresh} disabled={refreshing}
-          className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text-secondary)] hover:border-[var(--color-border-glow)] hover:text-[var(--color-text)] disabled:opacity-50">
+        <button
+          type="button"
+          onClick={refresh}
+          disabled={refreshing}
+          className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text-secondary)] hover:border-[var(--color-border-glow)] hover:text-[var(--color-text)] disabled:opacity-50"
+        >
           <RefreshCw size={13} className={refreshing ? "animate-spin" : ""} /> Refresh all
         </button>
       </div>
@@ -96,8 +118,14 @@ export default function StoragePage() {
                   <div className="space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-semibold text-[var(--color-text)]">{b.displayName}</span>
-                      <span className="rounded border border-[var(--color-border)] px-1.5 py-0.5 font-mono text-xs text-[var(--color-text-muted)]">{b.type}</span>
-                      {b.isDefault && <span className="rounded-full bg-[var(--color-primary-dim)] border border-[var(--color-primary)] px-2 py-0.5 text-[10px] font-semibold text-[var(--color-primary)]">DEFAULT</span>}
+                      <span className="rounded border border-[var(--color-border)] px-1.5 py-0.5 font-mono text-xs text-[var(--color-text-muted)]">
+                        {b.type}
+                      </span>
+                      {b.isDefault && (
+                        <span className="rounded-full bg-[var(--color-primary-dim)] border border-[var(--color-primary)] px-2 py-0.5 text-[10px] font-semibold text-[var(--color-primary)]">
+                          DEFAULT
+                        </span>
+                      )}
                       {!b.enabled && <span className="text-xs text-[var(--color-text-muted)]">disabled</span>}
                     </div>
                     <p className="font-mono text-xs text-[var(--color-text-muted)]">{b.id}</p>
@@ -105,10 +133,14 @@ export default function StoragePage() {
                     {b.capacity && (
                       <div className="w-48 space-y-1">
                         <div className="h-1.5 rounded-full bg-[var(--color-surface-raised)]">
-                          <div className="h-full rounded-full bg-[var(--color-secondary)]" style={{ width: `${Math.min(100, usedPct)}%` }} />
+                          <div
+                            className="h-full rounded-full bg-[var(--color-secondary)]"
+                            style={{ width: `${Math.min(100, usedPct)}%` }}
+                          />
                         </div>
                         <p className="text-xs text-[var(--color-text-muted)]">
-                          {formatBytes(b.capacity.usedBytes)} / {formatBytes(b.capacity.totalBytes)} · {formatBytes(b.capacity.availableBytes)} free
+                          {formatBytes(b.capacity.usedBytes)} / {formatBytes(b.capacity.totalBytes)} ·{" "}
+                          {formatBytes(b.capacity.availableBytes)} free
                         </p>
                       </div>
                     )}
@@ -116,10 +148,20 @@ export default function StoragePage() {
                   </div>
 
                   <div className="flex items-center gap-1.5">
-                    <ActionBtn onClick={() => probe(b.id)} label="Probe"><Zap size={13} /></ActionBtn>
-                    {!b.isDefault && <ActionBtn onClick={() => setDefault(b.id)} label="Set default"><Star size={13} /></ActionBtn>}
-                    <ActionBtn onClick={() => toggle(b)} label={b.enabled ? "Disable" : "Enable"}><Power size={13} /></ActionBtn>
-                    <ActionBtn onClick={() => del(b.id)} label="Delete" danger><Trash2 size={13} /></ActionBtn>
+                    <ActionBtn onClick={() => probe(b.id)} label="Probe">
+                      <Zap size={13} />
+                    </ActionBtn>
+                    {!b.isDefault && (
+                      <ActionBtn onClick={() => setDefault(b.id)} label="Set default">
+                        <Star size={13} />
+                      </ActionBtn>
+                    )}
+                    <ActionBtn onClick={() => toggle(b)} label={b.enabled ? "Disable" : "Enable"}>
+                      <Power size={13} />
+                    </ActionBtn>
+                    <ActionBtn onClick={() => del(b.id)} label="Delete" danger>
+                      <Trash2 size={13} />
+                    </ActionBtn>
                   </div>
                 </div>
               </div>
@@ -131,12 +173,25 @@ export default function StoragePage() {
   );
 }
 
-function ActionBtn({ children, onClick, label, danger }: { children: React.ReactNode; onClick: () => void; label: string; danger?: boolean }) {
+function ActionBtn({
+  children,
+  onClick,
+  label,
+  danger,
+}: { children: React.ReactNode; onClick: () => void; label: string; danger?: boolean }) {
   return (
-    <button onClick={onClick} title={label}
-      className={cn("rounded-md border border-[var(--color-border)] px-2 py-1.5 text-xs transition-colors hover:border-[var(--color-border-glow)]",
-        danger ? "text-[var(--color-text-muted)] hover:border-[var(--color-danger)] hover:text-[var(--color-danger)]"
-               : "text-[var(--color-text-muted)] hover:text-[var(--color-text)]")}
-    >{children}</button>
+    <button
+      type="button"
+      onClick={onClick}
+      title={label}
+      className={cn(
+        "rounded-md border border-[var(--color-border)] px-2 py-1.5 text-xs transition-colors hover:border-[var(--color-border-glow)]",
+        danger
+          ? "text-[var(--color-text-muted)] hover:border-[var(--color-danger)] hover:text-[var(--color-danger)]"
+          : "text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+      )}
+    >
+      {children}
+    </button>
   );
 }

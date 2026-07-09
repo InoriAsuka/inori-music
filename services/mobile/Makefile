@@ -10,6 +10,15 @@ gen:api:
 		-g dart-dio \
 		-o $(GENERATED_DIR) \
 		--additional-properties="pubName=inori_api,nullSafe=true,serializationLibrary=json_serializable,pubVersion=3.0.0"
+	# openapi-generator's dart-dio template hardcodes the SDK floor (currently
+	# >=3.5.0) with no --additional-properties override available. Our outer
+	# pubspec.yaml requires ^3.12.2, so a mismatched floor here resolves this
+	# package to a lower languageVersion in .dart_tool/package_config.json —
+	# which breaks part-file compilation with "language version override has to
+	# be the same in the library and its part(s)" (CFE-only; flutter analyze
+	# stays clean). Force it back in sync after every regeneration.
+	sed -i.bak "s/^  sdk: .*/  sdk: '>=3.12.2 <4.0.0'/" $(GENERATED_DIR)/pubspec.yaml
+	rm -f $(GENERATED_DIR)/pubspec.yaml.bak
 	@echo "✅ API client generated at $(GENERATED_DIR)"
 
 ## Run build_runner once (generate Riverpod providers, Freezed models)

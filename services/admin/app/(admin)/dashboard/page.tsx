@@ -7,7 +7,10 @@ import { AdminTokenPanel } from "@/components/admin/AdminTokenPanel";
 import { useAdminClient } from "@/hooks/useAdminClient";
 import { useIsAdminLoggedIn } from "@/store/auth";
 
-interface Stat { label: string; value?: number; }
+interface Stat {
+  label: string;
+  value?: number;
+}
 
 function StatCard({ label, value }: Stat) {
   return (
@@ -32,26 +35,25 @@ const QUICK_LINKS = [
 export default function DashboardPage() {
   const client = useAdminClient();
   const hasAccess = useIsAdminLoggedIn();
-  const [catalog, setCatalog] = useState<{ artists: number; albums: number; tracks: number; playlists: number } | null>(null);
+  const [catalog, setCatalog] = useState<{ artists: number; albums: number; tracks: number; playlists: number } | null>(
+    null
+  );
   const [hist, setHist] = useState<{ totalEvents: number; uniqueUsers: number; uniqueTracks: number } | null>(null);
 
   useEffect(() => {
     if (!client) return;
-    Promise.all([
-      client.GET("/api/v1/admin/catalog/stats"),
-      client.GET("/api/v1/admin/history/stats"),
-    ]).then(([c, h]) => {
-      if (c.data) setCatalog(c.data);
-      if (h.data) setHist(h.data);
-    });
+    Promise.all([client.GET("/api/v1/admin/catalog/stats"), client.GET("/api/v1/admin/history/stats")]).then(
+      ([c, h]) => {
+        if (c.data) setCatalog(c.data);
+        if (h.data) setHist(h.data);
+      }
+    );
   }, [client]);
 
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="font-display text-2xl font-bold tracking-wider text-[var(--color-primary)]">
-          DASHBOARD
-        </h1>
+        <h1 className="font-display text-2xl font-bold tracking-wider text-[var(--color-primary)]">DASHBOARD</h1>
         <p className="mt-1 text-sm text-[var(--color-text-muted)]">Inori Music administration overview</p>
       </div>
 
@@ -96,7 +98,9 @@ export default function DashboardPage() {
                 <Icon size={16} className="text-[var(--color-primary)]" />
               </div>
               <div>
-                <p className="font-semibold text-[var(--color-text)] group-hover:text-[var(--color-primary-hover)]">{label}</p>
+                <p className="font-semibold text-[var(--color-text)] group-hover:text-[var(--color-primary-hover)]">
+                  {label}
+                </p>
                 <p className="text-xs text-[var(--color-text-muted)]">{desc}</p>
               </div>
             </Link>

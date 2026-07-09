@@ -18,9 +18,16 @@ export function BottomNav() {
   return (
     <nav className="grid h-14 shrink-0 grid-cols-5 border-t border-[var(--color-border)] bg-[var(--color-surface)] sm:hidden">
       {TABS.map(({ href, label, icon: Icon }) => {
-        const active = pathname === href || pathname.startsWith(href + "/");
+        const active = pathname === href || pathname.startsWith(`${href}/`);
         return (
-          <Link key={href} href={href} className={cn("flex flex-col items-center justify-center gap-0.5 text-[10px]", active ? "text-[var(--color-primary)]" : "text-[var(--color-text-muted)]")}>
+          <Link
+            key={href}
+            href={href}
+            className={cn(
+              "flex flex-col items-center justify-center gap-0.5 text-[10px]",
+              active ? "text-[var(--color-primary)]" : "text-[var(--color-text-muted)]"
+            )}
+          >
             <Icon size={17} />
             {label}
           </Link>

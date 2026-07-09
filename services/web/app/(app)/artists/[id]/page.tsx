@@ -35,18 +35,22 @@ export default function ArtistDetailPage() {
     ]).then(([artistRes, albumsRes, tracksRes]) => {
       if (artistRes.data) setName(artistRes.data.name);
       if (albumsRes.data?.albums) {
-        setAlbums(albumsRes.data.albums.map((a) => ({
-          id: a.id,
-          title: a.title,
-          year: a.releaseYear ?? undefined,
-        })));
+        setAlbums(
+          albumsRes.data.albums.map((a) => ({
+            id: a.id,
+            title: a.title,
+            year: a.releaseYear ?? undefined,
+          }))
+        );
       }
       if (tracksRes.data?.tracks) {
-        setTracks(tracksRes.data.tracks.map((t) => ({
-          id: t.id,
-          title: t.title,
-          durationMs: t.durationMs ?? 0,
-        })));
+        setTracks(
+          tracksRes.data.tracks.map((t) => ({
+            id: t.id,
+            title: t.title,
+            durationMs: t.durationMs ?? 0,
+          }))
+        );
       }
       setLoading(false);
     });
@@ -66,7 +70,10 @@ export default function ArtistDetailPage() {
 
   return (
     <div className="space-y-8">
-      <Link href="/artists" className="flex items-center gap-1 text-sm text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]">
+      <Link
+        href="/artists"
+        className="flex items-center gap-1 text-sm text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
+      >
         <ArrowLeft size={14} /> Artists
       </Link>
 
@@ -87,7 +94,11 @@ export default function ArtistDetailPage() {
           <h2 className="mb-3 text-lg font-semibold">Albums</h2>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {albums.map((album) => (
-              <Link key={album.id} href={`/albums/${album.id}`} className="group flex flex-col gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-3 hover:bg-[var(--color-muted)] transition-colors">
+              <Link
+                key={album.id}
+                href={`/albums/${album.id}`}
+                className="group flex flex-col gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-3 hover:bg-[var(--color-muted)] transition-colors"
+              >
                 <Artwork alt={album.title} size="lg" className="w-full h-auto aspect-square" />
                 <p className="truncate font-medium text-sm">{album.title}</p>
                 {album.year && <p className="text-xs text-[var(--color-muted-foreground)]">{album.year}</p>}

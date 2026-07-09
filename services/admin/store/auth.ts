@@ -9,9 +9,7 @@ import { persist } from "zustand/middleware";
 import createClient from "openapi-fetch";
 import type { paths } from "@/types/api.gen";
 
-const baseUrl = typeof window === "undefined"
-  ? (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080")
-  : "";
+const baseUrl = typeof window === "undefined" ? (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080") : "";
 
 export interface AdminUser {
   id: string;
@@ -41,10 +39,18 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       bootstrapToken: null,
 
-      setSession(token, user) { set({ token, user }); },
-      setBootstrapToken(token) { set({ bootstrapToken: token.trim() || null }); },
-      clearBootstrapToken() { set({ bootstrapToken: null }); },
-      clearSession() { set({ token: null, user: null }); },
+      setSession(token, user) {
+        set({ token, user });
+      },
+      setBootstrapToken(token) {
+        set({ bootstrapToken: token.trim() || null });
+      },
+      clearBootstrapToken() {
+        set({ bootstrapToken: null });
+      },
+      clearSession() {
+        set({ token: null, user: null });
+      },
 
       effectiveToken() {
         const { token, user, bootstrapToken } = get();
@@ -60,8 +66,18 @@ export const useAuthStore = create<AuthState>()(
           headers: { Authorization: `Bearer ${token}` },
         });
         const { data, error } = await client.GET("/api/v1/me");
-        if (error || !data) { set({ token: null, user: null }); return false; }
-        set({ user: { id: data.id, username: data.username, role: data.role as "viewer" | "admin", createdAt: data.createdAt } });
+        if (error || !data) {
+          set({ token: null, user: null });
+          return false;
+        }
+        set({
+          user: {
+            id: data.id,
+            username: data.username,
+            role: data.role as "viewer" | "admin",
+            createdAt: data.createdAt,
+          },
+        });
         return true;
       },
     }),
@@ -73,7 +89,8 @@ export const useAuthStore = create<AuthState>()(
 );
 
 export const useEffectiveToken = () => useAuthStore((s) => s.effectiveToken());
-export const useIsAdminLoggedIn = () => useAuthStore((s) => {
-  const { token, user, bootstrapToken } = s;
-  return (token !== null && user?.role === "admin") || bootstrapToken !== null;
-});
+export const useIsAdminLoggedIn = () =>
+  useAuthStore((s) => {
+    const { token, user, bootstrapToken } = s;
+    return (token !== null && user?.role === "admin") || bootstrapToken !== null;
+  });

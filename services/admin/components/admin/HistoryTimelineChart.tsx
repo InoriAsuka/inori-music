@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import {
-  AreaChart, Area, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer,
-} from "recharts";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 
-interface Bucket { label: string; count: number; }
+interface Bucket {
+  label: string;
+  count: number;
+}
 type Granularity = "day" | "week" | "month";
 
 interface HistoryTimelineChartProps {
@@ -15,22 +15,17 @@ interface HistoryTimelineChartProps {
   onGranularityChange?: (g: Granularity) => void;
 }
 
-export function HistoryTimelineChart({
-  buckets,
-  granularity = "day",
-  onGranularityChange,
-}: HistoryTimelineChartProps) {
+export function HistoryTimelineChart({ buckets, granularity = "day", onGranularityChange }: HistoryTimelineChartProps) {
   const GRANULARITIES: Granularity[] = ["day", "week", "month"];
 
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
-          Play Timeline
-        </h3>
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">Play Timeline</h3>
         <div className="flex gap-1">
           {GRANULARITIES.map((g) => (
             <button
+              type="button"
               key={g}
               onClick={() => onGranularityChange?.(g)}
               className={
@@ -58,7 +53,13 @@ export function HistoryTimelineChart({
             <XAxis dataKey="label" tick={{ fill: "#4a4a7a", fontSize: 10 }} axisLine={false} tickLine={false} />
             <YAxis tick={{ fill: "#4a4a7a", fontSize: 10 }} axisLine={false} tickLine={false} />
             <Tooltip
-              contentStyle={{ background: "#0d0d1a", border: "1px solid #1e1e3f", borderRadius: 8, fontSize: 12, color: "#e8e8f4" }}
+              contentStyle={{
+                background: "#0d0d1a",
+                border: "1px solid #1e1e3f",
+                borderRadius: 8,
+                fontSize: 12,
+                color: "#e8e8f4",
+              }}
               cursor={{ stroke: "#9b5cff", strokeWidth: 1 }}
             />
             <Area

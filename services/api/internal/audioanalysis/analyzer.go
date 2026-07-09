@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"os"
 	"os/exec"
 	"strconv"
@@ -106,6 +107,10 @@ func (a *Analyzer) AnalyzeTrack(ctx context.Context, trackID, mediaObjectID stri
 			return nil
 		}
 		return fmt.Errorf("measure loudness: %w", err)
+	}
+	if math.IsNaN(loudness) || math.IsInf(loudness, 0) {
+		log.Printf("audioanalysis: loudness %v is non-finite (silent/unreadable audio), skipping track %s", loudness, trackID)
+		return nil
 	}
 
 	gain := referenceLoudnessLUFS - loudness

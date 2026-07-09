@@ -22,9 +22,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
       <div className="flex flex-1 overflow-hidden">
         <Sidebar />
-        <main className="flex-1 overflow-y-auto px-4 py-4 text-[var(--color-text)] sm:px-6 sm:py-6">
-          {children}
-        </main>
+        <main className="flex-1 overflow-y-auto px-4 py-4 text-[var(--color-text)] sm:px-6 sm:py-6">{children}</main>
       </div>
 
       <PlayerBar />

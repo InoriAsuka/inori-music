@@ -19,7 +19,8 @@ export function usePlayerKeyboard() {
       switch (e.key.toLowerCase()) {
         case " ":
           e.preventDefault();
-          if (s.status === "playing") s.pause(); else s.play();
+          if (s.status === "playing") s.pause();
+          else s.play();
           break;
         case "arrowleft":
           e.preventDefault();

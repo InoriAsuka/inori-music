@@ -145,7 +145,10 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
       next = currentIndex + 1;
       if (next >= queue.length) {
         if (repeat === "all") next = 0;
-        else { set({ status: "idle" }); return; }
+        else {
+          set({ status: "idle" });
+          return;
+        }
       }
     }
     set({ currentIndex: next, positionSeconds: 0, status: "loading" });
@@ -169,10 +172,18 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
     set({ currentIndex: index, positionSeconds: 0, status: "loading" });
   },
 
-  setStatus(status) { set({ status }); },
-  setPosition(positionSeconds) { set({ positionSeconds }); },
-  setVolume(volume) { set({ volume: Math.max(0, Math.min(1, volume)) }); },
-  toggleShuffle() { set((s) => ({ shuffle: !s.shuffle })); },
+  setStatus(status) {
+    set({ status });
+  },
+  setPosition(positionSeconds) {
+    set({ positionSeconds });
+  },
+  setVolume(volume) {
+    set({ volume: Math.max(0, Math.min(1, volume)) });
+  },
+  toggleShuffle() {
+    set((s) => ({ shuffle: !s.shuffle }));
+  },
   cycleRepeat() {
     set((s) => ({
       repeat: s.repeat === "off" ? "all" : s.repeat === "all" ? "one" : "off",
@@ -181,7 +192,5 @@ export const usePlayerStore = create<PlayerState>()((set, get) => ({
 }));
 
 // Convenience selectors
-export const useCurrentTrack = () =>
-  usePlayerStore((s) => s.queue[s.currentIndex] ?? null);
-export const useIsPlaying = () =>
-  usePlayerStore((s) => s.status === "playing");
+export const useCurrentTrack = () => usePlayerStore((s) => s.queue[s.currentIndex] ?? null);
+export const useIsPlaying = () => usePlayerStore((s) => s.status === "playing");

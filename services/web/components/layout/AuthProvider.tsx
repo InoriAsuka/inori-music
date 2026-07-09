@@ -11,7 +11,7 @@ import { useEffect } from "react";
 import { useAuthStore } from "@/store/auth";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const { token, refreshUser, clearSession } = useAuthStore();
+  const { token, refreshUser } = useAuthStore();
 
   useEffect(() => {
     if (!token) {
@@ -21,7 +21,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     // Set the hint cookie (1 day) so middleware can read it.
-    document.cookie = `inori_session=1; path=/; max-age=86400; SameSite=Lax`;
+    document.cookie = "inori_session=1; path=/; max-age=86400; SameSite=Lax";
 
     // Validate the stored token is still good.
     refreshUser().then((valid) => {
@@ -36,14 +36,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     const unsub = useAuthStore.subscribe((state) => {
       if (state.token) {
-        document.cookie = `inori_session=1; path=/; max-age=86400; SameSite=Lax`;
+        document.cookie = "inori_session=1; path=/; max-age=86400; SameSite=Lax";
       } else {
         document.cookie = "inori_session=; path=/; max-age=0";
-        clearSession();
       }
     });
     return unsub;
-  }, [clearSession]);
+  }, []);
 
   return <>{children}</>;
 }

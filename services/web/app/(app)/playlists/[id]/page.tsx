@@ -21,11 +21,13 @@ export default function PlaylistDetailPage() {
   const playQueue = usePlayerStore((s) => s.playQueue);
 
   const [name, setName] = useState("");
-  const [tracks, setTracks] = useState<{
-    id: string;
-    title: string;
-    durationMs: number;
-  }[]>([]);
+  const [tracks, setTracks] = useState<
+    {
+      id: string;
+      title: string;
+      durationMs: number;
+    }[]
+  >([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -37,11 +39,13 @@ export default function PlaylistDetailPage() {
     ]).then(([plRes, tracksRes]) => {
       if (plRes.data) setName(plRes.data.name);
       if (tracksRes.data?.tracks) {
-        setTracks(tracksRes.data.tracks.map((t) => ({
-          id: t.id,
-          title: t.title,
-          durationMs: t.durationMs ?? 0,
-        })));
+        setTracks(
+          tracksRes.data.tracks.map((t) => ({
+            id: t.id,
+            title: t.title,
+            durationMs: t.durationMs ?? 0,
+          }))
+        );
       }
       setLoading(false);
     });
@@ -61,17 +65,19 @@ export default function PlaylistDetailPage() {
 
   return (
     <div className="space-y-8">
-      <Link href="/playlists" className="flex items-center gap-1 text-sm text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]">
+      <Link
+        href="/playlists"
+        className="flex items-center gap-1 text-sm text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
+      >
         <ArrowLeft size={14} /> Playlists
       </Link>
 
       <div className="flex items-end gap-4">
         <div>
-          {loading
-            ? <Skeleton className="h-8 w-48 mb-2" />
-            : <h1 className="text-3xl font-bold">{name}</h1>}
+          {loading ? <Skeleton className="h-8 w-48 mb-2" /> : <h1 className="text-3xl font-bold">{name}</h1>}
           <p className="text-sm text-[var(--color-muted-foreground)]">{tracks.length} tracks</p>
           <button
+            type="button"
             onClick={() => playFrom(0)}
             disabled={tracks.length === 0}
             className="mt-3 flex items-center gap-2 rounded-full bg-[var(--color-primary)] px-6 py-2 text-sm font-semibold text-[var(--color-primary-foreground)] hover:opacity-90 disabled:opacity-50 transition-opacity"

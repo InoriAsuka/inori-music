@@ -83,7 +83,13 @@ export default function HomePage() {
         <StatCard label="Tracks" value={stats?.tracks} icon={<Music2 size={18} />} href="/tracks" loading={loading} />
         <StatCard label="Artists" value={stats?.artists} icon={<Users size={18} />} href="/artists" loading={loading} />
         <StatCard label="Albums" value={stats?.albums} icon={<Disc3 size={18} />} href="/albums" loading={loading} />
-        <StatCard label="Playlists" value={stats?.playlists} icon={<ListMusic size={18} />} href="/playlists" loading={loading} />
+        <StatCard
+          label="Playlists"
+          value={stats?.playlists}
+          icon={<ListMusic size={18} />}
+          href="/playlists"
+          loading={loading}
+        />
       </div>
 
       {/* Recently added */}
@@ -134,7 +140,11 @@ export default function HomePage() {
 }
 
 function StatCard({
-  label, value, icon, href, loading,
+  label,
+  value,
+  icon,
+  href,
+  loading,
 }: {
   label: string;
   value?: number;
@@ -148,9 +158,11 @@ function StatCard({
       className="flex flex-col gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-4 hover:bg-[var(--color-muted)] transition-colors"
     >
       <span className="text-[var(--color-muted-foreground)]">{icon}</span>
-      {loading
-        ? <Skeleton className="h-7 w-16" />
-        : <span className="text-2xl font-bold">{value?.toLocaleString() ?? "—"}</span>}
+      {loading ? (
+        <Skeleton className="h-7 w-16" />
+      ) : (
+        <span className="text-2xl font-bold">{value?.toLocaleString() ?? "—"}</span>
+      )}
       <span className="text-sm text-[var(--color-muted-foreground)]">{label}</span>
     </Link>
   );

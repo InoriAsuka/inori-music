@@ -34,14 +34,19 @@ export default function TracksPage() {
       .then(async ({ data }) => {
         if (!data) return;
         const raw = data.tracks ?? [];
-        const names = await resolveArtistNames(client, raw.map((t) => t.artistId));
-        setTracks(raw.map((t) => ({
-          id: t.id,
-          title: t.title,
-          artistName: names.get(t.artistId) ?? "",
-          durationMs: t.durationMs ?? 0,
-          isFavorite: t.isFavorite,
-        })));
+        const names = await resolveArtistNames(
+          client,
+          raw.map((t) => t.artistId)
+        );
+        setTracks(
+          raw.map((t) => ({
+            id: t.id,
+            title: t.title,
+            artistName: names.get(t.artistId) ?? "",
+            durationMs: t.durationMs ?? 0,
+            isFavorite: t.isFavorite,
+          }))
+        );
         if (data.pagination) setPagination(data.pagination);
       })
       .finally(() => setLoading(false));

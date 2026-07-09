@@ -9,11 +9,11 @@ import (
 )
 
 var (
-	ErrInvalidBackend    = errors.New("invalid storage backend")
-	ErrNotFound          = errors.New("storage backend not found")
-	ErrConflict          = errors.New("storage backend conflict")
-	ErrBackendIsDefault  = errors.New("storage backend is default")
-	ErrBackendInUse      = errors.New("storage backend is in use")
+	ErrInvalidBackend   = errors.New("invalid storage backend")
+	ErrNotFound         = errors.New("storage backend not found")
+	ErrConflict         = errors.New("storage backend conflict")
+	ErrBackendIsDefault = errors.New("storage backend is default")
+	ErrBackendInUse     = errors.New("storage backend is in use")
 )
 
 // ValidateBackend checks static configuration and fills inferred capabilities.

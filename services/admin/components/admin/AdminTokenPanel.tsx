@@ -12,7 +12,7 @@ export function AdminTokenPanel() {
   function save() {
     setBootstrapToken(draft);
     document.cookie = draft.trim()
-      ? `inori_admin_session=1; path=/; max-age=86400; SameSite=Lax`
+      ? "inori_admin_session=1; path=/; max-age=86400; SameSite=Lax"
       : "inori_admin_session=; path=/; max-age=0";
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
@@ -30,8 +30,7 @@ export function AdminTokenPanel() {
         )}
       </div>
       <p className="mb-3 text-xs text-[var(--color-text-muted)]">
-        Admin routes accept an admin user JWT or this static bootstrap token.
-        Stored in browser localStorage only.
+        Admin routes accept an admin user JWT or this static bootstrap token. Stored in browser localStorage only.
       </p>
       <div className="flex gap-2">
         <input
@@ -43,6 +42,7 @@ export function AdminTokenPanel() {
           className="min-w-0 flex-1 rounded-md border border-[var(--color-border)] bg-[var(--color-void)] px-3 py-2 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-primary)] transition-colors placeholder:text-[var(--color-text-muted)]"
         />
         <button
+          type="button"
           onClick={save}
           className="flex items-center gap-1.5 rounded-md bg-[var(--color-primary)] px-3 py-2 text-sm font-semibold text-[var(--color-primary-fg)] hover:opacity-90 transition-opacity"
         >
@@ -50,7 +50,11 @@ export function AdminTokenPanel() {
         </button>
         {bootstrapToken && (
           <button
-            onClick={() => { clearBootstrapToken(); setDraft(""); }}
+            type="button"
+            onClick={() => {
+              clearBootstrapToken();
+              setDraft("");
+            }}
             className="rounded-md border border-[var(--color-border)] p-2 text-[var(--color-text-muted)] hover:border-[var(--color-danger)] hover:text-[var(--color-danger)] transition-colors"
             title="Clear token"
           >

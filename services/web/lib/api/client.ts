@@ -12,10 +12,7 @@ import type { paths } from "@/types/api.gen";
 
 // Server-side (RSC / API routes): hit the backend directly.
 // Client-side: relative URL so Next.js rewrite fires.
-const baseUrl =
-  typeof window === "undefined"
-    ? (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080")
-    : "";
+const baseUrl = typeof window === "undefined" ? (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080") : "";
 
 export const api = createClient<paths>({ baseUrl });
 

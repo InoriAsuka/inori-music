@@ -6,9 +6,18 @@
 
 import { useState } from "react";
 import {
-  Play, Pause, SkipBack, SkipForward,
-  Volume2, VolumeX, Repeat, Repeat1, Shuffle,
-  AlertCircle, ListMusic, ChevronUp,
+  Play,
+  Pause,
+  SkipBack,
+  SkipForward,
+  Volume2,
+  VolumeX,
+  Repeat,
+  Repeat1,
+  Shuffle,
+  AlertCircle,
+  ListMusic,
+  ChevronUp,
 } from "lucide-react";
 import { usePlayerStore, useCurrentTrack, useIsPlaying } from "@/store/player";
 import { useAudio } from "@/hooks/useAudio";
@@ -22,10 +31,20 @@ export function PlayerBar() {
   const currentTrack = useCurrentTrack();
   const isPlaying = useIsPlaying();
   const {
-    status, positionSeconds, volume, shuffle, repeat,
-    play, pause, skipToNext, skipToPrevious,
-    setVolume, toggleShuffle, cycleRepeat,
-    queue, currentIndex,
+    status,
+    positionSeconds,
+    volume,
+    shuffle,
+    repeat,
+    play,
+    pause,
+    skipToNext,
+    skipToPrevious,
+    setVolume,
+    toggleShuffle,
+    cycleRepeat,
+    queue,
+    currentIndex,
   } = usePlayerStore();
 
   const { seek } = useAudio();
@@ -55,6 +74,7 @@ export function PlayerBar() {
       <div className="flex h-[72px] shrink-0 items-center gap-3 border-t border-[var(--color-border)] bg-[var(--color-surface)] px-3 sm:gap-4 sm:px-4">
         {/* Track info — tap to open fullscreen on mobile */}
         <button
+          type="button"
           onClick={() => setFsOpen(true)}
           className="flex min-w-0 w-48 shrink-0 items-center gap-3 text-left sm:w-56"
         >
@@ -75,6 +95,7 @@ export function PlayerBar() {
               <AlertCircle size={14} />
               Playback failed
               <button
+                type="button"
                 onClick={skipToNext}
                 className="rounded-md border border-[var(--color-danger)] px-2 py-0.5 text-xs hover:bg-[var(--color-danger)] hover:text-white"
               >
@@ -93,13 +114,16 @@ export function PlayerBar() {
                 </ControlBtn>
 
                 <button
+                  type="button"
                   onClick={isPlaying ? pause : play}
                   className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--color-primary)] text-[var(--color-primary-fg)] hover:opacity-90 transition-opacity glow-primary"
                   title={isPlaying ? "Pause" : "Play"}
                 >
-                  {isPlaying
-                    ? <Pause size={17} fill="currentColor" />
-                    : <Play size={17} fill="currentColor" className="ml-0.5" />}
+                  {isPlaying ? (
+                    <Pause size={17} fill="currentColor" />
+                  ) : (
+                    <Play size={17} fill="currentColor" className="ml-0.5" />
+                  )}
                 </button>
 
                 <ControlBtn
@@ -122,6 +146,7 @@ export function PlayerBar() {
                 </span>
                 <div
                   role="slider"
+                  tabIndex={0}
                   aria-valuenow={Math.round(positionSeconds)}
                   aria-valuemin={0}
                   aria-valuemax={Math.round(duration)}
@@ -129,6 +154,10 @@ export function PlayerBar() {
                   onClick={(e) => {
                     const rect = e.currentTarget.getBoundingClientRect();
                     seek(((e.clientX - rect.left) / rect.width) * duration);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "ArrowRight") seek(Math.min(duration, positionSeconds + 5));
+                    if (e.key === "ArrowLeft") seek(Math.max(0, positionSeconds - 5));
                   }}
                 >
                   <div
@@ -147,6 +176,7 @@ export function PlayerBar() {
         {/* Right controls */}
         <div className="hidden items-center gap-2 lg:flex">
           <button
+            type="button"
             onClick={() => setVolume(volume > 0 ? 0 : 0.7)}
             className="text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
             title={volume > 0 ? "Mute" : "Unmute"}
@@ -154,8 +184,12 @@ export function PlayerBar() {
             {volume === 0 ? <VolumeX size={15} /> : <Volume2 size={15} />}
           </button>
           <input
-            type="range" min={0} max={1} step={0.01} value={volume}
-            onChange={(e) => setVolume(parseFloat(e.target.value))}
+            type="range"
+            min={0}
+            max={1}
+            step={0.01}
+            value={volume}
+            onChange={(e) => setVolume(Number.parseFloat(e.target.value))}
             className="h-1 w-24 cursor-pointer accent-[var(--color-primary)]"
             aria-label="Volume"
           />
@@ -173,7 +207,11 @@ export function PlayerBar() {
 }
 
 function ControlBtn({
-  children, onClick, active, disabled, title,
+  children,
+  onClick,
+  active,
+  disabled,
+  title,
 }: {
   children: React.ReactNode;
   onClick: () => void;
@@ -183,14 +221,13 @@ function ControlBtn({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       disabled={disabled}
       title={title}
       className={cn(
         "flex items-center justify-center rounded p-1.5 transition-colors",
-        active
-          ? "text-[var(--color-primary)]"
-          : "text-[var(--color-text-muted)] hover:text-[var(--color-text)]",
+        active ? "text-[var(--color-primary)]" : "text-[var(--color-text-muted)] hover:text-[var(--color-text)]",
         disabled && "opacity-30 pointer-events-none"
       )}
     >

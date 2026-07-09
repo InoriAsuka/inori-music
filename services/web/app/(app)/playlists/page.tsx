@@ -37,11 +37,13 @@ export default function PlaylistsPage() {
       })
       .then(({ data }) => {
         if (data) {
-          setPlaylists((data.playlists ?? []).map((p) => ({
-            id: p.id,
-            name: p.name,
-            trackCount: p.trackIds.length,
-          })));
+          setPlaylists(
+            (data.playlists ?? []).map((p) => ({
+              id: p.id,
+              name: p.name,
+              trackCount: p.trackIds.length,
+            }))
+          );
           if (data.pagination) setPagination(data.pagination);
         }
       })

@@ -11,7 +11,9 @@ export function AdminTopbar({ onToggleSidebar }: { onToggleSidebar: () => void }
 
   async function handleLogout() {
     if (token) {
-      await adminClient(token).POST("/api/v1/auth/logout").catch(() => {});
+      await adminClient(token)
+        .POST("/api/v1/auth/logout")
+        .catch(() => {});
     }
     clearSession();
     document.cookie = "inori_admin_session=; path=/; max-age=0";
@@ -22,6 +24,7 @@ export function AdminTopbar({ onToggleSidebar }: { onToggleSidebar: () => void }
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4">
       <div className="flex items-center gap-3">
         <button
+          type="button"
           onClick={onToggleSidebar}
           className="rounded-md p-1.5 text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text)]"
         >
@@ -45,6 +48,7 @@ export function AdminTopbar({ onToggleSidebar }: { onToggleSidebar: () => void }
           </span>
         )}
         <button
+          type="button"
           onClick={handleLogout}
           className="rounded-md p-1.5 text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-danger)]"
           title="Log out"

@@ -63,9 +63,7 @@ export function useAudio() {
         } else if (data.streamUrl) {
           // Append the viewer JWT as a query param so the server can
           // authenticate without a custom Authorization header.
-          const base = data.streamUrl.startsWith("/")
-            ? `${window.location.origin}${data.streamUrl}`
-            : data.streamUrl;
+          const base = data.streamUrl.startsWith("/") ? `${window.location.origin}${data.streamUrl}` : data.streamUrl;
           const u = new URL(base);
           u.searchParams.set("token", token);
           playUrl = u.toString();
@@ -123,7 +121,9 @@ export function useAudio() {
         if (audio) setPosition(audio.currentTime);
       }, 250);
     }
-    return () => { if (positionTickRef.current) clearInterval(positionTickRef.current); };
+    return () => {
+      if (positionTickRef.current) clearInterval(positionTickRef.current);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
@@ -139,8 +139,6 @@ export function useAudio() {
             body: {
               trackId: currentTrack.id,
               playedAt: new Date().toISOString(),
-              durationSeconds: Math.round(currentTrack.durationSeconds),
-              source: "web",
             },
           })
           .catch(() => {});

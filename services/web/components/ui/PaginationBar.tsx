@@ -54,12 +54,7 @@ export function PaginationBar({ pagination, onPageChange, className }: Paginatio
               …
             </span>
           ) : (
-            <PageBtn
-              key={p}
-              onClick={() => onPageChange(p as number)}
-              active={p === page}
-              aria-label={`Page ${p}`}
-            >
+            <PageBtn key={p} onClick={() => onPageChange(p as number)} active={p === page} aria-label={`Page ${p}`}>
               {p}
             </PageBtn>
           )
@@ -87,6 +82,7 @@ function PageBtn({
 }) {
   return (
     <button
+      type="button"
       onClick={onClick}
       disabled={disabled}
       aria-label={ariaLabel}

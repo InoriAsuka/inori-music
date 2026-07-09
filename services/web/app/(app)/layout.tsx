@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
-import "../../globals.css";
-import { AuthProvider } from "@/components/layout/AuthProvider";
+import "../globals.css";
 import { AppShell } from "@/components/layout/AppShell";
 
 export const metadata: Metadata = {
@@ -8,9 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  return (
-    <AuthProvider>
-      <AppShell>{children}</AppShell>
-    </AuthProvider>
-  );
+  return <AppShell>{children}</AppShell>;
 }

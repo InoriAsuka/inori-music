@@ -22,7 +22,9 @@ export default function AlbumDetailPage() {
   const token = useAuthStore((s) => s.token);
   const playQueue = usePlayerStore((s) => s.playQueue);
 
-  const [album, setAlbum] = useState<{ title: string; artistName?: string; year?: number; artistId: string } | null>(null);
+  const [album, setAlbum] = useState<{ title: string; artistName?: string; year?: number; artistId: string } | null>(
+    null
+  );
   const [tracks, setTracks] = useState<TrackRowData[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -46,13 +48,15 @@ export default function AlbumDetailPage() {
         const raw = tracksRes.data.tracks;
         // All tracks share the album's artist — already resolved above.
         const artistName = album?.artistName ?? "";
-        setTracks(raw.map((t) => ({
-          id: t.id,
-          title: t.title,
-          artistName,
-          durationMs: t.durationMs ?? 0,
-          isFavorite: t.isFavorite,
-        })));
+        setTracks(
+          raw.map((t) => ({
+            id: t.id,
+            title: t.title,
+            artistName,
+            durationMs: t.durationMs ?? 0,
+            isFavorite: t.isFavorite,
+          }))
+        );
       }
       setLoading(false);
     });
@@ -82,19 +86,22 @@ export default function AlbumDetailPage() {
 
   return (
     <div className="space-y-8">
-      <Link href="/albums" className="flex items-center gap-1 text-sm text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]">
+      <Link
+        href="/albums"
+        className="flex items-center gap-1 text-sm text-[var(--color-muted-foreground)] hover:text-[var(--color-foreground)]"
+      >
         <ArrowLeft size={14} /> Albums
       </Link>
 
       <div className="flex flex-col gap-6 sm:flex-row sm:items-end">
         <Artwork alt={album?.title ?? ""} size="lg" className="h-48 w-48 shrink-0" />
         <div className="space-y-2">
-          {loading
-            ? <Skeleton className="h-8 w-64 mb-2" />
-            : <h1 className="text-3xl font-bold">{album?.title}</h1>}
+          {loading ? <Skeleton className="h-8 w-64 mb-2" /> : <h1 className="text-3xl font-bold">{album?.title}</h1>}
           <p className="text-[var(--color-muted-foreground)]">
             {album?.artistName && (
-              <Link href={`/artists/${album.artistId}`} className="hover:underline">{album.artistName}</Link>
+              <Link href={`/artists/${album.artistId}`} className="hover:underline">
+                {album.artistName}
+              </Link>
             )}
             {album?.year && <span className="ml-1 text-[var(--color-muted-foreground)]">· {album.year}</span>}
           </p>
@@ -102,6 +109,7 @@ export default function AlbumDetailPage() {
             {tracks.length} tracks · {formatDuration(totalMs / 1000)}
           </p>
           <button
+            type="button"
             onClick={() => playAll(0)}
             disabled={tracks.length === 0}
             className="mt-2 flex items-center gap-2 rounded-full bg-[var(--color-primary)] px-6 py-2.5 text-sm font-semibold text-[var(--color-primary-foreground)] hover:opacity-90 disabled:opacity-50 transition-opacity"
@@ -118,14 +126,7 @@ export default function AlbumDetailPage() {
                 <TrackRowSkeleton />
               </div>
             ))
-          : tracks.map((t, idx) => (
-              <TrackRow
-                key={t.id}
-                track={t}
-                index={idx + 1}
-                onPlay={() => playAll(idx)}
-              />
-            ))}
+          : tracks.map((t, idx) => <TrackRow key={t.id} track={t} index={idx + 1} onPlay={() => playAll(idx)} />)}
       </div>
     </div>
   );

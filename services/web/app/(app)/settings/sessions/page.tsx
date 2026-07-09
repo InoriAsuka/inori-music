@@ -33,16 +33,20 @@ export default function SessionsPage() {
     if (!token) return;
     const { data } = await authedApi(token).GET("/api/v1/me/sessions");
     if (data?.sessions) {
-      setSessions(data.sessions.map((s) => ({
-        userId: s.userId,
-        createdAt: s.createdAt,
-        expiresAt: s.expiresAt,
-      })));
+      setSessions(
+        data.sessions.map((s) => ({
+          userId: s.userId,
+          createdAt: s.createdAt,
+          expiresAt: s.expiresAt,
+        }))
+      );
     }
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    load();
+  }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function revokeOthers() {
     if (!token) return;
@@ -67,6 +71,7 @@ export default function SessionsPage() {
         <h1 className="text-2xl font-bold">Active Sessions</h1>
         <div className="flex items-center gap-2">
           <button
+            type="button"
             onClick={revokeOthers}
             disabled={revoking || sessions.length <= 1}
             className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-3 py-1.5 text-sm hover:bg-[var(--color-muted)] disabled:opacity-50 transition-colors"
@@ -75,6 +80,7 @@ export default function SessionsPage() {
             Revoke other sessions
           </button>
           <button
+            type="button"
             onClick={revokeAllDevices}
             disabled={revoking}
             className="flex items-center gap-1.5 rounded-md border border-[var(--color-danger)]/40 px-3 py-1.5 text-sm text-[var(--color-danger)] hover:bg-[var(--color-danger)]/10 disabled:opacity-50 transition-colors"
@@ -85,8 +91,8 @@ export default function SessionsPage() {
       </div>
 
       <p className="text-xs text-[var(--color-text-muted)]">
-        "Revoke other sessions" signs out other tokens for this account.
-        "Revoke all devices" signs out every session including this one.
+        "Revoke other sessions" signs out other tokens for this account. "Revoke all devices" signs out every session
+        including this one.
       </p>
 
       <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] divide-y divide-[var(--color-border)]">
@@ -108,8 +114,7 @@ export default function SessionsPage() {
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">Session</p>
                   <p className="text-xs text-[var(--color-muted-foreground)]">
-                    Created {new Date(s.createdAt).toLocaleString()} ·
-                    expires {new Date(s.expiresAt).toLocaleString()}
+                    Created {new Date(s.createdAt).toLocaleString()} · expires {new Date(s.expiresAt).toLocaleString()}
                   </p>
                 </div>
               </div>

@@ -10,8 +10,8 @@
  */
 
 import { createCanvas } from "canvas";
-import { writeFileSync, mkdirSync } from "fs";
-import { join } from "path";
+import { writeFileSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
 
 const sizes = [192, 512];
 const outDir = join(process.cwd(), "public", "icons");

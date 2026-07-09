@@ -15,5 +15,5 @@ export function formatDuration(seconds: number): string {
 
 /** Truncate a string to maxLen characters. */
 export function truncate(str: string, maxLen: number): string {
-  return str.length > maxLen ? str.slice(0, maxLen - 1) + "…" : str;
+  return str.length > maxLen ? `${str.slice(0, maxLen - 1)}…` : str;
 }

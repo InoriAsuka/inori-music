@@ -45,9 +45,9 @@ func TestParseSearchHitExcludesSnippetWithoutMarkTag(t *testing.T) {
 
 func TestParseSearchHitSkipsHitsWithMissingOrBadID(t *testing.T) {
 	cases := []map[string]json.RawMessage{
-		{"title": json.RawMessage(`"noid"`)},          // no id field at all
-		{"id": json.RawMessage(`""`)},                  // empty id
-		{"id": json.RawMessage(`{invalid}`)},           // malformed json for id
+		{"title": json.RawMessage(`"noid"`)}, // no id field at all
+		{"id": json.RawMessage(`""`)},        // empty id
+		{"id": json.RawMessage(`{invalid}`)}, // malformed json for id
 	}
 	for i, hit := range cases {
 		id, snippet := parseSearchHit(hit, "title")

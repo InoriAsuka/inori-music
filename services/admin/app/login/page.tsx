@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, FormEvent, Suspense } from "react";
+import { useState, type FormEvent, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Shield, Loader2 } from "lucide-react";
 import { api, adminClient } from "@/lib/api/client";
@@ -20,25 +20,41 @@ function LoginForm() {
 
   async function handleJwtLogin(e: FormEvent) {
     e.preventDefault();
-    setError(null); setLoading(true);
+    setError(null);
+    setLoading(true);
     try {
       const { data } = await api.POST("/api/v1/auth/login", { body: { username, password } });
-      if (!data) { setError("Invalid credentials."); return; }
+      if (!data) {
+        setError("Invalid credentials.");
+        return;
+      }
       const { data: me } = await adminClient(data.token).GET("/api/v1/me");
-      if (!me) { setError("Failed to load profile."); return; }
-      if (me.role !== "admin") { setError("This account does not have admin access."); return; }
+      if (!me) {
+        setError("Failed to load profile.");
+        return;
+      }
+      if (me.role !== "admin") {
+        setError("This account does not have admin access.");
+        return;
+      }
       setSession(data.token, { id: me.id, username: me.username, role: "admin", createdAt: me.createdAt });
-      document.cookie = `inori_admin_session=1; path=/; max-age=86400; SameSite=Lax`;
+      document.cookie = "inori_admin_session=1; path=/; max-age=86400; SameSite=Lax";
       router.replace(params.get("from") ?? "/dashboard");
-    } catch { setError("Network error."); }
-    finally { setLoading(false); }
+    } catch {
+      setError("Network error.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   function handleTokenLogin(e: FormEvent) {
     e.preventDefault();
-    if (!bootstrapDraft.trim()) { setError("Token is required."); return; }
+    if (!bootstrapDraft.trim()) {
+      setError("Token is required.");
+      return;
+    }
     setBootstrapToken(bootstrapDraft.trim());
-    document.cookie = `inori_admin_session=1; path=/; max-age=86400; SameSite=Lax`;
+    document.cookie = "inori_admin_session=1; path=/; max-age=86400; SameSite=Lax";
     router.replace(params.get("from") ?? "/dashboard");
   }
 
@@ -49,9 +65,7 @@ function LoginForm() {
           <div className="flex h-14 w-14 items-center justify-center rounded-xl border border-[var(--color-border-glow)] bg-[var(--color-primary-dim)] glow-primary">
             <Shield size={26} className="text-[var(--color-primary)]" />
           </div>
-          <h1 className="font-display text-lg font-bold tracking-widest text-[var(--color-primary)]">
-            INORI ADMIN
-          </h1>
+          <h1 className="font-display text-lg font-bold tracking-widest text-[var(--color-primary)]">INORI ADMIN</h1>
           <p className="text-xs text-[var(--color-text-muted)]">Management Console</p>
         </div>
 
@@ -59,11 +73,17 @@ function LoginForm() {
         <div className="flex gap-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1">
           {(["jwt", "token"] as const).map((t) => (
             <button
+              type="button"
               key={t}
-              onClick={() => { setTab(t); setError(null); }}
-              className={tab === t
-                ? "flex-1 rounded-md bg-[var(--color-primary)] py-1.5 text-xs font-semibold text-[var(--color-primary-fg)]"
-                : "flex-1 rounded-md py-1.5 text-xs text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"}
+              onClick={() => {
+                setTab(t);
+                setError(null);
+              }}
+              className={
+                tab === t
+                  ? "flex-1 rounded-md bg-[var(--color-primary)] py-1.5 text-xs font-semibold text-[var(--color-primary-fg)]"
+                  : "flex-1 rounded-md py-1.5 text-xs text-[var(--color-text-secondary)] hover:text-[var(--color-text)]"
+              }
             >
               {t === "jwt" ? "Admin Account" : "Bootstrap Token"}
             </button>
@@ -76,13 +96,31 @@ function LoginForm() {
         >
           {tab === "jwt" ? (
             <>
-              <Field id="username" label="Username" value={username} onChange={setUsername} autoComplete="username" placeholder="admin" />
-              <Field id="password" label="Password" value={password} onChange={setPassword} autoComplete="current-password" type="password" placeholder="••••••••" />
+              <Field
+                id="username"
+                label="Username"
+                value={username}
+                onChange={setUsername}
+                autoComplete="username"
+                placeholder="admin"
+              />
+              <Field
+                id="password"
+                label="Password"
+                value={password}
+                onChange={setPassword}
+                autoComplete="current-password"
+                type="password"
+                placeholder="••••••••"
+              />
             </>
           ) : (
             <div className="space-y-1.5">
-              <label className="text-sm font-medium text-[var(--color-text)]">Bootstrap Token</label>
+              <label htmlFor="bootstrap-token" className="text-sm font-medium text-[var(--color-text)]">
+                Bootstrap Token
+              </label>
               <input
+                id="bootstrap-token"
                 type="password"
                 value={bootstrapDraft}
                 onChange={(e) => setBootstrapDraft(e.target.value)}
@@ -116,16 +154,35 @@ function LoginForm() {
   );
 }
 
-function Field({ id, label, value, onChange, type = "text", autoComplete, placeholder }: {
-  id: string; label: string; value: string; onChange: (v: string) => void;
-  type?: string; autoComplete?: string; placeholder?: string;
+function Field({
+  id,
+  label,
+  value,
+  onChange,
+  type = "text",
+  autoComplete,
+  placeholder,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  type?: string;
+  autoComplete?: string;
+  placeholder?: string;
 }) {
   return (
     <div className="space-y-1.5">
-      <label htmlFor={id} className="text-sm font-medium text-[var(--color-text)]">{label}</label>
+      <label htmlFor={id} className="text-sm font-medium text-[var(--color-text)]">
+        {label}
+      </label>
       <input
-        id={id} type={type} autoComplete={autoComplete} required
-        value={value} onChange={(e) => onChange(e.target.value)}
+        id={id}
+        type={type}
+        autoComplete={autoComplete}
+        required
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
         className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-void)] px-3 py-2 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-primary)] transition-colors placeholder:text-[var(--color-text-muted)]"
       />
@@ -134,5 +191,9 @@ function Field({ id, label, value, onChange, type = "text", autoComplete, placeh
 }
 
 export default function LoginPage() {
-  return <Suspense><LoginForm /></Suspense>;
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
+  );
 }

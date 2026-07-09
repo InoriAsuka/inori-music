@@ -71,6 +71,9 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Unit tests
+        run: npm test
+
       - name: Build
         run: npm run build
         env:
@@ -89,7 +92,7 @@ jobs:
       - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.38.x'
+          flutter-version: '3.44.x'
           channel: stable
           cache: true
 
@@ -138,7 +141,7 @@ jobs:
         env:
           INORI_HTTP_ADDR: "0.0.0.0:8080"
           INORI_ADMIN_TOKEN: "ci-admin-token"
-          INORI_INITIAL_ADMIN_USER: "ci-viewer"
+          INORI_INITIAL_ADMIN_USER: "ci_viewer"
           INORI_INITIAL_ADMIN_PASSWORD: "ci-password-123"
 
       # ── Next.js web dev server (port 3000) ────────────────────────────
@@ -177,7 +180,7 @@ jobs:
         run: npx playwright test
         env:
           E2E_BASE_URL: http://localhost:3000
-          E2E_USERNAME: "ci-viewer"
+          E2E_USERNAME: "ci_viewer"
           E2E_PASSWORD: "ci-password-123"
 
       - name: Upload Playwright report
@@ -221,3 +224,78 @@ jobs:
         run: npm run build
         env:
           NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
+
+  admin-e2e:
+    name: Admin E2E smoke tests
+    runs-on: ubuntu-latest
+    needs: [api, admin]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Go API (in-memory, no postgres required) ──────────────────────
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: services/api/go.mod
+          cache-dependency-path: services/api/go.mod
+
+      - name: Start API server
+        run: |
+          go run ./services/api/cmd/server/main.go &
+          echo $! > /tmp/api.pid
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:8080/healthz && break || sleep 1
+          done
+        env:
+          INORI_HTTP_ADDR: "0.0.0.0:8080"
+          INORI_ADMIN_TOKEN: "ci-admin-token"
+          INORI_INITIAL_ADMIN_USER: "ci_viewer"
+          INORI_INITIAL_ADMIN_PASSWORD: "ci-password-123"
+
+      # ── Next.js admin dev server (port 3001) ───────────────────────────
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: services/admin/package-lock.json
+
+      - name: Install admin dependencies
+        working-directory: services/admin
+        run: npm ci
+
+      - name: Generate API types
+        working-directory: services/admin
+        run: npm run generate:api
+
+      - name: Start admin dev server
+        working-directory: services/admin
+        run: |
+          npm run dev &
+          for i in $(seq 1 60); do
+            curl -sf http://localhost:3001 && break || sleep 1
+          done
+        env:
+          NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
+
+      # ── Playwright ────────────────────────────────────────────────────
+      - name: Install Playwright browsers
+        working-directory: services/admin
+        run: npx playwright install chromium --with-deps
+
+      - name: Run E2E smoke tests
+        working-directory: services/admin
+        run: npx playwright test
+        env:
+          E2E_BASE_URL: http://localhost:3001
+          E2E_USERNAME: "ci_viewer"
+          E2E_PASSWORD: "ci-password-123"
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-playwright-report
+          path: services/admin/playwright-report/
+          retention-days: 7

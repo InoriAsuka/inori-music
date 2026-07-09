@@ -323,10 +323,10 @@ func TestGeneratePresignedURLMissingCredentials(t *testing.T) {
 	ctx := context.Background()
 	svc := NewService(NewMemoryRepository())
 	b := StorageBackend{
-		ID:          "s3-nocreds",
-		Type:        BackendTypeS3,
-		DisplayName: "S3 No Creds",
-		Enabled:     true,
+		ID:           "s3-nocreds",
+		Type:         BackendTypeS3,
+		DisplayName:  "S3 No Creds",
+		Enabled:      true,
 		Capabilities: CapabilitySet{PresignedURLs: true},
 		Config: BackendConfig{S3: &S3Config{
 			Endpoint:           "https://s3.example.com",
@@ -353,10 +353,10 @@ func TestGeneratePresignedURLSuccess(t *testing.T) {
 	svc := NewService(NewMemoryRepository())
 	svc.now = func() time.Time { return time.Date(2026, 6, 17, 12, 0, 0, 0, time.UTC) }
 	b := StorageBackend{
-		ID:          "s3-presign",
-		Type:        BackendTypeS3,
-		DisplayName: "S3 Presign",
-		Enabled:     true,
+		ID:           "s3-presign",
+		Type:         BackendTypeS3,
+		DisplayName:  "S3 Presign",
+		Enabled:      true,
 		Capabilities: CapabilitySet{PresignedURLs: true},
 		Config: BackendConfig{S3: &S3Config{
 			Endpoint:           "https://s3.example.com",

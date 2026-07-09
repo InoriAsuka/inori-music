@@ -10,12 +10,7 @@ interface BarChartProps {
   labelInterval?: number; // show x-axis label every N bars (default: auto)
 }
 
-export function BarChart({
-  data,
-  height = 120,
-  barColor = "var(--color-primary)",
-  labelInterval,
-}: BarChartProps) {
+export function BarChart({ data, height = 120, barColor = "var(--color-primary)", labelInterval }: BarChartProps) {
   if (data.length === 0) {
     return (
       <div
@@ -43,6 +38,7 @@ export function BarChart({
       width="100%"
       height={svgH}
       preserveAspectRatio="none"
+      role="img"
       aria-label="Play history bar chart"
     >
       {data.map((d, i) => {
@@ -52,23 +48,9 @@ export function BarChart({
 
         return (
           <g key={i}>
-            <rect
-              x={x}
-              y={y}
-              width={10}
-              height={barH}
-              rx={2}
-              fill={barColor}
-              opacity={d.value === 0 ? 0.15 : 0.85}
-            />
+            <rect x={x} y={y} width={10} height={barH} rx={2} fill={barColor} opacity={d.value === 0 ? 0.15 : 0.85} />
             {i % every === 0 && (
-              <text
-                x={x + 5}
-                y={svgH - 4}
-                textAnchor="middle"
-                fontSize={7}
-                fill="var(--color-text-muted)"
-              >
+              <text x={x + 5} y={svgH - 4} textAnchor="middle" fontSize={7} fill="var(--color-text-muted)">
                 {d.label}
               </text>
             )}

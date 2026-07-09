@@ -39,10 +39,9 @@ export default function FavoritesPage() {
     setTracks([]);
     setUserId(uid);
 
-    const { data, error: apiErr } = await client.GET(
-      "/api/v1/admin/favorites/users/{userId}/tracks",
-      { params: { path: { userId: uid } } }
-    );
+    const { data, error: apiErr } = await client.GET("/api/v1/admin/favorites/users/{userId}/tracks", {
+      params: { path: { userId: uid } },
+    });
 
     if (apiErr || !data) {
       setError("Failed to load favorites — check the user ID.");
@@ -85,6 +84,7 @@ export default function FavoritesPage() {
           className="flex-1 rounded-md border border-[var(--color-border)] bg-[var(--color-void)] px-3 py-2 text-sm text-[var(--color-text)] outline-none focus:border-[var(--color-primary)] placeholder:text-[var(--color-text-muted)]"
         />
         <button
+          type="button"
           onClick={lookup}
           disabled={loading || !inputValue.trim()}
           className="flex items-center gap-1.5 rounded-md bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-[var(--color-primary-fg)] hover:opacity-90 disabled:opacity-40"
@@ -114,6 +114,7 @@ export default function FavoritesPage() {
             </div>
             {tracks.length > 0 && (
               <button
+                type="button"
                 onClick={clearAll}
                 disabled={clearing}
                 className="flex items-center gap-1.5 rounded-md border border-[var(--color-danger)]/40 px-3 py-1.5 text-xs text-[var(--color-danger)] hover:bg-[var(--color-danger)]/10 disabled:opacity-50 transition-colors"
@@ -131,13 +132,17 @@ export default function FavoritesPage() {
           ) : (
             <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] divide-y divide-[var(--color-border)]">
               {tracks.map((t) => (
-                <div key={t.id} className="flex items-center gap-3 px-4 py-3 hover:bg-[var(--color-surface-raised)] transition-colors">
+                <div
+                  key={t.id}
+                  className="flex items-center gap-3 px-4 py-3 hover:bg-[var(--color-surface-raised)] transition-colors"
+                >
                   <Heart size={14} className="shrink-0 text-[var(--color-primary)]" fill="currentColor" />
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium text-[var(--color-text)]">{t.title}</p>
                     <p className="font-mono text-xs text-[var(--color-text-muted)]">{t.id}</p>
                   </div>
                   <button
+                    type="button"
                     onClick={() => removeTrack(t.id)}
                     className="shrink-0 rounded p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-danger)] transition-colors"
                     title="Remove favorite"

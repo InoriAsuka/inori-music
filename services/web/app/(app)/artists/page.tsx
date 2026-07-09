@@ -65,9 +65,7 @@ export default function ArtistsPage() {
             ))}
       </div>
 
-      {pagination && (
-        <PaginationBar pagination={pagination} onPageChange={setPage} />
-      )}
+      {pagination && <PaginationBar pagination={pagination} onPageChange={setPage} />}
     </div>
   );
 }

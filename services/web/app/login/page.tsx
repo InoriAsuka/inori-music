@@ -6,7 +6,7 @@
  */
 "use client";
 
-import { useState, FormEvent, Suspense } from "react";
+import { useState, type FormEvent, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Music2, Loader2 } from "lucide-react";
 import { api, authedApi } from "@/lib/api/client";

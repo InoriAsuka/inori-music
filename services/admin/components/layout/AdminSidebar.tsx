@@ -3,8 +3,16 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  LayoutDashboard, Users, Database, Upload, HardDrive,
-  Activity, FileBox, Heart, ChevronLeft, ChevronRight,
+  LayoutDashboard,
+  Users,
+  Database,
+  Upload,
+  HardDrive,
+  Activity,
+  FileBox,
+  Heart,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -31,7 +39,7 @@ export function AdminSidebar({ collapsed }: { collapsed: boolean }) {
     >
       <nav className="flex flex-col gap-0.5 p-2 pt-3">
         {NAV.map(({ href, label, icon: Icon }) => {
-          const active = pathname === href || pathname.startsWith(href + "/");
+          const active = pathname === href || pathname.startsWith(`${href}/`);
           return (
             <Link
               key={href}

@@ -37,11 +37,13 @@ export default function AlbumsPage() {
       })
       .then(({ data }) => {
         if (data) {
-          setAlbums((data.albums ?? []).map((a) => ({
-            id: a.id,
-            title: a.title,
-            year: a.releaseYear ?? undefined,
-          })));
+          setAlbums(
+            (data.albums ?? []).map((a) => ({
+              id: a.id,
+              title: a.title,
+              year: a.releaseYear ?? undefined,
+            }))
+          );
           if (data.pagination) setPagination(data.pagination);
         }
       })
@@ -62,9 +64,7 @@ export default function AlbumsPage() {
               >
                 <Artwork alt={album.title} size="lg" className="w-full h-auto aspect-square" />
                 <p className="truncate font-medium text-sm">{album.title}</p>
-                {album.year && (
-                  <p className="truncate text-xs text-[var(--color-muted-foreground)]">{album.year}</p>
-                )}
+                {album.year && <p className="truncate text-xs text-[var(--color-muted-foreground)]">{album.year}</p>}
               </Link>
             ))}
       </div>

@@ -1,9 +1,7 @@
 import createClient from "openapi-fetch";
 import type { paths } from "@/types/api.gen";
 
-const baseUrl = typeof window === "undefined"
-  ? (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080")
-  : "";
+const baseUrl = typeof window === "undefined" ? (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080") : "";
 
 export const api = createClient<paths>({ baseUrl });
 
@@ -25,7 +23,7 @@ export function uploadTrackLyrics(
   client: ReturnType<typeof adminClient>,
   trackId: string,
   file: File,
-  translation?: File,
+  translation?: File
 ) {
   return client.POST("/api/v1/catalog/tracks/{id}/lyrics", {
     params: { path: { id: trackId } },

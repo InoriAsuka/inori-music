@@ -13,12 +13,12 @@
  *   - API server reachable at NEXT_PUBLIC_API_BASE_URL (default http://localhost:8080)
  *
  * Run: npx playwright test
- * CI:  E2E_USERNAME=ci-viewer E2E_PASSWORD=ci-password-123 npx playwright test
+ * CI:  E2E_USERNAME=ci_viewer E2E_PASSWORD=ci-password-123 npx playwright test
  */
 
 import { test, expect, type Page } from "@playwright/test";
 
-const USERNAME = process.env.E2E_USERNAME ?? "ci-viewer";
+const USERNAME = process.env.E2E_USERNAME ?? "ci_viewer";
 const PASSWORD = process.env.E2E_PASSWORD ?? "ci-password-123";
 
 /** Shared login helper — fills the form and waits for redirect. */
@@ -60,9 +60,7 @@ test("search page renders and accepts input", async ({ page }) => {
 
 // ─── 3. Player bar on /tracks ────────────────────────────────────────────────
 
-test("tracks page renders and player bar shows idle state", async ({
-  page,
-}) => {
+test("tracks page renders and player bar shows idle state", async ({ page }) => {
   await login(page);
   await page.goto("/tracks");
 

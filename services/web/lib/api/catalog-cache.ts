@@ -9,7 +9,7 @@
  * on any error so callers can unconditionally use the result.
  */
 
-import { authedApi } from "@/lib/api/client";
+import type { authedApi } from "@/lib/api/client";
 
 type Fetcher = ReturnType<typeof authedApi>;
 
@@ -33,10 +33,7 @@ export async function resolveArtistName(api: Fetcher, artistId: string): Promise
   }
 }
 
-export async function resolveArtistNames(
-  api: Fetcher,
-  artistIds: string[]
-): Promise<Map<string, string>> {
+export async function resolveArtistNames(api: Fetcher, artistIds: string[]): Promise<Map<string, string>> {
   const result = new Map<string, string>();
   await Promise.all(
     [...new Set(artistIds)].map(async (id) => {

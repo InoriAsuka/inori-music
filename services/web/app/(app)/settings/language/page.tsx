@@ -26,6 +26,7 @@ export default function LanguagePage() {
       <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] divide-y divide-[var(--color-border)]">
         {SUPPORTED_LANGS.map(({ code, label, nativeLabel }) => (
           <button
+            type="button"
             key={code}
             onClick={() => pick(code)}
             className={cn(

@@ -17,9 +17,19 @@ import { usePlayerStore } from "@/store/player";
 import { Artwork } from "@/components/ui/Artwork";
 import { formatDuration } from "@/lib/utils";
 
-interface Artist { id: string; name: string; }
-interface Album { id: string; title: string; }
-interface Track { id: string; title: string; durationMs: number; }
+interface Artist {
+  id: string;
+  name: string;
+}
+interface Album {
+  id: string;
+  title: string;
+}
+interface Track {
+  id: string;
+  title: string;
+  durationMs: number;
+}
 
 interface SearchResults {
   artists: Artist[];
@@ -40,7 +50,10 @@ function SearchPageInner() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function runSearch(q: string) {
-    if (!token || !q.trim()) { setResults(null); return; }
+    if (!token || !q.trim()) {
+      setResults(null);
+      return;
+    }
     setLoading(true);
     authedApi(token)
       .GET("/api/v1/catalog/search", {
@@ -81,14 +94,13 @@ function SearchPageInner() {
         setResults(null);
       }
     }, 300);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
 
-  const empty = results &&
-    !results.artists.length &&
-    !results.albums.length &&
-    !results.tracks.length;
+  const empty = results && !results.artists.length && !results.albums.length && !results.tracks.length;
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -96,10 +108,12 @@ function SearchPageInner() {
       <div className="relative">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[var(--color-muted-foreground)]" />
         {loading && (
-          <Loader2 size={16} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-[var(--color-muted-foreground)]" />
+          <Loader2
+            size={16}
+            className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-[var(--color-muted-foreground)]"
+          />
         )}
         <input
-          autoFocus
           type="search"
           placeholder="Search tracks, artists, albums…"
           value={query}
@@ -109,14 +123,10 @@ function SearchPageInner() {
       </div>
 
       {!query.trim() && (
-        <p className="text-center text-sm text-[var(--color-muted-foreground)]">
-          Type to search your music library.
-        </p>
+        <p className="text-center text-sm text-[var(--color-muted-foreground)]">Type to search your music library.</p>
       )}
       {empty && (
-        <p className="text-center text-sm text-[var(--color-muted-foreground)]">
-          No results for &ldquo;{query}&rdquo;
-        </p>
+        <p className="text-center text-sm text-[var(--color-muted-foreground)]">No results for &ldquo;{query}&rdquo;</p>
       )}
 
       {results && (

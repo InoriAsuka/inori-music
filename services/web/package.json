@@ -1,6 +1,6 @@
 {
   "name": "inori-music-web",
-  "version": "2.6.0",
+  "version": "4.8.0",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
@@ -10,6 +10,7 @@
     "type-check": "tsc --noEmit",
     "generate:api": "openapi-typescript ../../packages/api-contract/openapi/storage-admin.v1.json -o ./types/api.gen.ts",
     "format": "biome format --write .",
+    "test": "vitest run",
     "test:e2e": "playwright test"
   },
   "dependencies": {
@@ -41,6 +42,7 @@
     "eslint-config-next": "^15.3.3",
     "openapi-typescript": "^7.8.0",
     "tailwindcss": "^4.1.10",
-    "typescript": "^5"
+    "typescript": "^5",
+    "vitest": "^4.1.10"
   }
 }

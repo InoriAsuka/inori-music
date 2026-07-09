@@ -9,8 +9,16 @@ type Granularity = "day" | "week" | "month";
 
 const PAGE = 50;
 
-interface TimelineBucket { label: string; count: number; }
-interface HistoryEvent { id: string; userId: string; trackId: string; playedAt: string; }
+interface TimelineBucket {
+  label: string;
+  count: number;
+}
+interface HistoryEvent {
+  id: string;
+  userId: string;
+  trackId: string;
+  playedAt: string;
+}
 
 export default function HistoryPage() {
   const client = useAdminClient();
@@ -41,12 +49,20 @@ export default function HistoryPage() {
     ]);
 
     if (histRes.data) {
-      setEvents((histRes.data.events ?? []).map((e) => ({ id: e.id, userId: e.userId, trackId: e.trackId, playedAt: e.playedAt })));
+      setEvents(
+        (histRes.data.events ?? []).map((e) => ({
+          id: e.id,
+          userId: e.userId,
+          trackId: e.trackId,
+          playedAt: e.playedAt,
+        }))
+      );
       setTotal((histRes.data.pagination as { total?: number } | undefined)?.total ?? 0);
     }
     if (statsRes.data) setStats(statsRes.data);
-    if (tracksRes.data?.tracks) setTopTracks(tracksRes.data.tracks.map((t) => ({ trackId: t.trackId, playCount: t.playCount })));
-    if (usersRes.data) setTopUsers(((usersRes.data as { users?: { userId: string; playCount: number }[] }).users ?? []));
+    if (tracksRes.data?.tracks)
+      setTopTracks(tracksRes.data.tracks.map((t) => ({ trackId: t.trackId, playCount: t.playCount })));
+    if (usersRes.data) setTopUsers((usersRes.data as { users?: { userId: string; playCount: number }[] }).users ?? []);
     if (tlRes.data) {
       const tl = (tlRes.data as unknown as { buckets?: { bucketStart: string; eventCount: number }[] }).buckets ?? [];
       setBuckets(tl.map((b) => ({ label: b.bucketStart, count: b.eventCount })));
@@ -54,7 +70,9 @@ export default function HistoryPage() {
     setLoading(false);
   }
 
-  useEffect(() => { load(); }, [client, offset, granularity]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    load();
+  }, [client, offset, granularity]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function del(id: string) {
     if (!client) return;
@@ -100,17 +118,30 @@ export default function HistoryPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h1 className="font-display text-xl font-bold tracking-wider text-[var(--color-primary)]">HISTORY</h1>
-        <button onClick={clearWindow} className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text-secondary)] hover:border-[var(--color-danger)] hover:text-[var(--color-danger)] transition-colors">
+        <button
+          type="button"
+          onClick={clearWindow}
+          className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-xs text-[var(--color-text-secondary)] hover:border-[var(--color-danger)] hover:text-[var(--color-danger)] transition-colors"
+        >
           Clear by date
         </button>
       </div>
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3">
-        {[["Play events", stats?.totalEvents], ["Unique users", stats?.uniqueUsers], ["Unique tracks", stats?.uniqueTracks]].map(([label, val]) => (
-          <div key={label as string} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+        {[
+          ["Play events", stats?.totalEvents],
+          ["Unique users", stats?.uniqueUsers],
+          ["Unique tracks", stats?.uniqueTracks],
+        ].map(([label, val]) => (
+          <div
+            key={label as string}
+            className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4"
+          >
             <p className="text-xs text-[var(--color-text-muted)]">{label}</p>
-            <p className="mt-2 font-mono text-2xl font-bold text-[var(--color-text)]">{(val as number | undefined)?.toLocaleString() ?? "—"}</p>
+            <p className="mt-2 font-mono text-2xl font-bold text-[var(--color-text)]">
+              {(val as number | undefined)?.toLocaleString() ?? "—"}
+            </p>
           </div>
         ))}
       </div>
@@ -122,18 +153,26 @@ export default function HistoryPage() {
 
       {/* Top charts */}
       <div className="grid gap-4 sm:grid-cols-2">
-        {[{ title: "Top Tracks", items: topTracks.map((t) => ({ key: t.trackId, count: t.playCount })) },
-          { title: "Top Users", items: topUsers.map((u) => ({ key: u.userId, count: u.playCount })) }].map(({ title, items }) => (
+        {[
+          { title: "Top Tracks", items: topTracks.map((t) => ({ key: t.trackId, count: t.playCount })) },
+          { title: "Top Users", items: topUsers.map((u) => ({ key: u.userId, count: u.playCount })) },
+        ].map(({ title, items }) => (
           <div key={title} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">{title}</p>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]">
+              {title}
+            </p>
             <div className="space-y-1.5">
-              {items.length === 0 ? <p className="text-xs text-[var(--color-text-muted)]">No data</p> : items.map((item, i) => (
-                <div key={item.key} className="flex items-center gap-2">
-                  <span className="w-5 text-right font-mono text-xs text-[var(--color-text-muted)]">{i + 1}</span>
-                  <code className="flex-1 truncate text-xs text-[var(--color-text)]">{item.key}</code>
-                  <span className="font-mono text-xs text-[var(--color-secondary)]">{item.count}</span>
-                </div>
-              ))}
+              {items.length === 0 ? (
+                <p className="text-xs text-[var(--color-text-muted)]">No data</p>
+              ) : (
+                items.map((item, i) => (
+                  <div key={item.key} className="flex items-center gap-2">
+                    <span className="w-5 text-right font-mono text-xs text-[var(--color-text-muted)]">{i + 1}</span>
+                    <code className="flex-1 truncate text-xs text-[var(--color-text)]">{item.key}</code>
+                    <span className="font-mono text-xs text-[var(--color-secondary)]">{item.count}</span>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         ))}
@@ -141,15 +180,21 @@ export default function HistoryPage() {
 
       {/* Batch toolbar */}
       <div className="flex items-center gap-3">
-        <button onClick={toggleAll} className="flex items-center gap-1.5 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors">
-          {allSelected
-            ? <CheckSquare size={14} className="text-[var(--color-primary)]" />
-            : <Square size={14} />}
+        <button
+          type="button"
+          onClick={toggleAll}
+          className="flex items-center gap-1.5 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
+        >
+          {allSelected ? <CheckSquare size={14} className="text-[var(--color-primary)]" /> : <Square size={14} />}
           {allSelected ? "Deselect all" : "Select all"}
         </button>
         {selected.size > 0 && (
-          <button onClick={batchDelete} disabled={batchDeleting}
-            className="flex items-center gap-1.5 rounded-md bg-[var(--color-danger)]/10 px-3 py-1.5 text-xs font-medium text-[var(--color-danger)] hover:bg-[var(--color-danger)]/20 disabled:opacity-50 transition-colors">
+          <button
+            type="button"
+            onClick={batchDelete}
+            disabled={batchDeleting}
+            className="flex items-center gap-1.5 rounded-md bg-[var(--color-danger)]/10 px-3 py-1.5 text-xs font-medium text-[var(--color-danger)] hover:bg-[var(--color-danger)]/20 disabled:opacity-50 transition-colors"
+          >
             <Trash2 size={12} />
             {batchDeleting ? "Deleting…" : `Delete ${selected.size}`}
           </button>
@@ -160,28 +205,71 @@ export default function HistoryPage() {
       <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
         {loading ? (
           <div className="py-8 text-center text-sm text-[var(--color-text-muted)]">Loading…</div>
-        ) : events.map((e) => (
-          <div key={e.id} className={`flex items-center gap-3 border-b border-[var(--color-border)] px-4 py-2.5 last:border-0 hover:bg-[var(--color-surface-raised)] transition-colors ${selected.has(e.id) ? "bg-[var(--color-primary)]/5" : ""}`}>
-            <button onClick={() => toggleSelect(e.id)} className="shrink-0 text-[var(--color-text-muted)] hover:text-[var(--color-primary)] transition-colors">
-              {selected.has(e.id) ? <CheckSquare size={14} className="text-[var(--color-primary)]" /> : <Square size={14} />}
-            </button>
-            <div className="flex-1 grid grid-cols-2 gap-x-4">
-              <p className="truncate font-mono text-xs"><span className="text-[var(--color-text-muted)]">user </span><span className="text-[var(--color-text)]">{e.userId}</span></p>
-              <p className="truncate font-mono text-xs"><span className="text-[var(--color-text-muted)]">track </span><span className="text-[var(--color-text)]">{e.trackId}</span></p>
-              <p className="col-span-2 text-xs text-[var(--color-text-muted)]">{new Date(e.playedAt).toLocaleString()}</p>
+        ) : (
+          events.map((e) => (
+            <div
+              key={e.id}
+              className={`flex items-center gap-3 border-b border-[var(--color-border)] px-4 py-2.5 last:border-0 hover:bg-[var(--color-surface-raised)] transition-colors ${selected.has(e.id) ? "bg-[var(--color-primary)]/5" : ""}`}
+            >
+              <button
+                type="button"
+                onClick={() => toggleSelect(e.id)}
+                className="shrink-0 text-[var(--color-text-muted)] hover:text-[var(--color-primary)] transition-colors"
+              >
+                {selected.has(e.id) ? (
+                  <CheckSquare size={14} className="text-[var(--color-primary)]" />
+                ) : (
+                  <Square size={14} />
+                )}
+              </button>
+              <div className="flex-1 grid grid-cols-2 gap-x-4">
+                <p className="truncate font-mono text-xs">
+                  <span className="text-[var(--color-text-muted)]">user </span>
+                  <span className="text-[var(--color-text)]">{e.userId}</span>
+                </p>
+                <p className="truncate font-mono text-xs">
+                  <span className="text-[var(--color-text-muted)]">track </span>
+                  <span className="text-[var(--color-text)]">{e.trackId}</span>
+                </p>
+                <p className="col-span-2 text-xs text-[var(--color-text-muted)]">
+                  {new Date(e.playedAt).toLocaleString()}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => del(e.id)}
+                className="rounded p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-danger)]"
+              >
+                <Trash2 size={13} />
+              </button>
             </div>
-            <button onClick={() => del(e.id)} className="rounded p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-danger)]"><Trash2 size={13} /></button>
-          </div>
-        ))}
+          ))
+        )}
       </div>
 
       {totalPages > 1 && (
         <div className="flex items-center justify-between text-sm text-[var(--color-text-muted)]">
           <span>{total} events</span>
           <div className="flex items-center gap-2">
-            <button onClick={() => setOffset(Math.max(0, offset - PAGE))} disabled={page <= 1} className="rounded p-1 hover:bg-[var(--color-surface-raised)] disabled:opacity-30"><ChevronLeft size={16} /></button>
-            <span>{page} / {totalPages}</span>
-            <button onClick={() => setOffset(offset + PAGE)} disabled={page >= totalPages} className="rounded p-1 hover:bg-[var(--color-surface-raised)] disabled:opacity-30"><ChevronRight size={16} /></button>
+            <button
+              type="button"
+              onClick={() => setOffset(Math.max(0, offset - PAGE))}
+              disabled={page <= 1}
+              className="rounded p-1 hover:bg-[var(--color-surface-raised)] disabled:opacity-30"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <span>
+              {page} / {totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() => setOffset(offset + PAGE)}
+              disabled={page >= totalPages}
+              className="rounded p-1 hover:bg-[var(--color-surface-raised)] disabled:opacity-30"
+            >
+              <ChevronRight size={16} />
+            </button>
           </div>
         </div>
       )}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"math"
 	"strings"
 	"testing"
 	"time"
@@ -98,6 +99,36 @@ func TestAnalyzerNoWritebackOnMeasureFailure(t *testing.T) {
 	}
 }
 
+func TestAnalyzerSkipsWritebackOnSilentTrack(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	locator := &stubLocator{
+		objects: map[string]storage.MediaObject{
+			"A": {ID: "A", BackendID: "b1", ObjectKey: "silence.wav"},
+		},
+	}
+	fetcher := &stubFetcher{body: []byte("fake-audio-bytes")}
+	updater := &stubUpdater{
+		existing: map[string]catalog.Track{
+			"track-1": {ID: "track-1"},
+		},
+	}
+
+	// ffmpeg's loudnorm filter reports "-inf" for absolute silence, which
+	// ParseFloat happily turns into math.Inf(-1). Writing that straight
+	// through to ReplayGainDb (referenceLoudnessLUFS - (-Inf) = +Inf) makes
+	// the track unmarshalable: encoding/json rejects non-finite floats, so
+	// every subsequent GET for that track returns a 200 with an empty body.
+	a := &Analyzer{locator: locator, fetcher: fetcher, updater: updater, measure: stubMeasure(math.Inf(-1), nil)}
+	if err := a.AnalyzeTrack(ctx, "track-1", "A"); err != nil {
+		t.Fatalf("expected nil error on silent track, got %v", err)
+	}
+	if len(updater.writes) != 0 {
+		t.Fatalf("expected no writeback for non-finite loudness, got %d writes", len(updater.writes))
+	}
+}
+
 func TestParseLoudnormReportExtractsIntegrated(t *testing.T) {
 	input := `[Parsed_loudnorm_0 @ 0x55a0c78] {
  "input_i" : "-14.50",
@@ -128,8 +159,8 @@ func TestParseLoudnormReportNoJson(t *testing.T) {
 
 var (
 	_ MediaObjectLocator = (*stubLocator)(nil)
-	_ ObjectFetcher       = (*stubFetcher)(nil)
-	_ TrackUpdater        = (*stubUpdater)(nil)
+	_ ObjectFetcher      = (*stubFetcher)(nil)
+	_ TrackUpdater       = (*stubUpdater)(nil)
 )
 
 type stubLocator struct {

@@ -4,15 +4,30 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"testing"
 
 	"golang.org/x/crypto/bcrypt"
 )
 
-const bcryptCost = 12
+const productionBcryptCost = 12
+
+// bcryptCost returns the bcrypt work factor to use. Test binaries hash at
+// bcrypt's minimum cost: dozens of httpapi/auth tests each create a user
+// via CreateUser, and at cost 12 a single hash takes ~11s under `go test
+// -race` (vs ~0.1s at MinCost) — enough call sites to blow past `go test`'s
+// default 600s per-package timeout, which is exactly what happened to the
+// race-test CI step. testing.Testing() (Go 1.21+) detects this without any
+// env var or per-test plumbing.
+func bcryptCost() int {
+	if testing.Testing() {
+		return bcrypt.MinCost
+	}
+	return productionBcryptCost
+}
 
 // HashPassword returns a bcrypt hash of the plaintext password.
 func HashPassword(plaintext string) (string, error) {
-	hash, err := bcrypt.GenerateFromPassword([]byte(plaintext), bcryptCost)
+	hash, err := bcrypt.GenerateFromPassword([]byte(plaintext), bcryptCost())
 	if err != nil {
 		return "", err
 	}

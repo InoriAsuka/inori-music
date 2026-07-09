@@ -8,7 +8,7 @@ import (
 
 // MemoryRepository is an in-memory user playlist repository for tests and development.
 type MemoryRepository struct {
-	mu    sync.Mutex // single mutex; used for all operations to prevent lost updates
+	mu    sync.Mutex              // single mutex; used for all operations to prevent lost updates
 	store map[string]UserPlaylist // keyed by playlist ID
 }
 

@@ -11,11 +11,7 @@ import { useEffect, useState, useCallback } from "react";
 import { History, Trash2, BarChart2, List, CheckSquare, Square } from "lucide-react";
 import { useAuthStore } from "@/store/auth";
 import { authedApi } from "@/lib/api/client";
-import {
-  PaginationBar,
-  type OffsetPagination,
-  offsetFromPage,
-} from "@/components/ui/PaginationBar";
+import { PaginationBar, type OffsetPagination, offsetFromPage } from "@/components/ui/PaginationBar";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { BarChart } from "@/components/ui/BarChart";
@@ -134,8 +130,12 @@ export default function HistoryPage() {
     setEventsLoading(false);
   }, [token, page]);
 
-  useEffect(() => { loadStats(); }, [loadStats]);
-  useEffect(() => { loadEvents(); }, [loadEvents]);
+  useEffect(() => {
+    loadStats();
+  }, [loadStats]);
+  useEffect(() => {
+    loadEvents();
+  }, [loadEvents]);
 
   async function deleteEvent(eventId: string) {
     if (!token) return;
@@ -186,9 +186,7 @@ export default function HistoryPage() {
 
   // Fill missing days so every day in the 30-day window has a bar
   const chartData = (() => {
-    const map = new Map(
-      timeline.map((b) => [isoDay(new Date(b.bucketStart)), b.eventCount])
-    );
+    const map = new Map(timeline.map((b) => [isoDay(new Date(b.bucketStart)), b.eventCount]));
     const result: { label: string; value: number }[] = [];
     const now = new Date();
     for (let i = 29; i >= 0; i--) {
@@ -200,10 +198,7 @@ export default function HistoryPage() {
     return result;
   })();
 
-  const isEmpty =
-    !statsLoading && !eventsLoading &&
-    (stats?.totalEvents ?? 0) === 0 &&
-    events.length === 0;
+  const isEmpty = !statsLoading && !eventsLoading && (stats?.totalEvents ?? 0) === 0 && events.length === 0;
 
   return (
     <div className="space-y-6">
@@ -214,6 +209,7 @@ export default function HistoryPage() {
           <h1 className="text-2xl font-bold">History</h1>
         </div>
         <button
+          type="button"
           onClick={clearHistory}
           disabled={(stats?.totalEvents ?? 0) === 0}
           className="rounded-md border border-[var(--color-border)] px-3 py-1.5 text-sm hover:bg-[var(--color-muted)] disabled:opacity-40 transition-colors"
@@ -226,6 +222,7 @@ export default function HistoryPage() {
       <div className="flex gap-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-card)] p-1 w-fit">
         {(["stats", "events"] as Tab[]).map((t) => (
           <button
+            type="button"
             key={t}
             onClick={() => setTab(t)}
             className={cn(
@@ -241,12 +238,7 @@ export default function HistoryPage() {
         ))}
       </div>
 
-      {isEmpty && (
-        <EmptyState
-          title="No playback history"
-          description="Tracks you play will appear here."
-        />
-      )}
+      {isEmpty && <EmptyState title="No playback history" description="Tracks you play will appear here." />}
 
       {/* ── Stats tab ────────────────────────────────────────────── */}
       {tab === "stats" && !isEmpty && (
@@ -259,11 +251,7 @@ export default function HistoryPage() {
           <section>
             <h2 className="mb-3 text-base font-semibold">Plays — last 30 days</h2>
             <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-4">
-              {statsLoading ? (
-                <Skeleton className="h-32 w-full" />
-              ) : (
-                <BarChart data={chartData} height={128} />
-              )}
+              {statsLoading ? <Skeleton className="h-32 w-full" /> : <BarChart data={chartData} height={128} />}
             </div>
           </section>
 
@@ -277,9 +265,7 @@ export default function HistoryPage() {
                   </div>
                 ))
               ) : topTracks.length === 0 ? (
-                <p className="px-4 py-6 text-center text-sm text-[var(--color-text-muted)]">
-                  No data yet
-                </p>
+                <p className="px-4 py-6 text-center text-sm text-[var(--color-text-muted)]">No data yet</p>
               ) : (
                 topTracks.map((t, i) => (
                   <div key={t.trackId} className="flex items-center gap-3 px-4 py-2.5">
@@ -306,16 +292,20 @@ export default function HistoryPage() {
           {/* Batch toolbar */}
           <div className="flex items-center gap-3">
             <button
+              type="button"
               onClick={toggleSelectAll}
               className="flex items-center gap-1.5 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
             >
-              {selected.size === events.length && events.length > 0
-                ? <CheckSquare size={15} className="text-[var(--color-primary)]" />
-                : <Square size={15} />}
+              {selected.size === events.length && events.length > 0 ? (
+                <CheckSquare size={15} className="text-[var(--color-primary)]" />
+              ) : (
+                <Square size={15} />
+              )}
               {selected.size === events.length && events.length > 0 ? "Deselect all" : "Select all"}
             </button>
             {selected.size > 0 && (
               <button
+                type="button"
                 onClick={batchDeleteSelected}
                 disabled={batchDeleting}
                 className="flex items-center gap-1.5 rounded-md bg-[var(--color-danger)]/10 px-3 py-1.5 text-sm font-medium text-[var(--color-danger)] hover:bg-[var(--color-danger)]/20 disabled:opacity-50 transition-colors"
@@ -327,51 +317,47 @@ export default function HistoryPage() {
           </div>
 
           <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] divide-y divide-[var(--color-border)]">
-            {eventsLoading ? (
-              Array.from({ length: 10 }).map((_, i) => (
-                <div key={i} className="px-4 py-3">
-                  <Skeleton className="h-5 w-full" />
-                </div>
-              ))
-            ) : (
-              events.map((e) => (
-                <div
-                  key={e.id}
-                  className={cn(
-                    "flex items-center gap-3 px-4 py-2.5 hover:bg-[var(--color-muted)] transition-colors",
-                    selected.has(e.id) && "bg-[var(--color-primary)]/5"
-                  )}
-                >
-                  <button
-                    onClick={() => toggleSelect(e.id)}
-                    className="shrink-0 text-[var(--color-text-muted)] hover:text-[var(--color-primary)] transition-colors"
-                  >
-                    {selected.has(e.id)
-                      ? <CheckSquare size={15} className="text-[var(--color-primary)]" />
-                      : <Square size={15} />}
-                  </button>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-mono text-xs text-[var(--color-text-secondary)]">
-                      {e.trackId}
-                    </p>
-                    <p className="text-xs text-[var(--color-text-muted)]">
-                      {new Date(e.playedAt).toLocaleString()}
-                    </p>
+            {eventsLoading
+              ? Array.from({ length: 10 }).map((_, i) => (
+                  <div key={i} className="px-4 py-3">
+                    <Skeleton className="h-5 w-full" />
                   </div>
-                  <button
-                    onClick={() => deleteEvent(e.id)}
-                    className="rounded p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-danger)] transition-colors"
-                    title="Delete event"
+                ))
+              : events.map((e) => (
+                  <div
+                    key={e.id}
+                    className={cn(
+                      "flex items-center gap-3 px-4 py-2.5 hover:bg-[var(--color-muted)] transition-colors",
+                      selected.has(e.id) && "bg-[var(--color-primary)]/5"
+                    )}
                   >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              ))
-            )}
+                    <button
+                      type="button"
+                      onClick={() => toggleSelect(e.id)}
+                      className="shrink-0 text-[var(--color-text-muted)] hover:text-[var(--color-primary)] transition-colors"
+                    >
+                      {selected.has(e.id) ? (
+                        <CheckSquare size={15} className="text-[var(--color-primary)]" />
+                      ) : (
+                        <Square size={15} />
+                      )}
+                    </button>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-mono text-xs text-[var(--color-text-secondary)]">{e.trackId}</p>
+                      <p className="text-xs text-[var(--color-text-muted)]">{new Date(e.playedAt).toLocaleString()}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => deleteEvent(e.id)}
+                      className="rounded p-1.5 text-[var(--color-text-muted)] hover:text-[var(--color-danger)] transition-colors"
+                      title="Delete event"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
           </div>
-          {pagination && (
-            <PaginationBar pagination={pagination} onPageChange={setPage} />
-          )}
+          {pagination && <PaginationBar pagination={pagination} onPageChange={setPage} />}
         </div>
       )}
     </div>

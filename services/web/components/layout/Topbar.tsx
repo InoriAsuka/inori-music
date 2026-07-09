@@ -37,7 +37,12 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
       {/* Logo + hamburger */}
       <div className="flex items-center gap-2">
         {onMenuClick && (
-          <button onClick={onMenuClick} className="rounded-md p-1.5 hover:bg-[var(--color-muted)] md:hidden" title="Menu">
+          <button
+            type="button"
+            onClick={onMenuClick}
+            className="rounded-md p-1.5 hover:bg-[var(--color-muted)] md:hidden"
+            title="Menu"
+          >
             <Menu size={18} />
           </button>
         )}
@@ -54,7 +59,9 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
       >
         <Search size={14} />
         Search tracks, artists…
-        <kbd className="ml-auto rounded border border-[var(--color-border)] bg-[var(--color-card)] px-1 text-xs opacity-60">⌘K</kbd>
+        <kbd className="ml-auto rounded border border-[var(--color-border)] bg-[var(--color-card)] px-1 text-xs opacity-60">
+          ⌘K
+        </kbd>
       </Link>
 
       {/* User menu */}
@@ -71,6 +78,7 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
           </span>
         )}
         <button
+          type="button"
           onClick={handleLogout}
           className="flex items-center gap-1 rounded-md p-1.5 text-sm text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] transition-colors"
           title="Log out"

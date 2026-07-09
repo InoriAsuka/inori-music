@@ -10,27 +10,14 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import {
-  ArrowLeft,
-  Play,
-  Heart,
-  Music2,
-  Disc3,
-  Clock,
-  Hash,
-  Tag,
-  BarChart2,
-} from "lucide-react";
+import { ArrowLeft, Play, Heart, Music2, Disc3, Clock, Hash, Tag, BarChart2 } from "lucide-react";
 import { useAuthStore } from "@/store/auth";
 import { authedApi } from "@/lib/api/client";
 import { usePlayerStore } from "@/store/player";
 import { Artwork } from "@/components/ui/Artwork";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { formatDuration, cn } from "@/lib/utils";
-import {
-  resolveArtistName,
-  resolveAlbumTitle,
-} from "@/lib/api/catalog-cache";
+import { resolveArtistName, resolveAlbumTitle } from "@/lib/api/catalog-cache";
 
 interface TrackDetail {
   id: string;
@@ -161,17 +148,14 @@ export default function TrackDetailPage() {
   }
 
   if (!track) {
-    return (
-      <div className="py-20 text-center text-[var(--color-text-muted)]">
-        Track not found.
-      </div>
-    );
+    return <div className="py-20 text-center text-[var(--color-text-muted)]">Track not found.</div>;
   }
 
   return (
     <div className="space-y-8">
       {/* Back */}
       <button
+        type="button"
         onClick={() => router.back()}
         className="flex items-center gap-1.5 text-sm text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
       >
@@ -181,16 +165,9 @@ export default function TrackDetailPage() {
 
       {/* Hero */}
       <div className="flex flex-col gap-6 sm:flex-row sm:items-end">
-        <Artwork
-          alt={track.title}
-          src={undefined}
-          size="lg"
-          className="h-40 w-40 shrink-0 rounded-xl"
-        />
+        <Artwork alt={track.title} src={undefined} size="lg" className="h-40 w-40 shrink-0 rounded-xl" />
         <div className="space-y-2">
-          <p className="text-xs font-medium uppercase tracking-wider text-[var(--color-text-muted)]">
-            Track
-          </p>
+          <p className="text-xs font-medium uppercase tracking-wider text-[var(--color-text-muted)]">Track</p>
           <h1 className="text-3xl font-bold leading-tight">{track.title}</h1>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-[var(--color-text-secondary)]">
             {track.artistName && (
@@ -204,10 +181,7 @@ export default function TrackDetailPage() {
             {track.albumTitle && (
               <>
                 <span className="text-[var(--color-border)]">·</span>
-                <Link
-                  href={`/albums/${track.albumId}`}
-                  className="hover:text-[var(--color-primary)] transition-colors"
-                >
+                <Link href={`/albums/${track.albumId}`} className="hover:text-[var(--color-primary)] transition-colors">
                   {track.albumTitle}
                 </Link>
               </>
@@ -217,6 +191,7 @@ export default function TrackDetailPage() {
           {/* Actions */}
           <div className="flex items-center gap-3 pt-2">
             <button
+              type="button"
               onClick={playTrack}
               className="flex h-10 items-center gap-2 rounded-full bg-[var(--color-primary)] px-5 text-sm font-semibold text-[var(--color-primary-fg)] hover:opacity-90 transition-opacity glow-primary"
             >
@@ -224,6 +199,7 @@ export default function TrackDetailPage() {
               Play
             </button>
             <button
+              type="button"
               onClick={toggleFavorite}
               disabled={favLoading}
               title={fav ? "Remove from favorites" : "Add to favorites"}
@@ -258,18 +234,12 @@ export default function TrackDetailPage() {
           </MetaRow>
         )}
         <MetaRow icon={<Music2 size={14} />} label="Artist">
-          <Link
-            href={`/artists/${track.artistId}`}
-            className="hover:text-[var(--color-primary)] transition-colors"
-          >
+          <Link href={`/artists/${track.artistId}`} className="hover:text-[var(--color-primary)] transition-colors">
             {track.artistName || "—"}
           </Link>
         </MetaRow>
         <MetaRow icon={<Disc3 size={14} />} label="Album">
-          <Link
-            href={`/albums/${track.albumId}`}
-            className="hover:text-[var(--color-primary)] transition-colors"
-          >
+          <Link href={`/albums/${track.albumId}`} className="hover:text-[var(--color-primary)] transition-colors">
             {track.albumTitle || "—"}
           </Link>
         </MetaRow>

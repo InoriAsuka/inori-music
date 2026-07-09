@@ -149,7 +149,10 @@ func reindexTracks(ctx context.Context, repo catalog.Repository, searchSvc *sear
 		},
 		catalog.TrackSortByCreatedAt,
 		func(e any) string { return e.(catalog.Track).ID },
-		func(e any) error { t := e.(catalog.Track); return searchSvc.IndexTrack(ctx, t.ID, t.Title, t.ArtistID, t.Genre) },
+		func(e any) error {
+			t := e.(catalog.Track)
+			return searchSvc.IndexTrack(ctx, t.ID, t.Title, t.ArtistID, t.Genre)
+		},
 	)
 }
 

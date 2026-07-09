@@ -2,10 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import {
-  Music2, Users, Disc3, ListMusic,
-  Heart, History, LayoutDashboard, Search, Settings,
-} from "lucide-react";
+import { Music2, Users, Disc3, ListMusic, Heart, History, LayoutDashboard, Search, Settings } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -55,7 +52,12 @@ export function Sidebar() {
 
 function SectionLabel({ children, className }: { children: React.ReactNode; className?: string }) {
   return (
-    <span className={cn("px-2 py-1 text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]", className)}>
+    <span
+      className={cn(
+        "px-2 py-1 text-xs font-semibold uppercase tracking-wider text-[var(--color-text-muted)]",
+        className
+      )}
+    >
       {children}
     </span>
   );

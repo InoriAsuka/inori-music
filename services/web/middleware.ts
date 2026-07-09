@@ -9,7 +9,7 @@
  * lightweight hint that a session is active. The actual token is validated
  * by the API on every request; the cookie is only used here for routing.
  */
-import { NextRequest, NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 
 const PUBLIC_PATHS = ["/login", "/_next", "/favicon.ico", "/api/v1"];
 

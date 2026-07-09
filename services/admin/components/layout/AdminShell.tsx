@@ -12,9 +12,7 @@ export function AdminShell({ children }: { children: React.ReactNode }) {
       <AdminTopbar onToggleSidebar={() => setCollapsed((c) => !c)} />
       <div className="flex flex-1 overflow-hidden">
         <AdminSidebar collapsed={collapsed} />
-        <main className="flex-1 overflow-y-auto p-6 text-[var(--color-text)]">
-          {children}
-        </main>
+        <main className="flex-1 overflow-y-auto p-6 text-[var(--color-text)]">{children}</main>
       </div>
     </div>
   );
