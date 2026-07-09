@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`4.7.0`
+`4.8.0`
 
 ## Product Goal
 
@@ -1437,7 +1437,7 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 
 - **CI hardening — OpenAPI contract fix**: `/api/v1/catalog/tracks/{id}/stream` path-level parameter moved to `$ref: '#/components/parameters/CatalogId'`; `security: [{bearerAuth: []}]` added to GET operation; `?token` query param retained at operation level. All 39 OpenAPI contract tests pass.
 - **CI E2E job**: `build.yml` new `e2e` job (depends on `api` + `web`); starts API in in-memory mode (`INORI_INITIAL_ADMIN_USER/PASSWORD`); starts Next.js dev server; installs Playwright chromium; runs `e2e/smoke.spec.ts` (3 smoke tests); uploads `playwright-report/` artifact on every run (7-day retention).
-- **E2E smoke test hardening**: `#username`/`#password` exact locators; shared `login()` helper; default credentials match CI env (`ci-viewer` / `ci-password-123`).
+- **E2E smoke test hardening**: `#username`/`#password` exact locators; shared `login()` helper; default credentials match CI env (`ci_viewer` / `ci-password-123`).
 - The phase output is version-tracked and covered by TypeScript type checks, Go tests, and 39 contract tests.
 
 ### v2.8.0 - 2026-06-22
@@ -1602,10 +1602,11 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - **fix: 播放器音频真实性修复（gapless 状态同步 / ReplayGain 应用 / Shuffle / EQ 真实接线 / crossfade 如实化）** — 2026-07-06 全量代码审查发现 v4.1.0–v4.2.0 多项音频特性为假实现：EQ 依赖的 `just_audio_equalizer` 从未加入 `pubspec.yaml`，`audio_handler.dart` 经 `(_player as dynamic).setBands` 调用不存在的方法且异常被静默吞掉（EQ UI 对音频输出零影响）；ReplayGain 开关从未被 `PlayerNotifier` 读取，`replayGainDb` 在客户端无消费方；`setShuffle` 仅翻转状态位不改变播放顺序；`_runCrossfade` 是切歌后同 player 的音量 V 形凹陷而非双轨交叉淡化；`PlayerNotifier` 未监听 `currentIndexStream`，gapless 队列自动前进时 UI/通知栏/历史上报全部脱轨，且 `next()` 取模回绕无视 `RepeatMode.off`。本阶段逐项修复：`currentIndexStream` 订阅同步状态与逐曲历史上报、repeat 语义映射 `setLoopMode`、手动切歌改增量 `seekToNext/Previous`（不再全队列重建）、ReplayGain 增益实际应用（`10^(db/20)` 与用户音量正交）、shuffle 经 `setShuffleModeEnabled` 真实生效、EQ 改用 `AudioPipeline` + `AndroidEqualizer`（不支持平台明确禁用标注）、crossfade 如实降级为「切歌淡入淡出」并同步文案。
 - The phase output is version-tracked and covered by flutter analyze (0 issues), flutter test（PlayerNotifier 队列状态机集成测试 / ReplayGain 增益计算 / shuffle 顺序 / repeat 语义）, and 人工听感验收清单（真机 EQ 听感 / 连播元数据 / 逐曲历史）.
 
-### v4.8.0 - TBD
+### v4.8.0 - 2026-07-10
 
-- **chore: 测试与结构还债（v4 封版收官）** — Go：`internal/httpapi/handler.go`（5218 行）与 `handler_test.go`（9255 行）按域拆分为 storage/media/auth/catalog/history/favorites/userplaylist/search 多文件（同 package 纯移动，773 测试护航零行为变更）。Flutter：`AuthNotifier`/`SearchHistoryNotifier` 等 provider 单测补齐 + `MiniPlayerBar`/`TrackListTile`/`SearchScreen` widget 测试。Web：Playwright e2e 扩展为登录→浏览→播放→收藏→历史完整主流程，引入 Vitest 覆盖 `store/player.ts` 队列逻辑。Admin：建立 Playwright e2e 最小回归（登录/用户管理/catalog/storage 页）。仓库卫生：`git rm --cached .codegraph/daemon.pid`、README 重写至 v4.8.0 基线（修正技术栈与目录路径描述）、web/admin/mobile 版本号与根 VERSION 对齐、CI 补 biome lint step。本阶段完成后 v4 线封版，仅接受 bug 修复 patch。
-- The phase output is version-tracked and covered by 全部 CI job（api/web/mobile/admin/e2e）绿灯 and README 快速开始人工走查.
+- **chore: 测试与结构还债（v4 封版收官）** — Go：`internal/httpapi/handler.go`（5218 行）与 `handler_test.go`（9255 行）按域拆分为 storage/media/auth/catalog/history/favorites/userplaylist/search 多文件（同 package 纯移动，773 测试护航零行为变更）。Flutter：`AuthNotifier`/`SearchHistoryNotifier` 等 provider 单测补齐 + `MiniPlayerBar`/`TrackListTile`/`SearchScreen` widget 测试，`flutter test --coverage` 接入 CI artifact。Web：Playwright e2e 扩展为登录→浏览专辑→播放（真实 audio src/状态断言）→收藏/取消收藏→历史记录（合成 `ended` 事件驱动真实 onEnded 处理）→登出的完整主流程，引入 Vitest 覆盖 `store/player.ts` 队列逻辑与 `lib/` 工具函数（49 tests）。Admin：建立 Playwright e2e 最小回归（登录/用户管理/catalog/storage 页）+ CI `admin-e2e` job。仓库卫生：`git rm --cached .codegraph/daemon.pid`、README 重写至 v4.8.0 基线、web/admin/mobile 版本号与根 VERSION 对齐、CI 补 biome lint step。
+- **fix: 端到端测试驱动发现并修复 12 个真实缺陷** — 补齐测试基建、用真实浏览器驱动播放/收藏/历史/登出全流程的过程中，暴露出此前隐藏的多个功能性缺陷（而非仅测试自身问题）：(1) bcrypt 测试 `-race` 超时；(2) CI 含连字符用户名导致 workflow 语法问题；(3) CSS `@import` 顺序错误；(4) `AuthProvider` 挂载位置不当；(5) 重复的 `/` 路由定义；(6) 错误的相对 CSS import 路径；(7) auth service 为 nil 时未判空导致 panic；(8) **ReplayGainDb 静音音轨写入 `+Inf`**——ffmpeg loudnorm 对绝对静音报告 `-inf` LUFS，`referenceLoudnessLUFS - (-Inf)` 产生非有限浮点数，`encoding/json` 无法序列化，导致该曲目此后所有 GET 请求返回 200 但空 body；(9) **收藏页永久显示"无收藏"**——`GET /api/v1/me/favorites/tracks` 在 catalog service 可用时（生产默认路径）只返回 `tracks` 而非 `trackIds`，Web 端空态判断只检查了后者；(10) Playwright 专辑列表计数与客户端数据请求竞态（测试基建问题）；(11) **播放历史从未被真正记录**——`useAudio.ts` 的 `onEnded` 处理器 POST 历史记录时携带 API 拒绝的多余字段（`durationSeconds`/`source`），Go 端严格 JSON 解码返回 400 但被 `.catch(() => {})` 静默吞掉，用户界面无任何异常表现，生产环境播放历史功能实际从未成功写入过一条记录；(12) **登出点击后不跳转 `/login`**——`AuthProvider` 的 zustand 订阅回调在 token 变空时又调用一次 `clearSession()`，与其自身触发的 `set()` 通知互相递归直至调用栈溢出，异常在 `Topbar.handleLogout()` 内部抛出，使其后的 `router.push("/login")` 永远不执行。这些修复本身即是本阶段"测试基建能真正抓住回归"目标的验证。本阶段完成后 v4 线封版，仅接受 bug 修复 patch（v4.8.x）。
+- The phase output is version-tracked and covered by 全部 CI job（api/web/mobile/admin/e2e）本地复核绿灯（gofmt/`go test -race` 774 tests/biome lint 0 errors/flutter analyze 0 fatal + flutter test 87 tests/vitest 49 tests/playwright main-flow 1 test）.
 
 ### v5.0.0 - TBD
 
