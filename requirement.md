@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`4.8.1`
+`4.8.2`
 
 ## Product Goal
 
@@ -1612,6 +1612,11 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 
 - **fix: v4.8.0 推送后远端 CI 发现的 3 个真实缺陷** — 本地 pre-push 验证全绿但远端 5 次 CI 运行全部失败，逐条拉取失败日志定位：(1) **Flutter CI `make gen:api` 触发 Makefile 静态模式规则解析错误**——`gen:api`/`build:watch` 目标名含冒号，GNU Make 按 `targets: pattern: prereqs` 语法解析而非字面目标名，因 `api`/`watch` 不含 `%` 通配符而在 `.PHONY` 行直接 abort；系 commit e314b83（Phase 304-308）引入的既有缺陷，此前被另一个已修复的 Flutter SDK 版本钉死问题挡住而从未暴露。修复为改用连字符（`gen-api`/`build-watch`），同步更新 `flutter.yml` 5 处与 `services/mobile/README.md` 1 处调用。(2) **Web CI type-check 失败**——`e2e/main-flow.spec.ts` 新增的 `@ts-expect-error` 抑制了一处并不产生错误的赋值（`class ProbedAudio extends NativeAudio` 结构上可赋值回 `window.Audio`），TS strict 模式判定该抑制注释本身为错误（TS2578）；系本阶段新增测试代码自身疏漏——push 前跑过 playwright/vitest/biome lint 但未单独对新文件跑 `type-check`。修复为移除多余抑制注释。(3) **Docker 镜像发布 CI 失败**（`publish-web`/`publish-admin`）——根因 A：仓库根 `.dockerignore` 的裸 `packages` 行排除整个 `packages/` 目录，导致两个 Dockerfile 的 `COPY packages/api-contract ...` 找不到源文件；根因 B（A 修复后会暴露的第二个缺陷）：`@inori/ui` 是两端 `package.json` 的 `file:../../packages/ui` 依赖（admin 端 `StorageHealthBadge.tsx` 有真实引用，两端 `next.config.ts` 均声明 `transpilePackages`），但两个 Dockerfile 都缺少对应的 `COPY packages/ui ...`。二分 CI 历史（`gh run list --json` + 逐次 `git diff`）确认此二缺陷自 commit 4b184bc8（2026-06-21，v2.2.0 阶段）起已连续存在超过 26 次运行、跨越约 19 天，与 v4.8.0 本阶段工作内容及 v4 整条线均无关，只是本次逐条排查 CI 时才第一次被发现。修复：`.dockerignore` 移除 `packages` 排除行，两个 Dockerfile 的 builder stage 各追加 `COPY packages/ui ../../packages/ui`。本地无 Docker 环境，此项修复仅通过等价目录结构复现 npm `file:` symlink 解析行为静态验证，实际效果待下次 CI 运行确认。
 - The phase output is version-tracked; fixes (1)(2) verified locally (`make gen-api` end-to-end + zero-diff regenerated client; `npm run type-check` reproduces then clears the error), fix (3) verified only by static reasoning (no local Docker available) pending live CI confirmation.
+
+### v4.8.2 - 2026-07-11
+
+- **fix: v4.8.1 推送后 CI 发现的第 4 个真实缺陷** — 监控 v4.8.1 推送触发的远端 CI，`flutter.yml` 的 `Analyze` job 在 ubuntu-latest 上失败（macOS 侧同一 job 因矩阵 fail-fast 联带取消，非独立问题）。根因：`.github/workflows/flutter.yml` 第 42 行的 Analyze 步骤使用裸 `flutter analyze`（对 info 级问题也返回非零退出码），而仓库既有的 4 条 info 级问题（字符串插值多余花括号，`full_player_screen.dart`/`settings_screen.dart` 各两处）早已被认定可接受——`build.yml` 的等价步骤一直正确使用 `flutter analyze --no-fatal-infos`，两个 workflow 文件对同一命令的 flag 从 v3.5.0（commit 68411e7）引入起就不一致，此前同样被 v4.8.1 才修复的 Flutter SDK 版本钉死问题挡住、从未真正执行到。修复：`flutter.yml` 该行同步加上 `--no-fatal-infos`，与 `build.yml` 保持一致。
+- The phase output is version-tracked and verified locally (`flutter analyze --no-fatal-infos` exits 0, 4 pre-existing info-level issues surfaced but non-fatal, matching build.yml's established baseline).
 
 ### v5.0.0 - TBD
 
