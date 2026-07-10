@@ -12,8 +12,10 @@
  * - E2E_USERNAME / E2E_PASSWORD env vars set to a valid admin account.
  * - API server reachable at NEXT_PUBLIC_API_BASE_URL (default http://localhost:8080).
  *
- * Run: npx playwright test
- * CI: E2E_USERNAME=ci_viewer E2E_PASSWORD=ci-password-123 npx playwright test
+ * Run: E2E_BASE_URL=http://localhost:3001 npx playwright test
+ * CI: E2E_BASE_URL=http://localhost:3001 E2E_USERNAME=ci_viewer E2E_PASSWORD=ci-password-123 npx playwright test
+ *
+ * Note: all routes use the /admin basePath (see next.config.ts).
  */
 
 import { test, expect, type Page } from "@playwright/test";
@@ -22,7 +24,7 @@ const E2E_USERNAME = process.env.E2E_USERNAME ?? "admin";
 const E2E_PASSWORD = process.env.E2E_PASSWORD ?? "password";
 
 async function login(page: Page) {
-	await page.goto("/login");
+	await page.goto("/admin/login");
 	await page.getByLabel("Username").fill(E2E_USERNAME);
 	await page.getByLabel("Password").fill(E2E_PASSWORD);
 	await page.getByRole("button", { name: /sign in/i }).click();
@@ -36,20 +38,20 @@ async function login(page: Page) {
 test("login flow redirects unauthenticated users and grants access on valid credentials", async ({
 	page,
 }) => {
-	await page.goto("/users");
-	// Should redirect to /login
-	await expect(page).toHaveURL(/\/login/, { timeout: 5_000 });
+	await page.goto("/admin/users");
+	// Should redirect to /admin/login (basePath is /admin)
+	await expect(page).toHaveURL(/\/admin\/login/, { timeout: 5_000 });
 
 	await login(page);
 	// After login, should land on a protected route
-	await expect(page).toHaveURL(/\/(dashboard|users|catalog|storage)/i);
+	await expect(page).toHaveURL(/\/admin\/(dashboard|users|catalog|storage)/i);
 });
 
 test("users tab renders user table with at least one user", async ({
 	page,
 }) => {
 	await login(page);
-	await page.goto("/users");
+	await page.goto("/admin/users");
 
 	// Users heading
 	await expect(page.locator("h1").filter({ hasText: /users/i })).toBeVisible({
@@ -64,7 +66,7 @@ test("users tab renders user table with at least one user", async ({
 
 test("catalog tab renders catalog view", async ({ page }) => {
 	await login(page);
-	await page.goto("/catalog");
+	await page.goto("/admin/catalog");
 
 	// Catalog heading
 	await expect(
@@ -74,7 +76,7 @@ test("catalog tab renders catalog view", async ({ page }) => {
 
 test("storage tab renders storage backend list", async ({ page }) => {
 	await login(page);
-	await page.goto("/storage");
+	await page.goto("/admin/storage");
 
 	// Storage heading
 	await expect(

@@ -104,6 +104,7 @@ jobs:
           labels: ${{ steps.meta-web.outputs.labels }}
           build-args: |
             NEXT_PUBLIC_API_BASE_URL=http://api:8080
+            CACHE_BUST=${{ github.run_id }}
 
   publish-admin:
     name: Build and publish Admin image
@@ -147,3 +148,4 @@ jobs:
           labels: ${{ steps.meta-admin.outputs.labels }}
           build-args: |
             NEXT_PUBLIC_API_BASE_URL=http://api:8080
+            CACHE_BUST=${{ github.run_id }}
