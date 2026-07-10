@@ -105,6 +105,8 @@ jobs:
           build-args: |
             NEXT_PUBLIC_API_BASE_URL=http://api:8080
             CACHE_BUST=${{ github.run_id }}
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/web:buildcache
+          cache-to: type=registry,ref=ghcr.io/${{ github.repository }}/web:buildcache,mode=max
 
   publish-admin:
     name: Build and publish Admin image
@@ -149,3 +151,5 @@ jobs:
           build-args: |
             NEXT_PUBLIC_API_BASE_URL=http://api:8080
             CACHE_BUST=${{ github.run_id }}
+          cache-from: type=registry,ref=ghcr.io/${{ github.repository }}/admin:buildcache
+          cache-to: type=registry,ref=ghcr.io/${{ github.repository }}/admin:buildcache,mode=max
