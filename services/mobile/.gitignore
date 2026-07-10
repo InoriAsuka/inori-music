@@ -36,7 +36,6 @@ migrate_working_dir/
 # Generated files
 **/*.g.dart
 **/*.freezed.dart
-lib/src/api/generated/
 
 # Symbolication related
 app.*.symbols

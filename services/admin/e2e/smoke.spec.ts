@@ -23,9 +23,9 @@ const E2E_PASSWORD = process.env.E2E_PASSWORD ?? "password";
 
 async function login(page: Page) {
 	await page.goto("/login");
-	await page.fill('input[type="text"]', E2E_USERNAME);
-	await page.fill('input[type="password"]', E2E_PASSWORD);
-	await page.click('button[type="submit"]');
+	await page.getByLabel("Username").fill(E2E_USERNAME);
+	await page.getByLabel("Password").fill(E2E_PASSWORD);
+	await page.getByRole("button", { name: /sign in/i }).click();
 
 	// Wait for redirect to dashboard
 	await page.waitForURL(/\/(dashboard|users|catalog|storage)/i, {

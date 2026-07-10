@@ -1,6 +1,6 @@
 {
   "name": "inori-music-admin",
-  "version": "4.8.2",
+  "version": "4.8.3",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack --port 3001",

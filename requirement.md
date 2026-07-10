@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`4.8.2`
+`4.8.3`
 
 ## Product Goal
 
@@ -1617,6 +1617,11 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 
 - **fix: v4.8.1 推送后 CI 发现的第 4 个真实缺陷** — 监控 v4.8.1 推送触发的远端 CI，`flutter.yml` 的 `Analyze` job 在 ubuntu-latest 上失败（macOS 侧同一 job 因矩阵 fail-fast 联带取消，非独立问题）。根因：`.github/workflows/flutter.yml` 第 42 行的 Analyze 步骤使用裸 `flutter analyze`（对 info 级问题也返回非零退出码），而仓库既有的 4 条 info 级问题（字符串插值多余花括号，`full_player_screen.dart`/`settings_screen.dart` 各两处）早已被认定可接受——`build.yml` 的等价步骤一直正确使用 `flutter analyze --no-fatal-infos`，两个 workflow 文件对同一命令的 flag 从 v3.5.0（commit 68411e7）引入起就不一致，此前同样被 v4.8.1 才修复的 Flutter SDK 版本钉死问题挡住、从未真正执行到。修复：`flutter.yml` 该行同步加上 `--no-fatal-infos`，与 `build.yml` 保持一致。
 - The phase output is version-tracked and verified locally (`flutter analyze --no-fatal-infos` exits 0, 4 pre-existing info-level issues surfaced but non-fatal, matching build.yml's established baseline).
+
+### v4.8.3 - 2026-07-11
+
+- **fix: v4.8.2 后继续收尾的 CI / Docker / Admin E2E 缺陷** — 继续追踪远端 CI 与本地复现后，确认并修复三类真实问题：(1) Flutter 生成客户端源码被 `.gitignore` 的 `lib/src/api/generated/*` 规则挡住，导致新引入的用户播放列表 / 歌词 / artwork OpenAPI Dart 源码未纳入版本控制；在真正干净的 build_runner 环境中会缺少模型/API 源文件。本阶段放开该目录下 OpenAPI generator 产出的 `.dart`/doc/test 源文件，只继续忽略 build_runner 生成的 `.g.dart`/`.freezed.dart`，并补交 33 个缺失源文件。(2) web/admin `package.json` 已升至 4.8.2，但 `package-lock.json` 根包版本仍停在 4.7.0；普通 CI 的 `npm ci` 在原路径下未暴露该问题，但 Docker deps stage 将 package 文件复制到 `/app` 后，npm 以实际目录名 `app@4.8.2` 校验 lock，触发 `npm ci` EUSAGE。修复为刷新两端 lockfile 根版本，并把 Dockerfile 中可选锁文件通配 `package-lock.json*` 改为必需的精确 `package-lock.json`，让缺锁在 COPY 阶段直接失败。(3) Admin Playwright smoke 登录用 `input[type="text"]` 选择器，在登录页结构变化或 token tab 状态下容易找不到输入框；改为按可访问 label 与 button role 操作真实登录表单。
+- The phase output is version-tracked and verified locally：Docker deps-stage 等价目录布局下 web/admin `npm ci` 复现并清除 EUSAGE；`npm --prefix services/web ci`、`npm --prefix services/admin ci`、admin lint/type-check 通过；Flutter 生成客户端修复已在干净 build_runner + `flutter analyze --no-fatal-infos` + `flutter test --no-pub` 验证通过。
 
 ### v5.0.0 - TBD
 
