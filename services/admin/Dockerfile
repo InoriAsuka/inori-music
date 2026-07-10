@@ -3,7 +3,8 @@ FROM node:22-alpine AS deps
 WORKDIR /app
 ARG CACHE_BUST=1
 RUN echo "cache-bust=${CACHE_BUST}" > /dev/null
-COPY services/admin/package.json services/admin/package-lock.json ./
+COPY services/admin/package.json ./package.json
+COPY services/admin/package-lock.json ./package-lock.json
 RUN npm ci
 
 FROM node:22-alpine AS builder

@@ -31,12 +31,12 @@ android {
     // smoke tests).
     val keystoreFile = System.getenv("ANDROID_KEYSTORE_PATH")?.let { file(it) }
         ?: rootProject.file("key.properties").takeIf { it.exists() }?.let { props ->
-            java.util.Properties().also { it.load(props.inputStream()) }
+            Properties().also { it.load(props.inputStream()) }
             null  // handled below
         }
 
     val keyProps = rootProject.file("key.properties").takeIf { it.exists() }?.let {
-        java.util.Properties().also { p -> p.load(it.inputStream()) }
+        Properties().also { p -> p.load(it.inputStream()) }
     }
 
     signingConfigs {

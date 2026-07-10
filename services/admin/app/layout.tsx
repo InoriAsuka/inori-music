@@ -16,6 +16,12 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        <link
+          href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400&family=Noto+Sans+JP:wght@400;700&display=swap"
+          rel="stylesheet"
+        />
+      </head>
       <body>
         <AdminI18nProvider>{children}</AdminI18nProvider>
       </body>
