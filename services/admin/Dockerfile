@@ -1,6 +1,8 @@
 # syntax=docker/dockerfile:1
 FROM node:22-alpine AS deps
 WORKDIR /app
+ARG CACHE_BUST=1
+RUN echo "cache-bust=${CACHE_BUST}" > /dev/null
 COPY services/admin/package.json services/admin/package-lock.json ./
 RUN npm ci
 

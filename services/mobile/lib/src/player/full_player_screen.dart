@@ -289,7 +289,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                       final speed = ref.watch(speedNotifierProvider);
                       return TextButton(
                         onPressed: () => _showSpeedSheet(context, ref),
-                        child: Text('${speed}×', style: const TextStyle(fontSize: 14)),
+                        child: Text('$speed×', style: const TextStyle(fontSize: 14)),
                       );
                     },
                   ),
@@ -403,7 +403,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
             ),
             for (final s in speeds)
               ListTile(
-                title: Text('${s}×'),
+                title: Text('$s×'),
                 trailing: s == current ? const Icon(Icons.check) : null,
                 onTap: () {
                   ref.read(speedNotifierProvider.notifier).setSpeed(s);

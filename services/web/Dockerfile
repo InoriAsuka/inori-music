@@ -3,6 +3,8 @@
 # ── Stage 1: install dependencies ──────────────────────────────────────────
 FROM node:22-alpine AS deps
 WORKDIR /app
+ARG CACHE_BUST=1
+RUN echo "cache-bust=${CACHE_BUST}" > /dev/null
 COPY services/web/package.json services/web/package-lock.json ./
 RUN npm ci
 

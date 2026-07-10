@@ -118,7 +118,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               final speed = ref.watch(speedNotifierProvider);
               return ListTile(
                 title: const Text('播放速度'),
-                trailing: Text('${speed}×'),
+                trailing: Text('$speed×'),
                 onTap: () => _showSpeedSheet(context, ref),
               );
             },
@@ -266,7 +266,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
             for (final s in speeds)
               ListTile(
-                title: Text('${s}×'),
+                title: Text('$s×'),
                 trailing: s == current ? const Icon(Icons.check) : null,
                 onTap: () {
                   ref.read(speedNotifierProvider.notifier).setSpeed(s);

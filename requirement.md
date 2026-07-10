@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`4.8.3`
+`4.8.4`
 
 ## Product Goal
 
@@ -1617,6 +1617,12 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 
 - **fix: v4.8.1 推送后 CI 发现的第 4 个真实缺陷** — 监控 v4.8.1 推送触发的远端 CI，`flutter.yml` 的 `Analyze` job 在 ubuntu-latest 上失败（macOS 侧同一 job 因矩阵 fail-fast 联带取消，非独立问题）。根因：`.github/workflows/flutter.yml` 第 42 行的 Analyze 步骤使用裸 `flutter analyze`（对 info 级问题也返回非零退出码），而仓库既有的 4 条 info 级问题（字符串插值多余花括号，`full_player_screen.dart`/`settings_screen.dart` 各两处）早已被认定可接受——`build.yml` 的等价步骤一直正确使用 `flutter analyze --no-fatal-infos`，两个 workflow 文件对同一命令的 flag 从 v3.5.0（commit 68411e7）引入起就不一致，此前同样被 v4.8.1 才修复的 Flutter SDK 版本钉死问题挡住、从未真正执行到。修复：`flutter.yml` 该行同步加上 `--no-fatal-infos`，与 `build.yml` 保持一致。
 - The phase output is version-tracked and verified locally (`flutter analyze --no-fatal-infos` exits 0, 4 pre-existing info-level issues surfaced but non-fatal, matching build.yml's established baseline).
+
+### v4.8.4 - 2026-07-11
+
+- **fix: 4.8.3 推送后 Docker / Flutter / Admin E2E 收尾的 3 类独立缺陷** — 继续追踪 v4.8.3 触发的远端 CI，定位三个互不相关的失败根因：(1) **Docker 镜像构建 `npm ci` EUSAGE（BuildKit wildcard COPY 缓存命中）**——v4.8.3 把 `package-lock.json*` 通配 COPY 改为精确 `package-lock.json`，理论上应该修复该问题；但 `gh run view --log-failed` 复现的 `npm error ... Missing: app@4.8.3 from lock file` 错误实际更复杂：即使 Dockerfile 代码已改，GitHub Actions 的 BuildKit 缓存层并未自动失效（无 `cache-from`/`cache-to` 显式配置时仍可能命中 registry-stored wildcard-COPY layer），导致旧层被复用。两端 Dockerfile 的 deps stage 头加 `ARG CACHE_BUST=1` + `RUN echo "cache-bust=${CACHE_BUST}" > /dev/null` 使每次 build 在 COPY 前注入非缓存指令，强制 layer hash 变化以击穿 wildcard-COPY 残留缓存。(2) **Flutter APK `build.gradle.kts` 编译错误（15 个 error）**——CI 用的 Flutter 3.44.6 + AGP 9（`android.newDsl=true`），`java.util.Properties().also { it.load(props.inputStream()) }` 未显式 import 导致 `'util'` / `'load'` / `'getProperty'` 全部 unresolved；`android {}` 扩展函数在 AGP 9 已 deprecated。修复：`plugins {}` 前加 `import java.util.Properties`，第一行 android DSL 上方加 `@Suppress("DEPRECATION")`。(3) **Flutter `analyze` 把 info 级问题当 fatal**——`full_player_screen.dart`/`settings_screen.dart` 各 2 处字符串插值多余花括号（`'${speed}×'` / `'${s}×'`），`flutter analyze` 默认对 info 也返回 exit code 1 导致 CI 红。跟 v4.8.2 `flutter.yml` 引入的 flag 不一致问题是不同路径——这里是 v4.8.2 之后新引入的。修复：源码层删掉 4 处冗余花括号（`'$speed×'` / `'$s×'`），比 `--no-fatal-infos` 更彻底、消除警告本身。
+- **hygiene: `services/admin/.gitignore` 追加 `*.tsconfig.tsbuildinfo`**——`tsconfig.tsbuildinfo` 是 TypeScript 增量构建产物，此前只在 `services/web/.gitignore` 有，admin 端缺失导致 `services/admin/tsconfig.tsbuildinfo` 不时进 staging；跟 web 端对齐。
+- The phase output is version-tracked; items (2)(3) 本地可验证（`flutter analyze` 0 issues、`services/mobile/android/app/build.gradle.kts` 静态校验 Kotlin DSL 引用可解析）；item (1) 仍需 live CI 确认（本地无 Docker）。
 
 ### v4.8.3 - 2026-07-11
 
