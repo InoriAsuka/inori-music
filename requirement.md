@@ -42,6 +42,18 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 
 ## Requirement History
 
+### v4.8.4 - 2026-07-11
+
+> 2026-07-11 补：本轮实际上做了三次 v4.8.4 push（`994ff31`、`ce8a491`、`0341c99`）才收绿。下表把三轮放在一起记录真实通过的修复。
+
+- **fix: 4.8.3 推送后 Docker / Flutter / Admin E2E 收尾的 3 类独立缺陷** ——继续追踪 v4.8.3 触发的远端 CI，定位三个互不相关的失败根因并修复：
+  (1) **Docker 镜像构建 npm ci EUSAGE（BuildKit COPY content-hash 缓存污染）**——v4.8.1 引入 wildcard COPY `package-lock.json*` 后 build 缓存含一份把 package.json+package-lock.json 预装进 image 的 layer，`npm ci` 时看到锁文件认为已装过直接退出，实际 node_modules 不存在 → EUSAGE。多源 COPY `COPY services/<svc>/package.json services/<svc>/package-lock.json ./` 与 wildcard-COPY 共享 content-hash → 拆分 COPY 不能打破缓存。`ARG CACHE_BUST=1` + `RUN echo` 不能击穿 COPY 层（只对 RUN/CMD/ENTRYPOINT 有效）。**正解**：docker.yml web/admin jobs `build-args` 加 `CACHE_BUST=${{ github.run_id }}`，RUN echo cache key 每轮变化 → 整个下游缓存链失效 → COPY+npm ci 实跑成功。Dockerfile 不需要拆分 COPY，但之前的拆分也无害、保留。
+  (2) **Flutter APK build.gradle.kts 编译错误（15 个）**——CI 用 AGP 9 + newDsl + Kotlin DSL：`java.util.Properties()` FQN 在 Kotlin DSL script 编译阶段报 `'util' unresolved`（AGP 7-8 不报，AGP 9 报错）。**实际上 `import java.util.Properties` 已经存在，但 FQN 不工作**。修复：把两个 `java.util.Properties()` 调用改为 `Properties()`（与 import 对齐）。
+  (3) **Flutter `analyze` 把 info 当 fatal + Turbopack dev mode @import 排序**——(i) `full_player_screen.dart`/`settings_screen.dart` 各 2 处字符串插值冗余花括号 `${speed}×`，`flutter analyze --no-fatal-infos` 不再报；(ii) **admin 端 Turbopack dev mode CSS 解析失败**：admin 端 `globals.css` 的 `@import "tailwindcss"` 后跟 `@import url(goog-fonts)`，Next 15.5.19 Turbopack dev mode 把 `@import url` 推到 `@theme` 块之后触发 CSS spec「@import 必须最先」冲突 → 整个 `/admin/login` 无法渲染。修复：globals.css 移除 `@import url`，改 app/layout.tsx 用 `<link rel="stylesheet">`。
+  (4) **Admin E2E 路径缺 basePath 前缀**——`next.config.ts` 设 `basePath: "/admin"`，所有路径实际挂 `/admin/*` 下；E2E 用 `/login`, `/users` 等裸路径 → Next 直接返回 404（`h1 "404" / "This page could not be found."`）。**此错误在 (3)(ii) 修复后才暴露**（CSS overlay 修复后 E2E 才真正 load 页面）。修复：smoke.spec.ts goto 路径全部加 `/admin` 前缀；toHaveURL 改 `/\/admin\/login/`；最终断言 `/\/admin\/(dashboard|users|catalog|storage)/i`。
+- **hygiene: `services/admin/.gitignore` 追加 `*.tsconfig.tsbuildinfo`**——`tsconfig.tsbuildinfo` 是 TypeScript 增量构建产物，admin 端此前缺失导致不时进 staging。
+- 故障排查时间线：07-09 v4.8.1 → 3 真实失败 → v4.8.3 触 2 失败（Docker EUSAGE + Admin E2E）→ v4.8.4 round 1 (`994ff31`) 加静态 CACHE_BUST + gradle FQN + css link → 仍红 → v4.8.4 round 2 (`ce8a491`) 拆分多源 COPY → Docker 仍红 / Admin E2E 暴露 404 → v4.8.4 round 3 (`0341c99`) 把 CACHE_BUST 改为从 workflow 注入 run_id + E2E 加 `/admin` 前缀 → **全绿**。共计 5 轮 CI | 3 个独立根因（缓存污染 + Turbopack CSS 排序 + basePath 错） | 1 个表层症状的链式暴露。
+
 ### v0.1.0 - 2026-06-02
 
 - Establish server-managed multi-backend media storage covering local, NFS, SMB, S3-compatible, and distributed backends.
