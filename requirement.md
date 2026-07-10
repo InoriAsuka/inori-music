@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`4.8.0`
+`4.8.1`
 
 ## Product Goal
 
@@ -1607,6 +1607,11 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - **chore: 测试与结构还债（v4 封版收官）** — Go：`internal/httpapi/handler.go`（5218 行）与 `handler_test.go`（9255 行）按域拆分为 storage/media/auth/catalog/history/favorites/userplaylist/search 多文件（同 package 纯移动，773 测试护航零行为变更）。Flutter：`AuthNotifier`/`SearchHistoryNotifier` 等 provider 单测补齐 + `MiniPlayerBar`/`TrackListTile`/`SearchScreen` widget 测试，`flutter test --coverage` 接入 CI artifact。Web：Playwright e2e 扩展为登录→浏览专辑→播放（真实 audio src/状态断言）→收藏/取消收藏→历史记录（合成 `ended` 事件驱动真实 onEnded 处理）→登出的完整主流程，引入 Vitest 覆盖 `store/player.ts` 队列逻辑与 `lib/` 工具函数（49 tests）。Admin：建立 Playwright e2e 最小回归（登录/用户管理/catalog/storage 页）+ CI `admin-e2e` job。仓库卫生：`git rm --cached .codegraph/daemon.pid`、README 重写至 v4.8.0 基线、web/admin/mobile 版本号与根 VERSION 对齐、CI 补 biome lint step。
 - **fix: 端到端测试驱动发现并修复 12 个真实缺陷** — 补齐测试基建、用真实浏览器驱动播放/收藏/历史/登出全流程的过程中，暴露出此前隐藏的多个功能性缺陷（而非仅测试自身问题）：(1) bcrypt 测试 `-race` 超时；(2) CI 含连字符用户名导致 workflow 语法问题；(3) CSS `@import` 顺序错误；(4) `AuthProvider` 挂载位置不当；(5) 重复的 `/` 路由定义；(6) 错误的相对 CSS import 路径；(7) auth service 为 nil 时未判空导致 panic；(8) **ReplayGainDb 静音音轨写入 `+Inf`**——ffmpeg loudnorm 对绝对静音报告 `-inf` LUFS，`referenceLoudnessLUFS - (-Inf)` 产生非有限浮点数，`encoding/json` 无法序列化，导致该曲目此后所有 GET 请求返回 200 但空 body；(9) **收藏页永久显示"无收藏"**——`GET /api/v1/me/favorites/tracks` 在 catalog service 可用时（生产默认路径）只返回 `tracks` 而非 `trackIds`，Web 端空态判断只检查了后者；(10) Playwright 专辑列表计数与客户端数据请求竞态（测试基建问题）；(11) **播放历史从未被真正记录**——`useAudio.ts` 的 `onEnded` 处理器 POST 历史记录时携带 API 拒绝的多余字段（`durationSeconds`/`source`），Go 端严格 JSON 解码返回 400 但被 `.catch(() => {})` 静默吞掉，用户界面无任何异常表现，生产环境播放历史功能实际从未成功写入过一条记录；(12) **登出点击后不跳转 `/login`**——`AuthProvider` 的 zustand 订阅回调在 token 变空时又调用一次 `clearSession()`，与其自身触发的 `set()` 通知互相递归直至调用栈溢出，异常在 `Topbar.handleLogout()` 内部抛出，使其后的 `router.push("/login")` 永远不执行。这些修复本身即是本阶段"测试基建能真正抓住回归"目标的验证。本阶段完成后 v4 线封版，仅接受 bug 修复 patch（v4.8.x）。
 - The phase output is version-tracked and covered by 全部 CI job（api/web/mobile/admin/e2e）本地复核绿灯（gofmt/`go test -race` 774 tests/biome lint 0 errors/flutter analyze 0 fatal + flutter test 87 tests/vitest 49 tests/playwright main-flow 1 test）.
+
+### v4.8.1 - 2026-07-11
+
+- **fix: v4.8.0 推送后远端 CI 发现的 3 个真实缺陷** — 本地 pre-push 验证全绿但远端 5 次 CI 运行全部失败，逐条拉取失败日志定位：(1) **Flutter CI `make gen:api` 触发 Makefile 静态模式规则解析错误**——`gen:api`/`build:watch` 目标名含冒号，GNU Make 按 `targets: pattern: prereqs` 语法解析而非字面目标名，因 `api`/`watch` 不含 `%` 通配符而在 `.PHONY` 行直接 abort；系 commit e314b83（Phase 304-308）引入的既有缺陷，此前被另一个已修复的 Flutter SDK 版本钉死问题挡住而从未暴露。修复为改用连字符（`gen-api`/`build-watch`），同步更新 `flutter.yml` 5 处与 `services/mobile/README.md` 1 处调用。(2) **Web CI type-check 失败**——`e2e/main-flow.spec.ts` 新增的 `@ts-expect-error` 抑制了一处并不产生错误的赋值（`class ProbedAudio extends NativeAudio` 结构上可赋值回 `window.Audio`），TS strict 模式判定该抑制注释本身为错误（TS2578）；系本阶段新增测试代码自身疏漏——push 前跑过 playwright/vitest/biome lint 但未单独对新文件跑 `type-check`。修复为移除多余抑制注释。(3) **Docker 镜像发布 CI 失败**（`publish-web`/`publish-admin`）——根因 A：仓库根 `.dockerignore` 的裸 `packages` 行排除整个 `packages/` 目录，导致两个 Dockerfile 的 `COPY packages/api-contract ...` 找不到源文件；根因 B（A 修复后会暴露的第二个缺陷）：`@inori/ui` 是两端 `package.json` 的 `file:../../packages/ui` 依赖（admin 端 `StorageHealthBadge.tsx` 有真实引用，两端 `next.config.ts` 均声明 `transpilePackages`），但两个 Dockerfile 都缺少对应的 `COPY packages/ui ...`。二分 CI 历史（`gh run list --json` + 逐次 `git diff`）确认此二缺陷自 commit 4b184bc8（2026-06-21，v2.2.0 阶段）起已连续存在超过 26 次运行、跨越约 19 天，与 v4.8.0 本阶段工作内容及 v4 整条线均无关，只是本次逐条排查 CI 时才第一次被发现。修复：`.dockerignore` 移除 `packages` 排除行，两个 Dockerfile 的 builder stage 各追加 `COPY packages/ui ../../packages/ui`。本地无 Docker 环境，此项修复仅通过等价目录结构复现 npm `file:` symlink 解析行为静态验证，实际效果待下次 CI 运行确认。
+- The phase output is version-tracked; fixes (1)(2) verified locally (`make gen-api` end-to-end + zero-diff regenerated client; `npm run type-check` reproduces then clears the error), fix (3) verified only by static reasoning (no local Docker available) pending live CI confirmation.
 
 ### v5.0.0 - TBD
 
