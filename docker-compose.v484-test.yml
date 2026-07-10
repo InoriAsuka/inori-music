@@ -1,0 +1,116 @@
+#!/bin/bash
+# docker-compose.v484-test.yml — testing overlay for v4.8.4 validation
+#
+# Differences from docker-compose.prod.yml:
+# - Project name: inori-v484-test
+# - Host ports remapped to avoid conflicts (mm-main-service owns :8080)
+#   - API host 18080 → container 8080
+#   - Web host 13000 → container 3000
+#   - Admin host 13001 → container 3001
+#   - Meilisearch host 17700 → container 7700
+# - No nginx (avoid host port 80 collision with other services)
+#
+# Deploy:
+#   docker compose -p inori-v484-test -f docker-compose.v484-test.yml up -d
+#
+# Access:
+#   API:   http://192.168.58.34:18080
+#   Web:   http://192.168.58.34:13000
+#   Admin: http://192.168.58.34:13001/admin/login
+#   Meili: http://192.168.58.34:17700
+
+name: inori-v484-test
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: inori
+      POSTGRES_USER: inori
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD required}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U inori"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    image: ghcr.io/inoriasuka/inori-music/api:latest
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "18080:8080"
+    environment:
+      INORI_HTTP_ADDR: "0.0.0.0:8080"
+      INORI_DB_DSN: "postgres://inori:${POSTGRES_PASSWORD}@postgres:5432/inori?sslmode=disable"
+      INORI_ADMIN_TOKEN: "${INORI_ADMIN_TOKEN:?INORI_ADMIN_TOKEN required}"
+      INORI_AUTH_SECRET: "${INORI_AUTH_SECRET:?INORI_AUTH_SECRET required}"
+      INORI_STORAGE_REPOSITORY_FILE: "/data/storage-backends.json"
+      INORI_MEDIA_OBJECT_REPOSITORY_FILE: "/data/media-objects.json"
+    volumes:
+      - api_data:/data
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      start_period: 15s
+      retries: 3
+
+  web:
+    image: ghcr.io/inoriasuka/inori-music/web:latest
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "13000:3000"
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: "http://api:8080"
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+  admin:
+    image: ghcr.io/inoriasuka/inori-music/admin:latest
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "13001:3001"
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: "http://api:8080"
+      PORT: "3001"
+      HOSTNAME: "0.0.0.0"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3001/admin/login"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+  meilisearch:
+    image: getmeili/meilisearch:latest
+    ports:
+      - "17700:7700"
+    environment:
+      - MEILI_MASTER_KEY=${MEILI_SEARCH_KEY:-default-master-key}
+      - MEILI_ENV=production
+    volumes:
+      - meilisearch_data:/meili_data
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  api_data:
+  meilisearch_data:
