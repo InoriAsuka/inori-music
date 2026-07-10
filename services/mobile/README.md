@@ -56,7 +56,7 @@ flutter test
 ### Generate API Client
 
 ```bash
-make gen:api
+make gen-api
 ```
 
 ### Build Runner

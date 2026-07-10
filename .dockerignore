@@ -3,7 +3,6 @@
 .plan
 *.md
 docs
-packages
 var
 tmp
 .DS_Store

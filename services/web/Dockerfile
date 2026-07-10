@@ -13,6 +13,9 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY services/web ./
 # Include the API contract package for codegen
 COPY packages/api-contract ../../packages/api-contract
+# @inori/ui is a file: dependency (package-lock symlinks into ../../packages/ui)
+# and next.config.ts transpiles it — must be physically present at build time.
+COPY packages/ui ../../packages/ui
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 RUN npm run build

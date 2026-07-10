@@ -1,10 +1,10 @@
-.PHONY: gen:api build:watch analyze test clean
+.PHONY: gen-api build-watch analyze test clean
 
 OPENAPI_SPEC := ../../packages/api-contract/openapi/storage-admin.v1.json
 GENERATED_DIR := lib/src/api/generated
 
 ## Generate Dart API client from OpenAPI spec
-gen:api:
+gen-api:
 	npx @openapitools/openapi-generator-cli generate \
 		-i $(OPENAPI_SPEC) \
 		-g dart-dio \
@@ -26,7 +26,7 @@ build:
 	dart run build_runner build --delete-conflicting-outputs
 
 ## Watch mode for development
-build:watch:
+build-watch:
 	dart run build_runner watch --delete-conflicting-outputs
 
 ## Run flutter analyze

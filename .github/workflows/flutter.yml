@@ -33,7 +33,7 @@ jobs:
         run: flutter pub get
       - name: Generate API client
         working-directory: services/mobile
-        run: make gen:api
+        run: make gen-api
       - name: Run build_runner
         working-directory: services/mobile
         run: dart run build_runner build --delete-conflicting-outputs
@@ -59,7 +59,7 @@ jobs:
         run: flutter pub get
       - name: Generate API client
         working-directory: services/mobile
-        run: make gen:api
+        run: make gen-api
       - name: Run build_runner
         working-directory: services/mobile
         run: dart run build_runner build --delete-conflicting-outputs
@@ -89,7 +89,7 @@ jobs:
         run: flutter pub get
       - name: Generate API client
         working-directory: services/mobile
-        run: make gen:api
+        run: make gen-api
       - name: Run build_runner
         working-directory: services/mobile
         run: dart run build_runner build --delete-conflicting-outputs
@@ -119,7 +119,7 @@ jobs:
         run: flutter pub get
       - name: Generate API client
         working-directory: services/mobile
-        run: make gen:api
+        run: make gen-api
       - name: Run build_runner
         working-directory: services/mobile
         run: dart run build_runner build --delete-conflicting-outputs
@@ -149,7 +149,7 @@ jobs:
         run: flutter pub get
       - name: Generate API client
         working-directory: services/mobile
-        run: make gen:api
+        run: make gen-api
       - name: Run build_runner
         working-directory: services/mobile
         run: dart run build_runner build --delete-conflicting-outputs

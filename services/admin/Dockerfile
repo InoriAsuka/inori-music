@@ -9,6 +9,7 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY services/admin ./
 COPY packages/api-contract ../../packages/api-contract
+COPY packages/ui ../../packages/ui
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 RUN npm run build

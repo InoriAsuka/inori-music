@@ -57,7 +57,6 @@ async function installAudioProbe(page: Page) {
         window.__testAudioInstance = this;
       }
     }
-    // @ts-expect-error overriding the built-in constructor for test observability
     window.Audio = ProbedAudio;
   });
 }
