@@ -6,9 +6,10 @@ WORKDIR /app
 ARG CACHE_BUST=1
 RUN echo "cache-bust=${CACHE_BUST}" > /dev/null
 COPY services/web/package.json services/web/package-lock.json ./
-RUN ls -la package.json package-lock.json && \
+RUN node --version && npm --version && \
+    ls -la package.json package-lock.json && \
     node -e "const p=require('./package-lock.json'); console.log('lockfileVersion='+p.lockfileVersion, 'name='+p.name)" && \
-    npm ci
+    npm ci --loglevel verbose
 
 # ── Stage 2: build ─────────────────────────────────────────────────────────
 FROM node:22-alpine AS builder
