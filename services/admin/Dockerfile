@@ -3,9 +3,10 @@ FROM node:22-alpine AS deps
 WORKDIR /app
 ARG CACHE_BUST=1
 RUN echo "cache-bust=${CACHE_BUST}" > /dev/null
-COPY services/admin/package.json ./package.json
-COPY services/admin/package-lock.json ./package-lock.json
-RUN npm ci
+COPY services/admin/package.json services/admin/package-lock.json ./
+RUN ls -la package.json package-lock.json && \
+    node -e "const p=require('./package-lock.json'); console.log('lockfileVersion='+p.lockfileVersion, 'name='+p.name)" && \
+    npm ci
 
 FROM node:22-alpine AS builder
 WORKDIR /app
