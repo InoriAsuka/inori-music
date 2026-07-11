@@ -35,6 +35,12 @@ WORKDIR /repo/services/admin
 COPY --from=deps /repo/services/admin/node_modules ./node_modules
 COPY services/admin ./
 COPY packages/api-contract ../../packages/api-contract
+# @inori/ui is a file: dependency (package-lock symlinks into ../../packages/ui)
+# and next.config.ts transpiles it — must be physically present at build time.
+# (This line was present in web/Dockerfile's builder stage from the start but
+# was missing here; npm ci's earlier crash on this stage always short-
+# circuited before the build step could ever reach and expose the gap.)
+COPY packages/ui ../../packages/ui
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 RUN npm run build
