@@ -52,7 +52,28 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
   (3) **Flutter `analyze` 把 info 当 fatal + Turbopack dev mode @import 排序**——(i) `full_player_screen.dart`/`settings_screen.dart` 各 2 处字符串插值冗余花括号 `${speed}×`，`flutter analyze --no-fatal-infos` 不再报；(ii) **admin 端 Turbopack dev mode CSS 解析失败**：admin 端 `globals.css` 的 `@import "tailwindcss"` 后跟 `@import url(goog-fonts)`，Next 15.5.19 Turbopack dev mode 把 `@import url` 推到 `@theme` 块之后触发 CSS spec「@import 必须最先」冲突 → 整个 `/admin/login` 无法渲染。修复：globals.css 移除 `@import url`，改 app/layout.tsx 用 `<link rel="stylesheet">`。
   (4) **Admin E2E 路径缺 basePath 前缀**——`next.config.ts` 设 `basePath: "/admin"`，所有路径实际挂 `/admin/*` 下；E2E 用 `/login`, `/users` 等裸路径 → Next 直接返回 404（`h1 "404" / "This page could not be found."`）。**此错误在 (3)(ii) 修复后才暴露**（CSS overlay 修复后 E2E 才真正 load 页面）。修复：smoke.spec.ts goto 路径全部加 `/admin` 前缀；toHaveURL 改 `/\/admin\/login/`；最终断言 `/\/admin\/(dashboard|users|catalog|storage)/i`。
 - **hygiene: `services/admin/.gitignore` 追加 `*.tsconfig.tsbuildinfo`**——`tsconfig.tsbuildinfo` 是 TypeScript 增量构建产物，admin 端此前缺失导致不时进 staging。
-- 故障排查时间线：07-09 v4.8.1 → 3 真实失败 → v4.8.3 触 2 失败（Docker EUSAGE + Admin E2E）→ v4.8.4 round 1 (`994ff31`) 加静态 CACHE_BUST + gradle FQN + css link → 仍红 → v4.8.4 round 2 (`ce8a491`) 拆分多源 COPY → Docker 仍红 / Admin E2E 暴露 404 → v4.8.4 round 3 (`0341c99`) 把 CACHE_BUST 改为从 workflow 注入 run_id + E2E 加 `/admin` 前缀 → **全绿**。共计 5 轮 CI | 3 个独立根因（缓存污染 + Turbopack CSS 排序 + basePath 错） | 1 个表层症状的链式暴露。
+- 故障排查时间线（2026-07-09 → 2026-07-12，**最终 9 轮**才真正 Docker 全绿）：
+  - 07-09 v4.8.1 → 3 真实失败 → v4.8.3 触 2 失败（Docker EUSAGE + Admin E2E）
+  - v4.8.4 round 1 (`994ff31`) 加静态 CACHE_BUST + gradle FQN + css link → 仍红
+  - round 2 (`ce8a491`) 拆分多源 COPY → Docker 仍红 / Admin E2E 暴露 404
+  - round 3 (`0341c99`) 把 CACHE_BUST 改为从 workflow 注入 run_id + E2E 加 `/admin` 前缀 → **Flutter/Admin E2E 绿，Docker 仍红**（此前误标"全绿"，实际 Docker 从未成功过）
+  - round 4 (`fb55b2f`) 误判"poisoned local BuildKit cache" → 引入 registry-backed cache → **新失败**：`invalid reference format: repository name (InoriAsuka/inori-music/admin) must be lowercase`（`${{ github.repository }}` 保留大小写，registry cache exporter 要求全小写）
+  - round 5 (`c0b6ee5`) 硬编码 `ghcr.io/inoriasuka/inori-music/...:buildcache` 小写 → 缓存导入成功（`buildcache: not found` 是空缓存首次正常态），但 **npm ci 仍 EUSAGE** —— 彻底否定"缓存污染"假说
+  - round 6 (`182b727`) 合并 COPY + 加 `ls -la`/`lockfileVersion` 诊断 → 证明 lockfile 文件完整、可 parse、大小正确，**不是文件损坏**
+  - round 7 (`f0dbc7f`) 加 `--loglevel verbose` → 揭开 npm ci 的真正异常：`TypeError: Cannot read properties of undefined (reading 'extraneous')` 于 `@npmcli/arborist/lib/arborist/load-virtual.js:296`（npm 10.9.8 / node:22-alpine）。**关键发现**：`ci.js` 的 `loadVirtual()` catch 块把任何异常都重抛为通用 EUSAGE 文案，真实 stack 只在 verbose 可见 —— 前 6 轮一直在追 decoy 消息
+  - round 8 (`9bcfb91`) 误诊为"file: link 目标不在磁盘" → 在 deps stage 加 `COPY packages/ui ../../packages/ui` → **仍失败**（输出与 round 7 字节级相同）
+  - **round 9a (`c48d77c`) 真正根因**：`WORKDIR /app` 只有 1 层深度。Arborist 用 `path.resolve(WORKDIR, meta.resolved)` + `path.relative` 重算 link 目标查找 key；`path.resolve('/app', '../../packages/ui')` 在 FS root 处夹紧 → 重算 key 变成 `../packages/ui`，与 lockfile 字面量 `"../../packages/ui"` 不匹配 → `nodes.get()` 返回 undefined → `#loadLink` 在 `target.extraneous` 崩溃。这是**纯内存路径字符串不匹配**，在任何磁盘访问之前发生 —— 所以 round 8 的"复制文件"修复完全无效。**正解**：deps + builder stage 的 WORKDIR 改为镜像 monorepo 真实深度 `/repo/services/web` / `/repo/services/admin`。**验证**：web 镜像 end-to-end 成功（job 86563312502）
+  - **round 9b (`4a0037d`) 第二个独立 latent bug**：npm ci 第一次真正成功后，admin builder stage 暴露 webpack `Module not found: Can't resolve '@inori/ui'`——admin 的 builder 阶段从未 `COPY packages/ui`（web 的 builder 一直有这行），此 gap 早于整个 saga，只是被 npm ci 崩溃掩盖。补上后 **Docker 全绿**（Web + API + Admin 三镜像全部 success）
+- 真正的 Docker 根因链（最终）：
+  1. **主因（round 9a）**：WORKDIR 深度与 monorepo 相对路径 `file:../../packages/ui` 不匹配 → Arborist 路径夹紧 → loadVirtual TypeError → 被 npm ci 吞成 EUSAGE decoy
+  2. **次因（round 9b）**：admin builder 缺 `COPY packages/ui`（webpack 编译期）——被 1 掩盖
+  3. **旁支（round 4-5）**：GHCR cache ref 大小写（已修，无害）
+  4. **误诊（rounds 1-3, 6-8）**：缓存污染 / 文件损坏 / 文件缺失 —— 全部被后续实验否定
+- 临时部署：`root@192.168.58.34` 的 `inori-v484-test` 栈（docker-compose.v484-test.yml）已成功 pull + up，全 5 容器 healthy：
+  - API `http://192.168.58.34:18080/healthz` → `{"status":"ok"}`
+  - Web `http://192.168.58.34:13000` → HTTP 307
+  - Admin `http://192.168.58.34:13001/admin/login` → HTTP 200
+- **已知独立问题（不阻塞部署）**：Build workflow 的 Admin E2E smoke 仍失败（`page.waitForURL` 登录重定向超时，`services/admin/e2e/smoke.spec.ts:33`）。自 `0341c99`（2026-07-10）起每次 Build run 都同样失败，与 Docker/npm 无关，不在本 patch 范围。
 
 ### v0.1.0 - 2026-06-02
 
