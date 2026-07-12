@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`5.0.0`
+`5.1.0`
 
 ## Product Goal
 
@@ -1667,10 +1667,10 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - **feat: 安全加固与对外可用基线（v5 产品化主轴开篇）** — v5 主轴为「产品化/对外开放」。签名流媒体 URL：新增 `internal/streamsign` package（HMAC-SHA256 对 trackId+exp 签名，`INORI_STREAM_SIGNING_KEY` 配置，15 分钟有效期），`TrackPlaybackDescriptor.streamUrl` 直接返回已签名 URL，`streamTrack` 验签替代 `?token=` 会话校验，三端客户端删除 token 拼接逻辑——会话 token（24h 有效、全账户权限）不再进入 URL/代理日志。登录限速：per-IP + per-username 双维度内存限速器，连续失败 5 次指数退避，429 `too_many_requests`。会话清理：接线既有 `DeleteExpiredSessions` 为每小时后台任务。部署硬化：`MEILI_MASTER_KEY` 移除不安全默认值改为必填、nginx 追加 HSTS/nosniff/X-Frame-Options/基线 CSP 安全头、生产模式 CORS 未配置时 ERROR 警告。OpenAPI 契约版本升至 5.0.0。
 - The phase output is version-tracked and covered by Go unit tests（签名/过期/篡改/限速/清理）, OpenAPI contract tests, web e2e 播放主流程回归, and 人工验证（access log 无会话 token、过期流 URL 返回 401）.
 
-### v5.1.0 - TBD
+### v5.1.0 - 2026-07-13
 
-- **feat: Web 体验对齐 I（歌词面板 + 搜索高亮/历史）** — 纯前端消费既有服务端能力，无服务端变更。歌词：`lib/lyrics/lrcParser.ts` 移植 mobile 端 LRC 解析（行级/逐字 `<mm:ss.xx>` spans/翻译配对），`LyricsPanel` 组件随播放位置同步滚动、当前行高亮、逐字渐变（无 word 数据回退整行）、双语翻译展示与开关。搜索：`highlight` 字段（`<mark>` 片段）以字符串切分转 React 元素渲染（禁用 `dangerouslySetInnerHTML` 防 XSS，PG 降级空值回退纯文本）；localStorage 搜索历史（最近 20 条去重、聚焦展示、单删/清空、键盘可达），行为对齐 mobile 端；拼音搜索为服务端能力，web 零成本受益。
-- The phase output is version-tracked and covered by Vitest（lrcParser 表驱动测试）, Playwright e2e（高亮元素/历史条目/歌词滚动断言）, and type-check + biome lint.
+- **feat: Web 体验对齐 I（歌词面板 + 搜索高亮/历史）** — 纯前端消费既有服务端能力，无服务端变更。歌词：`lib/lyrics/lrcParser.ts`/`srtParser.ts` 移植 mobile 端解析逻辑（行级/逐字 `<mm:ss.xx>` spans/翻译配对），`LyricsPanel` 组件随播放位置同步滚动、当前行高亮、逐字渐变（无 word 数据回退整行）、双语翻译展示与开关（localStorage 持久化），接入 `PlayerBar` 新增 Lyrics 入口。搜索：`highlight` 字段（`<mark>` 片段）经 `lib/search/highlight.ts` 字符串切分转 React `<mark>` 元素渲染（不使用 `dangerouslySetInnerHTML`，规避 XSS；PG 全文搜索降级空值回退纯文本），`api.gen.ts` 重新生成以补齐 `SearchResultItem.highlight` 字段；`lib/search/searchHistory.ts` 落地 localStorage 搜索历史（最近 20 条去重、聚焦展示下拉、单条删除/清空、键盘上下选择+回车确认），行为对齐 mobile 端 `SearchHistoryNotifier`。拼音搜索为既有服务端能力，web 零成本受益。
+- The phase output is version-tracked and covered by Vitest（lrcParser/srtParser/highlight/searchHistory 共 86 tests all green）, Playwright e2e（新增 `search-history.spec.ts` 覆盖历史记录/下拉展示/选择/清空，既有 smoke + search 用例全绿，`main-flow` 因本地未播种 catalog 数据按设计跳过）, and type-check（tsc --noEmit 0 errors）+ biome lint（81 files, 0 errors）。本地起 Go API + Next dev server 手动验证 LyricsPanel 挂载无 console error。
 
 ### v5.2.0 - TBD
 

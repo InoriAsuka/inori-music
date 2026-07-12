@@ -18,6 +18,7 @@ import {
   AlertCircle,
   ListMusic,
   ChevronUp,
+  Mic2,
 } from "lucide-react";
 import { usePlayerStore, useCurrentTrack, useIsPlaying } from "@/store/player";
 import { useAudio } from "@/hooks/useAudio";
@@ -25,6 +26,7 @@ import { Artwork } from "@/components/ui/Artwork";
 import { Visualizer } from "./Visualizer";
 import { QueueDrawer } from "./QueueDrawer";
 import { FullscreenPlayer } from "./FullscreenPlayer";
+import { LyricsPanel } from "./LyricsPanel";
 import { formatDuration, cn } from "@/lib/utils";
 
 export function PlayerBar() {
@@ -50,6 +52,7 @@ export function PlayerBar() {
   const { seek } = useAudio();
   const [queueOpen, setQueueOpen] = useState(false);
   const [fsOpen, setFsOpen] = useState(false);
+  const [lyricsOpen, setLyricsOpen] = useState(false);
 
   const duration = currentTrack?.durationSeconds ?? 0;
   const progress = duration > 0 ? positionSeconds / duration : 0;
@@ -195,12 +198,17 @@ export function PlayerBar() {
           />
         </div>
 
+        <ControlBtn onClick={() => setLyricsOpen(true)} title="Lyrics">
+          <Mic2 size={16} />
+        </ControlBtn>
+
         <ControlBtn onClick={() => setQueueOpen(true)} title="Queue">
           <ListMusic size={16} />
         </ControlBtn>
       </div>
 
       <QueueDrawer open={queueOpen} onClose={() => setQueueOpen(false)} />
+      <LyricsPanel open={lyricsOpen} onClose={() => setLyricsOpen(false)} />
       <FullscreenPlayer open={fsOpen} onClose={() => setFsOpen(false)} />
     </>
   );

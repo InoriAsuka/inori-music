@@ -3,8 +3,8 @@
  *
  * Playback URL resolution (in priority order):
  *   1. presignedUrl  — S3-compatible presigned GET URL (16-min TTL)
- *   2. streamUrl     — server-proxied /stream endpoint for local/NFS/SMB backends
- *                      Uses ?token= query param because <audio> cannot set headers.
+ *   2. streamUrl     — server-proxied /stream endpoint for local/NFS/SMB backends,
+ *                      HMAC-signed by the server (?exp=&sig=) — used as-is.
  *   3. error         — no URL available
  */
 "use client";
