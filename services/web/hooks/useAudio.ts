@@ -57,16 +57,12 @@ export function useAudio() {
         }
 
         // Prefer presigned URL; fall back to server-proxied stream endpoint.
+        // streamUrl already carries an HMAC signature (?exp=&sig=) — use as-is.
         let playUrl: string | null = null;
         if (data.presignedUrl) {
           playUrl = data.presignedUrl;
         } else if (data.streamUrl) {
-          // Append the viewer JWT as a query param so the server can
-          // authenticate without a custom Authorization header.
-          const base = data.streamUrl.startsWith("/") ? `${window.location.origin}${data.streamUrl}` : data.streamUrl;
-          const u = new URL(base);
-          u.searchParams.set("token", token);
-          playUrl = u.toString();
+          playUrl = data.streamUrl.startsWith("/") ? `${window.location.origin}${data.streamUrl}` : data.streamUrl;
         }
 
         if (!playUrl) {

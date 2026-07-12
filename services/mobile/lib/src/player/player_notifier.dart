@@ -89,20 +89,12 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
         return descriptor.presignedUrl;
       }
       if (descriptor.streamUrl != null && descriptor.streamUrl!.isNotEmpty) {
-        final token = await ref.read(tokenProvider.future);
-        if (token != null) {
-          final uri = Uri.parse(descriptor.streamUrl!);
-          return uri.replace(queryParameters: {...uri.queryParameters, 'token': token}).toString();
-        }
+        // streamUrl already carries HMAC signature from the server — use as-is.
         return descriptor.streamUrl;
       }
-      // Fallback: viewer stream endpoint
-      final token = await ref.read(tokenProvider.future);
-      if (token != null) {
-        final base = await ref.read(baseUrlProvider.future);
-        return '$base/api/v1/catalog/tracks/$trackId/stream?token=$token';
-      }
-      return null;
+      // Fallback: construct stream URL; Flutter sends Authorization: Bearer <token>.
+      final base = await ref.read(baseUrlProvider.future);
+      return '$base/api/v1/catalog/tracks/$trackId/stream';
     } catch (e) {
       debugPrint('PlayerNotifier: failed to resolve playback URL for $trackId: $e');
       return null;

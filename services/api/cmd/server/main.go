@@ -22,9 +22,11 @@ import (
 	"inori-music/services/api/internal/history"
 	historypg "inori-music/services/api/internal/history/postgres"
 	"inori-music/services/api/internal/httpapi"
+	"inori-music/services/api/internal/ratelimit"
 	"inori-music/services/api/internal/search"
 	"inori-music/services/api/internal/storage"
 	pgstore "inori-music/services/api/internal/storage/postgres"
+	"inori-music/services/api/internal/streamsign"
 	"inori-music/services/api/internal/userplaylist"
 	userplaylistpg "inori-music/services/api/internal/userplaylist/postgres"
 )
@@ -117,6 +119,36 @@ func main() {
 	userPlaylistRepo := userPlaylistRepository(ctx, pool)
 	userPlaylistService := userplaylist.NewService(userPlaylistRepo)
 
+	// Stream signing key — fall back to a hash of the admin token if not set.
+	streamSigningKey := os.Getenv("INORI_STREAM_SIGNING_KEY")
+	if streamSigningKey == "" {
+		streamSigningKey = adminToken + ":stream"
+		if adminToken != "" {
+			log.Print("INORI_STREAM_SIGNING_KEY not set; derived from INORI_ADMIN_TOKEN (set INORI_STREAM_SIGNING_KEY in production)")
+		}
+	}
+	streamSigner := streamsign.NewSigner(streamSigningKey)
+	loginLimiter := ratelimit.NewLimiter()
+
+	// Periodic session cleanup — remove expired sessions older than 7 days.
+	if authSessions != nil {
+		go func() {
+			ticker := time.NewTicker(1 * time.Hour)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-ctx.Done():
+					return
+				case <-ticker.C:
+					before := time.Now().Add(-7 * 24 * time.Hour)
+					if err := authSessions.DeleteExpiredSessions(ctx, before); err != nil {
+						log.Printf("session cleanup: %v", err)
+					}
+				}
+			}
+		}()
+	}
+
 	if interval := storageRefreshInterval(); interval > 0 {
 		log.Printf("storage refresh scheduler enabled with interval %s", interval)
 		scheduler := storage.NewRefreshScheduler(storageService, interval, func(report storage.RefreshReport, err error) {
@@ -132,6 +164,8 @@ func main() {
 	handlerOpts := []httpapi.HandlerOption{
 		httpapi.WithAdminToken(adminToken),
 		httpapi.WithAuthService(authService),
+		httpapi.WithLoginLimiter(loginLimiter),
+		httpapi.WithStreamSigner(streamSigner),
 		httpapi.WithMediaObjectService(mediaObjectService),
 		httpapi.WithCatalogService(catalogService),
 		httpapi.WithHistoryService(historyService),

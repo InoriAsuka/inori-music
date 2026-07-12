@@ -2023,7 +2023,7 @@
           },
           "streamUrl": {
             "type": "string",
-            "description": "Server-proxied streaming URL for filesystem backends (local, NFS, SMB). Append ?token=<bearer> to authenticate. Present only when presignedUrl is absent and the backend supports server-side streaming."
+            "description": "Server-proxied streaming URL for filesystem backends (local, NFS, SMB). The URL includes an HMAC-SHA256 signature (?exp=<unix>&sig=<base64url>) and must be used as-is — do not append additional query parameters. Prefer presignedUrl when both are present."
           }
         }
       },
@@ -2757,7 +2757,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "4.5.0"
+    "version": "5.0.0"
   },
   "openapi": "3.1.0",
   "paths": {

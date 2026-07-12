@@ -1149,9 +1149,10 @@ type trackPlaybackDescriptor struct {
 	BackendType   string `json:"backendType,omitempty"`
 	ObjectKey     string `json:"objectKey"`
 	PresignedURL  string `json:"presignedUrl,omitempty"`
-	// StreamURL is the server-proxied streaming URL for backends that do not
-	// support presigned URLs (local, NFS, SMB). Clients should prefer
-	// PresignedURL when both are present.
+	// StreamURL is the server-proxied streaming URL with an HMAC-SHA256
+	// signature (?exp=<unix>&sig=<hex>) for backends that do not support
+	// presigned URLs (local, NFS, SMB). Clients should send the URL as-is.
+	// Clients should prefer PresignedURL when both are present.
 	StreamURL string `json:"streamUrl,omitempty"`
 }
 
@@ -1194,11 +1195,16 @@ func (handler *Handler) getTrackPlayback(w http.ResponseWriter, r *http.Request)
 				}
 			}
 			// For filesystem-based backends that cannot presign, expose a
-			// server-proxy stream URL so the web client can play via /stream.
+			// server-proxy stream URL with HMAC signature so the web client can play via /stream.
 			if presignedURL == "" {
 				switch backend.Type {
 				case storage.BackendTypeLocal, storage.BackendTypeNFS, storage.BackendTypeSMB:
-					streamURL = "/api/v1/catalog/tracks/" + track.ID + "/stream"
+					base := "/api/v1/catalog/tracks/" + track.ID + "/stream"
+					if handler.streamSigner != nil {
+						streamURL = base + "?" + handler.streamSigner.Sign(track.ID)
+					} else {
+						streamURL = base
+					}
 				}
 			}
 		}
@@ -1220,38 +1226,61 @@ func (handler *Handler) getTrackPlayback(w http.ResponseWriter, r *http.Request)
 // (local, NFS, SMB) directly to the client. It supports HTTP Range requests
 // so browsers can seek within the audio file.
 //
-// Authentication: accepts a Bearer token in the Authorization header OR in the
-// ?token= query parameter. The ?token= fallback is required because the HTML
+// Authentication: accepts a Bearer token in the Authorization header (Flutter
+// clients) OR an HMAC-signed ?exp=<unix>&sig=<base64url> query string issued
+// by getTrackPlayback. The signed URL path is required because the HTML
 // <audio> element cannot set custom request headers.
 func (handler *Handler) streamTrack(w http.ResponseWriter, r *http.Request) {
 	if !handler.requireCatalogService(w) {
 		return
 	}
 
-	// Authenticate — try header first, fall back to ?token= query param.
+	trackID := r.PathValue("id")
+
+	// Authenticate — try Authorization header first (Flutter), then HMAC sig.
 	rawToken := r.Header.Get("Authorization")
-	if rawToken == "" {
-		if qt := r.URL.Query().Get("token"); qt != "" {
-			rawToken = "Bearer " + qt
+	if rawToken != "" {
+		token, ok := bearerToken(rawToken)
+		if !ok {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="inori"`)
+			writeAPIError(w, http.StatusUnauthorized, "unauthorized", "valid bearer token is required")
+			return
+		}
+		if handler.authService == nil {
+			writeAPIError(w, http.StatusServiceUnavailable, "auth_not_configured", "authentication service is not configured")
+			return
+		}
+		if _, err := handler.authService.ValidateToken(r.Context(), token); err != nil {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="inori"`)
+			writeAPIError(w, http.StatusUnauthorized, "unauthorized", "valid bearer token is required")
+			return
+		}
+	} else {
+		// HMAC signed URL: ?exp=<unix>&sig=<base64url>
+		if handler.streamSigner == nil {
+			writeAPIError(w, http.StatusServiceUnavailable, "stream_signer_not_configured", "stream signing is not configured")
+			return
+		}
+		q := r.URL.Query()
+		expStr := q.Get("exp")
+		sig := q.Get("sig")
+		if expStr == "" || sig == "" {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="inori"`)
+			writeAPIError(w, http.StatusUnauthorized, "unauthorized", "signed stream URL or bearer token is required")
+			return
+		}
+		var exp int64
+		if _, err := fmt.Sscanf(expStr, "%d", &exp); err != nil {
+			writeAPIError(w, http.StatusBadRequest, "invalid_exp", "invalid exp parameter")
+			return
+		}
+		if err := handler.streamSigner.Verify(trackID, exp, sig); err != nil {
+			writeAPIError(w, http.StatusUnauthorized, "unauthorized", "stream URL signature is invalid or expired")
+			return
 		}
 	}
-	token, ok := bearerToken(rawToken)
-	if !ok {
-		w.Header().Set("WWW-Authenticate", `Bearer realm="inori"`)
-		writeAPIError(w, http.StatusUnauthorized, "unauthorized", "valid bearer token is required")
-		return
-	}
-	if handler.authService == nil {
-		writeAPIError(w, http.StatusServiceUnavailable, "auth_not_configured", "authentication service is not configured")
-		return
-	}
-	if _, err := handler.authService.ValidateToken(r.Context(), token); err != nil {
-		w.Header().Set("WWW-Authenticate", `Bearer realm="inori"`)
-		writeAPIError(w, http.StatusUnauthorized, "unauthorized", "valid bearer token is required")
-		return
-	}
 
-	track, err := handler.catalogService.GetTrack(r.Context(), r.PathValue("id"))
+	track, err := handler.catalogService.GetTrack(r.Context(), trackID)
 	if err != nil {
 		writeError(w, err)
 		return

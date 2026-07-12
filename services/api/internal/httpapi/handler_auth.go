@@ -32,8 +32,20 @@ func (handler *Handler) login(w http.ResponseWriter, r *http.Request) {
 		writeError(w, err)
 		return
 	}
+	// Rate limit: per-IP + per-username.
+	clientIP := clientIPFromRequest(r)
+	if handler.loginLimiter != nil {
+		if handler.loginLimiter.IsLocked("ip:"+clientIP) || handler.loginLimiter.IsLocked("user:"+req.Username) {
+			writeAPIError(w, http.StatusTooManyRequests, "too_many_requests", "too many failed login attempts, please try again later")
+			return
+		}
+	}
 	token, session, err := handler.authService.Login(r.Context(), req.Username, req.Password)
 	if err != nil {
+		if handler.loginLimiter != nil {
+			handler.loginLimiter.RecordFailure("ip:" + clientIP)
+			handler.loginLimiter.RecordFailure("user:" + req.Username)
+		}
 		switch {
 		case errors.Is(err, auth.ErrBadCredentials), errors.Is(err, auth.ErrUserDisabled):
 			writeAPIError(w, http.StatusUnauthorized, "unauthorized", "invalid credentials")
@@ -42,11 +54,32 @@ func (handler *Handler) login(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	if handler.loginLimiter != nil {
+		handler.loginLimiter.ResetFailures("ip:" + clientIP)
+		handler.loginLimiter.ResetFailures("user:" + req.Username)
+	}
 	writeJSON(w, http.StatusOK, loginResponse{
 		Token:     token,
 		ExpiresAt: session.ExpiresAt,
 		UserID:    session.UserID,
 	})
+}
+
+// clientIPFromRequest extracts the client IP from the request.
+// It trusts X-Forwarded-For only when behind a reverse proxy (set via
+// INORI_TRUST_PROXY). Falls back to RemoteAddr.
+func clientIPFromRequest(r *http.Request) string {
+	xff := r.Header.Get("X-Forwarded-For")
+	if xff != "" {
+		if idx := strings.IndexByte(xff, ','); idx != -1 {
+			return strings.TrimSpace(xff[:idx])
+		}
+		return strings.TrimSpace(xff)
+	}
+	if idx := strings.LastIndexByte(r.RemoteAddr, ':'); idx != -1 {
+		return r.RemoteAddr[:idx]
+	}
+	return r.RemoteAddr
 }
 
 func (handler *Handler) logout(w http.ResponseWriter, r *http.Request) {

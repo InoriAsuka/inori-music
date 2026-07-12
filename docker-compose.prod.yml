@@ -37,6 +37,7 @@ services:
       INORI_DB_DSN: "postgres://inori:${POSTGRES_PASSWORD}@postgres:5432/inori?sslmode=disable"
       INORI_ADMIN_TOKEN: "${INORI_ADMIN_TOKEN:?INORI_ADMIN_TOKEN required}"
       INORI_AUTH_SECRET: "${INORI_AUTH_SECRET:?INORI_AUTH_SECRET required}"
+      INORI_STREAM_SIGNING_KEY: "${INORI_STREAM_SIGNING_KEY:?INORI_STREAM_SIGNING_KEY required}"
       INORI_STORAGE_REPOSITORY_FILE: "/data/storage-backends.json"
       INORI_MEDIA_OBJECT_REPOSITORY_FILE: "/data/media-objects.json"
     volumes:
@@ -92,7 +93,7 @@ services:
     ports:
       - "7700:7700"
     environment:
-      - MEILI_MASTER_KEY=${MEILI_SEARCH_KEY:-default-master-key}
+      - MEILI_MASTER_KEY=${MEILI_SEARCH_KEY:?MEILI_SEARCH_KEY required}
       - MEILI_ENV=production
     volumes:
       - meilisearch_data:/meili_data

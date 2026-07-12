@@ -19,8 +19,10 @@ import (
 	"inori-music/services/api/internal/catalog"
 	"inori-music/services/api/internal/favorites"
 	"inori-music/services/api/internal/history"
+	"inori-music/services/api/internal/ratelimit"
 	"inori-music/services/api/internal/search"
 	"inori-music/services/api/internal/storage"
+	"inori-music/services/api/internal/streamsign"
 	"inori-music/services/api/internal/userplaylist"
 )
 
@@ -169,6 +171,20 @@ func WithServiceInfo(info ServiceInfo) HandlerOption {
 	}
 }
 
+// WithLoginLimiter attaches a rate limiter for failed login attempts.
+func WithLoginLimiter(l *ratelimit.Limiter) HandlerOption {
+	return func(handler *Handler) {
+		handler.loginLimiter = l
+	}
+}
+
+// WithStreamSigner attaches an HMAC signer for server-proxied stream URLs.
+func WithStreamSigner(s *streamsign.Signer) HandlerOption {
+	return func(handler *Handler) {
+		handler.streamSigner = s
+	}
+}
+
 // WithCORSOrigins sets the list of allowed CORS origins. When the list is empty
 // the middleware reflects any request Origin back (permissive development mode).
 func WithCORSOrigins(origins []string) HandlerOption {
@@ -189,6 +205,8 @@ type Handler struct {
 	favoritesService    *favorites.Service
 	userPlaylistService *userplaylist.Service
 	searchSvc           search.Service
+	loginLimiter        *ratelimit.Limiter
+	streamSigner        *streamsign.Signer
 	adminToken          string
 	corsOrigins         []string
 	info                ServiceInfo
