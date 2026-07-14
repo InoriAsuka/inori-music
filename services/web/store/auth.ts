@@ -9,6 +9,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { authedApi } from "@/lib/api/client";
+import { usePlayerStore } from "@/store/player";
 
 export interface AuthUser {
   id: string;
@@ -40,6 +41,10 @@ export const useAuthStore = create<AuthState>()(
 
       clearSession() {
         set({ token: null, user: null });
+        // Wipe persisted playback state (queue/position) on logout so the
+        // next viewer to sign in on this device doesn't resume someone
+        // else's queue.
+        usePlayerStore.getState().clearPersisted();
       },
 
       async refreshUser() {

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Music2, Users, Disc3, ListMusic, Heart, History, LayoutDashboard, Search, Settings } from "lucide-react";
+import { Music2, Users, Disc3, ListMusic, Heart, History, LayoutDashboard, Search, Settings, Volume2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const NAV = [
@@ -23,6 +23,7 @@ const SETTINGS_NAV = [
   { href: "/settings/security", label: "Password", icon: <Settings size={16} /> },
   { href: "/settings/sessions", label: "Sessions", icon: <Settings size={16} /> },
   { href: "/settings/language", label: "Language", icon: <Settings size={16} /> },
+  { href: "/settings/audio", label: "Audio", icon: <Volume2 size={16} /> },
 ];
 
 export function Sidebar() {

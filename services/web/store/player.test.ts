@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { usePlayerStore, type QueueTrack } from "./player";
+import { usePlayerStore, PLAYER_STORAGE_KEY, type QueueTrack } from "./player";
 
 /**
  * Unit tests for the player store's queue state logic.
@@ -31,6 +31,7 @@ function resetStore() {
     volume: 1,
     shuffle: false,
     repeat: "off",
+    restoredPending: false,
   });
 }
 
@@ -291,5 +292,146 @@ describe("useCurrentTrack / useIsPlaying selectors", () => {
     resetStore();
     const s = usePlayerStore.getState();
     expect(s.queue[s.currentIndex] ?? null).toBeNull();
+  });
+});
+
+describe("persistence: acknowledgeRestore / clearPersisted", () => {
+  it("acknowledgeRestore clears restoredPending without touching other state", () => {
+    usePlayerStore.setState({ restoredPending: true, positionSeconds: 42 });
+    usePlayerStore.getState().acknowledgeRestore();
+    const s = usePlayerStore.getState();
+    expect(s.restoredPending).toBe(false);
+    expect(s.positionSeconds).toBe(42);
+  });
+
+  it("clearPersisted resets queue/index/status/position/shuffle/repeat", () => {
+    usePlayerStore.getState().playQueue([track("a"), track("b")], 1);
+    usePlayerStore.getState().toggleShuffle();
+    usePlayerStore.getState().cycleRepeat();
+    usePlayerStore.getState().setPosition(77);
+    usePlayerStore.getState().clearPersisted();
+    const s = usePlayerStore.getState();
+    expect(s.queue).toEqual([]);
+    expect(s.currentIndex).toBe(-1);
+    expect(s.status).toBe("idle");
+    expect(s.positionSeconds).toBe(0);
+    expect(s.shuffle).toBe(false);
+    expect(s.repeat).toBe("off");
+    expect(s.restoredPending).toBe(false);
+  });
+
+  it("clearPersisted preserves volume (a device preference, not session state)", () => {
+    usePlayerStore.getState().setVolume(0.3);
+    usePlayerStore.getState().clearPersisted();
+    expect(usePlayerStore.getState().volume).toBe(0.3);
+  });
+
+  it("playQueue clears any pending restoredPending flag", () => {
+    usePlayerStore.setState({ restoredPending: true });
+    usePlayerStore.getState().playQueue([track("a")]);
+    expect(usePlayerStore.getState().restoredPending).toBe(false);
+  });
+
+  it("play() clears restoredPending (user gesture acknowledges the restore)", () => {
+    usePlayerStore.setState({ restoredPending: true });
+    usePlayerStore.getState().play();
+    expect(usePlayerStore.getState().restoredPending).toBe(false);
+  });
+});
+
+describe("persistence: serialize/restore round-trip (merge logic)", () => {
+  // These exercise the zustand `persist` config's `partialize`/`merge`
+  // functions directly, mirroring how the middleware itself invokes them
+  // during store creation, without needing a real localStorage/browser
+  // environment or reaching into zustand internals.
+
+  async function loadPersistConfig() {
+    // Re-import fresh so we can introspect the store's persist options via
+    // the public `usePlayerStore.persist` API zustand's middleware attaches.
+    const mod = await import("./player");
+    return mod.usePlayerStore;
+  }
+
+  it("PLAYER_STORAGE_KEY matches the persist middleware's configured name", async () => {
+    const store = await loadPersistConfig();
+    expect(store.persist.getOptions().name).toBe(PLAYER_STORAGE_KEY);
+  });
+
+  it("partialize omits transient fields (status, restoredPending) from the persisted snapshot", async () => {
+    const store = await loadPersistConfig();
+    const tracks: QueueTrack[] = [track("a"), track("b")];
+    store.getState().playQueue(tracks, 1);
+    store.getState().setPosition(55);
+    store.getState().setVolume(0.6);
+    store.getState().toggleShuffle();
+    store.getState().cycleRepeat();
+
+    const partialize = store.persist.getOptions().partialize;
+    expect(partialize).toBeDefined();
+    if (!partialize) throw new Error("partialize must be defined");
+    const snapshot = partialize(store.getState());
+
+    expect(snapshot).toMatchObject({
+      queue: tracks,
+      currentIndex: 1,
+      positionSeconds: 55,
+      volume: 0.6,
+      shuffle: true,
+      repeat: "all",
+    });
+    expect(snapshot).not.toHaveProperty("status");
+    expect(snapshot).not.toHaveProperty("restoredPending");
+  });
+
+  it("merge restores persisted fields, forces status to idle, and sets restoredPending when a track was mid-queue", async () => {
+    const store = await loadPersistConfig();
+    const merge = store.persist.getOptions().merge;
+    expect(merge).toBeDefined();
+    if (!merge) throw new Error("merge must be defined");
+
+    const persisted = {
+      queue: [track("a"), track("b")],
+      currentIndex: 1,
+      positionSeconds: 88,
+      volume: 0.4,
+      shuffle: true,
+      repeat: "one" as const,
+    };
+    const merged = merge(persisted, store.getState()) as ReturnType<typeof store.getState>;
+
+    expect(merged.queue).toEqual(persisted.queue);
+    expect(merged.currentIndex).toBe(1);
+    expect(merged.positionSeconds).toBe(88);
+    expect(merged.volume).toBe(0.4);
+    expect(merged.shuffle).toBe(true);
+    expect(merged.repeat).toBe("one");
+    // Never resume playback automatically after a restore.
+    expect(merged.status).toBe("idle");
+    expect(merged.restoredPending).toBe(true);
+  });
+
+  it("merge does not set restoredPending when there is no persisted queue (fresh install)", async () => {
+    const store = await loadPersistConfig();
+    const merge = store.persist.getOptions().merge;
+    if (!merge) throw new Error("merge must be defined");
+    const merged = merge(undefined, store.getState()) as ReturnType<typeof store.getState>;
+    expect(merged.restoredPending).toBe(false);
+    expect(merged.status).toBe("idle");
+  });
+
+  it("merge does not set restoredPending when persisted currentIndex is -1 (queue cleared before refresh)", async () => {
+    const store = await loadPersistConfig();
+    const merge = store.persist.getOptions().merge;
+    if (!merge) throw new Error("merge must be defined");
+    const persisted = {
+      queue: [],
+      currentIndex: -1,
+      positionSeconds: 0,
+      volume: 1,
+      shuffle: false,
+      repeat: "off" as const,
+    };
+    const merged = merge(persisted, store.getState()) as ReturnType<typeof store.getState>;
+    expect(merged.restoredPending).toBe(false);
   });
 });
