@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`5.1.0`
+`5.2.0`
 
 ## Product Goal
 
@@ -41,6 +41,14 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Committed lifecycle updates must record latest transition metadata for audit preparation.
 
 ## Requirement History
+
+### v5.2.0 - 2026-07-14
+
+- **WebAudio ReplayGain 管线** —— Web 播放器通过共享 `AudioContext`、`MediaElementAudioSourceNode` 和独立 `GainNode` 实际应用曲目 `replayGainDb`；增益按 `10^(dB/20)` 计算并限制在 `0.1–2.0`，与用户音量正交。新增默认关闭且本地持久化的 ReplayGain 设置；WebAudio 或跨域条件不满足时优雅退回原生元素播放。
+- **双元素 gapless 与真实 crossfade** —— 两个 `HTMLAudioElement` 轮换播放，在进度超过 50% 或剩余不足 30 秒时预载精确的下一队列位置；自然结束可无缝切换，可选 2 秒线性交叉淡化在曲终前启动。预载按队列位置、曲目 ID、加载代次及 `canplay` 状态校验，并处理签名 URL 过期、重复曲目、快速连续切歌、淡出槽复用、晚到 Promise 与播放拒绝清理等竞态；repeat-one 会从零重新播放。
+- **本地播放状态恢复** —— Zustand persist 保存队列、当前位置、音量、随机及循环设置，位置写入按 5 秒节流；页面刷新后恢复曲目和进度但不自动播放，登出时清除持久化播放状态，避免跨用户泄漏。
+- **设置、运维与验证** —— 新增 `/settings/audio` 页面和 S3 音频 CORS 运维文档；Vitest 覆盖增益、预载、URL 新鲜度、队列 occurrence、crossfade 清理和持久化，最终 Web 类型检查、Biome lint（90 files）及 Vitest（9 files / 131 tests）通过。Playwright gapless e2e spec 已编写，但本地实跑因默认 `ci_viewer` 凭证无效停在登录前置步骤、未触达音频断言；人工响度/无缝切歌听感验收本轮也未执行——两者均待提供有效 `E2E_USERNAME` / `E2E_PASSWORD` 的集成环境后补齐。
+- 本阶段仅涉及 Web 客户端及运维文档，没有服务端 API schema 变化，因此 OpenAPI `info.version` 保持现状。
 
 ### v4.8.4 - 2026-07-11
 
