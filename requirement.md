@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`5.2.0`
+`5.3.0`
 
 ## Product Goal
 
@@ -41,6 +41,17 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Committed lifecycle updates must record latest transition metadata for audit preparation.
 
 ## Requirement History
+
+### v5.3.0 - 2026-07-16
+
+> v5.3.0 是纯 Web 客户端阶段，消费既有服务端能力；无 API schema / OpenAPI 变更。
+
+- **Web 用户播放列表** —— 新增个人播放列表 CRUD、曲目管理、拖拽排序与一键播放，全部消费既有 `/api/v1/me/playlists/*` 端点。包含列表页（创建/重命名/删除/空态引导与错误重试）、详情页（播放全部、单曲移除、按 `uid` 区分的重复曲目安全移除、PUT 拖拽排序保留重复与顺序）、TrackRow 上下文菜单「添加到播放列表」（复用选择器 + 内联新建，支持多播放列表独立完成态）。侧边栏与移动端导航同步加入播放列表入口。使用原生 `<dialog>.showModal()` 模态框与原生可聚焦陷阱、Escape 关闭与焦点恢复；所有新 prop 均为默认启用，现有调用方保持源兼容。
+- **播放速度控制** —— Web 播放器新增 0.5/0.75/1/1.25/1.5/2× 六档倍速，对齐移动客户端档位。通过独立 `GainNode` 的 `rampGain` / `setGain` 外，同时设置 `HTMLAudioElement.playbackRate` 与 `defaultPlaybackRate`（避免 `load()` 重置还原）；双元素引擎在预载待机槽、切歌 swap、恢复播放与会话恢复时同步继承；倍速状态通过已有 Zustand `persist` 保存；1× 外角标在 PlayerBar 与全屏播放器显示。
+- **睡眠定时器** —— 复刻移动客户端双模式：固定时长（15/30/45/60 分钟，会话级倒计时显示与取消）与「当前曲目结束后停止」。到期走已有 player store `pause()` 同步清空定时器；after-track 通过 `useAudio` 的 `ended` 路径优先拦截、阻止 advance / repeat / crossfade。位置 ticker 在 after-track 挂起期间直接返回，回避 lead-time自然淡出绕过语义。定时器 state 未进入 `persist`，会话级意图、刷新即清，登出时 `clearSession()` 同步 cancel，避免跨用户泄漏。
+- **音频状态机收敛** —— 经过多轮对抗性审查与回归测试，收敛了 v5.2.0 引入的双元素引擎竞态：晚到 `play()`、快速连续切歌、淡出槽复用与晚到淡出清理、固定时长到期与 after-track 占用、重复曲目预载身份。新增纯 `PlaybackCycle{loadId,playGen}` 代次身份、`ended` 推进守卫、合成/原生事件来源判定、`play()` settlement 守卫，Vitest 覆盖全部关键路径；原有 e2e / 人工听感验证仍依赖集成环境凭据与种子数据，本轮未执行。
+- **验证** —— Web 最终 TypeScript 通过、Biome lint 清洁（106 files）、Vitest 203/203 通过（13 files）；Go API 回归 784 tests / 19 packages 通过。
+- 未触碰服务端 / OpenAPI `info.version`。
 
 ### v5.2.0 - 2026-07-14
 
