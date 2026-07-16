@@ -16,6 +16,7 @@ const NAV = [
 ];
 
 const LIBRARY_NAV = [
+  { href: "/library/playlists", label: "My Playlists", icon: <ListMusic size={16} /> },
   { href: "/library/favorites", label: "Favorites", icon: <Heart size={16} /> },
   { href: "/library/history", label: "History", icon: <History size={16} /> },
 ];

@@ -37,6 +37,19 @@ export const PLAYER_STORAGE_KEY = "inori-player";
 /** Minimum interval between persisted position writes (ms). */
 const POSITION_PERSIST_THROTTLE_MS = 5000;
 
+/** Playback speed bounds (inclusive). UI presets stay within this range; the
+ *  store clamps any arbitrary input so boundary values are always safe. */
+export const MIN_PLAYBACK_SPEED = 0.5;
+export const MAX_PLAYBACK_SPEED = 2.0;
+export const DEFAULT_PLAYBACK_SPEED = 1;
+
+/** Clamp an arbitrary speed into [MIN_PLAYBACK_SPEED, MAX_PLAYBACK_SPEED],
+ *  falling back to the default for non-finite input (NaN/±Infinity). */
+export function clampPlaybackSpeed(speed: number): number {
+  if (!Number.isFinite(speed)) return DEFAULT_PLAYBACK_SPEED;
+  return Math.max(MIN_PLAYBACK_SPEED, Math.min(MAX_PLAYBACK_SPEED, speed));
+}
+
 interface PlayerState {
   queue: QueueTrack[];
   /** Index into queue of the currently active track (−1 = nothing loaded). */
@@ -46,6 +59,8 @@ interface PlayerState {
   positionSeconds: number;
   /** Volume 0–1 */
   volume: number;
+  /** Playback speed, clamped to [MIN_PLAYBACK_SPEED, MAX_PLAYBACK_SPEED]. */
+  speed: number;
   /** Shuffle on/off */
   shuffle: boolean;
   /** Repeat: off | one | all */
@@ -82,6 +97,8 @@ interface PlayerState {
   setStatus: (status: PlaybackStatus) => void;
   setPosition: (seconds: number) => void;
   setVolume: (volume: number) => void;
+  /** Set playback speed; clamped to [MIN_PLAYBACK_SPEED, MAX_PLAYBACK_SPEED]. */
+  setSpeed: (speed: number) => void;
   toggleShuffle: () => void;
   cycleRepeat: () => void;
 
@@ -151,6 +168,7 @@ interface PersistedPlayerState {
   currentIndex: number;
   positionSeconds: number;
   volume: number;
+  speed: number;
   shuffle: boolean;
   repeat: "off" | "one" | "all";
 }
@@ -163,6 +181,7 @@ export const usePlayerStore = create<PlayerState>()(
       status: "idle",
       positionSeconds: 0,
       volume: 1,
+      speed: DEFAULT_PLAYBACK_SPEED,
       shuffle: false,
       repeat: "off",
       restoredPending: false,
@@ -272,6 +291,9 @@ export const usePlayerStore = create<PlayerState>()(
       setVolume(volume) {
         set({ volume: Math.max(0, Math.min(1, volume)) });
       },
+      setSpeed(speed) {
+        set({ speed: clampPlaybackSpeed(speed) });
+      },
       toggleShuffle() {
         set((s) => ({ shuffle: !s.shuffle }));
       },
@@ -308,6 +330,7 @@ export const usePlayerStore = create<PlayerState>()(
         currentIndex: s.currentIndex,
         positionSeconds: s.positionSeconds,
         volume: s.volume,
+        speed: s.speed,
         shuffle: s.shuffle,
         repeat: s.repeat,
       }),
@@ -317,6 +340,8 @@ export const usePlayerStore = create<PlayerState>()(
         return {
           ...current,
           ...p,
+          // Guard against corrupt/out-of-range persisted speed.
+          speed: clampPlaybackSpeed(p?.speed ?? current.speed),
           status: "idle",
           restoredPending: hasRestoredTrack,
         };

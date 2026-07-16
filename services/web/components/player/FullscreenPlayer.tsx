@@ -4,6 +4,8 @@ import { AnimatePresence, motion } from "motion/react";
 import { X, Play, Pause, SkipBack, SkipForward } from "lucide-react";
 import { useCurrentTrack, useIsPlaying, usePlayerStore } from "@/store/player";
 import { Artwork } from "@/components/ui/Artwork";
+import { SpeedControl } from "./SpeedControl";
+import { SleepTimerControl } from "./SleepTimerControl";
 import { formatDuration } from "@/lib/utils";
 
 export function FullscreenPlayer({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -17,23 +19,35 @@ export function FullscreenPlayer({ open, onClose }: { open: boolean; onClose: ()
     <AnimatePresence>
       {open && track && (
         <motion.div
-          className="fixed inset-0 z-50 flex flex-col bg-[var(--color-void)] p-6 sm:hidden scanlines"
+          className="fixed inset-0 z-50 flex flex-col overflow-hidden bg-[var(--color-void)] p-4 sm:hidden scanlines"
           initial={{ y: "100%" }}
           animate={{ y: 0 }}
           exit={{ y: "100%" }}
           transition={{ duration: 0.22 }}
         >
-          <div className="relative z-10 flex justify-end">
+          <div className="relative z-20 flex items-center justify-between">
+            {/* Keep utility menus at the top and open them downward so short
+                mobile viewports never clip them against the bottom edge. */}
+            <div className="flex items-center gap-2">
+              <SpeedControl placement="below" align="left" />
+              <SleepTimerControl placement="below" align="left" />
+            </div>
             <button
               type="button"
               onClick={onClose}
-              className="rounded-full border border-[var(--color-border)] p-2 text-[var(--color-text-secondary)]"
+              aria-label="Close fullscreen player"
+              className="flex h-10 w-10 items-center justify-center rounded-full border border-[var(--color-border)] text-[var(--color-text-secondary)]"
             >
               <X size={18} />
             </button>
           </div>
-          <div className="relative z-10 flex flex-1 flex-col items-center justify-center gap-8">
-            <Artwork alt={track.title} src={track.artworkUrl} size="lg" className="h-72 w-72 glow-primary" />
+          <div className="relative z-10 flex min-h-0 flex-1 flex-col items-center justify-evenly gap-3 py-2">
+            <Artwork
+              alt={track.title}
+              src={track.artworkUrl}
+              size="lg"
+              className="h-[min(18rem,38dvh)] w-[min(18rem,38dvh)] glow-primary"
+            />
             <div className="w-full text-center">
               <h2 className="truncate text-xl font-semibold text-[var(--color-text)]">{track.title}</h2>
               <p className="mt-1 truncate text-sm text-[var(--color-text-secondary)]">

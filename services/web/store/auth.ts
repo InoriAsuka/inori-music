@@ -10,6 +10,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { authedApi } from "@/lib/api/client";
 import { usePlayerStore } from "@/store/player";
+import { useSleepTimerStore } from "@/store/sleepTimer";
 
 export interface AuthUser {
   id: string;
@@ -45,6 +46,10 @@ export const useAuthStore = create<AuthState>()(
         // next viewer to sign in on this device doesn't resume someone
         // else's queue.
         usePlayerStore.getState().clearPersisted();
+        // A sleep timer is a session-scoped intent — cancel it (and its
+        // module-scoped ticker) on logout so it never carries a countdown or
+        // an armed after-track stop into the next viewer's session.
+        useSleepTimerStore.getState().cancel();
       },
 
       async refreshUser() {

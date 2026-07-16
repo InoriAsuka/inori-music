@@ -1,5 +1,13 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import { usePlayerStore, PLAYER_STORAGE_KEY, type QueueTrack } from "./player";
+import {
+  usePlayerStore,
+  PLAYER_STORAGE_KEY,
+  DEFAULT_PLAYBACK_SPEED,
+  MIN_PLAYBACK_SPEED,
+  MAX_PLAYBACK_SPEED,
+  clampPlaybackSpeed,
+  type QueueTrack,
+} from "./player";
 
 /**
  * Unit tests for the player store's queue state logic.
@@ -29,6 +37,7 @@ function resetStore() {
     status: "idle",
     positionSeconds: 0,
     volume: 1,
+    speed: DEFAULT_PLAYBACK_SPEED,
     shuffle: false,
     repeat: "off",
     restoredPending: false,
@@ -261,6 +270,56 @@ describe("setVolume", () => {
   });
 });
 
+describe("setSpeed", () => {
+  it("defaults to 1×", () => {
+    expect(usePlayerStore.getState().speed).toBe(DEFAULT_PLAYBACK_SPEED);
+    expect(DEFAULT_PLAYBACK_SPEED).toBe(1);
+  });
+
+  it("sets an in-range speed unchanged", () => {
+    usePlayerStore.getState().setSpeed(1.5);
+    expect(usePlayerStore.getState().speed).toBe(1.5);
+    usePlayerStore.getState().setSpeed(0.75);
+    expect(usePlayerStore.getState().speed).toBe(0.75);
+  });
+
+  it("clamps below the minimum to MIN_PLAYBACK_SPEED", () => {
+    usePlayerStore.getState().setSpeed(0.1);
+    expect(usePlayerStore.getState().speed).toBe(MIN_PLAYBACK_SPEED);
+    expect(MIN_PLAYBACK_SPEED).toBe(0.5);
+  });
+
+  it("clamps above the maximum to MAX_PLAYBACK_SPEED", () => {
+    usePlayerStore.getState().setSpeed(5);
+    expect(usePlayerStore.getState().speed).toBe(MAX_PLAYBACK_SPEED);
+    expect(MAX_PLAYBACK_SPEED).toBe(2);
+  });
+
+  it("accepts the exact boundary values", () => {
+    usePlayerStore.getState().setSpeed(MIN_PLAYBACK_SPEED);
+    expect(usePlayerStore.getState().speed).toBe(0.5);
+    usePlayerStore.getState().setSpeed(MAX_PLAYBACK_SPEED);
+    expect(usePlayerStore.getState().speed).toBe(2);
+  });
+
+  it("falls back to the default for non-finite input", () => {
+    usePlayerStore.getState().setSpeed(Number.NaN);
+    expect(usePlayerStore.getState().speed).toBe(DEFAULT_PLAYBACK_SPEED);
+    usePlayerStore.getState().setSpeed(Number.POSITIVE_INFINITY);
+    expect(usePlayerStore.getState().speed).toBe(DEFAULT_PLAYBACK_SPEED);
+  });
+});
+
+describe("clampPlaybackSpeed", () => {
+  it("clamps arbitrary boundary input into range", () => {
+    expect(clampPlaybackSpeed(-100)).toBe(MIN_PLAYBACK_SPEED);
+    expect(clampPlaybackSpeed(0)).toBe(MIN_PLAYBACK_SPEED);
+    expect(clampPlaybackSpeed(100)).toBe(MAX_PLAYBACK_SPEED);
+    expect(clampPlaybackSpeed(1.25)).toBe(1.25);
+    expect(clampPlaybackSpeed(Number.NaN)).toBe(DEFAULT_PLAYBACK_SPEED);
+  });
+});
+
 describe("toggleShuffle / cycleRepeat", () => {
   it("toggles shuffle on and off", () => {
     expect(usePlayerStore.getState().shuffle).toBe(false);
@@ -326,6 +385,12 @@ describe("persistence: acknowledgeRestore / clearPersisted", () => {
     expect(usePlayerStore.getState().volume).toBe(0.3);
   });
 
+  it("clearPersisted preserves speed (a device preference, consistent with volume)", () => {
+    usePlayerStore.getState().setSpeed(1.5);
+    usePlayerStore.getState().clearPersisted();
+    expect(usePlayerStore.getState().speed).toBe(1.5);
+  });
+
   it("playQueue clears any pending restoredPending flag", () => {
     usePlayerStore.setState({ restoredPending: true });
     usePlayerStore.getState().playQueue([track("a")]);
@@ -363,6 +428,7 @@ describe("persistence: serialize/restore round-trip (merge logic)", () => {
     store.getState().playQueue(tracks, 1);
     store.getState().setPosition(55);
     store.getState().setVolume(0.6);
+    store.getState().setSpeed(1.25);
     store.getState().toggleShuffle();
     store.getState().cycleRepeat();
 
@@ -376,6 +442,7 @@ describe("persistence: serialize/restore round-trip (merge logic)", () => {
       currentIndex: 1,
       positionSeconds: 55,
       volume: 0.6,
+      speed: 1.25,
       shuffle: true,
       repeat: "all",
     });
@@ -394,6 +461,7 @@ describe("persistence: serialize/restore round-trip (merge logic)", () => {
       currentIndex: 1,
       positionSeconds: 88,
       volume: 0.4,
+      speed: 1.75,
       shuffle: true,
       repeat: "one" as const,
     };
@@ -403,6 +471,7 @@ describe("persistence: serialize/restore round-trip (merge logic)", () => {
     expect(merged.currentIndex).toBe(1);
     expect(merged.positionSeconds).toBe(88);
     expect(merged.volume).toBe(0.4);
+    expect(merged.speed).toBe(1.75);
     expect(merged.shuffle).toBe(true);
     expect(merged.repeat).toBe("one");
     // Never resume playback automatically after a restore.
@@ -417,6 +486,23 @@ describe("persistence: serialize/restore round-trip (merge logic)", () => {
     const merged = merge(undefined, store.getState()) as ReturnType<typeof store.getState>;
     expect(merged.restoredPending).toBe(false);
     expect(merged.status).toBe("idle");
+  });
+
+  it("merge clamps a corrupt persisted speed into range", async () => {
+    const store = await loadPersistConfig();
+    const merge = store.persist.getOptions().merge;
+    if (!merge) throw new Error("merge must be defined");
+    const persisted = {
+      queue: [track("a")],
+      currentIndex: 0,
+      positionSeconds: 0,
+      volume: 1,
+      speed: 99,
+      shuffle: false,
+      repeat: "off" as const,
+    };
+    const merged = merge(persisted, store.getState()) as ReturnType<typeof store.getState>;
+    expect(merged.speed).toBe(MAX_PLAYBACK_SPEED);
   });
 
   it("merge does not set restoredPending when persisted currentIndex is -1 (queue cleared before refresh)", async () => {

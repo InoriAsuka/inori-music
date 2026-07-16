@@ -1,3 +1,4 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 /**
@@ -7,6 +8,13 @@ import { defineConfig } from "vitest/config";
  * and utility functions in isolation. Run: npx vitest run
  */
 export default defineConfig({
+  // Mirror tsconfig's `@/*` -> `./*` path alias so store/lib modules that
+  // import siblings via `@/store/...` resolve under Vitest too.
+  resolve: {
+    alias: {
+      "@": fileURLToPath(new URL("./", import.meta.url)),
+    },
+  },
   test: {
     environment: "node",
     include: ["**/*.test.ts"],

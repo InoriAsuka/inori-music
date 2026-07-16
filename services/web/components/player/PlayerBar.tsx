@@ -27,6 +27,8 @@ import { Visualizer } from "./Visualizer";
 import { QueueDrawer } from "./QueueDrawer";
 import { FullscreenPlayer } from "./FullscreenPlayer";
 import { LyricsPanel } from "./LyricsPanel";
+import { SpeedControl } from "./SpeedControl";
+import { SleepTimerControl } from "./SleepTimerControl";
 import { formatDuration, cn } from "@/lib/utils";
 
 export function PlayerBar() {
@@ -74,12 +76,12 @@ export function PlayerBar() {
       </div>
 
       {/* Main player bar */}
-      <div className="flex h-[72px] shrink-0 items-center gap-3 border-t border-[var(--color-border)] bg-[var(--color-surface)] px-3 sm:gap-4 sm:px-4">
+      <div className="flex h-[72px] shrink-0 items-center gap-1 border-t border-[var(--color-border)] bg-[var(--color-surface)] px-2 sm:gap-2 sm:px-4">
         {/* Track info — tap to open fullscreen on mobile */}
         <button
           type="button"
           onClick={() => setFsOpen(true)}
-          className="flex min-w-0 w-48 shrink-0 items-center gap-3 text-left sm:w-56"
+          className="flex min-w-0 flex-1 items-center gap-2 text-left sm:w-56 sm:flex-none sm:shrink-0 sm:gap-3"
         >
           <Artwork alt={currentTrack.title} src={currentTrack.artworkUrl} size="sm" />
           <div className="min-w-0">
@@ -92,7 +94,7 @@ export function PlayerBar() {
         </button>
 
         {/* Centre controls */}
-        <div className="flex flex-1 flex-col items-center gap-1">
+        <div className="hidden flex-1 flex-col items-center gap-1 min-[480px]:flex">
           {isError ? (
             <div className="flex items-center gap-2 text-sm text-[var(--color-danger)]">
               <AlertCircle size={14} />
@@ -107,10 +109,12 @@ export function PlayerBar() {
             </div>
           ) : (
             <>
-              <div className="flex items-center gap-3 sm:gap-4">
-                <ControlBtn onClick={toggleShuffle} active={shuffle} title="Shuffle">
-                  <Shuffle size={15} />
-                </ControlBtn>
+              <div className="flex items-center gap-1 sm:gap-2">
+                <span className="hidden md:inline-flex">
+                  <ControlBtn onClick={toggleShuffle} active={shuffle} title="Shuffle">
+                    <Shuffle size={15} />
+                  </ControlBtn>
+                </span>
 
                 <ControlBtn onClick={skipToPrevious} title="Previous">
                   <SkipBack size={20} fill="currentColor" />
@@ -119,7 +123,7 @@ export function PlayerBar() {
                 <button
                   type="button"
                   onClick={isPlaying ? pause : play}
-                  className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--color-primary)] text-[var(--color-primary-fg)] hover:opacity-90 transition-opacity glow-primary"
+                  className="flex h-10 w-10 items-center justify-center rounded-full bg-[var(--color-primary)] text-[var(--color-primary-fg)] hover:opacity-90 transition-opacity glow-primary"
                   title={isPlaying ? "Pause" : "Play"}
                 >
                   {isPlaying ? (
@@ -137,9 +141,11 @@ export function PlayerBar() {
                   <SkipForward size={20} fill="currentColor" />
                 </ControlBtn>
 
-                <ControlBtn onClick={cycleRepeat} active={repeat !== "off"} title="Repeat">
-                  {repeat === "one" ? <Repeat1 size={15} /> : <Repeat size={15} />}
-                </ControlBtn>
+                <span className="hidden md:inline-flex">
+                  <ControlBtn onClick={cycleRepeat} active={repeat !== "off"} title="Repeat">
+                    {repeat === "one" ? <Repeat1 size={15} /> : <Repeat size={15} />}
+                  </ControlBtn>
+                </span>
               </div>
 
               {/* Progress */}
@@ -202,6 +208,14 @@ export function PlayerBar() {
           <Mic2 size={16} />
         </ControlBtn>
 
+        <div className="hidden sm:block">
+          <SpeedControl />
+        </div>
+
+        <div className="hidden sm:block">
+          <SleepTimerControl />
+        </div>
+
         <ControlBtn onClick={() => setQueueOpen(true)} title="Queue">
           <ListMusic size={16} />
         </ControlBtn>
@@ -234,7 +248,7 @@ function ControlBtn({
       disabled={disabled}
       title={title}
       className={cn(
-        "flex items-center justify-center rounded p-1.5 transition-colors",
+        "flex h-10 w-10 shrink-0 items-center justify-center rounded transition-colors",
         active ? "text-[var(--color-primary)]" : "text-[var(--color-text-muted)] hover:text-[var(--color-text)]",
         disabled && "opacity-30 pointer-events-none"
       )}

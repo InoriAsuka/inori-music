@@ -87,10 +87,7 @@ export function shouldStartNaturalCrossfade(
 }
 
 /** Repeat-one restarts only after a real ended event, never during lead-time crossfade checks. */
-export function shouldRestartRepeatOne(
-  repeat: "off" | "one" | "all",
-  reason: "natural-crossfade" | "ended"
-): boolean {
+export function shouldRestartRepeatOne(repeat: "off" | "one" | "all", reason: "natural-crossfade" | "ended"): boolean {
   return repeat === "one" && reason === "ended";
 }
 
@@ -106,11 +103,7 @@ export function canFinalizeReservedSlot(
   currentLoadId: number,
   reservedLoadId: number | null
 ): boolean {
-  return (
-    sourceSlotIndex !== activeSlotIndex &&
-    expectedLoadId === currentLoadId &&
-    reservedLoadId === expectedLoadId
-  );
+  return sourceSlotIndex !== activeSlotIndex && expectedLoadId === currentLoadId && reservedLoadId === expectedLoadId;
 }
 
 /**
@@ -120,4 +113,117 @@ export function canFinalizeReservedSlot(
  */
 export function isSlotReusable(reservedLoadId: number | null, currentLoadId: number): boolean {
   return reservedLoadId === null || reservedLoadId !== currentLoadId;
+}
+
+/**
+ * Identity of one playback cycle of a single media element.
+ *
+ * `loadId` is the media-LOAD identity: a new src/occurrence is loaded into the
+ * element. `playGen` is the playback-CYCLE identity: pressing play again on the
+ * *same* already-loaded media (resume/replay from the current position, without
+ * a reload) opens a new cycle on the same `loadId`. The two are distinct because
+ * `loadId` alone cannot tell "this element replayed" apart from "the same stale
+ * event fired again": both carry the same `loadId`, but only a replay bumps
+ * `playGen`. Guard refs record the whole cycle so a stale record from a
+ * terminated cycle stops matching once the user explicitly replays that media.
+ */
+export interface PlaybackCycle {
+  loadId: number;
+  playGen: number;
+}
+
+/** Two playback cycles are the same only when both media-load and cycle match. */
+export function cyclesMatch(a: PlaybackCycle | null, b: PlaybackCycle | null): boolean {
+  return a !== null && b !== null && a.loadId === b.loadId && a.playGen === b.playGen;
+}
+
+/**
+ * Decides whether an `ended` event fired on a given source cycle may
+ * advance/repeat playback. Late or duplicate `ended` events must be inert
+ * after a sleep-timer shutdown or a prior transition off the same source.
+ *
+ * Guards, in order:
+ *   • Playback intent — only a still-playing player advances. A fixed sleep
+ *     timer expiry pauses the player synchronously, so a delayed `ended` on
+ *     the still-active source sees `paused`/`idle`/`error` and is rejected.
+ *     (`loading` is excluded: a natural end always fires while `playing`, and
+ *     an ended event should never drive a slot that is mid-load.)
+ *   • Consumed cycle — the first after-current-track `ended` marks its source
+ *     cycle consumed; a duplicate `ended` on the same element and cycle is
+ *     rejected even though the timer has already cleared. An explicit replay of
+ *     the same media opens a NEW cycle (bumped `playGen`), so the consumed
+ *     record from the prior cycle no longer matches and the fresh end advances.
+ *   • Prior transition — the source cycle already advanced (crossfade or an
+ *     earlier ended) must not advance a second time. Replaying that same media
+ *     (end-of-queue resume) likewise opens a new cycle, clearing the match.
+ */
+export function canEndedAdvance(
+  status: "idle" | "loading" | "playing" | "paused" | "error",
+  sourceCycle: PlaybackCycle,
+  consumedEndedCycle: PlaybackCycle | null,
+  lastTransitionSourceCycle: PlaybackCycle | null
+): boolean {
+  return (
+    status === "playing" &&
+    !cyclesMatch(consumedEndedCycle, sourceCycle) &&
+    !cyclesMatch(lastTransitionSourceCycle, sourceCycle)
+  );
+}
+
+/**
+ * Native `ended` events are valid only while the element still reports ended.
+ * A native event queued before resume or source replacement may dispatch later,
+ * after the element has started a new cycle; rejecting that stale event prevents
+ * it from being attributed to the mutable current slot generation. Synthetic
+ * events remain allowed for the Playwright probe that drives track completion.
+ */
+export function hasCurrentEndedEvidence(eventIsTrusted: boolean, mediaEnded: boolean): boolean {
+  return !eventIsTrusted || mediaEnded;
+}
+
+/**
+ * The explicit-resume replay boundary. When the player transitions into
+ * `playing` on the ACTIVE slot without any reload (the status effect resumes
+ * the same already-loaded media), the slot's `ended` cycle must be reopened —
+ * but only if its current cycle was already terminated by a prior `ended`
+ * (consumed by after-track shutdown, or transitioned off at end-of-queue).
+ *
+ * Returns true exactly when a fresh cycle must be minted:
+ *   • the current cycle equals the consumed record (after-track defect), OR
+ *   • the current cycle equals the last-transition record (end-of-queue defect).
+ *
+ * Returns false for a normal mid-track pause→play (neither record matches the
+ * live cycle) and after a fixed-timer expiry (which terminates via `pause`, not
+ * via a consumed/transitioned `ended`, so neither record holds this cycle):
+ * those paths must NOT reopen the cycle, preserving stale-event inertness.
+ */
+export function shouldOpenFreshEndedCycle(
+  currentCycle: PlaybackCycle,
+  consumedEndedCycle: PlaybackCycle | null,
+  lastTransitionSourceCycle: PlaybackCycle | null
+): boolean {
+  return cyclesMatch(consumedEndedCycle, currentCycle) || cyclesMatch(lastTransitionSourceCycle, currentCycle);
+}
+
+/**
+ * An async play settlement may affect player state only while playback is
+ * still requested and the exact destination generation remains active.
+ * `loading` represents autoplay/skip intent until play() resolves.
+ */
+export function canSettleActivePlay(
+  status: "idle" | "loading" | "playing" | "paused" | "error",
+  destinationSlotIndex: number,
+  activeSlotIndex: number,
+  expectedLoadId: number,
+  currentLoadId: number,
+  expectedPlayRequestId: number,
+  currentPlayRequestId: number
+): boolean {
+  const playbackRequested = status === "loading" || status === "playing";
+  return (
+    playbackRequested &&
+    destinationSlotIndex === activeSlotIndex &&
+    expectedLoadId === currentLoadId &&
+    expectedPlayRequestId === currentPlayRequestId
+  );
 }

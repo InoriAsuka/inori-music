@@ -6,27 +6,41 @@
  * track IDs, stale async descriptor responses, old media readiness events,
  * and delayed crossfade cleanup from being mistaken for the slot's current
  * load.
+ *
+ * A slot's PLAYBACK CYCLE is a finer identity — (loadId, playGen) — that
+ * distinguishes each `ended` cycle of the same loaded media. Resuming the same
+ * media after its cycle was terminated by an `ended` (after-track shutdown or
+ * end-of-queue) bumps playGen, so a fresh legitimate `ended` is not mistaken
+ * for the stale event of the already-terminated cycle. See PlaybackCycle in
+ * gaplessEngine.
  */
 "use client";
 
-import { useEffect, useRef } from "react";
-import { usePlayerStore, useCurrentTrack, type QueueTrack } from "@/store/player";
-import { useAuthStore } from "@/store/auth";
 import { authedApi } from "@/lib/api/client";
-import { createAudioGraph, type AudioGraphNode } from "@/lib/audio/audioGraph";
-import { computeReplayGain, isReplayGainEnabled, REPLAY_GAIN_CHANGE_EVENT } from "@/lib/audio/replayGain";
-import { resolveReplayGainDb } from "@/lib/audio/trackGainCache";
-import { isCrossfadeEnabled, CROSSFADE_SECONDS } from "@/lib/audio/crossfade";
+import { type AudioGraphNode, createAudioGraph } from "@/lib/audio/audioGraph";
+import { CROSSFADE_SECONDS, isCrossfadeEnabled } from "@/lib/audio/crossfade";
 import {
+  type PlaybackCycle,
+  type QueueOccurrence,
+  canEndedAdvance,
   canFinalizeReservedSlot,
+  canSettleActivePlay,
+  cyclesMatch,
+  hasCurrentEndedEvidence,
   isSlotReusable,
   isStandbyReadyForOccurrence,
   occurrencesMatch,
+  shouldOpenFreshEndedCycle,
   shouldRestartRepeatOne,
   shouldStartNaturalCrossfade,
   shouldTriggerPreload,
-  type QueueOccurrence,
 } from "@/lib/audio/gaplessEngine";
+import { REPLAY_GAIN_CHANGE_EVENT, computeReplayGain, isReplayGainEnabled } from "@/lib/audio/replayGain";
+import { resolveReplayGainDb } from "@/lib/audio/trackGainCache";
+import { useAuthStore } from "@/store/auth";
+import { type QueueTrack, useCurrentTrack, usePlayerStore } from "@/store/player";
+import { isAfterTrackArmed, useSleepTimerStore } from "@/store/sleepTimer";
+import { useEffect, useRef } from "react";
 
 type ApiClient = ReturnType<typeof authedApi>;
 type SlotIndex = 0 | 1;
@@ -46,11 +60,22 @@ interface Slot {
   rampEndsAtMs: number;
   /** The exact load generation currently fading out and not yet reusable. */
   reservedLoadId: number | null;
+  /** Invalidates pending play() settlements without replacing the loaded media. */
+  playRequestId: number;
+  /**
+   * Playback-cycle generation for this element's currently loaded media. A new
+   * media load leaves it as-is (identity carried by loadId); an explicit
+   * replay of the SAME already-loaded media (resume after its `ended` cycle was
+   * consumed/transitioned) bumps it, opening a fresh `ended` cycle so stale
+   * cycle records stop matching. See PlaybackCycle in gaplessEngine.
+   */
+  playGen: number;
   readyListener: (() => void) | null;
 }
 
 interface PreparedSlot {
   slot: Slot;
+  loadId: number;
 }
 
 async function resolvePlaybackUrl(api: ApiClient, trackId: string): Promise<string | null> {
@@ -73,6 +98,32 @@ function setCurrentTimeSafely(audio: HTMLAudioElement, seconds: number) {
   }
 }
 
+/**
+ * Pin an element's playback rate to `speed`. Sets both `defaultPlaybackRate`
+ * (which the media load algorithm restores `playbackRate` from on every
+ * load()/src change) and `playbackRate` (the live rate) so a freshly-loaded
+ * or swapped-in element never silently reverts to 1×.
+ */
+function applyPlaybackRate(audio: HTMLAudioElement, speed: number) {
+  audio.defaultPlaybackRate = speed;
+  audio.playbackRate = speed;
+}
+
+/**
+ * Immediately silence every element and cancel crossfade state. Incrementing
+ * playRequestId makes already-returned play() promises unable to settle state;
+ * clearing reservations makes delayed fade cleanup idempotent.
+ */
+function neutralizePlayback(slots: [Slot, Slot]) {
+  for (const slot of slots) {
+    slot.playRequestId++;
+    slot.audio.pause();
+    slot.graph.setGain(slot.targetGain);
+    slot.rampEndsAtMs = 0;
+    slot.reservedLoadId = null;
+  }
+}
+
 export function useAudio() {
   const slotsRef = useRef<[Slot, Slot] | null>(null);
   const activeSlotRef = useRef<SlotIndex>(0);
@@ -81,20 +132,35 @@ export function useAudio() {
   const replayGainEnabledRef = useRef(isReplayGainEnabled());
   /** Globally unique across both slots and repeat-one playback cycles. */
   const nextLoadIdRef = useRef(1);
-  /** Last source generation advanced; blocks timeupdate + ended double transitions. */
-  const lastTransitionSourceLoadIdRef = useRef<number | null>(null);
+  /**
+   * Last source playback cycle advanced off; blocks timeupdate + ended double
+   * transitions. Records the whole cycle (loadId + playGen) so an explicit
+   * replay of the same media (which bumps playGen) is not treated as the
+   * already-transitioned cycle.
+   */
+  const lastTransitionSourceCycleRef = useRef<PlaybackCycle | null>(null);
+  /**
+   * Playback cycle whose `ended` event was already consumed by an
+   * after-current-track sleep shutdown. A duplicate `ended` on the same
+   * element and cycle must not advance/revive playback once the timer has
+   * cleared. An explicit replay opens a fresh cycle (bumped playGen), so its
+   * legitimate next `ended` is no longer matched here.
+   */
+  const endedConsumedCycleRef = useRef<PlaybackCycle | null>(null);
 
   const token = useAuthStore((s) => s.token);
   const currentTrack = useCurrentTrack();
-  const {
-    status,
-    volume,
-    currentIndex,
-    setStatus,
-    setPosition,
-    restoredPending,
-    acknowledgeRestore,
-  } = usePlayerStore();
+  const { status, volume, speed, currentIndex, setStatus, setPosition, restoredPending, acknowledgeRestore } =
+    usePlayerStore();
+
+  /**
+   * Latest playback speed, mirrored into a ref so slot-loading helpers
+   * (init, prepareSlot, swaps, restore) can apply the current rate without
+   * depending on a stale render closure. The `[speed]` effect below handles
+   * live changes to already-loaded elements.
+   */
+  const speedRef = useRef(speed);
+  speedRef.current = speed;
 
   // ── Initialise both audio elements once ─────────────────────────────────
   useEffect(() => {
@@ -103,6 +169,10 @@ export function useAudio() {
     function makeSlot(): Slot {
       const audio = new Audio();
       audio.preload = "auto";
+      // Set both: the media load algorithm resets playbackRate to
+      // defaultPlaybackRate, so pinning both keeps the rate across load().
+      audio.defaultPlaybackRate = speedRef.current;
+      audio.playbackRate = speedRef.current;
       return {
         audio,
         graph: createAudioGraph(audio),
@@ -113,6 +183,8 @@ export function useAudio() {
         targetGain: 1,
         rampEndsAtMs: 0,
         reservedLoadId: null,
+        playRequestId: 0,
+        playGen: 0,
         readyListener: null,
       };
     }
@@ -120,7 +192,18 @@ export function useAudio() {
     const slots: [Slot, Slot] = [makeSlot(), makeSlot()];
     slotsRef.current = slots;
 
+    // Zustand notifies subscribers synchronously inside pause(). This closes
+    // the window where a fixed sleep-timer expiry has updated player intent,
+    // but a pending audio.play() microtask could settle before React's status
+    // effect gets a chance to pause and invalidate both elements.
+    const unsubscribePlayer = usePlayerStore.subscribe((state, previousState) => {
+      if (state.status === "paused" && previousState.status !== "paused") {
+        neutralizePlayback(slots);
+      }
+    });
+
     return () => {
+      unsubscribePlayer();
       for (const slot of slots) {
         if (slot.readyListener) slot.audio.removeEventListener("canplay", slot.readyListener);
         slot.audio.pause();
@@ -144,6 +227,7 @@ export function useAudio() {
     slot.audio.pause();
     slot.loadId = nextLoadIdRef.current++;
     slot.reservedLoadId = null;
+    slot.playRequestId++;
     slot.occurrence = occurrence;
     slot.ready = false;
     slot.resolvedAtMs = 0;
@@ -215,10 +299,11 @@ export function useAudio() {
     slot.resolvedAtMs = Date.now();
     setCurrentTimeSafely(slot.audio, 0);
     slot.audio.load();
+    applyPlaybackRate(slot.audio, speedRef.current);
     if (slot.audio.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) markReady();
 
     void applyGainToSlot(slotIdx, occurrence, loadId, authToken);
-    return { slot };
+    return { slot, loadId };
   }
 
   function updateMediaSession(track: QueueTrack) {
@@ -239,6 +324,42 @@ export function useAudio() {
       .catch(() => {});
   }
 
+  function startSlotPlay(slotIdx: SlotIndex, expectedLoadId: number) {
+    const slots = slotsRef.current;
+    if (!slots) return null;
+    const slot = slots[slotIdx];
+    const playRequestId = slot.playRequestId + 1;
+    if (
+      !canSettleActivePlay(
+        usePlayerStore.getState().status,
+        slotIdx,
+        activeSlotRef.current,
+        expectedLoadId,
+        slot.loadId,
+        playRequestId,
+        playRequestId
+      )
+    ) {
+      return null;
+    }
+    slot.playRequestId = playRequestId;
+    return { playRequestId, promise: slot.audio.play() };
+  }
+
+  function canSettleSlotPlay(slotIdx: SlotIndex, loadId: number, playRequestId: number): boolean {
+    const slots = slotsRef.current;
+    if (!slots) return false;
+    return canSettleActivePlay(
+      usePlayerStore.getState().status,
+      slotIdx,
+      activeSlotRef.current,
+      loadId,
+      slots[slotIdx].loadId,
+      playRequestId,
+      slots[slotIdx].playRequestId
+    );
+  }
+
   function activateStandby(
     standbyIdx: SlotIndex,
     intended: QueueOccurrence,
@@ -254,11 +375,13 @@ export function useAudio() {
     const nextSlot = slots[standbyIdx];
     if (!isSlotReusable(nextSlot.reservedLoadId, nextSlot.loadId)) return false;
     if (!isStandbyReadyForOccurrence(nextSlot, intended, Date.now())) return false;
-    if (lastTransitionSourceLoadIdRef.current === prevSlot.loadId) return false;
+    if (cyclesMatch(lastTransitionSourceCycleRef.current, { loadId: prevSlot.loadId, playGen: prevSlot.playGen }))
+      return false;
 
     const sourceLoadId = prevSlot.loadId;
-    lastTransitionSourceLoadIdRef.current = sourceLoadId;
+    lastTransitionSourceCycleRef.current = { loadId: sourceLoadId, playGen: prevSlot.playGen };
     activeSlotRef.current = standbyIdx;
+    applyPlaybackRate(nextSlot.audio, speedRef.current);
     setCurrentTimeSafely(nextSlot.audio, 0);
     if (advanceStore) usePlayerStore.getState().skipToNext();
 
@@ -293,33 +416,30 @@ export function useAudio() {
       prevSlot.reservedLoadId = sourceLoadId;
       nextSlot.graph.setGain(0);
       nextSlot.rampEndsAtMs = Date.now() + CROSSFADE_SECONDS * 1000;
-      nextSlot.audio
-        .play()
+      const play = startSlotPlay(standbyIdx, destinationLoadId);
+      if (!play) {
+        prevSlot.reservedLoadId = null;
+        nextSlot.graph.setGain(nextSlot.targetGain);
+        nextSlot.rampEndsAtMs = 0;
+        return false;
+      }
+      play.promise
         .then(() => {
+          if (!canSettleSlotPlay(standbyIdx, destinationLoadId, play.playRequestId)) return;
           const currentSlots = slotsRef.current;
-          if (
-            !currentSlots ||
-            activeSlotRef.current !== standbyIdx ||
-            currentSlots[standbyIdx].loadId !== destinationLoadId
-          ) {
-            return;
-          }
-          nextSlot.graph.rampGain(nextSlot.targetGain, CROSSFADE_SECONDS);
-          prevSlot.graph.rampGain(0, CROSSFADE_SECONDS);
+          if (!currentSlots) return;
+          currentSlots[standbyIdx].graph.rampGain(currentSlots[standbyIdx].targetGain, CROSSFADE_SECONDS);
+          currentSlots[cleanupSlotIdx].graph.rampGain(0, CROSSFADE_SECONDS);
           setStatus("playing");
         })
         .catch(() => {
           finalizeSource();
+          if (!canSettleSlotPlay(standbyIdx, destinationLoadId, play.playRequestId)) return;
           const currentSlots = slotsRef.current;
-          if (
-            currentSlots &&
-            activeSlotRef.current === standbyIdx &&
-            currentSlots[standbyIdx].loadId === destinationLoadId
-          ) {
-            nextSlot.graph.setGain(nextSlot.targetGain);
-            nextSlot.rampEndsAtMs = 0;
-            setStatus("paused");
-          }
+          if (!currentSlots) return;
+          currentSlots[standbyIdx].graph.setGain(currentSlots[standbyIdx].targetGain);
+          currentSlots[standbyIdx].rampEndsAtMs = 0;
+          setStatus("paused");
         });
 
       setTimeout(finalizeSource, CROSSFADE_SECONDS * 1000);
@@ -328,10 +448,16 @@ export function useAudio() {
       setCurrentTimeSafely(prevSlot.audio, 0);
       prevSlot.graph.setGain(prevSlot.targetGain);
       nextSlot.graph.setGain(nextSlot.targetGain);
-      nextSlot.audio
-        .play()
-        .then(() => setStatus("playing"))
-        .catch(() => setStatus("paused"));
+      const destinationLoadId = nextSlot.loadId;
+      const play = startSlotPlay(standbyIdx, destinationLoadId);
+      if (!play) return false;
+      play.promise
+        .then(() => {
+          if (canSettleSlotPlay(standbyIdx, destinationLoadId, play.playRequestId)) setStatus("playing");
+        })
+        .catch(() => {
+          if (canSettleSlotPlay(standbyIdx, destinationLoadId, play.playRequestId)) setStatus("paused");
+        });
     }
 
     updateMediaSession(track);
@@ -342,16 +468,24 @@ export function useAudio() {
     const slots = slotsRef.current;
     if (!slots) return;
     const slot = slots[slotIdx];
-    lastTransitionSourceLoadIdRef.current = slot.loadId;
+    lastTransitionSourceCycleRef.current = { loadId: slot.loadId, playGen: slot.playGen };
     recordHistory(occurrence.trackId, authToken);
-    slot.loadId = nextLoadIdRef.current++;
+    const loadId = nextLoadIdRef.current++;
+    slot.loadId = loadId;
+    slot.playGen = 0;
+    slot.playRequestId++;
     setCurrentTimeSafely(slot.audio, 0);
     slot.graph.setGain(slot.targetGain);
     usePlayerStore.getState().setPosition(0);
-    slot.audio
-      .play()
-      .then(() => setStatus("playing"))
-      .catch(() => setStatus("paused"));
+    const play = startSlotPlay(slotIdx, loadId);
+    if (!play) return;
+    play.promise
+      .then(() => {
+        if (canSettleSlotPlay(slotIdx, loadId, play.playRequestId)) setStatus("playing");
+      })
+      .catch(() => {
+        if (canSettleSlotPlay(slotIdx, loadId, play.playRequestId)) setStatus("paused");
+      });
   }
 
   function advanceFromActive(reason: "natural-crossfade" | "ended", authToken: string | null): boolean {
@@ -360,7 +494,8 @@ export function useAudio() {
     const sourceIdx = activeSlotRef.current;
     const sourceSlot = slots[sourceIdx];
     const sourceOccurrence = sourceSlot.occurrence;
-    if (!sourceOccurrence || lastTransitionSourceLoadIdRef.current === sourceSlot.loadId) return false;
+    const sourceCycle: PlaybackCycle = { loadId: sourceSlot.loadId, playGen: sourceSlot.playGen };
+    if (!sourceOccurrence || cyclesMatch(lastTransitionSourceCycleRef.current, sourceCycle)) return false;
 
     const state = usePlayerStore.getState();
     if (state.repeat === "one") {
@@ -374,7 +509,7 @@ export function useAudio() {
     const intended = computeNextOccurrence(state.queue, state.currentIndex, state.repeat, state.shuffle);
     if (!intended) {
       if (reason === "ended") {
-        lastTransitionSourceLoadIdRef.current = sourceSlot.loadId;
+        lastTransitionSourceCycleRef.current = sourceCycle;
         recordHistory(sourceOccurrence.trackId, authToken);
         state.skipToNext();
       }
@@ -384,16 +519,10 @@ export function useAudio() {
     const standbyIdx: SlotIndex = sourceIdx === 0 ? 1 : 0;
     const nextTrack = state.queue[intended.queueIndex];
     if (!nextTrack) return false;
-    const activated = activateStandby(
-      standbyIdx,
-      intended,
-      nextTrack,
-      reason === "natural-crossfade",
-      true
-    );
+    const activated = activateStandby(standbyIdx, intended, nextTrack, reason === "natural-crossfade", true);
     if (activated) recordHistory(sourceOccurrence.trackId, authToken);
     if (!activated && reason === "ended") {
-      lastTransitionSourceLoadIdRef.current = sourceSlot.loadId;
+      lastTransitionSourceCycleRef.current = sourceCycle;
       recordHistory(sourceOccurrence.trackId, authToken);
       state.skipToNext();
     }
@@ -469,10 +598,15 @@ export function useAudio() {
         setStatus("error");
         return;
       }
-      prepared.slot.audio
-        .play()
-        .then(() => setStatus("playing"))
-        .catch(() => setStatus("paused"));
+      const play = startSlotPlay(activeIdx, prepared.loadId);
+      if (!play) return;
+      play.promise
+        .then(() => {
+          if (canSettleSlotPlay(activeIdx, prepared.loadId, play.playRequestId)) setStatus("playing");
+        })
+        .catch(() => {
+          if (canSettleSlotPlay(activeIdx, prepared.loadId, play.playRequestId)) setStatus("paused");
+        });
       updateMediaSession(currentTrack);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -507,11 +641,32 @@ export function useAudio() {
   useEffect(() => {
     const slots = slotsRef.current;
     if (!slots) return;
-    const active = slots[activeSlotRef.current];
+    const activeIdx = activeSlotRef.current;
+    const active = slots[activeIdx];
     if (status === "playing") {
-      active.audio.play().catch(() => setStatus("paused"));
+      // Explicit resume/replay boundary: if this slot's current playback cycle
+      // was already terminated by a prior `ended` (consumed by after-track
+      // shutdown, or transitioned off at end-of-queue), replaying the SAME
+      // media must open a fresh ended cycle. Bump playGen here — and only here
+      // — so the legitimate next `ended` of the replayed media is no longer
+      // matched by the stale consumed/transition records. A normal mid-track
+      // pause→play and a fixed-timer resume leave playGen untouched, preserving
+      // stale-event inertness.
+      if (
+        shouldOpenFreshEndedCycle(
+          { loadId: active.loadId, playGen: active.playGen },
+          endedConsumedCycleRef.current,
+          lastTransitionSourceCycleRef.current
+        )
+      ) {
+        active.playGen++;
+      }
+      const play = startSlotPlay(activeIdx, active.loadId);
+      play?.promise.catch(() => {
+        if (canSettleSlotPlay(activeIdx, active.loadId, play.playRequestId)) setStatus("paused");
+      });
     } else if (status === "paused") {
-      active.audio.pause();
+      neutralizePlayback(slots);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
@@ -523,6 +678,13 @@ export function useAudio() {
     for (const slot of slots) slot.audio.volume = volume;
   }, [volume]);
 
+  // ── Playback speed applies to BOTH elements (current + preloaded standby) ─
+  useEffect(() => {
+    const slots = slotsRef.current;
+    if (!slots) return;
+    for (const slot of slots) applyPlaybackRate(slot.audio, speed);
+  }, [speed]);
+
   // ── Position + natural crossfade ticker ─────────────────────────────────
   useEffect(() => {
     if (positionTickRef.current) clearInterval(positionTickRef.current);
@@ -533,6 +695,11 @@ export function useAudio() {
         const active = slots[activeSlotRef.current];
         setPosition(active.audio.currentTime);
 
+        // When after-current-track sleep mode is armed, the current track must
+        // be the last thing that plays — a lead-time crossfade would advance
+        // to the next track before `ended` fires, bypassing that semantic. Let
+        // the track run out and let the ended handler pause.
+        if (isAfterTrackArmed(useSleepTimerStore.getState())) return;
         if (!isCrossfadeEnabled() || !active.graph.active) return;
         const state = usePlayerStore.getState();
         const intended = computeNextOccurrence(state.queue, state.currentIndex, state.repeat, state.shuffle);
@@ -541,12 +708,7 @@ export function useAudio() {
         const standby = slots[standbyIdx];
         const standbyReady = standby.graph.active && isStandbyReadyForOccurrence(standby, intended, Date.now());
         if (
-          shouldStartNaturalCrossfade(
-            active.audio.currentTime,
-            active.audio.duration,
-            CROSSFADE_SECONDS,
-            standbyReady
-          )
+          shouldStartNaturalCrossfade(active.audio.currentTime, active.audio.duration, CROSSFADE_SECONDS, standbyReady)
         ) {
           advanceFromActive("natural-crossfade", token);
         }
@@ -564,8 +726,38 @@ export function useAudio() {
     if (!slots) return;
 
     function makeOnEnded(slotIdx: SlotIndex) {
-      return () => {
+      return (event: Event) => {
         if (slotIdx !== activeSlotRef.current) return;
+        const slots = slotsRef.current;
+        if (!slots) return;
+        const sourceSlot = slots[slotIdx];
+        if (!hasCurrentEndedEvidence(event.isTrusted, sourceSlot.audio.ended)) return;
+        const sourceCycle: PlaybackCycle = { loadId: sourceSlot.loadId, playGen: sourceSlot.playGen };
+
+        // An ended event may advance/repeat only while playback intent still
+        // holds for this exact source cycle. A fixed sleep-timer expiry pauses
+        // synchronously, so a late ended on the still-active source is rejected
+        // here (status is "paused"); a duplicate after-track ended is rejected
+        // because the cycle was marked consumed below.
+        if (
+          !canEndedAdvance(
+            usePlayerStore.getState().status,
+            sourceCycle,
+            endedConsumedCycleRef.current,
+            lastTransitionSourceCycleRef.current
+          )
+        ) {
+          return;
+        }
+
+        // Sleep timer "after current track": handleTrackEnded pauses the
+        // player and clears the timer. Mark this source cycle consumed FIRST
+        // so a duplicate ended cannot slip through after the timer clears, then
+        // do NOT advance/repeat/crossfade past this track.
+        if (useSleepTimerStore.getState().handleTrackEnded()) {
+          endedConsumedCycleRef.current = sourceCycle;
+          return;
+        }
         advanceFromActive("ended", token);
       };
     }
