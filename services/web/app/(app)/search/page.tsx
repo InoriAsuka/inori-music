@@ -47,7 +47,7 @@ function SearchPageInner() {
   const params = useSearchParams();
   const token = useAuthStore((s) => s.token);
   const playQueue = usePlayerStore((s) => s.playQueue);
-  const { history, add: addHistory, remove: removeHistory, clear: clearHistory } = useSearchHistory();
+  const { history, add: addHistory, remove: removeHistory, clear: clearHistory } = useSearchHistory(token);
 
   const initialQ = params.get("q") ?? "";
   const [query, setQuery] = useState(initialQ);

@@ -107,6 +107,22 @@ interface PlayerState {
   acknowledgeRestore: () => void;
   /** Wipes persisted playback state (called on logout). */
   clearPersisted: () => void;
+  /**
+   * Replace the queue/index/position/modes from a remote (cross-device) player
+   * state without autoplaying — status becomes "paused" and restoredPending is
+   * set so useAudio seeks to the restored position and waits for a user gesture
+   * (same no-autoplay contract as a persisted-refresh restore). Used by the
+   * cross-device "Resume from another device?" prompt.
+   */
+  hydrateRemoteState: (state: {
+    queue: QueueTrack[];
+    currentIndex: number;
+    positionSeconds: number;
+    repeat: "off" | "one" | "all";
+    shuffle: boolean;
+    volume: number;
+    speed: number;
+  }) => void;
 }
 
 /**
@@ -316,6 +332,20 @@ export const usePlayerStore = create<PlayerState>()(
           shuffle: false,
           repeat: "off",
           restoredPending: false,
+        });
+      },
+
+      hydrateRemoteState(state) {
+        set({
+          queue: state.queue,
+          currentIndex: state.currentIndex,
+          positionSeconds: state.positionSeconds,
+          repeat: state.repeat,
+          shuffle: state.shuffle,
+          volume: state.volume,
+          speed: clampPlaybackSpeed(state.speed),
+          status: "paused",
+          restoredPending: true,
         });
       },
     }),

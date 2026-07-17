@@ -22,8 +22,12 @@ import (
 	"inori-music/services/api/internal/history"
 	historypg "inori-music/services/api/internal/history/postgres"
 	"inori-music/services/api/internal/httpapi"
+	"inori-music/services/api/internal/playerstate"
+	playerstatepg "inori-music/services/api/internal/playerstate/postgres"
 	"inori-music/services/api/internal/ratelimit"
 	"inori-music/services/api/internal/search"
+	"inori-music/services/api/internal/searchhistory"
+	searchhistorypg "inori-music/services/api/internal/searchhistory/postgres"
 	"inori-music/services/api/internal/storage"
 	pgstore "inori-music/services/api/internal/storage/postgres"
 	"inori-music/services/api/internal/streamsign"
@@ -119,6 +123,26 @@ func main() {
 	userPlaylistRepo := userPlaylistRepository(ctx, pool)
 	userPlaylistService := userplaylist.NewService(userPlaylistRepo)
 
+	// Player state service — PostgreSQL when pool is available, in-memory otherwise.
+	var playerstateSvc *playerstate.Service
+	if pool != nil {
+		psRepo := playerstatepg.NewRepository(pool)
+		playerstateSvc = playerstate.NewService(psRepo)
+	} else {
+		log.Print("INORI_DATABASE_URL is not set; player state service running with in-memory (non-persistent) storage")
+		playerstateSvc = playerstate.NewService(playerstate.NewMemoryRepository())
+	}
+
+	// Search history service — PostgreSQL when pool is available, in-memory otherwise.
+	var searchHistorySvc *searchhistory.Service
+	if pool != nil {
+		shRepo := searchhistorypg.NewRepository(pool)
+		searchHistorySvc = searchhistory.NewService(shRepo)
+	} else {
+		log.Print("INORI_DATABASE_URL is not set; search history service running with in-memory (non-persistent) storage")
+		searchHistorySvc = searchhistory.NewService(searchhistory.NewMemoryRepository())
+	}
+
 	// Stream signing key — fall back to a hash of the admin token if not set.
 	streamSigningKey := os.Getenv("INORI_STREAM_SIGNING_KEY")
 	if streamSigningKey == "" {
@@ -171,6 +195,8 @@ func main() {
 		httpapi.WithHistoryService(historyService),
 		httpapi.WithFavoritesService(favoritesService),
 		httpapi.WithUserPlaylistService(userPlaylistService),
+		httpapi.WithPlayerstateService(playerstateSvc),
+		httpapi.WithSearchHistoryService(searchHistorySvc),
 		httpapi.WithCORSOrigins(corsOrigins()),
 		httpapi.WithServiceInfo(httpapi.ServiceInfo{Name: "inori-api", Version: version, Commit: commit, BuildTime: buildTime}),
 	}

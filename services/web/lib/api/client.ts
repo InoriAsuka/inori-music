@@ -14,6 +14,16 @@ import type { paths } from "@/types/api.gen";
 // Client-side: relative URL so Next.js rewrite fires.
 const baseUrl = typeof window === "undefined" ? (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080") : "";
 
+/**
+ * The base URL used for every v1 API call — empty (relative) in the browser so
+ * the Next.js rewrite fires, absolute on the server. Exposed for the raw-`fetch`
+ * wrappers (player-state / search-history) whose endpoints post-date the
+ * generated openapi-fetch `paths` type; they must use the same base as `api`.
+ */
+export function apiBaseUrl(): string {
+  return baseUrl;
+}
+
 export const api = createClient<paths>({ baseUrl });
 
 /**

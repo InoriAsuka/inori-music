@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/player/audio_handler.dart';
+import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/desktop_integration.dart';
 import 'package:inori_music/src/shared/locale_provider.dart';
 import 'package:inori_music/src/shared/router.dart';
@@ -31,12 +32,14 @@ class InoriMusicApp extends ConsumerStatefulWidget {
   ConsumerState<InoriMusicApp> createState() => _InoriMusicAppState();
 }
 
-class _InoriMusicAppState extends ConsumerState<InoriMusicApp> {
+class _InoriMusicAppState extends ConsumerState<InoriMusicApp>
+    with WidgetsBindingObserver {
   DesktopIntegration? _desktop;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     if (DesktopIntegration.isDesktop) {
       _desktop = DesktopIntegration(ref);
       // init is async; fire-and-forget — failures are logged inside the class.
@@ -46,8 +49,20 @@ class _InoriMusicAppState extends ConsumerState<InoriMusicApp> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _desktop?.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Cross-device sync (v5.4.0): flush the player state immediately when the
+    // app leaves the foreground, so progress survives a background kill.
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.hidden) {
+      ref.read(playerProvider.notifier).reportStateOnBackground();
+    }
   }
 
   @override

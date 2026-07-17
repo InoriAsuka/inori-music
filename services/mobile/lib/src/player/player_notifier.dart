@@ -15,10 +15,12 @@ import 'package:just_audio/just_audio.dart';
 
 import 'package:inori_music/main.dart' show audioHandler;
 import 'package:inori_music/src/api/api_client.dart';
+import 'package:inori_music/src/api/me_api.dart';
 import 'package:inori_music/src/audio/replay_gain_notifier.dart';
 import 'package:inori_music/src/catalog/catalog_cache_providers.dart';
 import 'package:inori_music/src/catalog/catalog_repository.dart';
 import 'package:inori_music/src/player/player_state.dart' as pstate;
+import 'package:inori_music/src/player/player_state_reporter.dart';
 
 // ---------------------------------------------------------------------------
 // Providers
@@ -40,6 +42,7 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
   late final AudioPlayer _audioPlayer;
   late final CatalogApi _catalog;
   late final HistoryApi _history;
+  late final MeApi _me;
 
   // In-memory track metadata cache to avoid redundant catalog API calls.
   final Map<String, CatalogTrack> _trackCache = {};
@@ -51,6 +54,13 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
   // Store subscriptions so they can be cancelled on dispose.
   late final List<StreamSubscription> _subscriptions;
 
+  // Cross-device player-state reporter (v5.4.0): 30s throttle while playing,
+  // immediate PUT on track change / pause / app background.
+  late final PlayerStateReporter _reporter;
+  // Last playing flag observed, so playerStateStream only triggers an immediate
+  // report on an actual play↔pause transition (not on every buffering tick).
+  bool _lastReportedPlaying = false;
+
   @override
   pstate.PlayerState build() {
     // Use the AudioPlayer instance owned by the AudioHandler so that
@@ -58,9 +68,12 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
     _audioPlayer = audioHandler.audioPlayer;
     _catalog = ref.read(catalogApiProvider);
     _history = ref.read(historyApiProvider);
+    _me = ref.read(meApiProvider);
+    _reporter = PlayerStateReporter(onReport: _reportPlayerState);
     _subscriptions = _setupPlayerListeners();
     // Cancel all stream subscriptions when the provider is disposed.
     ref.onDispose(() {
+      _reporter.dispose();
       for (final sub in _subscriptions) {
         sub.cancel();
       }
@@ -481,6 +494,8 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
         state = state.copyWith(currentIndex: idx, mediaItem: resolved);
         audioHandler.mediaItem.add(resolved);
         await _applyVolumeWithGain(state.volume);
+        // Cross-device sync: report the new track immediately (v5.4.0).
+        _reporter.reportNow();
       });
     })());
 
@@ -513,6 +528,13 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
           ],
         ),
       );
+      // Cross-device sync: gate the 30s throttle on playback, and PUT
+      // immediately on a play↔pause transition (v5.4.0).
+      _reporter.setPlaying(ps.playing);
+      if (ps.playing != _lastReportedPlaying) {
+        _lastReportedPlaying = ps.playing;
+        _reporter.reportNow();
+      }
     }));
 
     // OS media button events (lock screen, notification, Bluetooth)
@@ -546,5 +568,85 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
     } catch (e) {
       debugPrint('PlayerNotifier: failed to post history: $e');
     }
+  }
+
+  // ---- Cross-device player-state sync (v5.4.0) ----
+
+  static String _repeatToWire(pstate.RepeatMode mode) {
+    switch (mode) {
+      case pstate.RepeatMode.one:
+        return 'one';
+      case pstate.RepeatMode.all:
+        return 'all';
+      case pstate.RepeatMode.none:
+        return 'off';
+    }
+  }
+
+  static pstate.RepeatMode _repeatFromWire(String wire) {
+    switch (wire) {
+      case 'one':
+        return pstate.RepeatMode.one;
+      case 'all':
+        return pstate.RepeatMode.all;
+      default:
+        return pstate.RepeatMode.none;
+    }
+  }
+
+  /// Serialize the current playback state into the cross-device wire DTO.
+  PlayerStateDto _serializeState() {
+    return PlayerStateDto(
+      queue: state.queue.map((m) => m.id).toList(),
+      currentIndex: state.currentIndex,
+      positionSeconds: state.position.inMilliseconds / 1000.0,
+      repeat: _repeatToWire(state.repeat),
+      shuffle: state.shuffle,
+      volume: state.volume,
+      speed: _audioPlayer.speed,
+      status: state.isPlaying ? 'playing' : (state.isIdle ? 'stopped' : 'paused'),
+    );
+  }
+
+  /// PUT the current player state to the server. Skips empty/idle queues so a
+  /// fresh install never overwrites another device's state with nothing.
+  /// Swallows all errors — reporting must never break playback.
+  Future<void> _reportPlayerState() async {
+    if (state.queue.isEmpty || state.currentIndex < 0) return;
+    try {
+      await _me.putPlayerState(_serializeState());
+    } catch (e) {
+      debugPrint('PlayerNotifier: failed to report player state: $e');
+    }
+  }
+
+  /// Force an immediate player-state report. Called when the app is backgrounded
+  /// (see [InoriMusicApp]'s lifecycle listener) so progress survives a kill.
+  void reportStateOnBackground() => _reporter.reportNow();
+
+  /// Fetch the last cross-device player state, or null if none / on error.
+  Future<PlayerStateDto?> fetchRemoteState() async {
+    try {
+      return await _me.getPlayerState();
+    } catch (e) {
+      debugPrint('PlayerNotifier: failed to fetch remote player state: $e');
+      return null;
+    }
+  }
+
+  /// Rebuild the queue from a remote snapshot and seek to its position without
+  /// auto-playing (waits for a user gesture, mirroring the web resume flow).
+  Future<void> resumeFromRemote(PlayerStateDto remote) async {
+    if (remote.queue.isEmpty) return;
+    final idx = remote.currentIndex < 0
+        ? 0
+        : (remote.currentIndex >= remote.queue.length
+            ? remote.queue.length - 1
+            : remote.currentIndex);
+    await setRepeat(_repeatFromWire(remote.repeat));
+    await setShuffle(remote.shuffle);
+    await playQueue(remote.queue, initialIndex: idx);
+    await pause();
+    await seekTo(Duration(milliseconds: (remote.positionSeconds * 1000).round()));
   }
 }

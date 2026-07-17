@@ -2023,7 +2023,7 @@
           },
           "streamUrl": {
             "type": "string",
-            "description": "Server-proxied streaming URL for filesystem backends (local, NFS, SMB). The URL includes an HMAC-SHA256 signature (?exp=<unix>&sig=<base64url>) and must be used as-is — do not append additional query parameters. Prefer presignedUrl when both are present."
+            "description": "Server-proxied streaming URL for filesystem backends (local, NFS, SMB). The URL includes an HMAC-SHA256 signature (?exp=<unix>&sig=<base64url>) and must be used as-is \u2014 do not append additional query parameters. Prefer presignedUrl when both are present."
           }
         }
       },
@@ -2300,7 +2300,7 @@
             },
             "minItems": 1,
             "maxItems": 100,
-            "description": "List of play event IDs to delete (1–100 entries)."
+            "description": "List of play event IDs to delete (1\u2013100 entries)."
           }
         }
       },
@@ -2672,6 +2672,82 @@
             }
           }
         }
+      },
+      "PlayerState": {
+        "type": "object",
+        "required": [
+          "updatedAt"
+        ],
+        "properties": {
+          "queue": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Track IDs in queue order"
+          },
+          "currentIndex": {
+            "type": "integer",
+            "minimum": -1,
+            "description": "Current index in queue (-1 when idle)"
+          },
+          "positionSeconds": {
+            "type": "number",
+            "description": "Playback position in seconds"
+          },
+          "repeat": {
+            "type": "string",
+            "enum": [
+              "off",
+              "one",
+              "all"
+            ],
+            "description": "Repeat mode"
+          },
+          "shuffle": {
+            "type": "boolean",
+            "description": "Shuffle enabled"
+          },
+          "volume": {
+            "type": "number",
+            "description": "Volume 0.0\u20131.0"
+          },
+          "speed": {
+            "type": "number",
+            "description": "Playback speed"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "idle",
+              "playing",
+              "paused"
+            ],
+            "description": "Playback status"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Server-assigned last-write timestamp"
+          }
+        }
+      },
+      "SearchHistory": {
+        "type": "object",
+        "properties": {
+          "queries": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Search queries, newest first, max 20"
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last update timestamp"
+          }
+        }
       }
     },
     "securitySchemes": {
@@ -2683,7 +2759,7 @@
     },
     "responses": {
       "Unauthorized": {
-        "description": "Unauthorized — missing or invalid credentials",
+        "description": "Unauthorized \u2014 missing or invalid credentials",
         "content": {
           "application/json": {
             "schema": {
@@ -2693,7 +2769,7 @@
         }
       },
       "Forbidden": {
-        "description": "Forbidden — insufficient permissions",
+        "description": "Forbidden \u2014 insufficient permissions",
         "content": {
           "application/json": {
             "schema": {
@@ -2713,7 +2789,7 @@
         }
       },
       "BadRequest": {
-        "description": "Bad request — invalid parameters",
+        "description": "Bad request \u2014 invalid parameters",
         "content": {
           "application/json": {
             "schema": {
@@ -2757,7 +2833,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "5.0.0"
+    "version": "5.4.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -2780,7 +2856,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of items to return (1–500, default 50)."
+            "description": "Maximum number of items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -3127,7 +3203,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of items to return (1–500, default 50)."
+            "description": "Maximum number of items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -3462,7 +3538,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of items to return (1–500, default 50)."
+            "description": "Maximum number of items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -5318,7 +5394,7 @@
             "description": "Error"
           },
           "409": {
-            "description": "Error — backend is default (storage_backend_is_default) or has media objects (storage_backend_in_use)",
+            "description": "Error \u2014 backend is default (storage_backend_is_default) or has media objects (storage_backend_in_use)",
             "content": {
               "application/json": {
                 "schema": {
@@ -6320,7 +6396,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of items to return (1–500, default 50)."
+            "description": "Maximum number of items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -6447,7 +6523,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of items to return (1–500, default 50)."
+            "description": "Maximum number of items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -6644,7 +6720,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of items to return (1–500, default 50)."
+            "description": "Maximum number of items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -7290,7 +7366,7 @@
             }
           },
           "207": {
-            "description": "Partial success — some items failed",
+            "description": "Partial success \u2014 some items failed",
             "content": {
               "application/json": {
                 "schema": {
@@ -7378,7 +7454,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of items to return (1–500, default 50)."
+            "description": "Maximum number of items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -7684,7 +7760,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of tracks to return (1–500, default 50)."
+            "description": "Maximum number of tracks to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -7789,7 +7865,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of items to return (1–500, default 50)."
+            "description": "Maximum number of items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -8004,7 +8080,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Maximum number of tracks to return (1–500, default 50)."
+            "description": "Maximum number of tracks to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -8311,7 +8387,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Max items to return (1–500, default 50)."
+            "description": "Max items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -8448,7 +8524,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Max items to return (1–500, default 50)."
+            "description": "Max items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -8574,7 +8650,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Max items to return (1–500, default 50)."
+            "description": "Max items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -8700,7 +8776,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Max items to return (1–500, default 50)."
+            "description": "Max items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -8837,7 +8913,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Max items to return (1–500, default 50)."
+            "description": "Max items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -8963,7 +9039,7 @@
               "maximum": 500,
               "default": 50
             },
-            "description": "Max items to return (1–500, default 50)."
+            "description": "Max items to return (1\u2013500, default 50)."
           },
           {
             "in": "query",
@@ -9943,7 +10019,7 @@
             "name": "limit",
             "in": "query",
             "required": false,
-            "description": "Maximum number of events to return (1–500, default 50).",
+            "description": "Maximum number of events to return (1\u2013500, default 50).",
             "schema": {
               "type": "integer",
               "minimum": 1,
@@ -10235,7 +10311,7 @@
             "name": "limit",
             "in": "query",
             "required": false,
-            "description": "Maximum number of events to return (1–500, default 50).",
+            "description": "Maximum number of events to return (1\u2013500, default 50).",
             "schema": {
               "type": "integer",
               "minimum": 1,
@@ -10720,7 +10796,7 @@
             "name": "limit",
             "in": "query",
             "required": false,
-            "description": "Maximum number of tracks to return (1–100, default 10).",
+            "description": "Maximum number of tracks to return (1\u2013100, default 10).",
             "schema": {
               "type": "integer",
               "minimum": 1,
@@ -12491,7 +12567,7 @@
             "name": "limit",
             "in": "query",
             "required": false,
-            "description": "Maximum number of top-tracks entries to return (1–100; default 10).",
+            "description": "Maximum number of top-tracks entries to return (1\u2013100; default 10).",
             "schema": {
               "type": "integer",
               "minimum": 1,
@@ -12572,7 +12648,7 @@
             "name": "limit",
             "in": "query",
             "required": false,
-            "description": "Maximum number of top-listeners entries to return (1–100; default 10).",
+            "description": "Maximum number of top-listeners entries to return (1\u2013100; default 10).",
             "schema": {
               "type": "integer",
               "minimum": 1,
@@ -12642,7 +12718,7 @@
             "name": "limit",
             "in": "query",
             "required": false,
-            "description": "Maximum number of top-tracks entries to return (1–100; default 10).",
+            "description": "Maximum number of top-tracks entries to return (1\u2013100; default 10).",
             "schema": {
               "type": "integer",
               "minimum": 1,
@@ -13656,6 +13732,147 @@
             }
           }
         ]
+      }
+    },
+    "/api/v1/me/player-state": {
+      "get": {
+        "summary": "Get player state",
+        "operationId": "getMyPlayerState",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Player state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayerState"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "description": "Not found (no state reported)"
+          }
+        }
+      },
+      "put": {
+        "summary": "Put player state",
+        "operationId": "putMyPlayerState",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PlayerState"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Player state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PlayerState"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/me/search-history": {
+      "get": {
+        "summary": "Get search history",
+        "operationId": "getMySearchHistory",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Search history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SearchHistory"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      },
+      "put": {
+        "summary": "Put search history",
+        "operationId": "putMySearchHistory",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Queries, newest first, max 20"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      },
+      "delete": {
+        "summary": "Delete search history",
+        "operationId": "deleteMySearchHistory",
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
       }
     }
   },

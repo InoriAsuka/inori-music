@@ -19,8 +19,10 @@ import (
 	"inori-music/services/api/internal/catalog"
 	"inori-music/services/api/internal/favorites"
 	"inori-music/services/api/internal/history"
+	"inori-music/services/api/internal/playerstate"
 	"inori-music/services/api/internal/ratelimit"
 	"inori-music/services/api/internal/search"
+	"inori-music/services/api/internal/searchhistory"
 	"inori-music/services/api/internal/storage"
 	"inori-music/services/api/internal/streamsign"
 	"inori-music/services/api/internal/userplaylist"
@@ -137,6 +139,20 @@ func WithSearchService(svc search.Service) HandlerOption {
 	}
 }
 
+// WithPlayerstateService enables cross-device player state routes.
+func WithPlayerstateService(svc *playerstate.Service) HandlerOption {
+	return func(handler *Handler) {
+		handler.playerstateService = svc
+	}
+}
+
+// WithSearchHistoryService enables per-user search history routes.
+func WithSearchHistoryService(svc *searchhistory.Service) HandlerOption {
+	return func(handler *Handler) {
+		handler.searchHistoryService = svc
+	}
+}
+
 // withCatalogMediaReader wires the media object service into the catalog service
 // as a MediaObjectReader after both have been set via options. Called from Routes().
 func (handler *Handler) withCatalogMediaReader() {
@@ -205,6 +221,8 @@ type Handler struct {
 	favoritesService    *favorites.Service
 	userPlaylistService *userplaylist.Service
 	searchSvc           search.Service
+	playerstateService   *playerstate.Service
+	searchHistoryService *searchhistory.Service
 	loginLimiter        *ratelimit.Limiter
 	streamSigner        *streamsign.Signer
 	adminToken          string
@@ -247,6 +265,15 @@ func (handler *Handler) readinessReport() ReadinessReport {
 		readinessCheck("catalog_service", handler.catalogService != nil, "catalog service is configured", "catalog service is not configured"),
 		readinessCheck("history_service", handler.historyService != nil, "history service is configured", "history service is not configured"),
 		readinessCheck("favorites_service", handler.favoritesService != nil, "favorites service is configured", "favorites service is not configured"),
+	}
+	// Player state and search history are optional cross-device sync services:
+	// report their status only when configured so their absence does not fail
+	// readiness (mirrors the optional search backend).
+	if handler.playerstateService != nil {
+		checks = append(checks, readinessCheck("playerstate_service", true, "player state service is configured", "player state service is not configured"))
+	}
+	if handler.searchHistoryService != nil {
+		checks = append(checks, readinessCheck("search_history_service", true, "search history service is configured", "search history service is not configured"))
 	}
 	report := ReadinessReport{Ready: true, Checks: checks}
 	for _, check := range checks {
@@ -389,6 +416,13 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/admin/favorites/users/{userId}/tracks/{trackId}", handler.requireAdminAuth(handler.adminRemoveUserFavoriteTrack))
 	mux.HandleFunc("/api/v1/admin/favorites/users/{userId}/tracks/{trackId}", handler.requireAdminAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/admin/favorites/users/{userId}/tracks", handler.requireAdminAuth(handler.methodNotAllowed))
+	mux.HandleFunc("GET /api/v1/me/player-state", handler.requireViewerAuth(handler.getMyPlayerState))
+	mux.HandleFunc("PUT /api/v1/me/player-state", handler.requireViewerAuth(handler.putMyPlayerState))
+	mux.HandleFunc("/api/v1/me/player-state", handler.requireViewerAuth(handler.methodNotAllowed))
+	mux.HandleFunc("GET /api/v1/me/search-history", handler.requireViewerAuth(handler.getMySearchHistory))
+	mux.HandleFunc("PUT /api/v1/me/search-history", handler.requireViewerAuth(handler.putMySearchHistory))
+	mux.HandleFunc("DELETE /api/v1/me/search-history", handler.requireViewerAuth(handler.deleteMySearchHistory))
+	mux.HandleFunc("/api/v1/me/search-history", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("POST /api/v1/me/playlists", handler.requireViewerAuth(handler.createUserPlaylist))
 	mux.HandleFunc("GET /api/v1/me/playlists", handler.requireViewerAuth(handler.listUserPlaylists))
 	mux.HandleFunc("GET /api/v1/me/playlists/{id}", handler.requireViewerAuth(handler.getUserPlaylist))
@@ -877,6 +911,12 @@ func writeError(w http.ResponseWriter, err error) {
 	case errors.Is(err, userplaylist.ErrForbidden):
 		status = http.StatusForbidden
 		code = "forbidden"
+	case errors.Is(err, playerstate.ErrNotFound):
+		status = http.StatusNotFound
+		code = "not_found"
+	case errors.Is(err, playerstate.ErrInvalidInput):
+		status = http.StatusBadRequest
+		code = "invalid_input"
 	}
 	writeAPIError(w, status, code, strings.TrimSpace(err.Error()))
 }
