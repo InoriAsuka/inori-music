@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`5.3.0`
+`5.4.0`
 
 ## Product Goal
 
@@ -41,6 +41,14 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Committed lifecycle updates must record latest transition metadata for audit preparation.
 
 ## Requirement History
+
+### v5.4.0 - 2026-07-17
+
+- **跨设备播放续播** —— 服务端新增 `GET/PUT /api/v1/me/player-state` 端点（`internal/playerstate` 包，memory+postgres 双实现），客户端（Web/Flutter）在播放中每 30 秒节流上报，切歌/暂停/应用后台立即 PUT。Web 启动时 GET 远端状态，若 `updatedAt` 晚于本地则显示「继续上次播放」提示条（不自动播放，等用户手势），确认后重建队列并 seek 到 position（复用 v5.2.0 `restoredPending` 模式）。队列上限 500，`updatedAt` 由服务端生成（last-write-wins）。
+- **跨设备搜索历史同步** —— 服务端新增 `GET/PUT/DELETE /api/v1/me/search-history` 端点（`internal/searchhistory` 包）。Web 端在 v5.1.0 localStorage 基础上增加本地∪远端合并（去重取最新，裁到 20 条）后 PUT 回写，单删/清空同步远端。Flutter 端将 SharedPreferences 主存扩展为登录时合并远端，离线时仅本地，回联后下次合并。
+- **OpenAPI 契约升级** —— `packages/api-contract/openapi/storage-admin.v1.json` 版本从 5.0.0 升至 5.4.0，新增 `PlayerState` 和 `SearchHistory` schema 及 4 个新路径。`openapi_contract_test.go` 同步更新。
+- **验证** —— Go 792/792 测试通过（含 playerstate/searchhistory 单元测试、handler 测试、-race），Web TypeScript 通过，Vitest 203/203 通过，Biome 110 文件通过。
+- 本阶段为 v5 封版收官，后续新方向按 v6+ 升版。
 
 ### v5.3.0 - 2026-07-16
 
