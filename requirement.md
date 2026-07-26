@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`5.4.0`
+`5.5.0`
 
 ## Product Goal
 
@@ -1713,3 +1713,11 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 
 - **feat: 跨设备一致性（播放续播 + 搜索历史同步）—— v5 封版收官** — 服务端 viewer 域新增播放状态端点：migration `user_player_state` 单行 upsert 表（queue/currentIndex/positionMs/repeat/shuffle/updatedAt），`internal/playerstate` package（memory + PostgreSQL 双实现），`GET/PUT /api/v1/me/player-state`（last-write-wins，服务端时钟），`/readyz` 追加检查；搜索历史端点：`user_search_history` 表 + `GET/PUT/DELETE /api/v1/me/search-history`（服务端裁剪 20 条）。Web 与 Flutter 双端：播放中 30s 节流 + 切歌/暂停触发上报；启动时服务端状态较新则提示「在另一台设备听到 X，继续播放？」，确认后重建队列 seek 恢复（不自动播放）；搜索历史本地∪远端合并去重回写。OpenAPI 契约版本升至 5.4.0。本阶段完成后 v5 线封版：安全基线 + 双端对齐 + 跨设备一致构成产品化闭环，后续新方向按 v6+ 升大版本。
 - The phase output is version-tracked and covered by Go unit tests（playerstate/searchhistory 裁剪与冲突语义）, OpenAPI contract tests, Playwright e2e（恢复提示流程）, flutter test（节流/合并策略）, and 人工验收（手机→web 续播误差 <5s）.
+
+### v5.5.0 - 2026-07-26
+
+- **feat: 樱花薄暮浅色 ACG 主题（Web）** — 已部署实例的界面被判定为典型「AI 暗黑模板」（电紫 `#9b5cff` + 近黑 `#070711` + Orbitron 赛博字体 + 扫描线），本阶段按二次元 ACG 特色重做视觉。方向经两轮迭代确定为**明亮日系**：奶油白画布 `#FFF7F2` + 纯白卡片 + 樱粉 `#D42062` / 晴空青 `#0A7D94` / 杏金点缀，画面中不出现任何黑色或灰色大面积背景；字体 Orbitron+Inter → `Zen Maru Gothic`（日系圆黑，标题）+ `Poppins`（正文），中文回退链补 PingFang SC / Microsoft YaHei。权威 token 落在 `packages/ui/src/styles/sakura-dusk.css`（原 `neon-shrine.css` 重命名），web 端 `globals.css` 同步；`color-scheme` 由 dark 改 light，圆角整体放大，新增 `.card-soft`/`.card-float` 粉调阴影（不用灰黑）、`.aurora-veil` 三层径向渐变氛围底、`.petal` 樱花飘落、`.vinyl-spin` 唱片旋转，删除 `.scanlines` 赛博语汇。结构性调整：首页 4 个等大方块改 Bento 不对称网格（Tracks 卡 2×2 主视觉 + 超大图标水印，Playlists 卡横跨末行消除空缺）、Recently Added 补封面缩略图、列表项由 `<div onClick>` 改 `<button>`（原键盘不可达）；`PlayerBar` 进度条抽出 `ProgressBar` 支持 pointer 拖拽（原仅点击跳转）+ hover 增高 + 圆形手柄，播放键与 `ControlBtn` 由 40px 提到 44px 满足触摸目标标准；`Sidebar` 选中态由整块实心改左侧 3px 指示条 + 淡樱粉底 + `aria-current`；`Visualizer` canvas 渐变原写死三个旧主题 hex，改为挂载时读一次 CSS 变量（每帧读会触发 style recalc）；新增 `PetalDrift` 组件（6 片 CSS-only 花瓣，`prefers-reduced-motion` 下 `display:none`——仅归零 duration 会让花瓣僵在半空）；`FullscreenPlayer` 封面 canvas 取色驱动背景光晕，跨域污染时回退主题渐变。
+- **fix: 主题改造中发现的 3 类既有缺陷** — (1) **`--color-primary-foreground` 从未在 `@theme` 中定义**，却被 8 个文件 10 处引用（全是实心按钮文字），旧深色主题下靠继承浅色文字侥幸正常，浅色主题下会直接失效；补上定义。(2) **`bg-opacity-10` / `ring-opacity-20` 在 Tailwind v4 已失效**（v3 遗留写法），导致登录页与安全设置页的错误/成功提示渲染成实心红底红字、绿底绿字，几乎不可读；改为 `danger-dim` 底 + 边框，并把绕过主题的 `bg-green-500`/`text-green-600` 换成语义 token。(3) 四处硬编码 `bg-black/50`、`bg-black/60` 遮罩（Modal / MobileSidebar / QueueDrawer / LyricsPanel）改用 `--color-scrim` 梅墨半透明。
+- 色板全部经 WCAG AA 实测而非估算，三条硬约束记录在 `.plan/20260726-027-v5.5.0-sakura-dusk-web.md`：浅色强调色做实心按钮时白字极易不达标（初版樱粉白字仅 2.4:1，最终主色定 `#D42062` 达 5.0:1）；`--color-primary` 不能直接当压在 `--color-primary-dim` 上的文字色（侧栏选中态仅 4.2:1，新增 `--color-primary-on-dim` 达 5.2:1）；`--color-border` 达不到 3:1 只能做装饰线，控件轮廓须用 `--color-border-strong`。
+- Admin 后台与 Flutter 端对齐分别由 v5.6.0 / v5.7.0 跟进（`.plan/20260726-028`、`20260726-029`），因两端主题各有独立副本、且后台需降饱和处理、Flutter 端有 240 处符号引用需批量重命名。
+- The phase output is version-tracked and verified by `tsc --noEmit`（0 errors）, biome lint（源码 96 files 0 errors）, vitest（203 tests all green）, Playwright（6 passed；另 3 个播放用例失败已用 `git stash` 回退到改动前复跑确认同样失败，根因是本地种子 media object 指向不存在的音频文件，与主题无关）, 以及 Chrome DevTools MCP 实机走查——375/1440 两档逐屏验收，并注入对比度脚本扫描 **7 个页面**的实时 DOM 文字/背景配对（修复后 0 处不达标；侧栏选中态那处正是靠此扫描发现，离线色板审计未覆盖组合态），另从 CSSOM 读取编译产物确认 reduced-motion 规则生效。纯前端主题改造，零 API schema 变更，故跳过 OpenAPI `info.version` 同步。
