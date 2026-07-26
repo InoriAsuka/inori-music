@@ -6,7 +6,7 @@
   "main": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./styles": "./src/styles/neon-shrine.css"
+    "./styles": "./src/styles/sakura-dusk.css"
   },
   "peerDependencies": {
     "react": ">=19",

@@ -44,7 +44,7 @@ export function MobileSidebar({ open, onClose }: MobileSidebarProps) {
     <>
       <div
         className={cn(
-          "fixed inset-0 z-40 bg-black/60 transition-opacity md:hidden",
+          "fixed inset-0 z-40 bg-[var(--color-scrim)] transition-opacity md:hidden",
           open ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"
         )}
         onClick={onClose}

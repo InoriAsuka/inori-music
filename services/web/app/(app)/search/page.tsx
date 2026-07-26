@@ -163,7 +163,7 @@ function SearchPageInner() {
               setFocused(false);
             }
           }}
-          className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] py-3 pl-9 pr-4 text-sm outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)] focus:ring-opacity-20 transition-colors"
+          className="w-full rounded-full border border-[var(--color-border-strong)] bg-[var(--color-surface)] py-3 pl-9 pr-4 text-sm outline-none focus:border-[var(--color-primary)] transition-colors"
         />
 
         {showHistory && (

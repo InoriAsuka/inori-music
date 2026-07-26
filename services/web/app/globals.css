@@ -1,66 +1,90 @@
-@import url("https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400&family=Noto+Sans+JP:wght@400;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700;900&family=Poppins:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap");
 @import "tailwindcss";
 
 @theme {
-  /* ── Canvas layers ─────────────────────────────────────────────────── */
-  --color-void: #070711;
-  --color-surface: #0d0d1a;
-  --color-surface-raised: #12122b;
-  --color-border: #1e1e3f;
-  --color-border-glow: #2d2d6b;
+  /* ── Canvas layers — warm cream and blush, never grey or black ───────── */
+  --color-void: #fff7f2;
+  --color-surface: #ffffff;
+  --color-surface-raised: #fff0f5;
+  --color-overlay: #fce7ef;
 
-  /* ── Primary — electric violet ──────────────────────────────────────── */
-  --color-primary: #9b5cff;
-  --color-primary-hover: #b97dff;
-  --color-primary-dim: #1a0533;
-  --color-primary-fg: #f0e8ff;
+  /* Decorative hairlines only — 1.3:1 against a card, never a control outline. */
+  --color-border: #f2d9e4;
+  /* Control outlines (inputs, toggles, secondary buttons) — 3.4:1 on card. */
+  --color-border-strong: #b77a96;
 
-  /* ── Secondary — cyan-teal ──────────────────────────────────────────── */
-  --color-secondary: #0fd4c0;
-  --color-secondary-hover: #22e5d4;
-  --color-secondary-dim: #022926;
+  /* ── Primary — sakura ────────────────────────────────────────────────── */
+  /* Deep enough to carry white text at 5.0:1. Use --color-primary-soft for
+     large decorative fills where contrast does not apply. */
+  --color-primary: #d42062;
+  --color-primary-hover: #bd1550;
+  --color-primary-soft: #ff8fb8;
+  --color-primary-dim: #ffe4ee;
+  /* Sakura text sitting ON --color-primary-dim. --color-primary is only 4.2:1
+     against that tint; this darker step clears AA at 5.2:1. */
+  --color-primary-on-dim: #bd1550;
+  --color-primary-ink: #ffffff;
+  --color-primary-fg: #ffffff;
+  --color-primary-foreground: #ffffff;
 
-  /* ── Sakura pink ─────────────────────────────────────────────────────  */
-  --color-sakura: #ff5fa0;
-  --color-sakura-dim: #2a0014;
+  /* ── Secondary — sky teal ────────────────────────────────────────────── */
+  --color-secondary: #0a7d94;
+  --color-secondary-hover: #077084;
+  --color-secondary-soft: #7fd6e6;
+  --color-secondary-dim: #e0f5f9;
+  --color-secondary-ink: #ffffff;
+
+  /* ── Accent — apricot gold ───────────────────────────────────────────── */
+  --color-gold: #9a5b00;
+  --color-gold-soft: #ffc978;
+  --color-gold-dim: #fff1dc;
+  --color-gold-ink: #ffffff;
 
   /* ── Semantic ────────────────────────────────────────────────────────  */
-  --color-success: #00e5a0;
-  --color-warning: #ffd23f;
-  --color-danger: #ff4d6d;
-  --color-danger-dim: #2a000e;
-  --color-info: #38bdf8;
+  --color-success: #0b7a53;
+  --color-warning: #9a5b00;
+  --color-danger: #c81e2c;
+  --color-danger-dim: #ffe5e7;
+  --color-info: #0a7d94;
 
-  /* ── Text ────────────────────────────────────────────────────────────  */
-  --color-text: #e8e8f4;
-  --color-text-secondary: #9090b8;
-  --color-text-muted: #4a4a7a;
+  /* ── Text — plum ink, not pure black ────────────────────────────────── */
+  --color-text: #3b2a3f;
+  --color-text-secondary: #6b5570;
+  --color-text-muted: #7e6884;
+
+  /* ── Scrims ──────────────────────────────────────────────────────────  */
+  --color-scrim: rgb(59 42 63 / 0.45);
 
   /* ── Backward-compat aliases (used by existing components) ──────────── */
-  --color-background: #070711;
-  --color-foreground: #e8e8f4;
-  --color-card: #0d0d1a;
-  --color-card-foreground: #e8e8f4;
-  --color-muted: #12122b;
-  --color-muted-foreground: #9090b8;
-  --color-destructive: #ff4d6d;
-  --color-destructive-foreground: #f0e8ff;
+  --color-background: #fff7f2;
+  --color-foreground: #3b2a3f;
+  --color-card: #ffffff;
+  --color-card-foreground: #3b2a3f;
+  --color-muted: #fff0f5;
+  --color-muted-foreground: #6b5570;
+  --color-destructive: #c81e2c;
+  --color-destructive-foreground: #ffffff;
+  --color-sakura: #d42062;
+  --color-sakura-dim: #ffe4ee;
+  --color-border-glow: #b77a96;
 
   /* ── Radii ───────────────────────────────────────────────────────────  */
-  --radius-sm: 0.25rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
-  --radius-xl: 1rem;
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+  --radius-2xl: 1.75rem;
 
   /* ── Fonts ───────────────────────────────────────────────────────────  */
-  --font-display: "Orbitron", sans-serif;
-  --font-sans: "Inter", "Noto Sans JP", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Zen Maru Gothic", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-sans: "Poppins", "Zen Maru Gothic", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui,
+    sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 }
 
 /* ── Base ──────────────────────────────────────────────────────────────── */
 html {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 body {
@@ -71,54 +95,127 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+}
+
+/* Keep digits from reflowing as timers and counters tick. */
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
 /* ── Scrollbar ─────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar {
-  width: 4px;
-  height: 4px;
+  width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: var(--color-border-glow);
+  background: var(--color-overlay);
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-primary);
+  background: var(--color-primary-soft);
 }
 
 /* ── Selection ─────────────────────────────────────────────────────────── */
 ::selection {
   background: var(--color-primary-dim);
-  color: var(--color-primary-fg);
+  color: var(--color-text);
+}
+
+/* ── Focus ─────────────────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* ── Soft elevation — pink-tinted, never grey/black shadows ─────────────── */
+.card-soft {
+  box-shadow:
+    0 1px 2px rgb(212 32 98 / 0.04),
+    0 8px 24px -12px rgb(212 32 98 / 0.12);
+}
+.card-float {
+  box-shadow:
+    0 2px 4px rgb(212 32 98 / 0.05),
+    0 16px 40px -16px rgb(212 32 98 / 0.18);
 }
 
 /* ── Glow utilities ────────────────────────────────────────────────────── */
 .glow-primary {
-  box-shadow: 0 0 16px 3px color-mix(in srgb, var(--color-primary) 30%, transparent);
+  box-shadow:
+    0 4px 12px -2px color-mix(in srgb, var(--color-primary) 28%, transparent),
+    0 12px 32px -12px color-mix(in srgb, var(--color-primary) 22%, transparent);
 }
 .glow-secondary {
-  box-shadow: 0 0 16px 3px color-mix(in srgb, var(--color-secondary) 30%, transparent);
+  box-shadow:
+    0 4px 12px -2px color-mix(in srgb, var(--color-secondary) 28%, transparent),
+    0 12px 32px -12px color-mix(in srgb, var(--color-secondary) 22%, transparent);
 }
 
-/* ── Scanline overlay ───────────────────────────────────────────────────── */
-.scanlines {
+/* ── Ambient veil — sunlit blush wash behind app content ────────────────── */
+.aurora-veil {
   position: relative;
-  overflow: hidden;
 }
-.scanlines::after {
+.aurora-veil::before {
   content: "";
   position: absolute;
   inset: 0;
-  background: repeating-linear-gradient(
-    0deg,
-    transparent,
-    transparent 1px,
-    rgba(255, 255, 255, 0.012) 1px,
-    rgba(255, 255, 255, 0.012) 2px
-  );
   pointer-events: none;
-  z-index: 1;
+  background:
+    radial-gradient(70rem 45rem at 8% -12%, color-mix(in srgb, var(--color-primary-soft) 34%, transparent), transparent 68%),
+    radial-gradient(58rem 38rem at 104% 6%, color-mix(in srgb, var(--color-secondary-soft) 30%, transparent), transparent 66%),
+    radial-gradient(52rem 36rem at 88% 110%, color-mix(in srgb, var(--color-gold-soft) 26%, transparent), transparent 68%);
+  z-index: 0;
+}
+
+/* ── Sakura petal drift ─────────────────────────────────────────────────── */
+@keyframes petal-fall {
+  0% {
+    transform: translate3d(0, -10vh, 0) rotate(0deg);
+    opacity: 0;
+  }
+  10% {
+    opacity: var(--petal-opacity, 0.5);
+  }
+  90% {
+    opacity: var(--petal-opacity, 0.5);
+  }
+  100% {
+    transform: translate3d(var(--petal-drift, 6vw), 110vh, 0) rotate(320deg);
+    opacity: 0;
+  }
+}
+
+.petal {
+  position: absolute;
+  top: 0;
+  width: var(--petal-size, 12px);
+  height: var(--petal-size, 12px);
+  border-radius: 100% 0 100% 0;
+  background: linear-gradient(135deg, var(--color-primary-soft), #ffb8d2);
+  will-change: transform, opacity;
+  animation: petal-fall var(--petal-duration, 14s) linear infinite;
+  animation-delay: var(--petal-delay, 0s);
+}
+
+/* ── Slow vinyl spin for artwork while playing ──────────────────────────── */
+@keyframes vinyl-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.vinyl-spin {
+  animation: vinyl-spin 24s linear infinite;
 }
 
 /* ── Reduced motion ─────────────────────────────────────────────────────── */
@@ -127,6 +224,16 @@ body {
   *::before,
   *::after {
     animation-duration: 0ms !important;
+    animation-iteration-count: 1 !important;
     transition-duration: 0ms !important;
+  }
+
+  /* Zeroing the duration would freeze petals mid-screen — remove them instead. */
+  .petal {
+    display: none;
+  }
+
+  .vinyl-spin {
+    animation: none;
   }
 }

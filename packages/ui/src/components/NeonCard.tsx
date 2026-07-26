@@ -8,9 +8,9 @@ interface NeonCardProps {
 }
 
 const GLOW_MAP = {
-  primary: "shadow-[0_0_16px_3px_color-mix(in_srgb,#9b5cff_25%,transparent)]",
-  secondary: "shadow-[0_0_16px_3px_color-mix(in_srgb,#0fd4c0_25%,transparent)]",
-  sakura: "shadow-[0_0_16px_3px_color-mix(in_srgb,#ff5fa0_25%,transparent)]",
+  primary: "shadow-[0_0_8px_0_color-mix(in_srgb,var(--color-primary)_25%,transparent)]",
+  secondary: "shadow-[0_0_8px_0_color-mix(in_srgb,var(--color-secondary)_25%,transparent)]",
+  sakura: "shadow-[0_0_8px_0_color-mix(in_srgb,var(--color-sakura)_25%,transparent)]",
   none: "",
 };
 

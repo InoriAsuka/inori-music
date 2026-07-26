@@ -20,6 +20,13 @@ export function Visualizer() {
     let raf = 0;
     let t = 0;
 
+    // Read the theme once per mount rather than per frame — getComputedStyle
+    // forces a style recalc and this loop runs at 60fps.
+    const theme = getComputedStyle(document.documentElement);
+    const stops = ["--color-primary-soft", "--color-gold-soft", "--color-secondary-soft"].map(
+      (name) => theme.getPropertyValue(name).trim() || "#ff8fb8"
+    );
+
     function draw() {
       if (!canvas || !ctx) return;
       const dpr = window.devicePixelRatio || 1;
@@ -34,9 +41,9 @@ export function Visualizer() {
       const gap = 2;
       const bw = (w - gap * (bars - 1)) / bars;
       const grad = ctx.createLinearGradient(0, 0, w, 0);
-      grad.addColorStop(0, "#9b5cff");
-      grad.addColorStop(0.5, "#ff5fa0");
-      grad.addColorStop(1, "#0fd4c0");
+      grad.addColorStop(0, stops[0]);
+      grad.addColorStop(0.5, stops[1]);
+      grad.addColorStop(1, stops[2]);
       ctx.fillStyle = grad;
 
       for (let i = 0; i < bars; i++) {
@@ -44,7 +51,7 @@ export function Visualizer() {
         const pulse = Math.sin(t * 0.09 + i * 0.17) * 0.5 + 0.5;
         const amp = status === "playing" ? Math.max(0.15, wave * 0.7 + pulse * 0.3) : 0.08;
         const bh = amp * h;
-        ctx.globalAlpha = status === "playing" ? 0.8 : 0.25;
+        ctx.globalAlpha = status === "playing" ? 0.95 : 0.4;
         ctx.fillRect(i * (bw + gap), h - bh, bw, bh);
       }
       t++;

@@ -65,7 +65,7 @@ export function LyricsPanel({ open, onClose }: { open: boolean; onClose: () => v
       {open && (
         <>
           <motion.div
-            className="fixed inset-0 z-40 bg-black/50"
+            className="fixed inset-0 z-40 bg-[var(--color-scrim)]"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}

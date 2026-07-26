@@ -64,20 +64,20 @@ function LoginForm() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-[var(--color-background)] px-4">
-      <div className="w-full max-w-sm space-y-6">
+    <div className="aurora-veil flex min-h-dvh flex-col items-center justify-center bg-[var(--color-void)] px-4">
+      <div className="relative z-10 w-full max-w-sm space-y-6">
         {/* Logo */}
-        <div className="flex flex-col items-center gap-2">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-[var(--color-primary)]">
-            <Music2 size={24} className="text-[var(--color-primary-foreground)]" />
+        <div className="flex flex-col items-center gap-3">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[var(--color-primary)] glow-primary">
+            <Music2 size={26} className="text-[var(--color-primary-ink)]" />
           </div>
-          <h1 className="text-xl font-semibold">Sign in to Inori Music</h1>
+          <h1 className="font-display text-2xl font-bold tracking-tight">Sign in to Inori Music</h1>
         </div>
 
         {/* Form */}
         <form
           onSubmit={handleSubmit}
-          className="space-y-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-card)] p-6 shadow-sm"
+          className="space-y-4 rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface)] p-6"
         >
           <div className="space-y-1.5">
             <label htmlFor="username" className="text-sm font-medium">
@@ -90,7 +90,7 @@ function LoginForm() {
               required
               value={username}
               onChange={(e) => setUsername(e.target.value)}
-              className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)] focus:ring-opacity-20 transition-colors"
+              className="w-full rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-void)] px-3 py-2.5 text-sm outline-none focus:border-[var(--color-primary)] transition-colors"
               placeholder="your-username"
             />
           </div>
@@ -106,13 +106,16 @@ function LoginForm() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)] focus:ring-opacity-20 transition-colors"
+              className="w-full rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-void)] px-3 py-2.5 text-sm outline-none focus:border-[var(--color-primary)] transition-colors"
               placeholder="••••••••"
             />
           </div>
 
           {error && (
-            <p className="rounded-md bg-[var(--color-destructive)] bg-opacity-10 px-3 py-2 text-sm text-[var(--color-destructive)]">
+            <p
+              role="alert"
+              className="rounded-lg border border-[var(--color-danger)]/40 bg-[var(--color-danger-dim)] px-3 py-2 text-sm text-[var(--color-danger)]"
+            >
               {error}
             </p>
           )}
@@ -120,7 +123,7 @@ function LoginForm() {
           <button
             type="submit"
             disabled={loading}
-            className="flex w-full items-center justify-center gap-2 rounded-md bg-[var(--color-primary)] px-4 py-2 text-sm font-semibold text-[var(--color-primary-foreground)] hover:opacity-90 disabled:opacity-60 transition-opacity"
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--color-primary)] px-4 py-2.5 text-sm font-semibold text-[var(--color-primary-ink)] transition-colors hover:bg-[var(--color-primary-hover)] disabled:opacity-60"
           >
             {loading && <Loader2 size={14} className="animate-spin" />}
             Sign in

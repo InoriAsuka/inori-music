@@ -1,0 +1,78 @@
+/* Sakura Dusk design system — shared CSS for inori-web and inori-admin.
+   Import this file in each service's globals.css with:
+   @import "@inori/ui/styles"; */
+
+@import url('https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@400;500;700;900&family=Poppins:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@theme {
+  /* Warm cream and blush canvas — never grey or black. */
+  --color-void:           #fff7f2;
+  --color-surface:        #ffffff;
+  --color-surface-raised: #fff0f5;
+  --color-overlay:        #fce7ef;
+
+  /* Decorative hairlines only — 1.3:1 against a card, never a control outline. */
+  --color-border:         #f2d9e4;
+  /* Control outlines (inputs, toggles, secondary buttons) — 3.4:1 on card. */
+  --color-border-strong:  #b77a96;
+
+  /* Deep enough to carry white text at 5.0:1. Use --color-primary-soft for
+     large decorative fills where contrast does not apply. */
+  --color-primary:        #d42062;
+  --color-primary-hover:  #bd1550;
+  --color-primary-soft:   #ff8fb8;
+  --color-primary-dim:    #ffe4ee;
+  /* Sakura text sitting ON --color-primary-dim. --color-primary is only 4.2:1
+     against that tint; this darker step clears AA at 5.2:1. */
+  --color-primary-on-dim: #bd1550;
+  --color-primary-ink:    #ffffff;
+  --color-primary-fg:     #ffffff;
+  --color-primary-foreground: #ffffff;
+
+  --color-secondary:      #0a7d94;
+  --color-secondary-hover:#077084;
+  --color-secondary-soft: #7fd6e6;
+  --color-secondary-dim:  #e0f5f9;
+  --color-secondary-ink:  #ffffff;
+
+  --color-gold:           #9a5b00;
+  --color-gold-soft:      #ffc978;
+  --color-gold-dim:       #fff1dc;
+  --color-gold-ink:       #ffffff;
+
+  --color-success:        #0b7a53;
+  --color-warning:        #9a5b00;
+  --color-danger:         #c81e2c;
+  --color-danger-dim:     #ffe5e7;
+  --color-info:           #0a7d94;
+
+  /* Plum ink, not pure black. */
+  --color-text:           #3b2a3f;
+  --color-text-secondary: #6b5570;
+  --color-text-muted:     #7e6884;
+
+  --color-scrim:          rgb(59 42 63 / 0.45);
+
+  /* Backward-compat aliases */
+  --color-background:     #fff7f2;
+  --color-foreground:     #3b2a3f;
+  --color-card:           #ffffff;
+  --color-card-foreground:#3b2a3f;
+  --color-muted:          #fff0f5;
+  --color-muted-foreground:#6b5570;
+  --color-destructive:    #c81e2c;
+  --color-destructive-foreground: #ffffff;
+  --color-sakura:         #d42062;
+  --color-sakura-dim:     #ffe4ee;
+  --color-border-glow:    #b77a96;
+
+  --radius-sm:  0.5rem;
+  --radius-md:  0.75rem;
+  --radius-lg:  1rem;
+  --radius-xl:  1.25rem;
+  --radius-2xl: 1.75rem;
+
+  --font-display: "Zen Maru Gothic", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-sans:    "Poppins", "Zen Maru Gothic", "PingFang SC", "Microsoft YaHei", ui-sans-serif, system-ui, sans-serif;
+  --font-mono:    "JetBrains Mono", ui-monospace, monospace;
+}

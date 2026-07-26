@@ -23,7 +23,7 @@ export function Artwork({ src, alt, size = "md", playable, onPlay, className }: 
   return (
     <div
       className={cn(
-        "relative shrink-0 overflow-hidden rounded-md bg-[var(--color-muted)]",
+        "relative shrink-0 overflow-hidden rounded-xl bg-gradient-to-br from-[var(--color-primary-dim)] via-[var(--color-surface-raised)] to-[var(--color-secondary-dim)]",
         SIZE_CLASSES[size],
         playable && "group cursor-pointer",
         className
@@ -34,7 +34,7 @@ export function Artwork({ src, alt, size = "md", playable, onPlay, className }: 
         // eslint-disable-next-line @next/next/no-img-element
         <img src={src} alt={alt} className="h-full w-full object-cover" />
       ) : (
-        <div className="flex h-full w-full items-center justify-center text-[var(--color-muted-foreground)]">
+        <div className="flex h-full w-full items-center justify-center text-[var(--color-primary)] opacity-45">
           <svg
             width="40%"
             height="40%"
@@ -55,9 +55,9 @@ export function Artwork({ src, alt, size = "md", playable, onPlay, className }: 
 
       {/* Play overlay */}
       {playable && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--color-primary)]">
-            <Play size={14} fill="white" className="text-white ml-0.5" />
+        <div className="absolute inset-0 flex items-center justify-center bg-[var(--color-scrim)] opacity-0 transition-opacity group-hover:opacity-100">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-[var(--color-primary)] text-[var(--color-primary-ink)]">
+            <Play size={14} fill="currentColor" className="ml-0.5" />
           </div>
         </div>
       )}

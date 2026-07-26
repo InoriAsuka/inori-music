@@ -86,18 +86,21 @@ export default function ChangePasswordPage() {
               required
               value={value}
               onChange={(e) => set(e.target.value)}
-              className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-background)] px-3 py-2 text-sm outline-none focus:border-[var(--color-primary)] transition-colors"
+              className="w-full rounded-lg border border-[var(--color-border-strong)] bg-[var(--color-void)] px-3 py-2.5 text-sm outline-none focus:border-[var(--color-primary)] transition-colors"
             />
           </div>
         ))}
 
         {error && (
-          <p className="rounded-md bg-[var(--color-destructive)] bg-opacity-10 px-3 py-2 text-sm text-[var(--color-destructive)]">
+          <p
+            role="alert"
+            className="rounded-lg border border-[var(--color-danger)]/40 bg-[var(--color-danger-dim)] px-3 py-2 text-sm text-[var(--color-danger)]"
+          >
             {error}
           </p>
         )}
         {success && (
-          <p className="flex items-center gap-1.5 rounded-md bg-green-500 bg-opacity-10 px-3 py-2 text-sm text-green-600">
+          <p className="flex items-center gap-1.5 rounded-lg border border-[var(--color-success)]/40 bg-[var(--color-secondary-dim)] px-3 py-2 text-sm text-[var(--color-success)]">
             <CheckCircle size={14} /> Password updated successfully.
           </p>
         )}

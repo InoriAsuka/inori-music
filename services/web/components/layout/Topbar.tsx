@@ -33,33 +33,33 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
   }
 
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-card)] px-4">
+    <header className="relative z-10 flex h-14 shrink-0 items-center justify-between border-b border-[var(--color-border)] bg-[var(--color-void)] px-4">
       {/* Logo + hamburger */}
       <div className="flex items-center gap-2">
         {onMenuClick && (
           <button
             type="button"
             onClick={onMenuClick}
-            className="rounded-md p-1.5 hover:bg-[var(--color-muted)] md:hidden"
+            className="rounded-lg p-2 text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-text)] transition-colors md:hidden"
             title="Menu"
           >
             <Menu size={18} />
           </button>
         )}
-        <Link href="/" className="flex items-center gap-2 font-semibold">
+        <Link href="/" className="flex items-center gap-2">
           <Music2 size={20} className="text-[var(--color-primary)]" />
-          <span className="text-sm">Inori Music</span>
+          <span className="font-display text-base font-bold tracking-tight">Inori Music</span>
         </Link>
       </div>
 
       {/* Search shortcut — clicking navigates too */}
       <Link
         href="/search"
-        className="hidden flex-1 max-w-sm mx-8 items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-muted)] px-3 py-1.5 text-sm text-[var(--color-muted-foreground)] hover:bg-[var(--color-border)] transition-colors md:flex"
+        className="hidden flex-1 max-w-sm mx-8 items-center gap-2 rounded-full border border-[var(--color-border-strong)] bg-[var(--color-surface-raised)] px-4 py-2 text-sm text-[var(--color-text-secondary)] hover:border-[var(--color-primary)] hover:text-[var(--color-text)] transition-colors md:flex"
       >
         <Search size={14} />
         Search tracks, artists…
-        <kbd className="ml-auto rounded border border-[var(--color-border)] bg-[var(--color-card)] px-1 text-xs opacity-60">
+        <kbd className="ml-auto rounded border border-[var(--color-border-strong)] bg-[var(--color-surface)] px-1.5 py-0.5 font-mono text-[10px] text-[var(--color-text-muted)]">
           ⌘K
         </kbd>
       </Link>
@@ -67,11 +67,11 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
       {/* User menu */}
       <div className="flex items-center gap-3">
         {user && (
-          <span className="flex items-center gap-1.5 text-sm text-[var(--color-muted-foreground)]">
+          <span className="flex items-center gap-1.5 text-sm text-[var(--color-text-secondary)]">
             <User size={14} />
             {user.username}
             {user.role === "admin" && (
-              <span className="rounded-full bg-[var(--color-primary)] px-1.5 py-0.5 text-[10px] font-semibold text-[var(--color-primary-foreground)]">
+              <span className="rounded-full bg-[var(--color-primary)] px-2 py-0.5 text-[10px] font-semibold text-[var(--color-primary-ink)]">
                 admin
               </span>
             )}
@@ -80,7 +80,7 @@ export function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
         <button
           type="button"
           onClick={handleLogout}
-          className="flex items-center gap-1 rounded-md p-1.5 text-sm text-[var(--color-muted-foreground)] hover:bg-[var(--color-muted)] transition-colors"
+          className="flex items-center gap-1 rounded-lg p-2 text-sm text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)] hover:text-[var(--color-danger)] transition-colors"
           title="Log out"
         >
           <LogOut size={16} />
