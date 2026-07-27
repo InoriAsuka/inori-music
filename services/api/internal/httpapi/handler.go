@@ -213,23 +213,23 @@ func WithCORSOrigins(origins []string) HandlerOption {
 
 // Handler serves versioned administrative HTTP endpoints.
 type Handler struct {
-	storage             *storage.Service
-	mediaObjects        *storage.MediaObjectService
-	authService         *auth.Service
-	catalogService      *catalog.Service
-	historyService      *history.Service
-	favoritesService    *favorites.Service
-	userPlaylistService *userplaylist.Service
-	searchSvc           search.Service
+	storage              *storage.Service
+	mediaObjects         *storage.MediaObjectService
+	authService          *auth.Service
+	catalogService       *catalog.Service
+	historyService       *history.Service
+	favoritesService     *favorites.Service
+	userPlaylistService  *userplaylist.Service
+	searchSvc            search.Service
 	playerstateService   *playerstate.Service
 	searchHistoryService *searchhistory.Service
-	loginLimiter        *ratelimit.Limiter
-	streamSigner        *streamsign.Signer
-	adminToken          string
-	corsOrigins         []string
-	info                ServiceInfo
-	metricsMu           sync.Mutex
-	requestMetrics      map[requestMetricKey]requestMetricValue
+	loginLimiter         *ratelimit.Limiter
+	streamSigner         *streamsign.Signer
+	adminToken           string
+	corsOrigins          []string
+	info                 ServiceInfo
+	metricsMu            sync.Mutex
+	requestMetrics       map[requestMetricKey]requestMetricValue
 }
 
 func defaultServiceInfo() ServiceInfo {

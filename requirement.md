@@ -1721,3 +1721,8 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - 色板全部经 WCAG AA 实测而非估算，三条硬约束记录在 `.plan/20260726-027-v5.5.0-sakura-dusk-web.md`：浅色强调色做实心按钮时白字极易不达标（初版樱粉白字仅 2.4:1，最终主色定 `#D42062` 达 5.0:1）；`--color-primary` 不能直接当压在 `--color-primary-dim` 上的文字色（侧栏选中态仅 4.2:1，新增 `--color-primary-on-dim` 达 5.2:1）；`--color-border` 达不到 3:1 只能做装饰线，控件轮廓须用 `--color-border-strong`。
 - Admin 后台与 Flutter 端对齐分别由 v5.6.0 / v5.7.0 跟进（`.plan/20260726-028`、`20260726-029`），因两端主题各有独立副本、且后台需降饱和处理、Flutter 端有 240 处符号引用需批量重命名。
 - The phase output is version-tracked and verified by `tsc --noEmit`（0 errors）, biome lint（源码 96 files 0 errors）, vitest（203 tests all green）, Playwright（6 passed；另 3 个播放用例失败已用 `git stash` 回退到改动前复跑确认同样失败，根因是本地种子 media object 指向不存在的音频文件，与主题无关）, 以及 Chrome DevTools MCP 实机走查——375/1440 两档逐屏验收，并注入对比度脚本扫描 **7 个页面**的实时 DOM 文字/背景配对（修复后 0 处不达标；侧栏选中态那处正是靠此扫描发现，离线色板审计未覆盖组合态），另从 CSSOM 读取编译产物确认 reduced-motion 规则生效。纯前端主题改造，零 API schema 变更，故跳过 OpenAPI `info.version` 同步。
+
+### v5.5.1 - 2026-07-26
+
+- **fix: 修复 `gofmt` 对齐失效，Build CI 恢复通过** — `services/api/internal/httpapi/handler.go` 的 `Handler` 结构体在 v5.4.0 新增两个更长字段名后未重跑 gofmt，导致对齐列宽失效；本阶段仅做纯格式化修复（15 行加、15 行减，字段名/类型/顺序完全不变），零逻辑变更。`git diff -w` 归一化后两侧完全一致。本地 CI 等价检查全绿：`gofmt -l` PASS、`go vet` PASS、`go test` 792 passed、`go test -race` 792 passed、OpenAPI JSON 校验 PASS。此问题从 v4.8.4 起连续 7 个版本导致 Build 工作流失败，与 v5.5.0 前端主题改动无关；修复后后续版本的 Build 才能真实反映 Go 侧回归。
+- The phase output is version-tracked; verified locally by the CI-equivalent Go checks above.
