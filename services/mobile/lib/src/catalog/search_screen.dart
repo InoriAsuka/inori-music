@@ -12,7 +12,7 @@ import 'package:inori_music/src/catalog/catalog_repository.dart';
 import 'package:inori_music/src/catalog/search_history_provider.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/router.dart';
-import 'package:inori_music/src/shared/theme/neon_shrine.dart';
+import 'package:inori_music/src/shared/theme/sakura_dusk.dart';
 import 'package:inori_music/src/shared/widgets/track_list_tile.dart';
 
 // ---------------------------------------------------------------------------
@@ -136,7 +136,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
     } else if (showEmptyPrompt) {
       bodyContent = Center(
         child: Text(t.searchPrompt,
-            style: const TextStyle(color: NeonShrineColors.onSurfaceVariant)),
+            style: const TextStyle(color: SakuraDuskColors.onSurfaceVariant)),
       );
     } else {
       bodyContent = TabBarView(
@@ -247,7 +247,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
                           Text(
                             t.recentSearches,
                             style: const TextStyle(
-                              color: NeonShrineColors.onSurfaceVariant,
+                              color: SakuraDuskColors.onSurfaceVariant,
                               fontSize: 12,
                               fontWeight: FontWeight.w500,
                             ),
@@ -336,7 +336,7 @@ class _Highlighter {
         text: inner,
         style: base.copyWith(
           fontWeight: FontWeight.bold,
-          color: NeonShrineColors.primaryViolet,
+          color: SakuraDuskColors.sakuraPink,
         ),
       ));
       rest = rest.substring(c + _markClose.length);
@@ -361,10 +361,10 @@ class _AllResults extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.search_off, size: 64, color: NeonShrineColors.onSurfaceVariant),
+            Icon(Icons.search_off, size: 64, color: SakuraDuskColors.onSurfaceVariant),
             SizedBox(height: 16),
             Text('没有找到相关内容',
-                style: TextStyle(color: NeonShrineColors.onSurfaceVariant)),
+                style: TextStyle(color: SakuraDuskColors.onSurfaceVariant)),
           ],
         ),
       );
@@ -376,8 +376,8 @@ class _AllResults extends StatelessWidget {
         if (item.artist != null) {
           return ListTile(
             leading: const CircleAvatar(
-              backgroundColor: NeonShrineColors.surfaceContainer,
-              child: Icon(Icons.person, color: NeonShrineColors.outlineVariant),
+              backgroundColor: SakuraDuskColors.surfaceContainer,
+              child: Icon(Icons.person, color: SakuraDuskColors.outlineVariant),
             ),
             title: _HighlightedTitle(
                 raw: item.highlight, plain: item.artist!.name),
@@ -390,11 +390,11 @@ class _AllResults extends StatelessWidget {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: NeonShrineColors.surfaceContainer,
+                color: SakuraDuskColors.surfaceContainer,
                 borderRadius: BorderRadius.circular(6),
               ),
               child: const Icon(Icons.album,
-                  color: NeonShrineColors.outlineVariant, size: 28),
+                  color: SakuraDuskColors.outlineVariant, size: 28),
             ),
             title:
                 _HighlightedTitle(raw: item.highlight, plain: item.album!.title),
@@ -424,11 +424,11 @@ class _ArtistResults extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Icon(Icons.search_off,
-                size: 64, color: NeonShrineColors.onSurfaceVariant),
+                size: 64, color: SakuraDuskColors.onSurfaceVariant),
             const SizedBox(height: 16),
             Text(t.noResults,
                 style:
-                    const TextStyle(color: NeonShrineColors.onSurfaceVariant)),
+                    const TextStyle(color: SakuraDuskColors.onSurfaceVariant)),
           ],
         ),
       );
@@ -440,8 +440,8 @@ class _ArtistResults extends StatelessWidget {
         if (artist == null) return const SizedBox();
         return ListTile(
           leading: const CircleAvatar(
-            backgroundColor: NeonShrineColors.surfaceContainer,
-            child: Icon(Icons.person, color: NeonShrineColors.outlineVariant),
+            backgroundColor: SakuraDuskColors.surfaceContainer,
+            child: Icon(Icons.person, color: SakuraDuskColors.outlineVariant),
           ),
           title:
               _HighlightedTitle(raw: items[i].highlight, plain: artist.name),
@@ -465,11 +465,11 @@ class _AlbumResults extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Icon(Icons.search_off,
-                size: 64, color: NeonShrineColors.onSurfaceVariant),
+                size: 64, color: SakuraDuskColors.onSurfaceVariant),
             const SizedBox(height: 16),
             Text(t.noResults,
                 style:
-                    const TextStyle(color: NeonShrineColors.onSurfaceVariant)),
+                    const TextStyle(color: SakuraDuskColors.onSurfaceVariant)),
           ],
         ),
       );
@@ -484,11 +484,11 @@ class _AlbumResults extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: NeonShrineColors.surfaceContainer,
+              color: SakuraDuskColors.surfaceContainer,
               borderRadius: BorderRadius.circular(6),
             ),
             child: const Icon(Icons.album,
-                color: NeonShrineColors.outlineVariant, size: 28),
+                color: SakuraDuskColors.outlineVariant, size: 28),
           ),
           title:
               _HighlightedTitle(raw: items[i].highlight, plain: album.title),
@@ -513,11 +513,11 @@ class _TrackResults extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Icon(Icons.search_off,
-                size: 64, color: NeonShrineColors.onSurfaceVariant),
+                size: 64, color: SakuraDuskColors.onSurfaceVariant),
             const SizedBox(height: 16),
             Text(t.noResults,
                 style:
-                    const TextStyle(color: NeonShrineColors.onSurfaceVariant)),
+                    const TextStyle(color: SakuraDuskColors.onSurfaceVariant)),
           ],
         ),
       );
@@ -550,7 +550,7 @@ class _HighlightedTitle extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const base = TextStyle(
-      color: NeonShrineColors.onSurface,
+      color: SakuraDuskColors.onSurface,
       fontSize: 14,
       fontWeight: FontWeight.w500,
     );

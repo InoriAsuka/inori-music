@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/auth/auth_notifier.dart';
-import 'package:inori_music/src/shared/theme/neon_shrine.dart';
+import 'package:inori_music/src/shared/theme/sakura_dusk.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -155,7 +155,7 @@ class _AppLogo extends StatelessWidget {
           width: 72,
           height: 72,
           decoration: BoxDecoration(
-            color: NeonShrineColors.primaryVioletDark,
+            color: SakuraDuskColors.sakuraPinkDark,
             borderRadius: BorderRadius.circular(18),
           ),
           child: const Icon(Icons.music_note_rounded, color: Colors.white, size: 40),
@@ -164,7 +164,7 @@ class _AppLogo extends StatelessWidget {
         Text(
           'Inori Music',
           style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                color: NeonShrineColors.onBackground,
+                color: SakuraDuskColors.onBackground,
                 fontWeight: FontWeight.w700,
               ),
         ),
@@ -172,7 +172,7 @@ class _AppLogo extends StatelessWidget {
         Text(
           'Sign in to your library',
           style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: NeonShrineColors.onSurfaceVariant,
+                color: SakuraDuskColors.onSurfaceVariant,
               ),
         ),
       ],
@@ -209,7 +209,7 @@ class _ServerUrlToggleState extends ConsumerState<_ServerUrlToggle> {
               Icon(
                 widget.show ? Icons.expand_less : Icons.expand_more,
                 size: 18,
-                color: NeonShrineColors.onSurfaceVariant,
+                color: SakuraDuskColors.onSurfaceVariant,
               ),
               const SizedBox(width: 4),
               Text(

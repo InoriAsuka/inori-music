@@ -7,7 +7,7 @@ import 'package:inori_api/src/model/catalog_album.dart';
 import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/catalog/catalog_repository.dart';
 import 'package:inori_music/src/shared/router.dart';
-import 'package:inori_music/src/shared/theme/neon_shrine.dart';
+import 'package:inori_music/src/shared/theme/sakura_dusk.dart';
 
 final _albumsProvider = FutureProvider<List<CatalogAlbum>>((ref) {
   return ref.watch(catalogRepositoryProvider).listAlbums(limit: 200);
@@ -28,7 +28,7 @@ class AlbumsScreen extends ConsumerWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline, color: NeonShrineColors.error, size: 48),
+              const Icon(Icons.error_outline, color: SakuraDuskColors.error, size: 48),
               const SizedBox(height: 12),
               Text('$e', textAlign: TextAlign.center),
               const SizedBox(height: 12),
@@ -75,9 +75,9 @@ class _AlbumCard extends StatelessWidget {
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
-          color: NeonShrineColors.surfaceVariant,
+          color: SakuraDuskColors.surfaceVariant,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: NeonShrineColors.outlineVariant, width: 0.5),
+          border: Border.all(color: SakuraDuskColors.outlineVariant, width: 0.5),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -86,13 +86,13 @@ class _AlbumCard extends StatelessWidget {
               child: Container(
                 width: double.infinity,
                 decoration: const BoxDecoration(
-                  color: NeonShrineColors.surfaceContainer,
+                  color: SakuraDuskColors.surfaceContainer,
                   borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
                 ),
                 child: const Icon(
                   Icons.album,
                   size: 56,
-                  color: NeonShrineColors.outlineVariant,
+                  color: SakuraDuskColors.outlineVariant,
                 ),
               ),
             ),

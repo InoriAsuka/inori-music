@@ -7,7 +7,7 @@ import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/desktop_integration.dart';
 import 'package:inori_music/src/shared/locale_provider.dart';
 import 'package:inori_music/src/shared/router.dart';
-import 'package:inori_music/src/shared/theme/neon_shrine.dart';
+import 'package:inori_music/src/shared/theme/sakura_dusk.dart';
 
 /// Global [InoriAudioHandler] instance shared between main.dart and PlayerNotifier.
 late final InoriAudioHandler audioHandler;
@@ -72,9 +72,8 @@ class _InoriMusicAppState extends ConsumerState<InoriMusicApp>
 
     return MaterialApp.router(
       title: 'Inori Music',
-      theme: buildNeonShrineTheme(),
-      darkTheme: buildNeonShrineTheme(),
-      themeMode: ThemeMode.dark,
+      theme: buildSakuraDuskTheme(),
+      themeMode: ThemeMode.light,
       routerConfig: router,
       debugShowCheckedModeBanner: false,
       locale: locale,

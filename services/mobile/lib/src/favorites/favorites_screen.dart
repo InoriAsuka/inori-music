@@ -8,7 +8,7 @@ import 'package:inori_music/src/catalog/catalog_repository.dart';
 import 'package:inori_music/src/favorites/track_favorite_notifier.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/router.dart';
-import 'package:inori_music/src/shared/theme/neon_shrine.dart';
+import 'package:inori_music/src/shared/theme/sakura_dusk.dart';
 import 'package:inori_music/src/shared/widgets/track_list_tile.dart';
 import 'package:inori_music/src/user_playlist/user_playlist_notifier.dart';
 
@@ -80,12 +80,12 @@ class FavoritesScreen extends ConsumerWidget {
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
-                      color: NeonShrineColors.onSurface,
+                      color: SakuraDuskColors.onSurface,
                     ),
                   ),
                   const Spacer(),
                   IconButton(
-                    icon: const Icon(Icons.add, color: NeonShrineColors.primaryViolet),
+                    icon: const Icon(Icons.add, color: SakuraDuskColors.sakuraPink),
                     tooltip: 'New Playlist',
                     onPressed: () => _showCreateDialog(context, ref),
                   ),
@@ -104,7 +104,7 @@ class FavoritesScreen extends ConsumerWidget {
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Text('$e',
-                    style: const TextStyle(color: NeonShrineColors.error)),
+                    style: const TextStyle(color: SakuraDuskColors.error)),
               ),
             ),
             data: (playlists) => playlists.isEmpty
@@ -113,7 +113,7 @@ class FavoritesScreen extends ConsumerWidget {
                       padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
                       child: Text(
                         'No playlists yet. Tap + to create one.',
-                        style: TextStyle(color: NeonShrineColors.onSurfaceVariant),
+                        style: TextStyle(color: SakuraDuskColors.onSurfaceVariant),
                       ),
                     ),
                   )
@@ -126,18 +126,18 @@ class FavoritesScreen extends ConsumerWidget {
                             width: 44,
                             height: 44,
                             decoration: BoxDecoration(
-                              color: NeonShrineColors.surfaceContainer,
+                              color: SakuraDuskColors.surfaceContainer,
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: const Icon(Icons.queue_music,
-                                color: NeonShrineColors.primaryViolet),
+                                color: SakuraDuskColors.sakuraPink),
                           ),
                           title: Text(pl.name),
                           subtitle: Text('${pl.trackIds.length} tracks'),
                           trailing: IconButton(
                             icon: const Icon(Icons.delete_outline,
                                 size: 20,
-                                color: NeonShrineColors.onSurfaceVariant),
+                                color: SakuraDuskColors.onSurfaceVariant),
                             onPressed: () async {
                               await ref
                                   .read(userPlaylistProvider.notifier)
@@ -160,7 +160,7 @@ class FavoritesScreen extends ConsumerWidget {
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
-                  color: NeonShrineColors.onSurface,
+                  color: SakuraDuskColors.onSurface,
                 ),
               ),
             ),
@@ -175,7 +175,7 @@ class FavoritesScreen extends ConsumerWidget {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     const Icon(Icons.error_outline,
-                        color: NeonShrineColors.error, size: 48),
+                        color: SakuraDuskColors.error, size: 48),
                     const SizedBox(height: 12),
                     Text('$e', textAlign: TextAlign.center),
                     const SizedBox(height: 12),
@@ -195,12 +195,12 @@ class FavoritesScreen extends ConsumerWidget {
                         children: [
                           Icon(Icons.favorite_border,
                               size: 64,
-                              color: NeonShrineColors.onSurfaceVariant),
+                              color: SakuraDuskColors.onSurfaceVariant),
                           SizedBox(height: 16),
                           Text('No favorites yet',
                               style: TextStyle(
                                   fontSize: 18,
-                                  color: NeonShrineColors.onSurfaceVariant)),
+                                  color: SakuraDuskColors.onSurfaceVariant)),
                         ],
                       ),
                     ),

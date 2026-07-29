@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:inori_music/src/shared/router.dart';
-import 'package:inori_music/src/shared/theme/neon_shrine.dart';
+import 'package:inori_music/src/shared/theme/sakura_dusk.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/user_playlist/user_playlist_notifier.dart';
 
@@ -165,7 +165,7 @@ class _UserPlaylistDetailScreenState
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       const Icon(Icons.error_outline,
-                          color: NeonShrineColors.error, size: 48),
+                          color: SakuraDuskColors.error, size: 48),
                       const SizedBox(height: 12),
                       Text(_error!, textAlign: TextAlign.center),
                       const SizedBox(height: 12),
@@ -187,7 +187,7 @@ class _UserPlaylistDetailScreenState
                               Text(
                                 '${_trackIds!.length} tracks',
                                 style: const TextStyle(
-                                    color: NeonShrineColors.onSurfaceVariant),
+                                    color: SakuraDuskColors.onSurfaceVariant),
                               ),
                               const Spacer(),
                               FilledButton.icon(
@@ -217,7 +217,7 @@ class _UserPlaylistDetailScreenState
                                     child: Text(
                                       '${i + 1}',
                                       style: const TextStyle(
-                                          color: NeonShrineColors
+                                          color: SakuraDuskColors
                                               .onSurfaceVariant),
                                     ),
                                   ),
@@ -225,7 +225,7 @@ class _UserPlaylistDetailScreenState
                                 title: Text(
                                   tid,
                                   style: const TextStyle(
-                                    color: NeonShrineColors.onSurface,
+                                    color: SakuraDuskColors.onSurface,
                                     fontSize: 13,
                                   ),
                                   maxLines: 1,
@@ -234,7 +234,7 @@ class _UserPlaylistDetailScreenState
                                 trailing: IconButton(
                                   icon: const Icon(Icons.remove_circle_outline,
                                       size: 20,
-                                      color: NeonShrineColors.onSurfaceVariant),
+                                      color: SakuraDuskColors.onSurfaceVariant),
                                   onPressed: () async {
                                     try {
                                       await ref

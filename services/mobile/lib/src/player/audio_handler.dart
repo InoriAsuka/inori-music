@@ -210,7 +210,7 @@ class InoriAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
         androidNotificationChannelName: 'Inori Music',
         androidNotificationOngoing: true,
         androidStopForegroundOnPause: true,
-        notificationColor: const Color(0xFF9B5CFF), // NeonShrine primary violet
+        notificationColor: const Color(0xFFD42062), // SakuraDusk primary pink
       ),
     );
   }

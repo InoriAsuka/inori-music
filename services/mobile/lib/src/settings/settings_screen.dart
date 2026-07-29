@@ -16,7 +16,7 @@ import 'package:inori_music/src/offline/download_notifier.dart';
 import 'package:inori_music/src/offline/offline_db.dart';
 import 'package:inori_music/src/shared/locale_provider.dart';
 import 'package:inori_music/src/shared/router.dart';
-import 'package:inori_music/src/shared/theme/neon_shrine.dart';
+import 'package:inori_music/src/shared/theme/sakura_dusk.dart';
 
 // ---------------------------------------------------------------------------
 // Language picker data
@@ -58,7 +58,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           const _SectionHeader(title: 'Account'),
           ListTile(
             leading: const CircleAvatar(
-              backgroundColor: NeonShrineColors.primaryVioletDark,
+              backgroundColor: SakuraDuskColors.sakuraPinkDark,
               child: Icon(Icons.person, color: Colors.white),
             ),
             title: Text(username.isNotEmpty ? username : 'User'),
@@ -197,8 +197,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           // Sign out
           const _SectionHeader(title: 'Account Actions'),
           ListTile(
-            leading: const Icon(Icons.logout, color: NeonShrineColors.error),
-            title: Text(t.logout, style: const TextStyle(color: NeonShrineColors.error)),
+            leading: const Icon(Icons.logout, color: SakuraDuskColors.error),
+            title: Text(t.logout, style: const TextStyle(color: SakuraDuskColors.error)),
             onTap: () => _confirmLogout(context, ref, t),
           ),
         ],
@@ -400,7 +400,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     final selected = await showModalBottomSheet<int>(
       context: context,
-      backgroundColor: NeonShrineColors.surface,
+      backgroundColor: SakuraDuskColors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -424,7 +424,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 return ListTile(
                   title: Text(opt.label),
                   leading: isSelected
-                      ? const Icon(Icons.check, color: NeonShrineColors.primaryViolet)
+                      ? const Icon(Icons.check, color: SakuraDuskColors.sakuraPink)
                       : null,
                   onTap: () => Navigator.pop(ctx, i),
                 );
@@ -487,7 +487,7 @@ class _OfflineLibrarySection extends ConsumerWidget {
             padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Text(
               'No downloaded tracks.',
-              style: TextStyle(color: NeonShrineColors.onSurfaceVariant),
+              style: TextStyle(color: SakuraDuskColors.onSurfaceVariant),
             ),
           );
         }
@@ -501,7 +501,7 @@ class _OfflineLibrarySection extends ConsumerWidget {
               child: Text(
                 '${tracks.length} track${tracks.length == 1 ? '' : 's'} · $totalMb MB',
                 style: const TextStyle(
-                  color: NeonShrineColors.onSurfaceVariant,
+                  color: SakuraDuskColors.onSurfaceVariant,
                   fontSize: 12,
                 ),
               ),
@@ -510,24 +510,24 @@ class _OfflineLibrarySection extends ConsumerWidget {
               (t) => ListTile(
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16),
                 leading: const Icon(Icons.download_done,
-                    color: NeonShrineColors.primaryViolet),
+                    color: SakuraDuskColors.sakuraPink),
                 title: Text(
                   t.title,
                   style: const TextStyle(
-                      color: NeonShrineColors.onSurface, fontSize: 14),
+                      color: SakuraDuskColors.onSurface, fontSize: 14),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 subtitle: Text(
                   t.artistName,
                   style: const TextStyle(
-                      color: NeonShrineColors.onSurfaceVariant, fontSize: 12),
+                      color: SakuraDuskColors.onSurfaceVariant, fontSize: 12),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 trailing: IconButton(
                   icon: const Icon(Icons.delete_outline,
-                      color: NeonShrineColors.error),
+                      color: SakuraDuskColors.error),
                   onPressed: () {
                     ref
                         .read(downloadProvider.notifier)
@@ -538,10 +538,10 @@ class _OfflineLibrarySection extends ConsumerWidget {
             ),
             ListTile(
               leading:
-                  const Icon(Icons.delete_sweep, color: NeonShrineColors.error),
+                  const Icon(Icons.delete_sweep, color: SakuraDuskColors.error),
               title: const Text(
                 'Delete all downloads',
-                style: TextStyle(color: NeonShrineColors.error),
+                style: TextStyle(color: SakuraDuskColors.error),
               ),
               onTap: () async {
                 final confirmed = await showDialog<bool>(
@@ -650,7 +650,7 @@ class _EqSection extends ConsumerWidget {
                       ),
                       Text(
                         _bandLabels[i],
-                        style: const TextStyle(fontSize: 10, color: NeonShrineColors.onSurfaceVariant),
+                        style: const TextStyle(fontSize: 10, color: SakuraDuskColors.onSurfaceVariant),
                       ),
                     ],
                   ),
@@ -755,7 +755,7 @@ class _SectionHeader extends StatelessWidget {
       child: Text(
         title,
         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: NeonShrineColors.primaryViolet,
+              color: SakuraDuskColors.sakuraPink,
               fontWeight: FontWeight.w600,
             ),
       ),

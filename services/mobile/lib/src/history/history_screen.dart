@@ -9,7 +9,7 @@ import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/history/track_title_resolver.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/router.dart';
-import 'package:inori_music/src/shared/theme/neon_shrine.dart';
+import 'package:inori_music/src/shared/theme/sakura_dusk.dart';
 
 // ---------------------------------------------------------------------------
 // Providers
@@ -62,11 +62,11 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: NeonShrineColors.surfaceVariant,
-        title: Text(t.deleteHistory, style: const TextStyle(color: NeonShrineColors.onSurface)),
+        backgroundColor: SakuraDuskColors.surfaceVariant,
+        title: Text(t.deleteHistory, style: const TextStyle(color: SakuraDuskColors.onSurface)),
         content: Text(
           'Delete ${ids.length} event${ids.length > 1 ? 's' : ''}? (ID: ${ids.take(3).join(', ')}${ids.length > 3 ? '...' : ''})',
-          style: const TextStyle(color: NeonShrineColors.onSurfaceVariant),
+          style: const TextStyle(color: SakuraDuskColors.onSurfaceVariant),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(t.cancel)),
@@ -95,7 +95,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to delete: $e'), backgroundColor: NeonShrineColors.error),
+          SnackBar(content: Text('Failed to delete: $e'), backgroundColor: SakuraDuskColors.error),
         );
       }
     }
@@ -112,7 +112,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
         actions: [
           if (_selectMode) ...[
             IconButton(
-              icon: const Icon(Icons.delete, color: NeonShrineColors.error),
+              icon: const Icon(Icons.delete, color: SakuraDuskColors.error),
               tooltip: 'Delete selected',
               onPressed: _selected.isEmpty ? null : _deleteSelected,
             ),
@@ -144,7 +144,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline, color: NeonShrineColors.error, size: 48),
+              const Icon(Icons.error_outline, color: SakuraDuskColors.error, size: 48),
               const SizedBox(height: 12),
               Text('$e', textAlign: TextAlign.center),
               const SizedBox(height: 12),
@@ -160,9 +160,9 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.history, size: 64, color: NeonShrineColors.onSurfaceVariant),
+                    Icon(Icons.history, size: 64, color: SakuraDuskColors.onSurfaceVariant),
                     SizedBox(height: 16),
-                    Text('No play history yet', style: TextStyle(fontSize: 18, color: NeonShrineColors.onSurfaceVariant)),
+                    Text('No play history yet', style: TextStyle(fontSize: 18, color: SakuraDuskColors.onSurfaceVariant)),
                   ],
                 ),
               )
@@ -242,24 +242,24 @@ class _HistoryTileState extends ConsumerState<_HistoryTile> {
               value: widget.isSelected,
               onChanged: (_) => widget.onToggleSelect(widget.event.id),
               checkColor: Colors.white,
-              activeColor: NeonShrineColors.primaryViolet,
+              activeColor: SakuraDuskColors.sakuraPink,
             )
           : const CircleAvatar(
-              backgroundColor: NeonShrineColors.surfaceContainer,
-              child: Icon(Icons.music_note, color: NeonShrineColors.onSurfaceVariant, size: 18),
+              backgroundColor: SakuraDuskColors.surfaceContainer,
+              child: Icon(Icons.music_note, color: SakuraDuskColors.onSurfaceVariant, size: 18),
             ),
       title: Text(
         displayName,
-        style: const TextStyle(color: NeonShrineColors.onSurface, fontSize: 14, fontWeight: FontWeight.w500),
+        style: const TextStyle(color: SakuraDuskColors.onSurface, fontSize: 14, fontWeight: FontWeight.w500),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
       subtitle: Text(
         _HistoryScreenState._formatEventDate(widget.event.playedAt, t),
-        style: const TextStyle(color: NeonShrineColors.onSurfaceVariant, fontSize: 12),
+        style: const TextStyle(color: SakuraDuskColors.onSurfaceVariant, fontSize: 12),
       ),
       selected: widget.isSelected,
-      selectedTileColor: NeonShrineColors.primaryVioletDark.withValues(alpha: 0.2),
+      selectedTileColor: SakuraDuskColors.sakuraPinkDark.withValues(alpha: 0.2),
       onTap: widget.selectMode ? () => widget.onToggleSelect(widget.event.id) : null,
       onLongPress: widget.selectMode ? null : () => widget.onEnterSelectMode(widget.event.id),
     );

@@ -12,7 +12,7 @@ import 'package:inori_music/src/lyrics/lyric_line.dart';
 import 'package:inori_music/src/lyrics/lyrics_provider.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/player/player_state.dart' as ps;
-import 'package:inori_music/src/shared/theme/neon_shrine.dart';
+import 'package:inori_music/src/shared/theme/sakura_dusk.dart';
 
 /// Full-screen player overlay with progress bar, controls, and queue sheet.
 class FullPlayerScreen extends ConsumerStatefulWidget {
@@ -47,7 +47,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
     final position = ref.watch(playerProvider.select((s) => s.position));
 
     return Scaffold(
-      backgroundColor: NeonShrineColors.background,
+      backgroundColor: SakuraDuskColors.background,
       body: SafeArea(
         child: Column(
           children: [
@@ -57,7 +57,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
               child: Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.keyboard_arrow_down, size: 32, color: NeonShrineColors.onBackground),
+                    icon: const Icon(Icons.keyboard_arrow_down, size: 32, color: SakuraDuskColors.onBackground),
                     tooltip: 'Close player',
                     onPressed: () => Navigator.of(context).maybePop(),
                   ),
@@ -65,11 +65,11 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                     child: Text(
                       'Now Playing',
                       textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: NeonShrineColors.onSurfaceVariant),
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: SakuraDuskColors.onSurfaceVariant),
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.queue_music, color: NeonShrineColors.onSurfaceVariant),
+                    icon: const Icon(Icons.queue_music, color: SakuraDuskColors.onSurfaceVariant),
                     tooltip: 'Queue',
                     onPressed: () => _showQueueSheet(context, ref),
                   ),
@@ -81,8 +81,8 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                         icon: Icon(
                           Icons.equalizer,
                           color: eqEnabled
-                              ? NeonShrineColors.primaryVioletLight
-                              : NeonShrineColors.onSurfaceVariant,
+                              ? SakuraDuskColors.sakuraPinkLight
+                              : SakuraDuskColors.onSurfaceVariant,
                         ),
                         tooltip: 'Equalizer',
                         onPressed: () => ref2.read(eqNotifierProvider.notifier).setEnabled(!eqEnabled),
@@ -108,11 +108,11 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                     width: 280,
                     height: 280,
                     decoration: BoxDecoration(
-                      color: NeonShrineColors.surfaceVariant,
+                      color: SakuraDuskColors.surfaceVariant,
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: NeonShrineColors.primaryViolet.withValues(alpha: 0.15),
+                          color: SakuraDuskColors.sakuraPink.withValues(alpha: 0.15),
                           blurRadius: 32,
                           offset: const Offset(0, 8),
                         ),
@@ -142,8 +142,8 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                   height: 6,
                   decoration: BoxDecoration(
                     color: _pageIndex == i
-                        ? NeonShrineColors.primaryViolet
-                        : NeonShrineColors.onSurfaceVariant.withValues(alpha: 0.4),
+                        ? SakuraDuskColors.sakuraPink
+                        : SakuraDuskColors.onSurfaceVariant.withValues(alpha: 0.4),
                     borderRadius: BorderRadius.circular(3),
                   ),
                 );
@@ -159,7 +159,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                 children: [
                   Text(
                     state.mediaItem?.title ?? 'Unknown Track',
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: NeonShrineColors.onBackground),
+                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: SakuraDuskColors.onBackground),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
@@ -167,7 +167,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                   const SizedBox(height: 4),
                   Text(
                     state.mediaItem?.artist ?? '',
-                    style: const TextStyle(fontSize: 15, color: NeonShrineColors.onSurfaceVariant),
+                    style: const TextStyle(fontSize: 15, color: SakuraDuskColors.onSurfaceVariant),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
@@ -211,8 +211,8 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(_formatDuration(state.position), style: const TextStyle(fontSize: 12, color: NeonShrineColors.onSurfaceVariant)),
-                        Text(_formatDuration(state.duration), style: const TextStyle(fontSize: 12, color: NeonShrineColors.onSurfaceVariant)),
+                        Text(_formatDuration(state.position), style: const TextStyle(fontSize: 12, color: SakuraDuskColors.onSurfaceVariant)),
+                        Text(_formatDuration(state.duration), style: const TextStyle(fontSize: 12, color: SakuraDuskColors.onSurfaceVariant)),
                       ],
                     ),
                   ),
@@ -229,7 +229,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                   IconButton(
                     icon: Icon(
                       Icons.repeat,
-                      color: state.repeat != ps.RepeatMode.none ? NeonShrineColors.primaryVioletLight : NeonShrineColors.onSurfaceVariant,
+                      color: state.repeat != ps.RepeatMode.none ? SakuraDuskColors.sakuraPinkLight : SakuraDuskColors.onSurfaceVariant,
                     ),
                     onPressed: () {
                       final notifier = ref.read(playerProvider.notifier);
@@ -253,7 +253,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                       return IconButton(
                         icon: Icon(
                           Icons.shuffle,
-                          color: isShuffle ? NeonShrineColors.primaryVioletLight : NeonShrineColors.onSurfaceVariant,
+                          color: isShuffle ? SakuraDuskColors.sakuraPinkLight : SakuraDuskColors.onSurfaceVariant,
                         ),
                         onPressed: () => ref2.read(playerProvider.notifier).setShuffle(!isShuffle),
                         tooltip: 'Shuffle',
@@ -261,13 +261,13 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                     },
                   ),
                   IconButton(
-                    icon: const Icon(Icons.skip_previous, size: 36, color: NeonShrineColors.onSurface),
+                    icon: const Icon(Icons.skip_previous, size: 36, color: SakuraDuskColors.onSurface),
                     onPressed: () => ref.read(playerProvider.notifier).previous(),
                   ),
                   // Play / Pause button
                   Container(
                     decoration: const BoxDecoration(
-                      color: NeonShrineColors.primaryViolet,
+                      color: SakuraDuskColors.sakuraPink,
                       shape: BoxShape.circle,
                     ),
                     child: IconButton(
@@ -280,7 +280,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.skip_next, size: 36, color: NeonShrineColors.onSurface),
+                    icon: const Icon(Icons.skip_next, size: 36, color: SakuraDuskColors.onSurface),
                     onPressed: () => ref.read(playerProvider.notifier).next(),
                   ),
                   // Speed control button
@@ -302,8 +302,8 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                         icon: Icon(
                           Icons.bedtime,
                           color: active
-                              ? NeonShrineColors.primaryVioletLight
-                              : NeonShrineColors.onSurfaceVariant,
+                              ? SakuraDuskColors.sakuraPinkLight
+                              : SakuraDuskColors.onSurfaceVariant,
                         ),
                         tooltip: 'Sleep timer',
                         onPressed: () => _showSleepTimerSheet(context, ref),
@@ -321,10 +321,10 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                       icon: Icon(
                         isFav ? Icons.favorite : Icons.favorite_border,
                         color: isFav
-                            ? NeonShrineColors.accentPink
+                            ? SakuraDuskColors.accentPink
                             : (trackId != null
-                                ? NeonShrineColors.onSurface
-                                : NeonShrineColors.onSurfaceVariant),
+                                ? SakuraDuskColors.onSurface
+                                : SakuraDuskColors.onSurfaceVariant),
                       ),
                       onPressed: trackId == null
                           ? null
@@ -427,7 +427,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
         minChildSize: 0.3,
         builder: (_, controller) => Container(
           decoration: const BoxDecoration(
-            color: NeonShrineColors.surface,
+            color: SakuraDuskColors.surface,
             borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
           ),
           child: Column(
@@ -437,7 +437,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: NeonShrineColors.outlineVariant,
+                  color: SakuraDuskColors.outlineVariant,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -445,7 +445,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                 padding: EdgeInsets.all(12),
                 child: Text(
                   'Queue',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: NeonShrineColors.onBackground),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: SakuraDuskColors.onBackground),
                 ),
               ),
               Expanded(
@@ -467,22 +467,22 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                           key: ValueKey(item.id),
                           leading: Icon(
                             Icons.music_note,
-                            color: isCurrent ? NeonShrineColors.primaryVioletLight : NeonShrineColors.onSurfaceVariant,
+                            color: isCurrent ? SakuraDuskColors.sakuraPinkLight : SakuraDuskColors.onSurfaceVariant,
                           ),
                           title: Text(
                             item.title,
                             style: TextStyle(
-                              color: isCurrent ? NeonShrineColors.primaryVioletLight : NeonShrineColors.onSurface,
+                              color: isCurrent ? SakuraDuskColors.sakuraPinkLight : SakuraDuskColors.onSurface,
                               fontWeight: isCurrent ? FontWeight.w600 : FontWeight.normal,
                             ),
                           ),
-                          subtitle: Text(item.artist ?? '', style: const TextStyle(color: NeonShrineColors.onSurfaceVariant)),
+                          subtitle: Text(item.artist ?? '', style: const TextStyle(color: SakuraDuskColors.onSurfaceVariant)),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               if (isCurrent && playerState.isPlaying)
-                                const Icon(Icons.equalizer, color: NeonShrineColors.primaryVioletLight, size: 20),
-                              const Icon(Icons.drag_handle, color: NeonShrineColors.onSurfaceVariant, size: 20),
+                                const Icon(Icons.equalizer, color: SakuraDuskColors.sakuraPinkLight, size: 20),
+                              const Icon(Icons.drag_handle, color: SakuraDuskColors.onSurfaceVariant, size: 20),
                             ],
                           ),
                           onTap: () {
@@ -552,7 +552,7 @@ class _ArtworkFallback extends StatelessWidget {
       child: Icon(
         Icons.music_note_rounded,
         size: 80,
-        color: NeonShrineColors.primaryViolet,
+        color: SakuraDuskColors.sakuraPink,
       ),
     );
   }
@@ -599,7 +599,7 @@ class _LyricsPage extends ConsumerWidget {
     final bilingual = ref.watch(bilingualLyricsProvider);
     return Container(
       decoration: BoxDecoration(
-        color: NeonShrineColors.surfaceVariant,
+        color: SakuraDuskColors.surfaceVariant,
         borderRadius: BorderRadius.circular(16),
       ),
       child: ClipRRect(

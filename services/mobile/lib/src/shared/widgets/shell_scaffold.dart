@@ -8,7 +8,7 @@ import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/player/mini_player_bar.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/router.dart';
-import 'package:inori_music/src/shared/theme/neon_shrine.dart';
+import 'package:inori_music/src/shared/theme/sakura_dusk.dart';
 
 /// Adaptive shell scaffold:
 /// - Mobile (<600dp): BottomNavigationBar + MiniPlayerBar
@@ -282,7 +282,7 @@ class _DesktopSidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: NeonShrineColors.surface,
+      color: SakuraDuskColors.surface,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -290,12 +290,12 @@ class _DesktopSidebar extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
             child: Row(
               children: [
-                const Icon(Icons.music_note_rounded, color: NeonShrineColors.primaryViolet, size: 22),
+                const Icon(Icons.music_note_rounded, color: SakuraDuskColors.sakuraPink, size: 22),
                 const SizedBox(width: 8),
                 Text(
                   'Inori Music',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: NeonShrineColors.onSurface,
+                        color: SakuraDuskColors.onSurface,
                         fontWeight: FontWeight.w700,
                       ),
                 ),
@@ -312,17 +312,17 @@ class _DesktopSidebar extends StatelessWidget {
                 return ListTile(
                   leading: Icon(
                     item.icon,
-                    color: isSelected ? NeonShrineColors.primaryVioletLight : NeonShrineColors.onSurfaceVariant,
+                    color: isSelected ? SakuraDuskColors.sakuraPinkLight : SakuraDuskColors.onSurfaceVariant,
                   ),
                   title: Text(
                     item.label,
                     style: TextStyle(
-                      color: isSelected ? NeonShrineColors.onSurface : NeonShrineColors.onSurfaceVariant,
+                      color: isSelected ? SakuraDuskColors.onSurface : SakuraDuskColors.onSurfaceVariant,
                       fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
                     ),
                   ),
                   selected: isSelected,
-                  selectedTileColor: NeonShrineColors.primaryVioletDark.withValues(alpha: 0.3),
+                  selectedTileColor: SakuraDuskColors.sakuraPinkDark.withValues(alpha: 0.3),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   onTap: () => onItemTapped(i),
                 );

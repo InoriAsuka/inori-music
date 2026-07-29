@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`5.6.0`
+`5.7.0`
 
 ## Product Goal
 
@@ -41,6 +41,11 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Committed lifecycle updates must record latest transition metadata for audit preparation.
 
 ## Requirement History
+
+### v5.7.0 - 2026-07-30
+
+- **Flutter 樱花薄暮主题对齐** —— `services/mobile/lib/src/shared/theme/neon_shrine.dart` 迁移为 `sakura_dusk.dart`，类名/函数名/色板全面对齐 Web 端樱花薄暮浅色色板：`background #FFF7F2`、`surface #FFFFFF`、`primary #D42062`、`onBackground/onSurface #3B2A3F`、`error #C81E2C`、`miniPlayerShadow #263B2A3F`。`ColorScheme.dark` 改为 `ColorScheme.light`，`main.dart` 切为 `ThemeMode.light` 并移除冗余 `darkTheme`，避免深色亮度推导残留。`primaryViolet*` 24 处引用批量替换为 `sakuraPink*`，共 311 处主题符号引用迁移；通知栏颜色同步改为 `#D42062`。`flutter analyze --no-fatal-infos` 仅剩 1 个既存 info、`flutter test --no-pub` 87/87 通过。**真机走查待执行**：需在模拟器/真机逐屏确认无深底浅字残留，并手工核对关键对比度配对。
+- 本阶段仅涉及 Flutter 客户端视觉主题，没有服务端 API schema 变化，因此 OpenAPI `info.version` 保持现状。
 
 ### v5.6.0 - 2026-07-28
 

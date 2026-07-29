@@ -8,7 +8,7 @@ import 'package:inori_music/src/catalog/artwork_provider.dart';
 import 'package:inori_music/src/catalog/catalog_cache_providers.dart';
 import 'package:inori_music/src/offline/download_notifier.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
-import 'package:inori_music/src/shared/theme/neon_shrine.dart';
+import 'package:inori_music/src/shared/theme/sakura_dusk.dart';
 import 'package:inori_music/src/user_playlist/user_playlist_notifier.dart';
 
 class TrackListTile extends ConsumerWidget {
@@ -71,14 +71,14 @@ class TrackListTile extends ConsumerWidget {
               ? Text(
                   '${track.trackNumber}',
                   style: const TextStyle(
-                    color: NeonShrineColors.onSurfaceVariant,
+                    color: SakuraDuskColors.onSurfaceVariant,
                     fontSize: 13,
                   ),
                 )
               : const Icon(
                   Icons.music_note,
                   size: 18,
-                  color: NeonShrineColors.onSurfaceVariant,
+                  color: SakuraDuskColors.onSurfaceVariant,
                 ),
         ),
       );
@@ -90,7 +90,7 @@ class TrackListTile extends ConsumerWidget {
       title: Text(
         track.title,
         style: const TextStyle(
-          color: NeonShrineColors.onSurface,
+          color: SakuraDuskColors.onSurface,
           fontSize: 14,
           fontWeight: FontWeight.w500,
         ),
@@ -102,7 +102,7 @@ class TrackListTile extends ConsumerWidget {
                 data: (name) => Text(
                   name,
                   style: const TextStyle(
-                    color: NeonShrineColors.onSurfaceVariant,
+                    color: SakuraDuskColors.onSurfaceVariant,
                     fontSize: 12,
                   ),
                   maxLines: 1,
@@ -112,7 +112,7 @@ class TrackListTile extends ConsumerWidget {
                 error: (e, st) => Text(
                   track.artistId,
                   style: const TextStyle(
-                    color: NeonShrineColors.onSurfaceVariant,
+                    color: SakuraDuskColors.onSurfaceVariant,
                     fontSize: 12,
                   ),
                   maxLines: 1,
@@ -127,7 +127,7 @@ class TrackListTile extends ConsumerWidget {
             Text(
               durationStr,
               style: const TextStyle(
-                color: NeonShrineColors.onSurfaceVariant,
+                color: SakuraDuskColors.onSurfaceVariant,
                 fontSize: 12,
               ),
             ),
@@ -138,8 +138,8 @@ class TrackListTile extends ConsumerWidget {
               isFavorite ? Icons.favorite : Icons.favorite_border,
               size: 20,
               color: isFavorite
-                  ? NeonShrineColors.accentPink
-                  : NeonShrineColors.onSurfaceVariant,
+                  ? SakuraDuskColors.accentPink
+                  : SakuraDuskColors.onSurfaceVariant,
             ),
           ),
         ],
@@ -163,7 +163,7 @@ class TrackListTile extends ConsumerWidget {
           // --- Playlist ---
           ListTile(
             leading: const Icon(Icons.playlist_add,
-                color: NeonShrineColors.primaryViolet),
+                color: SakuraDuskColors.sakuraPink),
             title: const Text('Add to playlist'),
             onTap: () {
               Navigator.pop(ctx);
@@ -202,8 +202,8 @@ class _ArtworkPlaceholder extends StatelessWidget {
     return Container(
       width: 40,
       height: 40,
-      color: NeonShrineColors.surfaceContainer,
-      child: const Icon(Icons.music_note, size: 18, color: NeonShrineColors.onSurfaceVariant),
+      color: SakuraDuskColors.surfaceContainer,
+      child: const Icon(Icons.music_note, size: 18, color: SakuraDuskColors.onSurfaceVariant),
     );
   }
 }
@@ -266,7 +266,7 @@ class _AddToPlaylistSheetState extends ConsumerState<_AddToPlaylistSheet> {
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
-                color: NeonShrineColors.onSurface,
+                color: SakuraDuskColors.onSurface,
               ),
             ),
           ),
@@ -275,14 +275,14 @@ class _AddToPlaylistSheetState extends ConsumerState<_AddToPlaylistSheet> {
               padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Text(
                 'No playlists yet.',
-                style: TextStyle(color: NeonShrineColors.onSurfaceVariant),
+                style: TextStyle(color: SakuraDuskColors.onSurfaceVariant),
               ),
             )
           else
             ...playlists.map(
               (pl) => ListTile(
                 leading: const Icon(Icons.queue_music,
-                    color: NeonShrineColors.primaryViolet),
+                    color: SakuraDuskColors.sakuraPink),
                 title: Text(pl.name),
                 subtitle: Text('${pl.trackIds.length} tracks'),
                 onTap: () async {
@@ -294,7 +294,7 @@ class _AddToPlaylistSheetState extends ConsumerState<_AddToPlaylistSheet> {
               ),
             ),
           ListTile(
-            leading: const Icon(Icons.add, color: NeonShrineColors.primaryViolet),
+            leading: const Icon(Icons.add, color: SakuraDuskColors.sakuraPink),
             title: const Text('+ New Playlist'),
             onTap: _createAndAdd,
           ),
