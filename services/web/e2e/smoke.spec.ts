@@ -11,9 +11,11 @@
  *   - Dev server running on http://localhost:3000 (or E2E_BASE_URL)
  *   - E2E_USERNAME / E2E_PASSWORD env vars set to a valid account
  *   - API server reachable at NEXT_PUBLIC_API_BASE_URL (default http://localhost:8080)
+ *   - API server started with INORI_E2E_VIEWER_USER / INORI_E2E_VIEWER_PASSWORD to auto-create test account
  *
  * Run: npx playwright test
  * CI:  E2E_USERNAME=ci_viewer E2E_PASSWORD=ci-password-123 npx playwright test
+ *      (API must be started with INORI_E2E_VIEWER_USER=ci_viewer INORI_E2E_VIEWER_PASSWORD=ci-password-123)
  */
 
 import { test, expect, type Page } from "@playwright/test";

@@ -429,7 +429,7 @@ export default function CatalogPage() {
       {/* Relink dialog */}
       {relinkId && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-scrim)]"
           onClick={() => setRelinkId(null)}
         >
           <div
@@ -469,7 +469,7 @@ export default function CatalogPage() {
       {/* Lyrics dialog */}
       {lyricsTrackId && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-[var(--color-scrim)] p-4"
           onClick={() => setLyricsTrackId(null)}
         >
           <div

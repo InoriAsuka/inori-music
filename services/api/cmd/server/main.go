@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -90,6 +91,17 @@ func main() {
 		os.Getenv("INORI_INITIAL_ADMIN_PASSWORD"),
 	); err != nil {
 		log.Printf("initial admin setup: %v", err)
+	}
+
+	// E2E test viewer account — create if E2E env vars are set
+	if e2eUser := os.Getenv("INORI_E2E_VIEWER_USER"); e2eUser != "" {
+		if e2ePass := os.Getenv("INORI_E2E_VIEWER_PASSWORD"); e2ePass != "" {
+			if _, err := authService.CreateUser(ctx, e2eUser, e2ePass, auth.RoleViewer); err != nil {
+				if !errors.Is(err, auth.ErrUserConflict) {
+					log.Printf("e2e viewer setup: %v", err)
+				}
+			}
+		}
 	}
 
 	// Catalog service — PostgreSQL when pool is available, in-memory otherwise.

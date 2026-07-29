@@ -1,55 +1,73 @@
 @import "tailwindcss";
 
 @theme {
-  /* ── Canvas layers ─────────────────────────────────────────────────── */
-  --color-void: #070711;
-  --color-surface: #0d0d1a;
-  --color-surface-raised: #12122b;
-  --color-border: #1e1e3f;
-  --color-border-glow: #2d2d6b;
+  /* ── Canvas layers — warm cream, slightly desaturated for long reading ─── */
+  --color-void: #faf8f6;
+  --color-surface: #ffffff;
+  --color-surface-raised: #fff5f8;
+  --color-border: #e8dfe4;
+  --color-border-glow: #c9b3bd;
 
-  /* ── Primary — electric violet ──────────────────────────────────────── */
-  --color-primary: #9b5cff;
-  --color-primary-hover: #b97dff;
-  --color-primary-dim: #1a0533;
-  --color-primary-fg: #f0e8ff;
+  /* ── Primary — muted berry, professional tone ──────────────────────────── */
+  --color-primary: #b8577a;
+  --color-primary-hover: #d06890;
+  --color-primary-soft: #ff8fb8;
+  --color-primary-dim: #f5e8ed;
+  --color-primary-fg: #ffffff;
+  --color-primary-ink: #ffffff;
 
-  /* ── Secondary — cyan-teal ──────────────────────────────────────────── */
-  --color-secondary: #0fd4c0;
-  --color-secondary-hover: #22e5d4;
-  --color-secondary-dim: #022926;
+  /* ── Secondary — teal, restrained for admin data ──────────────────────── */
+  --color-secondary: #0a7d94;
+  --color-secondary-hover: #077084;
+  --color-secondary-soft: #7fd6e6;
+  --color-secondary-dim: #e0f5f9;
+  --color-secondary-ink: #ffffff;
 
-  /* ── Sakura pink ─────────────────────────────────────────────────────  */
-  --color-sakura: #ff5fa0;
-  --color-sakura-dim: #2a0014;
+  /* ── Gold — sparingly for warnings / highlights ────────────────────────── */
+  --color-gold: #9a5b00;
+  --color-gold-soft: #ffc978;
+  --color-gold-dim: #fff1dc;
+  --color-gold-ink: #3b2a3f;
 
-  /* ── Semantic ────────────────────────────────────────────────────────  */
-  --color-success: #00e5a0;
-  --color-warning: #ffd23f;
-  --color-danger: #ff4d6d;
-  --color-danger-dim: #2a000e;
-  --color-info: #38bdf8;
+  /* ── Sakura pink — accents only, not backgrounds ──────────────────────── */
+  --color-sakura: #d42062;
+  --color-sakura-soft: #ff8fb8;
+  --color-sakura-dim: #ffe4ee;
 
-  /* ── Text ────────────────────────────────────────────────────────────  */
-  --color-text: #e8e8f4;
-  --color-text-secondary: #9090b8;
-  --color-text-muted: #4a4a7a;
+  /* ── Semantic ─────────────────────────────────────────────────────────── */
+  --color-success: #0b7a53;
+  --color-success-dim: #d1fae5;
+  --color-warning: #9a5b00;
+  --color-warning-dim: #fff1dc;
+  --color-danger: #c81e2c;
+  --color-danger-dim: #ffe5e7;
+  --color-danger-foreground: #ffffff;
+  --color-info: #0a7d94;
+  --color-info-dim: #e0f5f9;
 
-  /* ── Radii ───────────────────────────────────────────────────────────  */
-  --radius-sm: 0.25rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
-  --radius-xl: 1rem;
+  /* ── Text — plum ink on cream ──────────────────────────────────────────── */
+  --color-text: #3b2a3f;
+  --color-text-secondary: #6b5570;
+  --color-text-muted: #7e6884;
 
-  /* ── Fonts ───────────────────────────────────────────────────────────  */
+  --color-scrim: rgb(59 42 63 / 0.45);
+
+  /* ── Radii ────────────────────────────────────────────────────────────── */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.25rem;
+  --radius-2xl: 1.75rem;
+
+  /* ── Fonts ────────────────────────────────────────────────────────────── */
   --font-display: "Orbitron", sans-serif;
   --font-sans: "Inter", "Noto Sans JP", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 }
 
-/* ── Base ──────────────────────────────────────────────────────────────── */
+/* ── Base ────────────────────────────────────────────────────────────────── */
 html {
-  color-scheme: dark;
+  color-scheme: light;
 }
 
 body {
@@ -60,7 +78,7 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ── Scrollbar ─────────────────────────────────────────────────────────── */
+/* ── Scrollbar ───────────────────────────────────────────────────────────── */
 ::-webkit-scrollbar {
   width: 4px;
   height: 4px;
@@ -76,39 +94,39 @@ body {
   background: var(--color-primary);
 }
 
-/* ── Selection ─────────────────────────────────────────────────────────── */
+/* ── Selection ───────────────────────────────────────────────────────────── */
 ::selection {
   background: var(--color-primary-dim);
-  color: var(--color-primary-fg);
+  color: var(--color-primary-ink);
 }
 
-/* ── Glow utilities ────────────────────────────────────────────────────── */
+/* ── Glow utilities — restrained for admin reading comfort ───────────────── */
 .glow-primary {
-  box-shadow: 0 0 16px 3px color-mix(in srgb, var(--color-primary) 30%, transparent);
+  box-shadow: 0 0 12px 2px color-mix(in srgb, var(--color-primary) 18%, transparent);
 }
 .glow-secondary {
-  box-shadow: 0 0 16px 3px color-mix(in srgb, var(--color-secondary) 30%, transparent);
+  box-shadow: 0 0 12px 2px color-mix(in srgb, var(--color-secondary) 18%, transparent);
 }
 .glow-sakura {
-  box-shadow: 0 0 16px 3px color-mix(in srgb, var(--color-sakura) 30%, transparent);
+  box-shadow: 0 0 12px 2px color-mix(in srgb, var(--color-sakura) 18%, transparent);
 }
 
-/* ── Active nav item ────────────────────────────────────────────────────── */
+/* ── Active nav item ──────────────────────────────────────────────────────── */
 .nav-active {
   border-left: 2px solid var(--color-primary);
-  background: color-mix(in srgb, var(--color-primary) 12%, transparent);
-  color: var(--color-primary-fg);
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  color: var(--color-primary-ink);
 }
 
-/* ── Glass panel ────────────────────────────────────────────────────────── */
+/* ── Glass panel — light background only ─────────────────────────────────── */
 .glass {
-  background: color-mix(in srgb, var(--color-surface) 85%, transparent);
+  background: color-mix(in srgb, var(--color-surface) 92%, transparent);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid var(--color-border);
 }
 
-/* ── Scanline overlay (apply to hero/header sections) ───────────────────── */
+/* ── Scanline overlay — very subtle for admin ─────────────────────────────── */
 .scanlines {
   position: relative;
   overflow: hidden;
@@ -121,14 +139,14 @@ body {
     0deg,
     transparent,
     transparent 1px,
-    rgba(255, 255, 255, 0.012) 1px,
-    rgba(255, 255, 255, 0.012) 2px
+    rgba(0, 0, 0, 0.012) 1px,
+    rgba(0, 0, 0, 0.012) 2px
   );
   pointer-events: none;
   z-index: 1;
 }
 
-/* ── Pulsing health dot (used in admin StorageHealthBadge) ──────────────── */
+/* ── Pulsing health dot (used in admin StorageHealthBadge) ────────────────── */
 @keyframes pulse-dot {
   0%,
   100% {
@@ -136,15 +154,15 @@ body {
     transform: scale(1);
   }
   50% {
-    opacity: 0.5;
-    transform: scale(0.85);
+    opacity: 0.6;
+    transform: scale(0.9);
   }
 }
 .pulse-dot {
   animation: pulse-dot 2s ease-in-out infinite;
 }
 
-/* ── Reduced motion ─────────────────────────────────────────────────────── */
+/* ── Reduced motion ──────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

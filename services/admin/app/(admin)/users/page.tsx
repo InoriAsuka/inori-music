@@ -239,7 +239,7 @@ export default function UsersPage() {
       {/* Sessions drawer */}
       {sessionsUser && (
         <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60"
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-[var(--color-scrim)]"
           onClick={() => setSessionsUser(null)}
         >
           <div

@@ -24,7 +24,7 @@ export function AdminTokenPanel() {
         <KeyRound size={15} className="text-[var(--color-primary)]" />
         <h2 className="text-sm font-semibold text-[var(--color-text)]">Bootstrap Admin Token</h2>
         {bootstrapToken && (
-          <span className="rounded-full bg-[var(--color-success)] bg-opacity-15 px-2 py-0.5 text-[10px] font-semibold text-[var(--color-success)]">
+          <span className="rounded-full bg-[var(--color-success-dim)] px-2 py-0.5 text-[10px] font-semibold text-[var(--color-success)]">
             active
           </span>
         )}

@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`5.5.0`
+`5.6.0`
 
 ## Product Goal
 
@@ -42,7 +42,12 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 
 ## Requirement History
 
-### v5.4.0 - 2026-07-17
+### v5.6.0 - 2026-07-28
+
+- **Admin 樱花薄暮主题对齐** —— `services/admin/app/globals.css` 从 Neon Shrine 深色主题迁移到 v5.5.0 确立的樱花薄暮浅色 ACG 色板：canvas 改为暖奶油白 `#faf8f6`、primary 改为降饱和 berry `#b8577a`、语义色补充 `*-dim` 背景、text 改为深梅紫墨 `#3b2a3f`；新增 `--color-scrim` 遮罩、secondary/gold 体系、`*-ink` 文本色。`color-scheme` 切为 `light`，glow/scanline/nav-active 视觉强度下调适配长时间阅读。同步修复 3 处 `bg-black/60` 硬编码遮罩为 `bg-[var(--color-scrim)]`、2 处 Tailwind v4 失效的 `bg-opacity` 用法改为 `bg-[var(--color-success-dim)]`。`layout.tsx` 的 `themeColor` 同步更新为浅色背景。Admin TypeScript 类型检查通过，Biome lint 39 文件清洁。
+- 本阶段仅涉及 Admin 客户端视觉与少量样式 token，没有服务端 API schema 变化，因此 OpenAPI `info.version` 保持现状。
+
+### v5.5.0 - 2026-07-26
 
 - **跨设备播放续播** —— 服务端新增 `GET/PUT /api/v1/me/player-state` 端点（`internal/playerstate` 包，memory+postgres 双实现），客户端（Web/Flutter）在播放中每 30 秒节流上报，切歌/暂停/应用后台立即 PUT。Web 启动时 GET 远端状态，若 `updatedAt` 晚于本地则显示「继续上次播放」提示条（不自动播放，等用户手势），确认后重建队列并 seek 到 position（复用 v5.2.0 `restoredPending` 模式）。队列上限 500，`updatedAt` 由服务端生成（last-write-wins）。
 - **跨设备搜索历史同步** —— 服务端新增 `GET/PUT/DELETE /api/v1/me/search-history` 端点（`internal/searchhistory` 包）。Web 端在 v5.1.0 localStorage 基础上增加本地∪远端合并（去重取最新，裁到 20 条）后 PUT 回写，单删/清空同步远端。Flutter 端将 SharedPreferences 主存扩展为登录时合并远端，离线时仅本地，回联后下次合并。

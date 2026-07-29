@@ -145,7 +145,7 @@ export default function ImportPage() {
           </div>
           {error && <p className="text-sm text-[var(--color-danger)]">{error}</p>}
           {result && (
-            <p className="rounded-md border border-[var(--color-success)] bg-[var(--color-success)] bg-opacity-10 px-4 py-3 text-sm text-[var(--color-success)]">
+            <p className="rounded-md border border-[var(--color-success)] bg-[var(--color-success-dim)] px-4 py-3 text-sm text-[var(--color-success)]">
               {result}
             </p>
           )}

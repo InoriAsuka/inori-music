@@ -245,7 +245,7 @@ export default function MediaObjectsPage() {
       {/* Detail drawer */}
       {detail && (
         <div
-          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60"
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-[var(--color-scrim)]"
           onClick={() => setDetail(null)}
         >
           <div
