@@ -47,6 +47,11 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - **Web 10 段 EQ** —— 新增共享 `services/web/lib/audio/eqPresets.ts` 定义 10 段 ISO 频率与 5 组预设（Flat/Bass Boost/Treble Boost/Vocal/Electronic），Web `audioGraph.ts` 从 `MediaElementAudioSourceNode -> GainNode -> destination` 扩展为 `-> BiquadFilter[] -> GainNode -> destination`，每个频段为 peaking 滤波器（Q=1.4，±6 dB）。新增 `services/web/store/eq.ts` Zustand persist 保存启用态/预设/10 段增益；`useAudio.ts` 订阅 store 实时应用 EQ，并与 ReplayGain 共存。PlayerBar 新增 `EqualizerControl` 入口 + `EqualizerPanel` 面板，支持启用/禁用、预设选择、逐段 ±6 dB 滑块调节和重置。Web TypeScript 类型检查通过，Biome lint 114 文件清洁。
 - 本阶段仅涉及 Web 客户端音频处理与 UI，没有服务端 API schema 变化，因此 OpenAPI `info.version` 保持现状。
 
+### v5.8.1 - 2026-07-30
+
+- **真机走查验收** —— 完成自动化验证：Web TypeScript/Biome 114 files 通过，Flutter `flutter analyze --no-fatal-infos` 通过。人工验收清单已准备就绪，需在实体设备/模拟器上执行：Flutter 登录页/曲库/播放/设置/MiniPlayer 逐屏检查浅色主题可读性，Web ReplayGain 响度对比/连播间隙确认，跨设备续播手机↔Web 双设备场景验收（恢复位置误差 < 5s）。关键对比度配对已知达标：`#3B2A3F`/白 13.2:1、`#6B5570`/白 6.7:1、白/`#D42062` 5.0:1。
+- 本阶段为验收阶段，无代码修改，因此 OpenAPI `info.version` 保持现状。
+
 ### v5.8.0 - 2026-07-30
 
 - **E2E 测试凭据修复** —— `services/api/cmd/server/main.go` 添加启动时自动创建测试用户逻辑：通过 `INORI_E2E_VIEWER_USER` / `INORI_E2E_VIEWER_PASSWORD` 环境变量创建 `viewer` 角色账户，解决 Playwright 规范因默认 `ci_viewer`/`ci-password-123` 凭据无效而卡在登录前置步骤的问题。更新 `services/web/e2e/smoke.spec.ts` 文档说明环境变量要求。
