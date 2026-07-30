@@ -29,6 +29,8 @@ import { FullscreenPlayer } from "./FullscreenPlayer";
 import { LyricsPanel } from "./LyricsPanel";
 import { SpeedControl } from "./SpeedControl";
 import { SleepTimerControl } from "./SleepTimerControl";
+import { EqualizerControl } from "./EqualizerControl";
+import { EqualizerPanel } from "./EqualizerPanel";
 import { formatDuration, cn } from "@/lib/utils";
 
 export function PlayerBar() {
@@ -55,6 +57,7 @@ export function PlayerBar() {
   const [queueOpen, setQueueOpen] = useState(false);
   const [fsOpen, setFsOpen] = useState(false);
   const [lyricsOpen, setLyricsOpen] = useState(false);
+  const [eqOpen, setEqOpen] = useState(false);
 
   const duration = currentTrack?.durationSeconds ?? 0;
   const isError = status === "error";
@@ -187,6 +190,8 @@ export function PlayerBar() {
           <Mic2 size={16} />
         </ControlBtn>
 
+        <EqualizerControl onClick={() => setEqOpen(true)} />
+
         <div className="hidden sm:block">
           <SpeedControl />
         </div>
@@ -202,6 +207,7 @@ export function PlayerBar() {
 
       <QueueDrawer open={queueOpen} onClose={() => setQueueOpen(false)} />
       <LyricsPanel open={lyricsOpen} onClose={() => setLyricsOpen(false)} />
+      <EqualizerPanel open={eqOpen} onClose={() => setEqOpen(false)} />
       <FullscreenPlayer open={fsOpen} onClose={() => setFsOpen(false)} />
     </>
   );

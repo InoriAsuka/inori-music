@@ -36,9 +36,11 @@ import {
   shouldTriggerPreload,
 } from "@/lib/audio/gaplessEngine";
 import { REPLAY_GAIN_CHANGE_EVENT, computeReplayGain, isReplayGainEnabled } from "@/lib/audio/replayGain";
+import type { EqBandId } from "@/lib/audio/eqPresets";
 import { resolveReplayGainDb } from "@/lib/audio/trackGainCache";
 import { useAuthStore } from "@/store/auth";
 import { type QueueTrack, useCurrentTrack, usePlayerStore } from "@/store/player";
+import { useEqStore } from "@/store/eq";
 import { isAfterTrackArmed, useSleepTimerStore } from "@/store/sleepTimer";
 import { useEffect, useRef } from "react";
 
@@ -267,6 +269,16 @@ export function useAudio() {
     } else {
       slot.rampEndsAtMs = 0;
       slot.graph.setGain(gain);
+    }
+    applyEqToSlot(slot);
+  }
+
+  function applyEqToSlot(slot: Slot) {
+    const { enabled, gains } = useEqStore.getState();
+    if (!enabled || !slot.graph.active) return;
+    const entries = Object.entries(gains) as [EqBandId, number][];
+    for (let i = 0; i < entries.length; i++) {
+      slot.graph.setEqBand(i, entries[i][1]);
     }
   }
 
@@ -543,6 +555,18 @@ export function useAudio() {
     return () => window.removeEventListener(REPLAY_GAIN_CHANGE_EVENT, onChange);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
+
+  // ── React to EQ changes live ────────────────────────────────────────────
+  useEffect(() => {
+    const unsubscribe = useEqStore.subscribe((state) => {
+      const slots = slotsRef.current;
+      if (!slots) return;
+      const slot = slots[activeSlotRef.current];
+      if (slot.occurrence) applyEqToSlot(slot);
+    });
+    return unsubscribe;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Restore-from-persistence: seek without autoplay ─────────────────────
   useEffect(() => {

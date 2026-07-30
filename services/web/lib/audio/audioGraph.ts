@@ -54,19 +54,23 @@ export interface AudioGraphNode {
   /** True when WebAudio graph is active for this element; false = direct-playback fallback. */
   readonly active: boolean;
   readonly gainNode: GainNode | null;
+  readonly eqFilters: BiquadFilterNode[];
   /** Set the gain immediately (no ramp). */
   setGain(value: number): void;
   /** Linearly ramp gain from its current value to `target` over `seconds`. */
   rampGain(target: number, seconds: number): void;
+  /** Update one EQ band's peaking filter gain in dB. */
+  setEqBand(index: number, db: number): void;
   disconnect(): void;
 }
 
 /**
- * Wraps `audio` with an AudioContext -> MediaElementAudioSourceNode -> GainNode
- * graph. Sets `crossOrigin = "anonymous"` on the element (must be set before
+ * Wraps `audio` with an AudioContext -> MediaElementAudioSourceNode ->
+ * BiquadFilter[] -> GainNode -> destination graph.
+ * Sets `crossOrigin = "anonymous"` on the element (must be set before
  * the graph is created / before `src` triggers a fetch that doesn't request
  * CORS headers). Falls back to a no-op passthrough node (audio plays directly,
- * ReplayGain/crossfade become inert) if AudioContext is unavailable or graph
+ * ReplayGain/crossfade/EQ become inert) if AudioContext is unavailable or graph
  * creation throws (CORS-tainted or otherwise unsupported).
  */
 export function createAudioGraph(audio: HTMLAudioElement): AudioGraphNode {
@@ -79,14 +83,22 @@ export function createAudioGraph(audio: HTMLAudioElement): AudioGraphNode {
 
   try {
     const source = ctx.createMediaElementSource(audio);
+    const eqFilters = createEqFilterChain(ctx);
     const gainNode = ctx.createGain();
     gainNode.gain.value = 1.0;
-    source.connect(gainNode);
+
+    let chain: AudioNode = source;
+    for (const filter of eqFilters) {
+      chain.connect(filter);
+      chain = filter;
+    }
+    chain.connect(gainNode);
     gainNode.connect(ctx.destination);
 
     return {
       active: true,
       gainNode,
+      eqFilters,
       setGain(value) {
         gainNode.gain.cancelScheduledValues(ctx.currentTime);
         gainNode.gain.setValueAtTime(value, ctx.currentTime);
@@ -94,14 +106,21 @@ export function createAudioGraph(audio: HTMLAudioElement): AudioGraphNode {
       rampGain(target, seconds) {
         const now = ctx.currentTime;
         gainNode.gain.cancelScheduledValues(now);
-        // setValueAtTime anchors the ramp's start value so a ramp-in-progress
-        // doesn't jump before continuing linearly.
         gainNode.gain.setValueAtTime(gainNode.gain.value, now);
         gainNode.gain.linearRampToValueAtTime(target, now + seconds);
+      },
+      setEqBand(index, db) {
+        if (index < 0 || index >= eqFilters.length) return;
+        const filter = eqFilters[index];
+        filter.gain.cancelScheduledValues(ctx.currentTime);
+        filter.gain.setValueAtTime(db, ctx.currentTime);
       },
       disconnect() {
         try {
           source.disconnect();
+          for (const filter of eqFilters) {
+            filter.disconnect();
+          }
           gainNode.disconnect();
         } catch {
           // Already disconnected — non-fatal.
@@ -115,13 +134,28 @@ export function createAudioGraph(audio: HTMLAudioElement): AudioGraphNode {
   }
 }
 
+const EQ_FREQUENCIES = [31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
+
+function createEqFilterChain(ctx: BaseAudioContext): BiquadFilterNode[] {
+  return EQ_FREQUENCIES.map((freq) => {
+    const filter = ctx.createBiquadFilter();
+    filter.type = "peaking";
+    filter.frequency.value = freq;
+    filter.Q.value = 1.4;
+    filter.gain.value = 0;
+    return filter;
+  });
+}
+
 /** No-op graph used when WebAudio is unavailable — audio plays directly via the element. */
 function createFallbackNode(): AudioGraphNode {
   return {
     active: false,
     gainNode: null,
+    eqFilters: [],
     setGain() {},
     rampGain() {},
+    setEqBand() {},
     disconnect() {},
   };
 }
