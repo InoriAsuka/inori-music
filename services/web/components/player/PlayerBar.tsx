@@ -19,6 +19,7 @@ import {
   ListMusic,
   ChevronUp,
   Mic2,
+  MicVocal,
 } from "lucide-react";
 import { usePlayerStore, useCurrentTrack, useIsPlaying } from "@/store/player";
 import { useAudio } from "@/hooks/useAudio";
@@ -27,6 +28,7 @@ import { Visualizer } from "./Visualizer";
 import { QueueDrawer } from "./QueueDrawer";
 import { FullscreenPlayer } from "./FullscreenPlayer";
 import { LyricsPanel } from "./LyricsPanel";
+import { KaraokePanel } from "./KaraokePanel";
 import { SpeedControl } from "./SpeedControl";
 import { SleepTimerControl } from "./SleepTimerControl";
 import { EqualizerControl } from "./EqualizerControl";
@@ -58,6 +60,7 @@ export function PlayerBar() {
   const [fsOpen, setFsOpen] = useState(false);
   const [lyricsOpen, setLyricsOpen] = useState(false);
   const [eqOpen, setEqOpen] = useState(false);
+  const [karaokeOpen, setKaraokeOpen] = useState(false);
 
   const duration = currentTrack?.durationSeconds ?? 0;
   const isError = status === "error";
@@ -190,6 +193,16 @@ export function PlayerBar() {
           <Mic2 size={16} />
         </ControlBtn>
 
+        <ControlBtn
+          onClick={() => {
+            setLyricsOpen(false);
+            setKaraokeOpen(true);
+          }}
+          title="Karaoke"
+        >
+          <MicVocal size={16} />
+        </ControlBtn>
+
         <EqualizerControl onClick={() => setEqOpen(true)} />
 
         <div className="hidden sm:block">
@@ -207,6 +220,7 @@ export function PlayerBar() {
 
       <QueueDrawer open={queueOpen} onClose={() => setQueueOpen(false)} />
       <LyricsPanel open={lyricsOpen} onClose={() => setLyricsOpen(false)} />
+      <KaraokePanel open={karaokeOpen} onClose={() => setKaraokeOpen(false)} />
       <EqualizerPanel open={eqOpen} onClose={() => setEqOpen(false)} />
       <FullscreenPlayer open={fsOpen} onClose={() => setFsOpen(false)} />
     </>

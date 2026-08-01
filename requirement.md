@@ -42,6 +42,11 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 
 ## Requirement History
 
+### v5.9.1 - 2026-07-31
+
+- **歌词全屏卡拉 OK 模式** —— 新增全屏卡拉 OK 视图（`components/player/KaraokePanel.tsx`），复用增强 LRC 逐字时间戳数据。`lib/karaoke/useSmoothPosition.ts` 通过 rAF 插值将 store 的 250ms tick 平滑至 60fps，消除逐字高亮跳动；`lib/karaoke/progress.ts` 导出纯函数 `activeLineIndex` 与 `wordProgress` 供测试验证。歌词行全屏大字显示（Zen Maru Gothic / Poppins），当前行放大高亮，非当前行缩小淡出；活跃词使用 `background-clip: text` 渐变填充实现从左到右的渐进高亮效果；`<dialog>.showModal()` 提供原生 Escape 关闭与焦点恢复；与 `LyricsPanel` 互斥切换。Web TypeScript 类型检查通过，Biome lint 117 files 通过。**真机播放歌词同步测试待执行**。
+- 本阶段仅涉及 Web 客户端歌词 UI，没有服务端 API schema 变化，因此 OpenAPI `info.version` 保持现状。
+
 ### v5.9.0 - 2026-07-30
 
 - **Web 10 段 EQ** —— 新增共享 `services/web/lib/audio/eqPresets.ts` 定义 10 段 ISO 频率与 5 组预设（Flat/Bass Boost/Treble Boost/Vocal/Electronic），Web `audioGraph.ts` 从 `MediaElementAudioSourceNode -> GainNode -> destination` 扩展为 `-> BiquadFilter[] -> GainNode -> destination`，每个频段为 peaking 滤波器（Q=1.4，±6 dB）。新增 `services/web/store/eq.ts` Zustand persist 保存启用态/预设/10 段增益；`useAudio.ts` 订阅 store 实时应用 EQ，并与 ReplayGain 共存。PlayerBar 新增 `EqualizerControl` 入口 + `EqualizerPanel` 面板，支持启用/禁用、预设选择、逐段 ±6 dB 滑块调节和重置。Web TypeScript 类型检查通过，Biome lint 114 文件清洁。
