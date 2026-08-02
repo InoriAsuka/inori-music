@@ -4,7 +4,7 @@
  * exact contracts (and the correct verbs) rather than open-coding paths:
  *
  *   GET    /me/playlists                    → list
- *   POST   /me/playlists                    → create        { name, description? }
+ *   POST   /me/playlists                    → create        { name, description?, sourceCatalogId? }
  *   GET    /me/playlists/{id}               → get
  *   PATCH  /me/playlists/{id}               → rename        { name?, description? }
  *   DELETE /me/playlists/{id}               → delete
@@ -12,6 +12,8 @@
  *   POST   /me/playlists/{id}/tracks        → append        { trackId }  (empty 2xx)
  *   PUT    /me/playlists/{id}/tracks        → replace order { trackIds }  ← reorder / remove-occurrence
  *   DELETE /me/playlists/{id}/tracks/{tid}  → remove FIRST occurrence      (empty 2xx)
+ *
+ *   POST   /catalog/playlists/{id}/copy     → copy as user playlist   (empty 2xx)
  *
  * Note the reorder path is PUT-replace, not a dedicated PATCH-order endpoint —
  * there is no such endpoint in the contract.
@@ -126,4 +128,17 @@ export async function removeFirstUserPlaylistTrack(token: string, id: string, tr
     params: { path: { id, trackId } },
   });
   if (error) throw error;
+}
+
+/**
+ * POST /api/v1/catalog/playlists/{id}/copy — clone a catalog playlist into
+ * the current viewer's personal playlists. Returns the newly-created
+ * UserPlaylist.
+ */
+export async function copyCatalogPlaylist(token: string, catalogId: string): Promise<UserPlaylist> {
+  const { data, error } = await authedApi(token).POST("/api/v1/catalog/playlists/{id}/copy", {
+    params: { path: { id: catalogId } },
+  });
+  if (error || !data) throw error ?? new Error("copy failed");
+  return data;
 }

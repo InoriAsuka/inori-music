@@ -14,13 +14,16 @@ var (
 
 // UserPlaylist is a named collection of tracks owned by a user.
 type UserPlaylist struct {
-	ID          string
-	UserID      string
-	Name        string
-	Description string
-	TrackIDs    []string
-	CreatedAt   time.Time
-	UpdatedAt   time.Time
+	ID             string
+	UserID         string
+	Name           string
+	Description    string
+	TrackIDs       []string
+	CreatedAt      time.Time
+	UpdatedAt      time.Time
+	// SourceCatalogID points to the catalog playlist this was copied from,
+	// or empty if it was created directly.
+	SourceCatalogID string
 }
 
 // Repository persists user playlists.
@@ -33,8 +36,9 @@ type Repository interface {
 
 // CreateRequest carries the fields needed to create a new playlist.
 type CreateRequest struct {
-	Name        string
-	Description string
+	Name            string
+	Description     string
+	SourceCatalogID string
 }
 
 // UpdateRequest carries optional fields to patch a playlist.

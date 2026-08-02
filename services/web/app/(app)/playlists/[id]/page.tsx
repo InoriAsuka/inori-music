@@ -8,12 +8,13 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Play } from "lucide-react";
+import { ArrowLeft, Play, Copy } from "lucide-react";
 import { useAuthStore } from "@/store/auth";
 import { authedApi } from "@/lib/api/client";
 import { Skeleton, TrackRowSkeleton } from "@/components/ui/Skeleton";
 import { usePlayerStore } from "@/store/player";
 import { formatDuration } from "@/lib/utils";
+import { CopyFromCatalogDialog } from "@/components/playlists/CopyFromCatalogDialog";
 
 export default function PlaylistDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -29,6 +30,7 @@ export default function PlaylistDetailPage() {
     }[]
   >([]);
   const [loading, setLoading] = useState(true);
+  const [copyOpen, setCopyOpen] = useState(false);
 
   useEffect(() => {
     if (!token || !id) return;
@@ -76,14 +78,24 @@ export default function PlaylistDetailPage() {
         <div>
           {loading ? <Skeleton className="h-8 w-48 mb-2" /> : <h1 className="text-3xl font-bold">{name}</h1>}
           <p className="text-sm text-[var(--color-muted-foreground)]">{tracks.length} tracks</p>
-          <button
-            type="button"
-            onClick={() => playFrom(0)}
-            disabled={tracks.length === 0}
-            className="mt-3 flex items-center gap-2 rounded-full bg-[var(--color-primary)] px-6 py-2 text-sm font-semibold text-[var(--color-primary-foreground)] hover:opacity-90 disabled:opacity-50 transition-opacity"
-          >
-            <Play size={14} fill="currentColor" /> Play
-          </button>
+          <div className="mt-3 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => playFrom(0)}
+              disabled={tracks.length === 0}
+              className="flex items-center gap-2 rounded-full bg-[var(--color-primary)] px-6 py-2 text-sm font-semibold text-[var(--color-primary-foreground)] hover:opacity-90 disabled:opacity-50 transition-opacity"
+            >
+              <Play size={14} fill="currentColor" /> Play
+            </button>
+            <button
+              type="button"
+              onClick={() => setCopyOpen(true)}
+              disabled={loading || !token}
+              className="flex items-center gap-2 rounded-full border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text)] hover:bg-[var(--color-muted)] disabled:opacity-50 transition-colors"
+            >
+              <Copy size={14} /> Copy to my library
+            </button>
+          </div>
         </div>
       </div>
 
@@ -110,6 +122,15 @@ export default function PlaylistDetailPage() {
               </div>
             ))}
       </div>
+
+      {token && (
+        <CopyFromCatalogDialog
+          open={copyOpen}
+          onClose={() => setCopyOpen(false)}
+          catalogId={id as string}
+          catalogName={name}
+        />
+      )}
     </div>
   );
 }

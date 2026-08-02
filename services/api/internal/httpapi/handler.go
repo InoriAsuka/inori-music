@@ -432,6 +432,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("DELETE /api/v1/me/playlists/{id}/tracks/{trackId}", handler.requireViewerAuth(handler.removeUserPlaylistTrack))
 	mux.HandleFunc("GET /api/v1/me/playlists/{id}/tracks", handler.requireViewerAuth(handler.getUserPlaylistTracks))
 	mux.HandleFunc("PUT /api/v1/me/playlists/{id}/tracks", handler.requireViewerAuth(handler.setUserPlaylistTracks))
+	mux.HandleFunc("POST /api/v1/catalog/playlists/{id}/copy", handler.requireViewerAuth(handler.copyCatalogPlaylist))
 	mux.HandleFunc("/api/v1/me/playlists/{id}/tracks/{trackId}", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/me/playlists/{id}/tracks", handler.requireViewerAuth(handler.methodNotAllowed))
 	mux.HandleFunc("/api/v1/me/playlists/{id}", handler.requireViewerAuth(handler.methodNotAllowed))

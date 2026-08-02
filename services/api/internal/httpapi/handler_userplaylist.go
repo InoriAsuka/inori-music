@@ -3,6 +3,7 @@ package httpapi
 import (
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 
 	"inori-music/services/api/internal/userplaylist"
@@ -19,8 +20,9 @@ func (handler *Handler) requireUserPlaylistService(w http.ResponseWriter) bool {
 }
 
 type createUserPlaylistRequest struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
+	Name            string `json:"name"`
+	Description     string `json:"description"`
+	SourceCatalogID string `json:"sourceCatalogId"`
 }
 
 type updateUserPlaylistRequest struct {
@@ -63,8 +65,9 @@ func (handler *Handler) createUserPlaylist(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	p, err := handler.userPlaylistService.CreatePlaylist(r.Context(), user.ID, userplaylist.CreateRequest{
-		Name:        req.Name,
-		Description: req.Description,
+		Name:            req.Name,
+		Description:     req.Description,
+		SourceCatalogID: req.SourceCatalogID,
 	})
 	if err != nil {
 		writeError(w, err)
@@ -230,4 +233,75 @@ func (handler *Handler) setUserPlaylistTracks(w http.ResponseWriter, r *http.Req
 		return
 	}
 	writeJSON(w, http.StatusOK, userPlaylistJSON(p))
+}
+
+func (handler *Handler) copyCatalogPlaylist(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireUserPlaylistService(w) || !handler.requireCatalogService(w) {
+		return
+	}
+	user, ok := userFromContext(r)
+	if !ok {
+		writeAPIError(w, http.StatusUnauthorized, "unauthorized", "valid bearer token is required")
+		return
+	}
+	// Copying a catalog playlist to a user playlist doesn't need a body
+	// because the name is derived from the source catalog playlist.
+	// We pass an empty create request and set SourceCatalogID after creation.
+	catalogId := r.PathValue("id")
+
+	// Validate that the catalog playlist exists first
+	_, err := handler.catalogService.GetPlaylist(r.Context(), catalogId)
+	if err != nil {
+		writeAPIError(w, http.StatusNotFound, "catalog_playlist_not_found", "catalog playlist not found")
+		return
+	}
+
+	// Fetch the tracks from the catalog playlist
+	tracks, err := handler.catalogService.GetPlaylistTracks(r.Context(), catalogId)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "internal_error", "failed to get playlist tracks")
+		return
+	}
+
+	var trackIds []string
+	for _, t := range tracks {
+		trackIds = append(trackIds, t.ID)
+	}
+
+	// Create user playlist with the catalog playlist as source
+	// Note: we can't directly use CreatePlaylist because it expects a name
+	// We need to either: 1) add a new method, or 2) use CreatePlaylist with a name derived from catalog playlist
+	// For simplicity, let's use CreatePlaylist and set SourceCatalogID after
+	// But we need to get the catalog playlist name first
+	pl, err := handler.catalogService.GetPlaylist(r.Context(), catalogId)
+	if err != nil {
+		writeAPIError(w, http.StatusInternalServerError, "internal_error", "failed to get playlist")
+		return
+	}
+
+	p, err := handler.userPlaylistService.CreatePlaylist(r.Context(), user.ID, userplaylist.CreateRequest{
+		Name:            pl.Name,
+		SourceCatalogID: catalogId,
+	})
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	// Now add all tracks
+	for _, tid := range trackIds {
+		if err := handler.userPlaylistService.AddTrack(r.Context(), user.ID, p.ID, tid); err != nil {
+			// Don't fail the whole operation for a single track failure
+			log.Printf("failed to add track %s to playlist %s: %v", tid, p.ID, err)
+		}
+	}
+
+	// Refresh the playlist data to return the full state
+	p, err = handler.userPlaylistService.GetPlaylist(r.Context(), user.ID, p.ID)
+	if err != nil {
+		writeError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, userPlaylistJSON(p))
 }

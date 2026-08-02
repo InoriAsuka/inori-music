@@ -41,13 +41,14 @@ func (s *Service) CreatePlaylist(ctx context.Context, userID string, req CreateR
 	}
 	now := s.now().UTC()
 	p := UserPlaylist{
-		ID:          newID(),
-		UserID:      strings.TrimSpace(userID),
-		Name:        name,
-		Description: strings.TrimSpace(req.Description),
-		TrackIDs:    []string{},
-		CreatedAt:   now,
-		UpdatedAt:   now,
+		ID:              newID(),
+		UserID:          strings.TrimSpace(userID),
+		Name:            name,
+		Description:     strings.TrimSpace(req.Description),
+		TrackIDs:        []string{},
+		SourceCatalogID: strings.TrimSpace(req.SourceCatalogID),
+		CreatedAt:       now,
+		UpdatedAt:       now,
 	}
 	if err := s.repo.Save(ctx, p); err != nil {
 		return UserPlaylist{}, err

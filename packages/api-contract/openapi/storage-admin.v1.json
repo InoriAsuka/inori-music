@@ -2620,6 +2620,10 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "sourceCatalogId": {
+            "type": "string",
+            "description": "Source catalog playlist ID if copied from catalog, empty otherwise"
           }
         }
       },
@@ -2634,6 +2638,10 @@
           },
           "description": {
             "type": "string"
+          },
+          "sourceCatalogId": {
+            "type": "string",
+            "description": "ID of the catalog playlist this was copied from, if any"
           }
         }
       },
@@ -13871,6 +13879,62 @@
           },
           "401": {
             "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/api/v1/catalog/playlists/{id}/copy": {
+      "post": {
+        "summary": "Copy catalog playlist to user library",
+        "operationId": "copyCatalogPlaylist",
+        "tags": [
+          "CatalogPlaylists"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Playlist copied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPlaylist"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Catalog playlist not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
           }
         }
       }
