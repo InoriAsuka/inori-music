@@ -44,28 +44,31 @@ export const DEFAULT_EQ_GAINS = EQ_BANDS.reduce<Record<EqBandId, number>>((acc, 
   return acc;
 }, {} as Record<EqBandId, number>);
 
-export type EqPresetName = "flat" | "bass-boost" | "treble-boost" | "vocal" | "electronic";
+export type EqPresetName = "flat" | "bassBoost" | "vocal" | "electronic";
 
+/**
+ * Preset gains, one entry per band in EQ_BANDS order.
+ *
+ * These values are the authoritative shared definition and must stay
+ * byte-for-byte identical to `eqPresets` in
+ * `services/mobile/lib/src/audio/eq_settings.dart` — the Flutter client
+ * shipped them first, so both clients sound the same on the same preset.
+ */
 export const EQ_PRESETS: Record<EqPresetName, Record<EqBandId, number>> = {
   flat: { ...DEFAULT_EQ_GAINS },
-  "bass-boost": {
-    "band-31": 4, "band-62": 3.5, "band-125": 2.5, "band-250": 1.5,
-    "band-500": 0.5, "band-1k": 0, "band-2k": 0, "band-4k": 0,
+  bassBoost: {
+    "band-31": 6, "band-62": 5, "band-125": 4, "band-250": 2,
+    "band-500": 0, "band-1k": 0, "band-2k": 0, "band-4k": 0,
     "band-8k": 0, "band-16k": 0,
   },
-  "treble-boost": {
-    "band-31": 0, "band-62": 0, "band-125": 0, "band-250": 0,
-    "band-500": 0.5, "band-1k": 1, "band-2k": 2, "band-4k": 3,
-    "band-8k": 3.5, "band-16k": 4,
-  },
   vocal: {
-    "band-31": -2, "band-62": -2, "band-125": -1.5, "band-250": -1,
-    "band-500": 0.5, "band-1k": 2, "band-2k": 2.5, "band-4k": 2,
-    "band-8k": 0.5, "band-16k": -1,
+    "band-31": 0, "band-62": 0, "band-125": 0, "band-250": 2,
+    "band-500": 4, "band-1k": 4, "band-2k": 3, "band-4k": 2,
+    "band-8k": 0, "band-16k": 0,
   },
   electronic: {
-    "band-31": 3, "band-62": 2.5, "band-125": 1.5, "band-250": 0.5,
-    "band-500": 0, "band-1k": -0.5, "band-2k": 0.5, "band-4k": 1.5,
-    "band-8k": 2.5, "band-16k": 3,
+    "band-31": 4, "band-62": 3, "band-125": 0, "band-250": -2,
+    "band-500": 0, "band-1k": 2, "band-2k": 3, "band-4k": 3,
+    "band-8k": 4, "band-16k": 4,
   },
 };

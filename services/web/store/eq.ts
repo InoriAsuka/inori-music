@@ -6,7 +6,8 @@ import { DEFAULT_EQ_GAINS, EQ_BANDS, type EqBandId, EQ_PRESETS, type EqPresetNam
 
 export interface EqState {
   enabled: boolean;
-  preset: EqPresetName;
+  /** A preset key, or "custom" once any band is hand-adjusted (matches Flutter). */
+  preset: EqPresetName | "custom";
   gains: Record<EqBandId, number>;
   toggle: () => void;
   setPreset: (preset: EqPresetName) => void;
@@ -29,7 +30,7 @@ export const useEqStore = create<EqState>()(
       setBand: (id, db) =>
         set((s) => ({
           gains: { ...s.gains, [id]: db },
-          preset: "flat",
+          preset: "custom",
         })),
       reset: () =>
         set({

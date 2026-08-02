@@ -11,6 +11,7 @@ import 'package:inori_music/src/lyrics/bilingual_lyrics_notifier.dart';
 import 'package:inori_music/src/lyrics/lyric_line.dart';
 import 'package:inori_music/src/lyrics/lyrics_provider.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
+import 'package:inori_music/src/player/karaoke_screen.dart';
 import 'package:inori_music/src/player/player_state.dart' as ps;
 import 'package:inori_music/src/shared/theme/sakura_dusk.dart';
 
@@ -72,6 +73,18 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                     icon: const Icon(Icons.queue_music, color: SakuraDuskColors.onSurfaceVariant),
                     tooltip: 'Queue',
                     onPressed: () => _showQueueSheet(context, ref),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.mic_external_on, color: SakuraDuskColors.onSurfaceVariant),
+                    tooltip: 'Karaoke',
+                    onPressed: trackId.isEmpty
+                        ? null
+                        : () => Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => const KaraokeScreen(),
+                                fullscreenDialog: true,
+                              ),
+                            ),
                   ),
                   // EQ icon button
                   Consumer(

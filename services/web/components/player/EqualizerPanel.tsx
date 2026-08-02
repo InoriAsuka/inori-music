@@ -1,7 +1,7 @@
 "use client";
 
 import { useEqStore } from "@/store/eq";
-import { EQ_BANDS, type EqBandId } from "@/lib/audio/eqPresets";
+import { EQ_BANDS, type EqBandId, type EqPresetName } from "@/lib/audio/eqPresets";
 import { X } from "lucide-react";
 
 export function EqualizerPanel({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -27,14 +27,14 @@ export function EqualizerPanel({ open, onClose }: { open: boolean; onClose: () =
           </label>
           <select
             value={preset}
-            onChange={(e) => setPreset(e.target.value as typeof preset)}
+            onChange={(e) => setPreset(e.target.value as EqPresetName)}
             className="rounded-md border border-[var(--color-border)] bg-[var(--color-void)] px-2 py-1.5 text-xs text-[var(--color-text)] outline-none focus:border-[var(--color-primary)]"
           >
             <option value="flat">Flat</option>
-            <option value="bass-boost">Bass Boost</option>
-            <option value="treble-boost">Treble Boost</option>
+            <option value="bassBoost">Bass Boost</option>
             <option value="vocal">Vocal</option>
             <option value="electronic">Electronic</option>
+            {preset === "custom" && <option value="custom">Custom</option>}
           </select>
         </div>
 
