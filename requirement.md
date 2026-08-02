@@ -42,6 +42,15 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 
 ## Requirement History
 
+### v5.10.0 - 2026-08-02
+
+- **EQ 预设跨端对齐（修正）** —— v5.9.0 的 Web EQ 预设值是新拟的，与 Flutter `eq_settings.dart` 早已存在的一套不一致（`bassBoost` 首段 4 dB vs 6 dB、`vocal`/`electronic` 曲线完全不同），且 Web 多出一个 Flutter 没有的 `treble-boost`。Flutter 为先行实现，故以其为准修正 Web：预设 key 改为 `flat` / `bassBoost` / `vocal` / `electronic`，10 段增益值与 Dart 侧逐一对齐；手动拖动滑块后的标记由 `flat` 改为 `custom`（对齐 Flutter 语义），面板下拉在 `custom` 态下追加对应选项。`eqPresets.ts` 顶部注明该表为跨端权威定义，改动需同步 Dart 侧。
+- **Flutter 卡拉 OK 模式** —— 对齐 v5.9.1 Web 实现。新增 `lib/src/lyrics/karaoke_progress.dart`，逐字进度算法（`activeLineIndex` / `wordProgress`）与 Web `progress.ts` 逐行对应，含零长度区间、末词兜底尾巴（800 ms）、越界索引等同款边界处理。新增 `lib/src/player/karaoke_screen.dart` 全屏视图：当前行放大不透明、邻行缩放淡出、当前词经 `ShaderMask` 线性渐变从左至右填充（非整词跳变），无逐字时间戳的行回退为整行高亮；入口挂在全屏播放器顶栏，无曲目时禁用。
+- **跨端一致性测试** —— 新增 `test/karaoke_progress_test.dart`（Dart，14 例）与 `lib/karaoke/progress.test.ts`（Vitest，14 例），用例一一对应，锁定两端逐字高亮行为一致。
+- **验证** —— Web `tsc --noEmit` 通过、Biome lint 119 files 通过、Vitest 217/217 通过；Flutter `analyze --no-fatal-infos` 仅 1 个既存 info、`flutter test` 101/101 通过。
+- **附带** —— `.gitignore` 补充 `.DS_Store`。
+- 本阶段仅涉及客户端，无服务端 API schema 变化，OpenAPI `info.version` 保持现状。
+
 ### v5.9.1 - 2026-07-31
 
 - **歌词全屏卡拉 OK 模式** —— 新增全屏卡拉 OK 视图（`components/player/KaraokePanel.tsx`），复用增强 LRC 逐字时间戳数据。`lib/karaoke/useSmoothPosition.ts` 通过 rAF 插值将 store 的 250ms tick 平滑至 60fps，消除逐字高亮跳动；`lib/karaoke/progress.ts` 导出纯函数 `activeLineIndex` 与 `wordProgress` 供测试验证。歌词行全屏大字显示（Zen Maru Gothic / Poppins），当前行放大高亮，非当前行缩小淡出；活跃词使用 `background-clip: text` 渐变填充实现从左到右的渐进高亮效果；`<dialog>.showModal()` 提供原生 Escape 关闭与焦点恢复；与 `LyricsPanel` 互斥切换。Web TypeScript 类型检查通过，Biome lint 117 files 通过。**真机播放歌词同步测试待执行**。

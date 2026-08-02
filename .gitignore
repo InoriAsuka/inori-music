@@ -5,3 +5,6 @@
 .codegraph/*.db-wal
 .codegraph/daemon.sock
 .claude/
+
+# macOS
+.DS_Store
