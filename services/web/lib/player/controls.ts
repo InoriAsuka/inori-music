@@ -10,6 +10,11 @@
 /**
  * Playback-speed presets, exactly matching the mobile/Flutter tiers and the
  * store's [MIN_PLAYBACK_SPEED, MAX_PLAYBACK_SPEED] bounds.
+ *
+ * The Flutter counterpart is `speedPresets` in
+ * `services/mobile/lib/src/audio/speed_notifier.dart` — change both together.
+ * Pitch is preserved at every tier on both clients (see applyPlaybackRate in
+ * hooks/useAudio.ts).
  */
 export const SPEED_PRESETS = [0.5, 0.75, 1, 1.25, 1.5, 2] as const;
 

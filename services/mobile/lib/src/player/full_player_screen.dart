@@ -402,7 +402,6 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
   }
 
   void _showSpeedSheet(BuildContext context, WidgetRef ref) {
-    const speeds = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
     final current = ref.read(speedNotifierProvider);
     showModalBottomSheet<void>(
       context: context,
@@ -414,7 +413,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
               padding: EdgeInsets.all(16),
               child: Text('播放速度', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
             ),
-            for (final s in speeds)
+            for (final s in speedPresets)
               ListTile(
                 title: Text('$s×'),
                 trailing: s == current ? const Icon(Icons.check) : null,

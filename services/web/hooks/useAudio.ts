@@ -105,8 +105,15 @@ function setCurrentTimeSafely(audio: HTMLAudioElement, seconds: number) {
  * (which the media load algorithm restores `playbackRate` from on every
  * load()/src change) and `playbackRate` (the live rate) so a freshly-loaded
  * or swapped-in element never silently reverts to 1×.
+ *
+ * `preservesPitch` is set explicitly rather than left to the UA default:
+ * the spec default is `true` and every current browser honours it, but
+ * leaving it implicit means a UA that flips the default would silently
+ * introduce chipmunk audio at non-1× speeds. Flutter's just_audio also
+ * preserves pitch, so declaring it keeps the two clients audibly identical.
  */
 function applyPlaybackRate(audio: HTMLAudioElement, speed: number) {
+  audio.preservesPitch = true;
   audio.defaultPlaybackRate = speed;
   audio.playbackRate = speed;
 }
@@ -171,10 +178,7 @@ export function useAudio() {
     function makeSlot(): Slot {
       const audio = new Audio();
       audio.preload = "auto";
-      // Set both: the media load algorithm resets playbackRate to
-      // defaultPlaybackRate, so pinning both keeps the rate across load().
-      audio.defaultPlaybackRate = speedRef.current;
-      audio.playbackRate = speedRef.current;
+      applyPlaybackRate(audio, speedRef.current);
       return {
         audio,
         graph: createAudioGraph(audio),
