@@ -42,6 +42,19 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 
 ## Requirement History
 
+### v5.11.1 - 2026-08-03
+
+- **倍速音高保持显式化** —— Web `applyPlaybackRate` 显式设置 `preservesPitch = true`。规范默认即为 `true` 且当前浏览器均遵守，但留作隐式意味着 UA 若改默认值会在非 1× 速度下静默出现变调；Flutter 的 just_audio 同样保持音高，显式声明让两端听感一致。同时把 `makeSlot` 中重复的两行 rate 设置收敛到 `applyPlaybackRate`，避免第三处漂移点。
+- **倍速档位收敛为单一来源** —— Flutter 的 `[0.5, 0.75, 1.0, 1.25, 1.5, 2.0]` 此前在 `full_player_screen.dart` 与 `settings_screen.dart` 各硬编码一份字面量，与 Web 的 `SPEED_PRESETS` 无任何约束关联——正是 v5.10.0 修正的 EQ 预设漂移的同款结构。现提取为 `speed_notifier.dart` 的 `speedPresets` 常量（附 `minSpeed`/`maxSpeed`），两处调用点改为引用。
+- **跨端档位一致性测试** —— 新增 `test/speed_presets_test.dart`，与 Web `controls.test.ts` 既有的 `SPEED_PRESETS` 断言一一对应：档位字面量、边界内、含中性 1×、升序无重复。任一端改动而未同步另一端，其自身测试即失败。注释约束靠人执行不可靠，故补测试钉死。
+- **验证** —— Web `tsc --noEmit` 通过、Biome lint 120 files 通过、Vitest 217/217 通过；Flutter `analyze --no-fatal-infos` 仅 1 个既存 info、`flutter test` 104/104 通过（新增 3 例）。
+- 本阶段仅涉及客户端，无服务端 API schema 变化，OpenAPI `info.version` 保持现状。
+
+### v5.11.0 - 2026-08-03
+
+- **播放列表批量导入** —— 新增 `POST /api/v1/catalog/playlists/{id}/copy` 端点，将 catalog 歌单克隆为当前 viewer 的个人歌单，通过新增的 `source_catalog_id` 列保留来源引用（方案 2），为未来跨端同步预留扩展点。服务端 schema 变更（`user_playlists` 加 `source_catalog_id TEXT`）、types/service/handler/repository 同步更新，Go 792 测试通过。Web 端 `CopyFromCatalogDialog` 组件 + `/playlists/[id]` 详情页入口「Copy to my library」按钮，确认后携带目标名称调用新端点，成功后显示 tracks 数量。OpenAPI 新增 `UserPlaylist.sourceCatalogId` 字段与 `copyCatalogPlaylist` 操作，类型已重新生成。
+- 本阶段含服务端 schema 变更，OpenAPI `info.version` 保持现状（语义化版本由发布流程管理）。
+
 ### v5.10.0 - 2026-08-02
 
 - **EQ 预设跨端对齐（修正）** —— v5.9.0 的 Web EQ 预设值是新拟的，与 Flutter `eq_settings.dart` 早已存在的一套不一致（`bassBoost` 首段 4 dB vs 6 dB、`vocal`/`electronic` 曲线完全不同），且 Web 多出一个 Flutter 没有的 `treble-boost`。Flutter 为先行实现，故以其为准修正 Web：预设 key 改为 `flat` / `bassBoost` / `vocal` / `electronic`，10 段增益值与 Dart 侧逐一对齐；手动拖动滑块后的标记由 `flat` 改为 `custom`（对齐 Flutter 语义），面板下拉在 `custom` 态下追加对应选项。`eqPresets.ts` 顶部注明该表为跨端权威定义，改动需同步 Dart 侧。
