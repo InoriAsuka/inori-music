@@ -13884,6 +13884,11 @@
       }
     },
     "/api/v1/catalog/playlists/{id}/copy": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/CatalogId"
+        }
+      ],
       "post": {
         "summary": "Copy catalog playlist to user library",
         "operationId": "copyCatalogPlaylist",
@@ -13893,16 +13898,6 @@
         "security": [
           {
             "bearerAuth": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string"
-            }
           }
         ],
         "responses": {
