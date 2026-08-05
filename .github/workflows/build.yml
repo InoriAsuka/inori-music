@@ -253,7 +253,13 @@ jobs:
           INORI_INITIAL_ADMIN_USER: "ci_viewer"
           INORI_INITIAL_ADMIN_PASSWORD: "ci-password-123"
 
-      # ── Next.js admin dev server (port 3001) ───────────────────────────
+      # ── Next.js admin server (port 3001) ────────────────────────────────
+      # Built + run in production mode rather than `next dev`: dev mode
+      # compiles each route on demand on first visit, and under CI's shared
+      # runners that first-visit compile cost was enough to make a route
+      # visited only once (storage) miss its Playwright timeout — see
+      # .plan/20260805-034-v5.11.4-admin-e2e-timeout.md. A production build
+      # pre-compiles every route up front, giving consistent response times.
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -269,10 +275,14 @@ jobs:
         working-directory: services/admin
         run: npm run generate:api
 
-      - name: Start admin dev server
+      - name: Build admin
+        working-directory: services/admin
+        run: npx next build
+
+      - name: Start admin server
         working-directory: services/admin
         run: |
-          npm run dev &
+          npx next start -p 3001 &
           for i in $(seq 1 60); do
             curl -sf http://localhost:3001 && break || sleep 1
           done
