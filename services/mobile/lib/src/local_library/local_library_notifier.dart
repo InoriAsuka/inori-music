@@ -34,7 +34,7 @@ class LocalLibraryNotifier extends AsyncNotifier<List<LocalLibraryTrack>> {
 
   /// Opens a multi-file picker filtered to supported audio extensions.
   Future<void> importFiles() async {
-    final result = await FilePicker.pickFiles(
+    final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: supportedLocalAudioExtensions,
       allowMultiple: true,
@@ -47,7 +47,7 @@ class LocalLibraryNotifier extends AsyncNotifier<List<LocalLibraryTrack>> {
   /// Opens a directory picker and recursively imports every supported audio
   /// file found underneath it.
   Future<void> importFolder() async {
-    final dirPath = await FilePicker.getDirectoryPath();
+    final dirPath = await FilePicker.platform.getDirectoryPath();
     if (dirPath == null) return;
     final paths = <String>[];
     await for (final entity in Directory(dirPath).list(recursive: true, followLinks: false)) {
