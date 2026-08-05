@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:inori_music/l10n/app_localizations.dart';
+import 'package:inori_music/src/auth/auth_notifier.dart';
 import 'package:inori_music/src/player/mini_player_bar.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/router.dart';
@@ -95,11 +96,29 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
 
   @override
   Widget build(BuildContext context) {
+    const bottomBar = MiniPlayerBar();
+
+    // Guest mode is a local-files-only player — the whole server-catalog nav
+    // (Artists/Albums/Search/Favorites/History) is meaningless without an
+    // account, so it's dropped entirely rather than shown pointing at empty
+    // screens. Local Library and Settings are reachable from
+    // LocalLibraryScreen's own AppBar instead of a multi-item nav bar.
+    final isGuest = ref.watch(authProvider).valueOrNull?.isGuest ?? false;
+    if (isGuest) {
+      return Scaffold(
+        body: Column(
+          children: [
+            Expanded(child: widget.child),
+            bottomBar,
+          ],
+        ),
+      );
+    }
+
     final t = AppLocalizations.of(context);
     final items = _navItems(t);
     final width = MediaQuery.sizeOf(context).width;
     final selectedIndex = _selectedIndex(context, items);
-    const bottomBar = MiniPlayerBar();
 
     if (width >= 1200) {
       return _DesktopLayout(

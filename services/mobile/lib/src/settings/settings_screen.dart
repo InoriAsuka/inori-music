@@ -47,6 +47,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget build(BuildContext context) {
     final auth = ref.watch(authProvider);
     final username = auth.valueOrNull?.username ?? '';
+    final isGuest = auth.valueOrNull?.isGuest ?? false;
     final locale = ref.read(localeProvider);
     final t = AppLocalizations.of(context);
 
@@ -56,30 +57,47 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         children: [
           // Account section
           const _SectionHeader(title: 'Account'),
-          ListTile(
-            leading: const CircleAvatar(
-              backgroundColor: SakuraDuskColors.sakuraPinkDark,
-              child: Icon(Icons.person, color: Colors.white),
+          if (isGuest)
+            ListTile(
+              leading: const CircleAvatar(
+                backgroundColor: SakuraDuskColors.sakuraPinkDark,
+                child: Icon(Icons.person_outline, color: Colors.white),
+              ),
+              title: const Text('以游客身份使用'),
+              subtitle: const Text('登录后可使用云端曲库、收藏与跨设备续播'),
+              trailing: FilledButton.tonal(
+                onPressed: () => ref.read(authProvider.notifier).exitGuestMode(),
+                child: const Text('登录'),
+              ),
+            )
+          else ...[
+            ListTile(
+              leading: const CircleAvatar(
+                backgroundColor: SakuraDuskColors.sakuraPinkDark,
+                child: Icon(Icons.person, color: Colors.white),
+              ),
+              title: Text(username.isNotEmpty ? username : 'User'),
+              subtitle: const Text('Logged in'),
             ),
-            title: Text(username.isNotEmpty ? username : 'User'),
-            subtitle: const Text('Logged in'),
-          ),
-          ListTile(
-            leading: const Icon(Icons.lock_outline),
-            title: Text(t.changePassword),
-            onTap: () => _showChangePasswordDialog(context, ref, t),
-          ),
+            ListTile(
+              leading: const Icon(Icons.lock_outline),
+              title: Text(t.changePassword),
+              onTap: () => _showChangePasswordDialog(context, ref, t),
+            ),
+          ],
           const Divider(),
 
-          // Sessions section
-          const _SectionHeader(title: 'Sessions'),
-          ListTile(
-            leading: const Icon(Icons.devices),
-            title: Text(t.revokeAll),
-            subtitle: Text(t.sessions),
-            onTap: () => _confirmRevokeAllSessions(context, ref, t),
-          ),
-          const Divider(),
+          // Sessions section — not applicable to a guest (no server session).
+          if (!isGuest) ...[
+            const _SectionHeader(title: 'Sessions'),
+            ListTile(
+              leading: const Icon(Icons.devices),
+              title: Text(t.revokeAll),
+              subtitle: Text(t.sessions),
+              onTap: () => _confirmRevokeAllSessions(context, ref, t),
+            ),
+            const Divider(),
+          ],
 
           // Language section
           const _SectionHeader(title: 'Appearance'),
@@ -91,10 +109,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           const Divider(),
 
-          // Offline Library section
-          const _SectionHeader(title: 'Offline Library'),
-          _OfflineLibrarySection(),
-          const Divider(),
+          // Offline Library section — downloads require an account; a guest
+          // manages their local files from the Local Library screen instead.
+          if (!isGuest) ...[
+            const _SectionHeader(title: 'Offline Library'),
+            _OfflineLibrarySection(),
+            const Divider(),
+          ],
 
           // Lyrics section
           const _SectionHeader(title: '歌词'),
@@ -194,13 +215,16 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           const Divider(),
 
-          // Sign out
-          const _SectionHeader(title: 'Account Actions'),
-          ListTile(
-            leading: const Icon(Icons.logout, color: SakuraDuskColors.error),
-            title: Text(t.logout, style: const TextStyle(color: SakuraDuskColors.error)),
-            onTap: () => _confirmLogout(context, ref, t),
-          ),
+          // Sign out — a guest was never logged in; their exit path is the
+          // "登录" button in the Account section above instead.
+          if (!isGuest) ...[
+            const _SectionHeader(title: 'Account Actions'),
+            ListTile(
+              leading: const Icon(Icons.logout, color: SakuraDuskColors.error),
+              title: Text(t.logout, style: const TextStyle(color: SakuraDuskColors.error)),
+              onTap: () => _confirmLogout(context, ref, t),
+            ),
+          ],
         ],
       ),
     );

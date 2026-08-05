@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -7,6 +9,7 @@ import 'package:inori_music/src/audio/sleep_timer_notifier.dart';
 import 'package:inori_music/src/audio/speed_notifier.dart';
 import 'package:inori_music/src/catalog/artwork_provider.dart';
 import 'package:inori_music/src/favorites/track_favorite_notifier.dart';
+import 'package:inori_music/src/local_library/local_library_notifier.dart' show localTrackIdPrefix;
 import 'package:inori_music/src/lyrics/bilingual_lyrics_notifier.dart';
 import 'package:inori_music/src/lyrics/lyric_line.dart';
 import 'package:inori_music/src/lyrics/lyrics_provider.dart';
@@ -77,7 +80,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                   IconButton(
                     icon: const Icon(Icons.mic_external_on, color: SakuraDuskColors.onSurfaceVariant),
                     tooltip: 'Karaoke',
-                    onPressed: trackId.isEmpty
+                    onPressed: (trackId.isEmpty || trackId.startsWith(localTrackIdPrefix))
                         ? null
                         : () => Navigator.of(context).push(
                               MaterialPageRoute<void>(
@@ -135,6 +138,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                       borderRadius: BorderRadius.circular(16),
                       child: _FullPlayerArtwork(
                         albumId: state.mediaItem?.extras?['albumId'] as String?,
+                        localArtUri: state.mediaItem?.artUri,
                       ),
                     ),
                   ),
@@ -327,7 +331,9 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                   // always use the same live trackId from the reactive ref.
                   Consumer(builder: (context2, ref2, child2) {
                     final trackId = ref2.watch(playerProvider).mediaItem?.id;
-                    final isFav = trackId != null
+                    // Local (guest-mode) tracks have no server-side favorite state.
+                    final isLocal = trackId?.startsWith(localTrackIdPrefix) ?? false;
+                    final isFav = (trackId != null && !isLocal)
                         ? ref2.watch(trackFavoriteProvider(trackId))
                         : false;
                     return IconButton(
@@ -335,11 +341,11 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                         isFav ? Icons.favorite : Icons.favorite_border,
                         color: isFav
                             ? SakuraDuskColors.accentPink
-                            : (trackId != null
+                            : (trackId != null && !isLocal
                                 ? SakuraDuskColors.onSurface
                                 : SakuraDuskColors.onSurfaceVariant),
                       ),
-                      onPressed: trackId == null
+                      onPressed: (trackId == null || isLocal)
                           ? null
                           : () => ref2.read(trackFavoriteProvider(trackId).notifier).toggle(),
                       tooltip: 'Favorite',
@@ -527,12 +533,24 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
 /// Watches [artworkUrlProvider] for the album and shows CachedNetworkImage when
 /// a URL is available; falls back to a music-note icon otherwise.
 class _FullPlayerArtwork extends ConsumerWidget {
-  const _FullPlayerArtwork({this.albumId});
+  const _FullPlayerArtwork({this.albumId, this.localArtUri});
 
   final String? albumId;
+  // Embedded cover art extracted from a guest-mode local file (file:// URI).
+  final Uri? localArtUri;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final artUri = localArtUri;
+    if (artUri != null && artUri.scheme == 'file') {
+      return Image.file(
+        File(artUri.toFilePath()),
+        width: 280,
+        height: 280,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => const _ArtworkFallback(),
+      );
+    }
     if (albumId == null || albumId!.isEmpty) {
       return const _ArtworkFallback();
     }
@@ -579,7 +597,8 @@ class _LyricsPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (trackId.isEmpty) {
+    // Local (guest-mode) tracks have no server-side lyrics to fetch.
+    if (trackId.isEmpty || trackId.startsWith(localTrackIdPrefix)) {
       return Center(
         child: Text(
           '暂无歌词',

@@ -8,5 +8,11 @@
 	<true/>
 	<key>com.apple.security.network.server</key>
 	<true/>
+	<!-- Guest-mode local library (v5.12.0): required so a file/folder picked
+	     via file_picker's NSOpenPanel stays readable after selection under
+	     App Sandbox. Read-only is enough — the app never writes back to the
+	     user's original files, only copies extracted cover art elsewhere. -->
+	<key>com.apple.security.files.user-selected.read-only</key>
+	<true/>
 </dict>
 </plist>

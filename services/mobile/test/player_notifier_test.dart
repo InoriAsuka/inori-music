@@ -4,6 +4,7 @@ import 'dart:math' show pow;
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:inori_music/src/local_library/local_library_notifier.dart' show localTrackIdPrefix;
 import 'package:inori_music/src/player/player_state.dart' as pstate;
 
 // ---------------------------------------------------------------------------
@@ -207,6 +208,63 @@ void main() {
         currentIndex: -1,
       );
       expect(s.isIdle, isTrue);
+    });
+  });
+
+  // ---------------------------------------------------------------------
+  // Guest-mode local: track id branching (v5.12.0).
+  //
+  // Mirrors two guards in PlayerNotifier that keep local (guest-mode, no
+  // account) tracks from touching server-only features: _postHistoryFor
+  // must never report play history for a local id, and _reportPlayerState
+  // must skip the whole cross-device sync PUT while a local track is the
+  // one currently playing (a local file has no meaning on another device).
+  // ---------------------------------------------------------------------
+  group('Guest-mode local: track id branching (mirrors player_notifier.dart guards)', () {
+    bool shouldPostHistory(String trackId) =>
+        trackId.isNotEmpty && !trackId.startsWith(localTrackIdPrefix);
+
+    test('history is posted for a normal server trackId', () {
+      expect(shouldPostHistory('track-123'), isTrue);
+    });
+
+    test('history is skipped for a local: trackId', () {
+      expect(shouldPostHistory('${localTrackIdPrefix}abc-uuid'), isFalse);
+    });
+
+    test('history is skipped for an empty trackId', () {
+      expect(shouldPostHistory(''), isFalse);
+    });
+
+    bool shouldReportPlayerState(List<MediaItem> queue, int currentIndex) {
+      if (queue.isEmpty || currentIndex < 0) return false;
+      if (currentIndex < queue.length && queue[currentIndex].id.startsWith(localTrackIdPrefix)) {
+        return false;
+      }
+      return true;
+    }
+
+    test('reports when current track is a server track', () {
+      final queue = [MediaItem(id: 'track-1', title: 'T')];
+      expect(shouldReportPlayerState(queue, 0), isTrue);
+    });
+
+    test('skips reporting when current track is local', () {
+      final queue = [MediaItem(id: '${localTrackIdPrefix}abc', title: 'T')];
+      expect(shouldReportPlayerState(queue, 0), isFalse);
+    });
+
+    test('skips reporting when queue is empty', () {
+      expect(shouldReportPlayerState([], -1), isFalse);
+    });
+
+    test('a mixed queue only blocks reporting while the CURRENT index is local', () {
+      final queue = [
+        MediaItem(id: 'track-1', title: 'Server'),
+        MediaItem(id: '${localTrackIdPrefix}abc', title: 'Local'),
+      ];
+      expect(shouldReportPlayerState(queue, 0), isTrue, reason: 'current is the server track');
+      expect(shouldReportPlayerState(queue, 1), isFalse, reason: 'current is the local track');
     });
   });
 }

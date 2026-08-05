@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:inori_music/src/api/api_client.dart';
 
@@ -11,11 +12,17 @@ const _kUserIdKey = 'user_id';
 const _kUsernameKey = 'username';
 const _kBaseUrlKey = 'base_url';
 
+/// SharedPreferences key for "last session was a guest session" — non-secret
+/// UI preference, deliberately kept out of [FlutterSecureStorage] (that's
+/// reserved for real credentials). Lets a guest relaunch straight into guest
+/// mode instead of flashing the login screen again.
+const _kLastModeGuestKey = 'auth.lastModeGuest';
+
 // ---------------------------------------------------------------------------
 // Auth state
 // ---------------------------------------------------------------------------
 
-enum AuthStatus { loading, authenticated, unauthenticated }
+enum AuthStatus { loading, authenticated, unauthenticated, guest }
 
 class AuthState {
   const AuthState({
@@ -33,6 +40,11 @@ class AuthState {
   final String? error;
 
   bool get isAuthenticated => status == AuthStatus.authenticated;
+  bool get isGuest => status == AuthStatus.guest;
+  // "Past the login gate" — either a real account or an explicit guest choice.
+  // The router redirect and the shell nav both key off this rather than
+  // `isAuthenticated` alone, so guest mode doesn't get bounced back to /login.
+  bool get isPastGate => isAuthenticated || isGuest;
 
   AuthState copyWith({
     AuthStatus? status,
@@ -89,7 +101,34 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
         return const AuthState(status: AuthStatus.unauthenticated);
       }
     }
+
+    // No valid session — if the last thing this install did was explicitly
+    // continue as a guest, skip straight back into guest mode instead of
+    // flashing the login screen on every cold start.
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool(_kLastModeGuestKey) ?? false) {
+      return const AuthState(status: AuthStatus.guest);
+    }
     return const AuthState(status: AuthStatus.unauthenticated);
+  }
+
+  /// Enter guest mode: purely local, no network call. Persists the choice so
+  /// a relaunch goes straight back into guest mode (see [build]).
+  Future<void> continueAsGuest() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kLastModeGuestKey, true);
+    state = const AsyncData(AuthState(status: AuthStatus.guest));
+  }
+
+  /// Drop from guest mode back to genuinely unauthenticated, so the router's
+  /// normal "not past the gate → /login" rule takes over. Used by the "Log
+  /// in" entry point surfaced to guests in Settings — going through
+  /// unauthenticated (rather than a special guest-only login path) means the
+  /// router doesn't need a second, parallel set of login-reachability rules.
+  Future<void> exitGuestMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_kLastModeGuestKey);
+    state = const AsyncData(AuthState(status: AuthStatus.unauthenticated));
   }
 
   Future<void> login(String username, String password, {String? baseUrl}) async {
@@ -115,6 +154,8 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
       await _storage.write(key: _kTokenKey, value: token);
       await _storage.write(key: _kUserIdKey, value: userId);
       await _storage.write(key: _kUsernameKey, value: username);
+      // A real login always wins over a previously-remembered guest session.
+      (await SharedPreferences.getInstance()).remove(_kLastModeGuestKey);
 
       state = AsyncData(AuthState(
         status: AuthStatus.authenticated,
@@ -145,6 +186,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
       }
     }
     await _clearStorage();
+    (await SharedPreferences.getInstance()).remove(_kLastModeGuestKey);
     state = const AsyncData(AuthState(status: AuthStatus.unauthenticated));
   }
 

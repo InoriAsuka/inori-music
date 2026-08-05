@@ -22,6 +22,20 @@ void main() {
       expect(state.isAuthenticated, isFalse);
     });
 
+    test('isGuest is true only when status is guest', () {
+      expect(const AuthState(status: AuthStatus.guest).isGuest, isTrue);
+      expect(const AuthState(status: AuthStatus.authenticated).isGuest, isFalse);
+      expect(const AuthState(status: AuthStatus.unauthenticated).isGuest, isFalse);
+      expect(const AuthState(status: AuthStatus.loading).isGuest, isFalse);
+    });
+
+    test('isPastGate is true for authenticated and guest, false otherwise', () {
+      expect(const AuthState(status: AuthStatus.authenticated).isPastGate, isTrue);
+      expect(const AuthState(status: AuthStatus.guest).isPastGate, isTrue);
+      expect(const AuthState(status: AuthStatus.unauthenticated).isPastGate, isFalse);
+      expect(const AuthState(status: AuthStatus.loading).isPastGate, isFalse);
+    });
+
     test('copyWith preserves unchanged fields', () {
       const state = AuthState(
         status: AuthStatus.authenticated,
@@ -44,12 +58,13 @@ void main() {
   });
 
   group('AuthStatus', () {
-    test('has three values', () {
-      expect(AuthStatus.values, hasLength(3));
+    test('has four values', () {
+      expect(AuthStatus.values, hasLength(4));
       expect(AuthStatus.values, containsAll([
         AuthStatus.loading,
         AuthStatus.authenticated,
         AuthStatus.unauthenticated,
+        AuthStatus.guest,
       ]));
     });
   });

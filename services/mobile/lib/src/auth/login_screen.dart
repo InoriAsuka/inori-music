@@ -129,6 +129,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                           )
                         : Text(t.login, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
                   ),
+                  const SizedBox(height: 12),
+
+                  // Guest entry point — a local-files player, no account
+                  // needed. Visual treatment is intentionally plain for now;
+                  // v5.13.0 redesigns this screen's whole layout.
+                  TextButton(
+                    onPressed: isLoading
+                        ? null
+                        : () => ref.read(authProvider.notifier).continueAsGuest(),
+                    child: const Text('以游客身份继续'),
+                  ),
                   const SizedBox(height: 24),
                 ],
               ),

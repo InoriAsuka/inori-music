@@ -1,0 +1,237 @@
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import 'package:inori_music/src/local_library/local_library_db.dart';
+import 'package:inori_music/src/local_library/local_library_notifier.dart';
+import 'package:inori_music/src/player/player_notifier.dart';
+import 'package:inori_music/src/shared/router.dart';
+import 'package:inori_music/src/shared/theme/sakura_dusk.dart';
+
+/// Guest mode's home screen: a flat list of locally-imported audio files.
+/// No account, no server — this is what makes the app usable without login.
+/// v1 is intentionally a single flat list (artist/album/title sorted) rather
+/// than a full Artists→Albums→Tracks hierarchy: a personal local file
+/// collection is typically far smaller than a server catalog, so grouped
+/// browsing is a later candidate, not core scope.
+class LocalLibraryScreen extends ConsumerWidget {
+  const LocalLibraryScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(localLibraryProvider);
+    final playerState = ref.watch(playerProvider);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('本地曲库'),
+        actions: [
+          PopupMenuButton<_ImportAction>(
+            icon: const Icon(Icons.add),
+            tooltip: '导入',
+            onSelected: (action) {
+              final notifier = ref.read(localLibraryProvider.notifier);
+              switch (action) {
+                case _ImportAction.files:
+                  notifier.importFiles();
+                case _ImportAction.folder:
+                  notifier.importFolder();
+              }
+            },
+            itemBuilder: (context) => const [
+              PopupMenuItem(value: _ImportAction.files, child: Text('导入文件')),
+              PopupMenuItem(value: _ImportAction.folder, child: Text('导入文件夹')),
+            ],
+          ),
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: '设置',
+            onPressed: () => context.push(AppRoutes.settings),
+          ),
+        ],
+      ),
+      body: state.when(
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (e, _) => Center(
+          child: Text('$e', style: const TextStyle(color: SakuraDuskColors.error)),
+        ),
+        data: (tracks) {
+          if (tracks.isEmpty) return const _EmptyLocalLibrary();
+          final ids = tracks.map((t) => t.id).toList();
+          return ListView.builder(
+            itemCount: tracks.length,
+            itemBuilder: (context, i) {
+              final track = tracks[i];
+              final isCurrent = playerState.mediaItem?.id == track.id;
+              return _LocalTrackTile(
+                key: ValueKey(track.id),
+                track: track,
+                isCurrent: isCurrent,
+                isPlaying: isCurrent && playerState.isPlaying,
+                onTap: () => ref.read(playerProvider.notifier).playQueue(ids, initialIndex: i),
+                onDelete: () => _confirmDelete(context, ref, track),
+              );
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _confirmDelete(BuildContext context, WidgetRef ref, LocalLibraryTrack track) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('移除曲目'),
+        content: Text('从本地曲库中移除「${track.title}」？不会删除原始文件。'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('移除')),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await ref.read(localLibraryProvider.notifier).remove(track.id);
+    }
+  }
+}
+
+enum _ImportAction { files, folder }
+
+class _EmptyLocalLibrary extends ConsumerWidget {
+  const _EmptyLocalLibrary();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final notifier = ref.read(localLibraryProvider.notifier);
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.library_music_outlined, size: 64, color: SakuraDuskColors.onSurfaceVariant),
+            const SizedBox(height: 16),
+            const Text(
+              '本地曲库还是空的',
+              style: TextStyle(fontSize: 18, color: SakuraDuskColors.onSurfaceVariant),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              '以游客身份使用时，音乐来自你设备上的文件，不需要账号或服务器。',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: SakuraDuskColors.onSurfaceVariant),
+            ),
+            const SizedBox(height: 24),
+            FilledButton.icon(
+              icon: const Icon(Icons.audio_file_outlined),
+              label: const Text('导入文件'),
+              onPressed: notifier.importFiles,
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              icon: const Icon(Icons.folder_outlined),
+              label: const Text('导入文件夹'),
+              onPressed: notifier.importFolder,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LocalTrackTile extends StatelessWidget {
+  const _LocalTrackTile({
+    super.key,
+    required this.track,
+    required this.isCurrent,
+    required this.isPlaying,
+    required this.onTap,
+    required this.onDelete,
+  });
+
+  final LocalLibraryTrack track;
+  final bool isCurrent;
+  final bool isPlaying;
+  final VoidCallback onTap;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final subtitleParts = [
+      if (track.artistName.isNotEmpty) track.artistName,
+      if (track.durationMs != null) _formatDuration(Duration(milliseconds: track.durationMs!)),
+    ];
+    return ListTile(
+      leading: _Cover(coverPath: track.coverArtPath, highlighted: isCurrent),
+      title: Text(
+        track.title,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: isCurrent ? SakuraDuskColors.sakuraPink : SakuraDuskColors.onSurface,
+          fontWeight: isCurrent ? FontWeight.w600 : FontWeight.normal,
+        ),
+      ),
+      subtitle: subtitleParts.isEmpty
+          ? null
+          : Text(subtitleParts.join(' · '), maxLines: 1, overflow: TextOverflow.ellipsis),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (isCurrent && isPlaying)
+            const Padding(
+              padding: EdgeInsets.only(right: 4),
+              child: Icon(Icons.equalizer, color: SakuraDuskColors.sakuraPinkLight, size: 20),
+            ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline, color: SakuraDuskColors.onSurfaceVariant),
+            onPressed: onDelete,
+          ),
+        ],
+      ),
+      onTap: onTap,
+    );
+  }
+
+  static String _formatDuration(Duration d) {
+    final mins = d.inMinutes;
+    final secs = d.inSeconds % 60;
+    return '$mins:${secs.toString().padLeft(2, '0')}';
+  }
+}
+
+class _Cover extends StatelessWidget {
+  const _Cover({required this.coverPath, required this.highlighted});
+  final String? coverPath;
+  final bool highlighted;
+
+  @override
+  Widget build(BuildContext context) {
+    final path = coverPath;
+    return Container(
+      width: 44,
+      height: 44,
+      decoration: BoxDecoration(
+        color: SakuraDuskColors.surfaceContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: path != null
+          ? Image.file(
+              File(path),
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => _fallbackIcon(),
+            )
+          : _fallbackIcon(),
+    );
+  }
+
+  Widget _fallbackIcon() => Icon(
+        Icons.music_note_rounded,
+        color: highlighted ? SakuraDuskColors.sakuraPink : SakuraDuskColors.onSurfaceVariant,
+      );
+}

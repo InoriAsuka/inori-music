@@ -6,6 +6,8 @@ import 'dart:math' show pow;
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:inori_music/src/local_library/local_library_db.dart';
+import 'package:inori_music/src/local_library/local_library_notifier.dart' show localTrackIdPrefix;
 import 'package:inori_music/src/offline/offline_db.dart';
 import 'package:inori_api/src/api/catalog_api.dart';
 import 'package:inori_api/src/api/history_api.dart';
@@ -46,6 +48,10 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
 
   // In-memory track metadata cache to avoid redundant catalog API calls.
   final Map<String, CatalogTrack> _trackCache = {};
+
+  // Same idea for guest-mode local-file tracks (id prefix `local:`) — see
+  // resolvePlaybackUrl / _localMediaItem / _backfillLocalTrack below.
+  final Map<String, LocalLibraryTrack> _localTrackCache = {};
 
   // Resolved display names — keyed by artistId / albumId.
   final Map<String, String> _artistNameCache = {};
@@ -88,6 +94,11 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
   /// Resolve the playback URL for a track and prepare the audio source.
   /// Returns the resolved URL or null if unavailable.
   Future<String?> resolvePlaybackUrl(String trackId) async {
+    // Guest-mode local file — never touches the server or OfflineDb.
+    if (trackId.startsWith(localTrackIdPrefix)) {
+      final local = await LocalLibraryDb.instance.query(trackId);
+      return local != null ? 'file://${local.localPath}' : null;
+    }
     // Check local offline cache first.
     final offline = await OfflineDb.instance.query(trackId);
     if (offline != null && File(offline.localPath).existsSync()) {
@@ -364,6 +375,9 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
 
   /// Fetch and cache CatalogTrack metadata. Returns null on failure.
   Future<CatalogTrack?> _resolveTrack(String trackId) async {
+    // Local tracks never have a CatalogTrack — _makeMediaItem branches to
+    // _localMediaItem for these regardless of what this returns.
+    if (trackId.startsWith(localTrackIdPrefix)) return null;
     if (_trackCache.containsKey(trackId)) return _trackCache[trackId];
     try {
       final resp = await _catalog.getCatalogTrack(id: trackId);
@@ -376,20 +390,60 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
   }
 
   /// Stub MediaItem used to populate the queue immediately before metadata resolves.
-  MediaItem _stubMediaItem(String trackId) => MediaItem(
-        id: trackId,
-        title: _trackCache[trackId]?.title ?? trackId,
-        artist: _artistNameCache[_trackCache[trackId]?.artistId ?? ''] ?? '',
-        extras: {
-          'trackId': trackId,
-          'albumId': _trackCache[trackId]?.albumId,
-        },
-      );
+  MediaItem _stubMediaItem(String trackId) {
+    if (trackId.startsWith(localTrackIdPrefix)) return _localMediaItem(trackId);
+    return MediaItem(
+      id: trackId,
+      title: _trackCache[trackId]?.title ?? trackId,
+      artist: _artistNameCache[_trackCache[trackId]?.artistId ?? ''] ?? '',
+      extras: {
+        'trackId': trackId,
+        'albumId': _trackCache[trackId]?.albumId,
+      },
+    );
+  }
+
+  /// MediaItem for a guest-mode local file. Reads the in-memory cache
+  /// populated from [LocalLibraryDb]; on a cache miss it returns an
+  /// id-only stub and kicks off an async backfill (same pattern as
+  /// [_backfillArtistName]/[_backfillAlbumTitle] below) rather than making
+  /// this function async — SQLite lookups are fast but queue construction
+  /// needs a synchronous MediaItem immediately.
+  MediaItem _localMediaItem(String trackId) {
+    final cached = _localTrackCache[trackId];
+    if (cached == null) {
+      _backfillLocalTrack(trackId);
+      return MediaItem(id: trackId, title: trackId, artist: '', album: '');
+    }
+    return MediaItem(
+      id: trackId,
+      title: cached.title,
+      artist: cached.artistName,
+      album: cached.albumTitle,
+      duration: cached.durationMs != null ? Duration(milliseconds: cached.durationMs!) : Duration.zero,
+      artUri: cached.coverArtPath != null ? Uri.file(cached.coverArtPath!) : null,
+      extras: {'trackId': trackId},
+    );
+  }
+
+  /// Fetch local track metadata in the background and update the current
+  /// MediaItem if it is the track being displayed.
+  Future<void> _backfillLocalTrack(String trackId) async {
+    final row = await LocalLibraryDb.instance.query(trackId);
+    if (row == null) return;
+    _localTrackCache[trackId] = row;
+    if (state.mediaItem?.id == trackId) {
+      final updated = _localMediaItem(trackId);
+      state = state.copyWith(mediaItem: updated);
+      audioHandler.mediaItem.add(updated);
+    }
+  }
 
   /// Full MediaItem populated from resolved CatalogTrack metadata.
   /// Artist name and album title are filled from the in-memory cache when
   /// available; otherwise an async backfill updates the state after lookup.
   MediaItem _makeMediaItem(String trackId, CatalogTrack? track) {
+    if (trackId.startsWith(localTrackIdPrefix)) return _localMediaItem(trackId);
     final artistId = track?.artistId ?? '';
     final albumId = track?.albumId ?? '';
     final artistName = artistId.isNotEmpty ? (_artistNameCache[artistId] ?? artistId) : '';
@@ -559,6 +613,8 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
   }
 
   Future<void> _postHistoryFor(String trackId) async {
+    // Local files have no server-side history to report against.
+    if (trackId.startsWith(localTrackIdPrefix)) return;
     try {
       if (trackId.isNotEmpty) {
         await _history.recordPlayEvent(
@@ -613,6 +669,14 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
   /// Swallows all errors — reporting must never break playback.
   Future<void> _reportPlayerState() async {
     if (state.queue.isEmpty || state.currentIndex < 0) return;
+    // Guest-mode local files don't exist on other devices — reporting them
+    // would tell another device to resume a queue it can never actually
+    // play. Skip the whole report while a local track is current rather
+    // than trying to filter-and-reindex the queue.
+    if (state.currentIndex < state.queue.length &&
+        state.queue[state.currentIndex].id.startsWith(localTrackIdPrefix)) {
+      return;
+    }
     try {
       await _me.putPlayerState(_serializeState());
     } catch (e) {

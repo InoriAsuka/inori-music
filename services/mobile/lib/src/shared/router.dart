@@ -17,6 +17,7 @@ import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/favorites/favorites_screen.dart';
 import 'package:inori_music/src/history/history_screen.dart';
 import 'package:inori_music/src/history/history_stats_screen.dart';
+import 'package:inori_music/src/local_library/local_library_screen.dart';
 import 'package:inori_music/src/settings/settings_screen.dart';
 import 'package:inori_music/src/shared/widgets/shell_scaffold.dart';
 import 'package:inori_music/src/user_playlist/user_playlist_detail_screen.dart';
@@ -42,6 +43,7 @@ abstract class AppRoutes {
   static const history = '/library/history';
   static const historyStats = '/library/history/stats';
   static const settings = '/settings';
+  static const localLibrary = '/local-library';
   static const myPlaylists = '/library/my-playlists';
   static const myPlaylistDetail = '/library/my-playlists/:id';
 
@@ -128,6 +130,23 @@ class _DeepLinkTrackScreenState extends ConsumerState<_DeepLinkTrackScreen> {
 
 
 // ---------------------------------------------------------------------------
+// Guest-mode route allow-list
+// ---------------------------------------------------------------------------
+
+/// Routes reachable in guest mode (no account). Guest mode is a local-files
+/// player — every server-catalog route (Artists/Albums/Tracks/Playlists/
+/// Search/Favorites/History/MyPlaylists) is meaningless without an account,
+/// so this is an allow-list rather than a block-list: any new server-backed
+/// route added later is safe-by-default instead of silently leaking through.
+/// `/login` is handled separately in the redirect (a guest must always be
+/// able to reach it to upgrade to a real account).
+const _guestAllowedRoutes = [
+  AppRoutes.localLibrary,
+  AppRoutes.settings,
+  AppRoutes.player,
+];
+
+// ---------------------------------------------------------------------------
 // Router provider
 // ---------------------------------------------------------------------------
 
@@ -144,11 +163,24 @@ final routerProvider = Provider<GoRouter>((ref) {
       // While auth is loading, show a splash instead of flashing content.
       if (authState is AsyncLoading) return AppRoutes.login;
 
-      final isLoggedIn = authState.valueOrNull?.isAuthenticated ?? false;
+      final authValue = authState.valueOrNull;
+      final isLoggedIn = authValue?.isAuthenticated ?? false;
+      final isGuest = authValue?.isGuest ?? false;
+      final isPastGate = isLoggedIn || isGuest;
       final isLoginRoute = state.matchedLocation == AppRoutes.login;
 
-      if (!isLoggedIn && !isLoginRoute) return AppRoutes.login;
+      if (!isPastGate && !isLoginRoute) return AppRoutes.login;
       if (isLoggedIn && isLoginRoute) return AppRoutes.artists;
+      // Mirrors the isLoggedIn rule above: once past the gate (as a guest),
+      // /login is never something you "sit on" — landing there (e.g. right
+      // after tapping "Continue as Guest") bounces into the app. A guest who
+      // wants to log in for real instead calls AuthNotifier.exitGuestMode(),
+      // which drops back to genuinely unauthenticated so this same rule set
+      // routes them to /login normally (see settings_screen.dart).
+      if (isGuest && isLoginRoute) return AppRoutes.localLibrary;
+      if (isGuest && !_guestAllowedRoutes.any((r) => state.matchedLocation.startsWith(r))) {
+        return AppRoutes.localLibrary;
+      }
       return null;
     },
     routes: [
@@ -235,6 +267,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.settings,
             builder: (context, state) => const SettingsScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.localLibrary,
+            builder: (context, state) => const LocalLibraryScreen(),
           ),
           GoRoute(
             path: AppRoutes.myPlaylists,
