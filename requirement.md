@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`5.11.4`
+`5.11.5`
 
 ## Product Goal
 
@@ -41,6 +41,11 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Committed lifecycle updates must record latest transition metadata for audit preparation.
 
 ## Requirement History
+
+### v5.11.5 - 2026-08-05
+
+- **fix: Admin E2E CI 改用生产构建，根治 storage tab 计时不稳定** — v5.11.4 把超时从 8s/30s 放宽到 15s/45s 后推送观察，`storage tab` 用例反而更慢（18.9s / 45.1s 撞满新超时，比放宽前的 11.9s / 30.1s 还差），证明"再给更多时间"是在追一个不断后退的目标，不是真正的余量不足。根因是 `.github/workflows/build.yml` 的 `admin-e2e` job 用 `npm run dev`（Turbopack 开发模式）跑 admin：开发模式下每个路由第一次被访问时才编译，`storage` 恰好是套件里唯一"第一次真正跑到断言阶段"的路由（此前 middleware/baseUrl 缺陷让全部用例卡在登录阶段，`storage` 从未真正执行到），在 CI 共享 runner 资源下这次首访编译延迟足以吃掉整个超时预算，且预算越松、观察到的耗时也跟着越涨（资源竞争下的可变延迟，不是固定缺口）。改为 `npx next build` + `npx next start -p 3001`（生产模式，构建期预编译全部路由，运行期不再有按需编译的方差）。本地验证：连续两次 `playwright test` 全绿，`storage tab` 耗时从此前的 15.3s/18.9s 收敛到 6.3s/6.7s，与其余三个用例（5.6s–10.2s）处在同一量级，不再是异常值。v5.11.4 放宽的超时保留作为额外余量，不再是承载修复的主力。
+- The phase output is version-tracked and verified locally（生产构建成功、`playwright test` 本地连续两次 4/4 通过、耗时分布收敛）；远端 CI 待本次推送最终确认。
 
 ### v5.11.4 - 2026-08-05
 
