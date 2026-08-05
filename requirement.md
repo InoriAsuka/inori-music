@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`5.11.5`
+`5.12.0`
 
 ## Product Goal
 
@@ -41,6 +41,14 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Committed lifecycle updates must record latest transition metadata for audit preparation.
 
 ## Requirement History
+
+### v5.12.0 - 2026-08-06
+
+- **feat: Flutter 游客本地播放模式** — 用户提出的三项 Flutter 客户端深度体验改造的第一阶段（另两项：启动页/登录页/自定义背景见 v5.13.0，皮肤系统/桌面窗体见 v5.14.0–v5.15.0）。改造前，客户端 100% 依赖服务端账号——`AuthStatus` 只有 `loading/authenticated/unauthenticated` 三态，`unauthenticated` 只是登录前的瞬时态，`router.dart` 的 `redirect` 无条件把它导回 `/login`；全仓库没有任何本地文件播放路径（无 `file_picker`、无任何标签解析库），既有的"离线"功能（`offline_db.dart`）实质是"已登录状态下把服务端曲目缓存到本地"，与"不登录也能用的本地播放器"是两回事。本阶段新增 `AuthStatus.guest`：`AuthNotifier.continueAsGuest()` 纯本地状态切换（不发网络请求），并把选择写入 `shared_preferences`（`auth.lastModeGuest`，与 token 用的 `flutter_secure_storage` 分开），冷启动时无有效 token 但曾选择过游客模式则直接进入 guest 态，不再闪回登录表单；新增 `AuthNotifier.exitGuestMode()`（guest→unauthenticated）作为"游客登录真实账号"的路径——复用路由既有的"未过闸→/login"规则，不需要给登录页单独开一套可达性规则。路由 `redirect` 对 guest 态采用**白名单**而非黑名单放行（`/local-library`、`/settings`、`/player`）：服务端 catalog 相关路由（Artists/Albums/Tracks/Playlists/Search/Favorites/History/MyPlaylists）对游客毫无意义，白名单保证未来任何新增的服务端路由默认对游客不可达，不必每次新增都记得排除。`ShellScaffold` 对 guest 态提前返回一个无导航栏的极简布局（只有内容区 + MiniPlayerBar）——游客只有"本地曲库"一个真实目的地，硬套多目的地的 NavigationBar/Rail 没有意义，设置入口改放在本地曲库页 AppBar 的齿轮图标。
+- **feat: 本地文件导入与元数据解析** — 新增 `lib/src/local_library/`：`local_library_db.dart`（`LocalLibraryDb`，完整照抄 `OfflineDb` 的 completer 守卫单例模式，独立 `local_library_tracks` 表——不复用 `offline_tracks`，因为后者的 schema 与全部消费方都假定 `track_id` 是服务端 UUID，混用会让两套语义永久纠缠）、`local_library_notifier.dart`（`file_picker` 多选文件/整目录递归导入，`audio_metadata_reader` 提取标题/艺术家/专辑/时长/内嵌封面，标签缺失或格式不支持时标题回退文件名去扩展名，单个文件解析失败不影响本批次其余文件）、`local_library_screen.dart`（游客的主屏：单层扁平列表，按 artist/album/title 排序——个人本地文件规模通常远小于服务端曲库，暂不做 Artists→Albums→Tracks 三级浏览，留作后续候选）。元数据库选型排除了最初计划的 `audiotags`：该包基于 `flutter_rust_bridge` + Rust crate，需要为 Android/iOS/macOS/Windows 全平台编译原生 Rust 代码，而现有 Flutter CI 完全没有 Rust 工具链，引入后单是让 5 个 CI runner 都能编译就是一次独立的高风险改造；改用纯 Dart 实现的 `audio_metadata_reader`（零原生依赖，覆盖 MP3/MP4/FLAC/OGG/Opus/WAV/AIFF/APE，比原计划格式覆盖更广），避免了这类风险。
+- **fix: player_notifier.dart 接入本地曲目播放** — 本地曲目 id 统一加 `local:` 前缀，在原有的按 `trackId` 查询的少数几个函数处分支，而不是引入新的联合类型：队列内存模型本身就是 `audio_service` 的 `MediaItem`（与服务端无关的通用类型），mini player / full player 只读 `title/artist/album/id`，UI 侧零改动。`resolvePlaybackUrl` 命中 `local:` 前缀时查 `LocalLibraryDb` 直接返回 `file://` 路径，跳过服务端 catalog 与既有 `OfflineDb` 缓存检查；`_stubMediaItem`/`_makeMediaItem` 分支到新增的 `_localMediaItem`（缓存命中同步返回，未命中先吐出 id-only 占位并异步 `_backfillLocalTrack`——复用文件里艺术家/专辑名回填的既有模式，不用把整条播放链路改成 async）；`_postHistoryFor` 对 `local:` 前缀直接跳过（本地文件没有服务端历史可言）；跨设备续播上报 `_reportPlayerState` 在当前播放曲目是本地曲目时整体跳过（不是过滤队列后再上报——过滤会让上报的 `currentIndex` 指向错误曲目，直接跳过整次上报更安全）；ReplayGain 增益查找对未知 id 已经安全空转，无需改动。`full_player_screen.dart` 对本地曲目禁用收藏按钮、歌词 tab、卡拉 OK 入口（三者均依赖服务端），并新增本地内嵌封面渲染（`MediaItem.artUri` 为 `file://` 时优先展示，取代原来只认 `albumId` 网络封面的 `_FullPlayerArtwork`）。
+- **fix: macOS App Sandbox 缺失文件访问权限（本阶段引入前即可能影响任何未来的文件选择功能）** — 排查中发现 `services/mobile/macos/Runner/{DebugProfile,Release}.entitlements` 启用了 `com.apple.security.app-sandbox` 却未声明任何文件访问权限；沙盒模式下 `file_picker` 弹出的系统选择框选中文件后，后续读取会被沙盒拒绝。两份 entitlements 均补上 `com.apple.security.files.user-selected.read-only`（只读即可——本阶段只读取用户选中的音频文件，封面图另存到 App 自己的数据目录，不回写用户原始文件）。
+- **验证** — `flutter analyze --no-fatal-infos` 0 issues；`flutter test --no-pub` 113/113 通过（含新增：`AuthStatus` 四态 + `isGuest`/`isPastGate` getter 测试、`player_notifier.dart` 两处 guest 分支——`_postHistoryFor`/`_reportPlayerState` 守卫——的镜像测试，沿用本仓库既有的"不直接实例化依赖 `audioHandler` 全局单例的 `PlayerNotifier`，镜像其决策逻辑"测试惯例）；本地无完整 Xcode（仅 Command Line Tools）无法 `flutter run -d macos` 做真机走查，**实机验证待本次推送后的远端 CI（Build macOS / Build Windows job）产出构建，由用户下载验证**。
 
 ### v5.11.5 - 2026-08-05
 
