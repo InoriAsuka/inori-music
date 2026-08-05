@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`5.9.0`
+`5.11.3`
 
 ## Product Goal
 
@@ -41,6 +41,23 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Committed lifecycle updates must record latest transition metadata for audit preparation.
 
 ## Requirement History
+
+### v5.11.3 - 2026-08-05
+
+- **test: 补全 P1 音频引擎核心模块测试（task #74 收尾）** — v5.11.2 的文档承诺测试补齐只覆盖了 `throttle`/`playerStateSync`/`trackGainCache` 三个模块，任务 #74 实际要求的四个核心模块中 `crossfade.ts`、`audioGraph.ts` 仍无测试。新增 `crossfade.test.ts`（9 例，复用 `token.test.ts` 的 fake-localStorage/无 window 双环境模式）与 `audioGraph.test.ts`（20 例，构造最小 fake `AudioContext`/`GainNode`/`BiquadFilterNode` 覆盖真实 WebAudio 连接拓扑：source→10 段 EQ 滤波器链→GainNode→destination、增益/EQ 数学、CORS 兜底降级、共享 AudioContext 复用、首次手势 resume）。至此 Web 音频引擎全部核心模块（crossfade/audioGraph/trackGainCache/playerStateSync/gaplessEngine/replayGain）均有测试覆盖。
+- **fix: Build CI 在 Go 与 Web 两侧各有一处独立缺陷** — 推送 v5.11.2/Windows CI 后例行检查远端 CI 状态，发现 Build 工作流连续 3 次推送失败。(1) **`services/api/internal/userplaylist/types.go` gofmt 对齐失效**——v5.11.0 新增 `SourceCatalogID` 字段（比既有字段名更长）后未重跑 gofmt，与 v5.5.1 是同一类缺陷；`gofmt -w` 修复。(2) **`trackGainCache.test.ts`/`playerStateSync.test.ts` 类型错误**——v5.11.2 提交前只跑了 `vitest run`（esbuild 转译，不做完整类型检查）未跑 `tsc --noEmit`：前者 `makeApi()` 返回的裸对象与 `resolveReplayGainDb` 期望的 openapi-fetch `Client` 类型不匹配（6 处，改为在构造处一次性 `as unknown as Fetcher`）；后者 `import ... from "./player-state"` 路径本不存在（真实模块一部分在 `./playerStateSync`、一部分在 `@/lib/api/player-state`），且该导入失败掩盖了后续 16 处真正的类型错误（`t()` 构造的 `{id}` 不满足 `QueueTrack` 全量字段，补全为完整 fixture）。
+- **fix: 深挖 Build CI 历史发现两条更早、持续更久的 E2E 缺陷** — 继续向前追溯 Build 失败历史（而非只看最近一次），发现 `Web E2E`/`Admin E2E` 两个 job 各自因为一个**真实产品缺陷**（非环境、非凭据问题）100% 必现失败，分别已持续 10 天与 26/44 天却从未被处理：
+  - **Web：搜索历史下拉框在 blur→refocus 后会延迟自关闭**（`app/(app)/search/page.tsx`）——输入框 `onBlur` 用 `setTimeout(..., 150)` 延迟隐藏下拉（为了让历史项的 click 能先注册），但从未在 `onFocus` 时取消这个定时器；若用户在 150ms 内重新聚焦（例如清空后重新点击输入框——`search-history.spec.ts` 的操作序列正是如此），旧定时器仍会在稍后触发并把下拉关闭，导致下拉（含"Clear history"按钮）在用户仍处于聚焦状态时凭空消失、点击目标从 DOM 上被卸载。这是真实用户也会踩到的时序缺陷，不是 Playwright 特有的假象。修复为把 timeout id 存入 ref，`onFocus` 时清除。此缺陷自下拉框功能引入的 v5.1.0 起就存在，`search-history.spec.ts`（v5.5.0 引入）从第一次跑起就没有真正绿过。
+  - **Admin：`basePath: "/admin"` 与两处独立机制的错误交互，导致鉴权中间件形同虚设 + 浏览器端全部 API 请求 404** ——两个各自独立、叠加发作的缺陷：(a) `middleware.ts` 的 `config.matcher` 写成 `["/admin/:path*"]`，但 Next.js 对已配置 `basePath` 的项目会自动把 `basePath` 再拼一次到 matcher 上，实际生效的匹配式变成 `/admin/admin/:path*`，永远匹配不到真实请求路径（如 `/admin/users`），中间件对任何真实页面都不会执行——未登录也能直接停留在受保护页面，登录重定向从未触发；由 v4.8.0（"测试与结构还债"）把原本正确、不含 `/admin` 前缀（依赖自动拼接）的 matcher 替换成错误写法引入，已持续 26 天。同时修复了配套的重定向目标二次前缀问题（`loginUrl.pathname` 曾硬编码 `"/admin/login"`，叠加自动前缀变成 `/admin/admin/login`），并删除了基于错误前提编写、从未真正生效过的 `stripBasePath()` 死代码。(b) `lib/api/client.ts` 与 `store/auth.ts` 的浏览器端 `baseUrl` 均写死为空字符串（从没有 basePath 的 `services/web` 对应文件复制而来，未随 admin 的 basePath 调整），导致浏览器发出的每一个 API 请求（含用户名密码登录本身）都打到裸 `/api/v1/...`，未命中同样会被自动加上 `/admin` 前缀匹配的 rewrite 规则，落到 Next.js 自己的 404 页面；登录页把"无 `data`"一律显示成"Invalid credentials."，掩盖了请求实际上根本没到达 Go API 的真相。此缺陷自 admin 独立拆分、引入 basePath 的 v2.5.0 起就存在，长达 44 天，推测因登录页另有一条不经过此路径的"Bootstrap Token"通道被日常使用而未被发现。两处均改为浏览器端 `baseUrl = "/admin"`。均通过本地起真实 Go API + Next dev server + Playwright 复现后再验证修复：curl 直连确认 Go 侧凭据全程有效、写最小 Playwright 探针脚本捕获浏览器真实请求/响应定位到 404 而非凭据错误、逐项修复后 `npx playwright test` 4/4 全绿（此前 0/4）。顺带修正 admin E2E 自身一处过期断言——`users tab` 用例断言页面存在匹配 `/username/i` 的文本，但表头实际文案是"User"非"Username"，改为断言真实种子账号用户名出现在列表中，更贴合用例名"confirms at least one user exists"的本意。
+- **hygiene: `services/admin/.gitignore` 补齐 `next-env.d.ts`/`test-results/`/`playwright-report/`** — 与 `services/web/.gitignore` 对齐，此前 admin 端会把 Next.js 自动生成文件与本地/CI 跑 Playwright 产生的临时目录当作未跟踪文件反复出现。
+- The phase output is version-tracked and verified locally：`gofmt -l`/`go vet`/`go test -race`（792 passed）/OpenAPI JSON 校验全绿；Web `tsc --noEmit`/`biome lint`（125 files）/`vitest run`（274 passed，含本阶段新增 29 例）全绿；Admin `tsc --noEmit`/`biome lint`（41 files）/`next build` 全绿，`playwright test` 4/4 通过（此前 0/4）；Flutter `flutter test --no-pub` 104/104（确认改动范围未外溢到移动端）。远端 CI 待本次推送验证——此前 Web/Admin E2E job 因 `api`/`web` 前置 job 失败而被跳过，本次预期可以真正执行到。
+
+### v5.11.2 - 2026-08-04
+
+- **test: 补齐 3 处文档承诺但缺失的测试** — `lib/player/throttle.ts`、`lib/player/playerStateSync.ts`、`lib/audio/trackGainCache.ts` 三个模块的 JSDoc 均写有"见 xxx.test.ts"但实际文件不存在；新增 9+15+6 共 30 个测试用例（均在 node 环境运行，无需 DOM）。
+- **fix: OpenAPI 契约 `POST /catalog/playlists/{id}/copy` 路径参数改用 `$ref`** — 原为内联参数定义，与其余端点统一使用 `#/components/parameters/CatalogId` 的方式不一致，导致路径参数契约测试失败；改为 `$ref` 后契约测试通过。
+- **ci: Flutter CI 追加 Windows 构建任务** — 新增 `build-windows` job（`windows-latest`），推送 main 后除 APK/macOS/IPA 外新增 Windows 产物构建。
+- The phase output is version-tracked（VERSION 提交于同一 commit）。本条目为 v5.11.3 阶段整理 Build CI 历史时后补记录，此前提交时未同步补充本节。
 
 ### v5.11.1 - 2026-08-03
 
