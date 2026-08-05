@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`5.11.3`
+`5.11.4`
 
 ## Product Goal
 
@@ -41,6 +41,11 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Committed lifecycle updates must record latest transition metadata for audit preparation.
 
 ## Requirement History
+
+### v5.11.4 - 2026-08-05
+
+- **fix: Admin E2E `storage tab` 用例在远端 CI 偶发超时** — 推送 v5.11.3 后监控远端 CI：`Web checks`/`Admin checks`/`Go API checks`/`Flutter mobile checks`/`Web E2E` 五个 job 全部转绿（`Web E2E` 此前从未真正跑绿过），验证了 v5.11.3 的 middleware/baseUrl 修复在真实 CI 环境同样生效；`Admin E2E` 从此前 4/4 失败降到 1/4 失败——`storage tab` 用例第一次尝试在 8000ms 内没等到 `<h1>Storage</h1>`（本地复测该用例单次即耗时 15.3s，明显比同套件其它三个用例慢），重试时更是在最基础的 `getByLabel("Username")` 上撞到 `playwright.config.ts` 的 30000ms 整体测试超时——两个现象指向同一个方向：这是该用例第一次在真正跑通登录之后被执行到（此前 middleware/baseUrl 两个缺陷导致全部 4 个用例一直在登录阶段就失败，从未真正走到这一步过），CI 共享 runner 资源下 Next dev server 编译 + 4 个顺序用例的累积负载让这条路径的余量比本地开发机紧得多，不是逻辑缺陷。将 `playwright.config.ts` 整体测试超时 30s→45s，`storage tab` 断言超时 8s→15s；其余三个用例余量充足未改动。
+- The phase output is version-tracked and verified locally（`tsc --noEmit`/`biome lint` 39 files 通过，`playwright test` 4/4 通过，含 storage tab 15.3s 单次耗时确认新超时有余量）；远端 CI 待本次推送最终确认。
 
 ### v5.11.3 - 2026-08-05
 
