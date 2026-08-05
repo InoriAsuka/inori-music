@@ -58,10 +58,12 @@ test("users tab renders user table with at least one user", async ({
 		timeout: 8_000,
 	});
 
-	// Confirm table or user rows exist
-	await expect(
-		page.locator("table, [role='table'], div").filter({ hasText: /username/i }),
-	).toBeVisible({ timeout: 6_000 });
+	// Confirm at least one user row exists, showing the seeded E2E account
+	// (the table header says "User", not "Username" — assert on real row data
+	// instead of a label that doesn't match what the UI actually renders).
+	await expect(page.getByText(E2E_USERNAME, { exact: true })).toBeVisible({
+		timeout: 6_000,
+	});
 });
 
 test("catalog tab renders catalog view", async ({ page }) => {

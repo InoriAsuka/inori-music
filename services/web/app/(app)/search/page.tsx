@@ -56,6 +56,7 @@ function SearchPageInner() {
   const [focused, setFocused] = useState(false);
   const [historyIndex, setHistoryIndex] = useState(-1);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const blurTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const visibleHistory = history.slice(0, 10);
@@ -143,10 +144,15 @@ function SearchPageInner() {
           placeholder="Search tracks, artists, albums…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          onFocus={() => setFocused(true)}
+          onFocus={() => {
+            // A refocus (e.g. re-clicking the input) must win over a still-pending
+            // hide from a prior blur, or the dropdown closes out from under the user.
+            if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
+            setFocused(true);
+          }}
           onBlur={() => {
             // Defer so a click on a history item registers before we hide it.
-            setTimeout(() => setFocused(false), 150);
+            blurTimeoutRef.current = setTimeout(() => setFocused(false), 150);
           }}
           onKeyDown={(e) => {
             if (!showHistory) return;

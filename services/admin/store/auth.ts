@@ -9,7 +9,8 @@ import { persist } from "zustand/middleware";
 import createClient from "openapi-fetch";
 import type { paths } from "@/types/api.gen";
 
-const baseUrl = typeof window === "undefined" ? (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080") : "";
+// See lib/api/client.ts for why the browser-side base must carry the "/admin" basePath.
+const baseUrl = typeof window === "undefined" ? (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080") : "/admin";
 
 export interface AdminUser {
   id: string;

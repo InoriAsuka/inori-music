@@ -1,7 +1,10 @@
 import createClient from "openapi-fetch";
 import type { paths } from "@/types/api.gen";
 
-const baseUrl = typeof window === "undefined" ? (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080") : "";
+// Client-side requests are same-origin and go through the rewrite in next.config.ts,
+// which Next.js matches only when the request carries the app's basePath ("/admin") —
+// a plain fetch (unlike next/link or the router) never gets that prefix added for us.
+const baseUrl = typeof window === "undefined" ? (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080") : "/admin";
 
 export const api = createClient<paths>({ baseUrl });
 

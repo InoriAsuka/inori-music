@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { decideResume, reportingSignature, formatResumePosition } from "./playerStateSync";
-import type { LocalPlayerSnapshot, RemotePlayerState } from "./player-state";
+import type { LocalPlayerSnapshot } from "./playerStateSync";
+import type { RemotePlayerState } from "@/lib/api/player-state";
+import type { QueueTrack } from "@/store/player";
 
-function t(id: string) {
-  return { id };
+function t(id: string): QueueTrack {
+  return { id, title: id, artistName: id, albumTitle: id, durationSeconds: 0, playbackUrl: "" };
 }
 
 function snap(opts: Partial<LocalPlayerSnapshot> = {}): LocalPlayerSnapshot {

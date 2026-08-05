@@ -1,5 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { resolveReplayGainDb, __resetReplayGainCache } from "./trackGainCache";
+import type { authedApi } from "@/lib/api/client";
+
+type Fetcher = ReturnType<typeof authedApi>;
 
 /**
  * The cache is module-level, so tests must reset it between runs. The
@@ -20,7 +23,7 @@ function makeApi(gain: number | null) {
     data: { replayGainDb: gain },
     error: null,
   });
-  return api;
+  return api as unknown as Fetcher;
 }
 
 describe("resolveReplayGainDb", () => {
