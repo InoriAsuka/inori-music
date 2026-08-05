@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`5.12.0`
+`5.12.1`
 
 ## Product Goal
 
@@ -41,6 +41,11 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Committed lifecycle updates must record latest transition metadata for audit preparation.
 
 ## Requirement History
+
+### v5.12.1 - 2026-08-06
+
+- **fix: `file_picker` 11.x 与 AGP 9 不兼容，导致 Android APK 编译失败** — 推送 v5.12.0 后监控远端 CI：`Docker` 转绿，但 `Flutter CI` 的 `Build APK` job 与 `Build` workflow 的 `Flutter mobile checks` job 均在同一处失败——`android/app/src/main/java/io/flutter/plugins/GeneratedPluginRegistrant.java:34: error: cannot find symbol class FilePickerPlugin`。根因：`file_picker` 10.3.9/11.0.0 起在插件自身的 Android `build.gradle` 里应用了已弃用的 `kotlin-android` 插件，与本仓库固定的 AGP 9.0.1（`android/settings.gradle.kts`）内置 Kotlin 支持冲突，导致插件的 Kotlin 源码实际未被正确编译进构建图，Java 侧自动生成的 registrant 引用不到该类（上游已知问题，`miguelpruivo/flutter_file_picker` issue #1973/#1942/#1952，确认降级到 `10.3.10` 可规避）。本地无 Android SDK 无法直接复现 Gradle 构建，但 `flutter analyze`/`flutter test` 均不需要 Android 工具链，未能提前拦下——这类"依赖版本与本项目固定的 AGP/Kotlin 工具链不兼容"的问题只能靠远端 CI 的真实 Android 构建暴露，是本次的教训。修复：`file_picker` 从 `^11.0.3` 改为精确锁定 `10.3.10`（不用 `^`，避免未来 `pub upgrade` 无意中滑回有问题的版本区间），pubspec.yaml 留注释说明原因与升级前的确认步骤；配套把 `local_library_notifier.dart` 的两处调用从 11.x 的静态方法写法（`FilePicker.pickFiles(...)`）改回 10.x 的实例访问写法（`FilePicker.platform.pickFiles(...)`）——两个大版本间这是真实的公开 API 变更，不是本项目的用法错误。
+- The phase output is version-tracked and verified locally（`flutter analyze --no-fatal-infos` 0 issues，`flutter test --no-pub` 113/113 通过）；Android/Windows/macOS 的实际构建结果待本次推送后的远端 CI 确认——本地环境同时缺完整 Xcode 与 Android SDK，v5.12.0 起这几个 phase 的平台特定构建验证已与用户约定改为"推送后由 CI 产出构建，用户下载确认"。
 
 ### v5.12.0 - 2026-08-06
 
