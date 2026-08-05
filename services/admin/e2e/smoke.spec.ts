@@ -80,8 +80,10 @@ test("storage tab renders storage backend list", async ({ page }) => {
 	await login(page);
 	await page.goto("/admin/storage");
 
-	// Storage heading
+	// Storage heading — this route is a later stop in the suite and has been
+	// observed to need more headroom than the others under CI's slower/shared
+	// runners (dev-server compile + cumulative load from the prior 3 tests).
 	await expect(
 		page.locator("h1").filter({ hasText: /storage/i }),
-	).toBeVisible({ timeout: 8_000 });
+	).toBeVisible({ timeout: 15_000 });
 });
