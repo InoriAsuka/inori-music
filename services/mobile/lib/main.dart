@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:inori_music/l10n/app_localizations.dart';
+import 'package:inori_music/src/auth/auth_notifier.dart';
 import 'package:inori_music/src/player/audio_handler.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/desktop_integration.dart';
@@ -69,6 +70,18 @@ class _InoriMusicAppState extends ConsumerState<InoriMusicApp>
   Widget build(BuildContext context) {
     final router = ref.watch(routerProvider);
     final locale = ref.watch(localeProvider);
+
+    // Resize the desktop window when crossing the login gate in either
+    // direction (narrow fixed window pre-login, wide resizable shell after).
+    // Registered here rather than inside DesktopIntegration because
+    // WidgetRef.listen is only valid within a widget's build method.
+    ref.listen(authProvider, (prev, next) {
+      final wasPastGate = prev?.valueOrNull?.isPastGate ?? false;
+      final isPastGate = next.valueOrNull?.isPastGate ?? false;
+      if (wasPastGate != isPastGate) {
+        _desktop?.applyWindowForAuthState(isPastGate);
+      }
+    });
 
     return MaterialApp.router(
       title: 'Inori Music',
