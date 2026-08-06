@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`5.12.3`
+`5.12.4`
 
 ## Product Goal
 
@@ -41,6 +41,11 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Committed lifecycle updates must record latest transition metadata for audit preparation.
 
 ## Requirement History
+
+### v5.12.4 - 2026-08-06
+
+- **ci: GitHub Release 附带 Flutter 构建产物** — 用户在验证 v5.12.x 期间指出，每次都要用 `gh run download` 从 workflow 运行记录里下载构建产物太麻烦，应该像 Go server 二进制一样直接发布到 GitHub Release。`.github/workflows/release.yml`（`v*.*.*` tag 触发，此前只构建 5 个平台/架构组合的 `inori-api` 二进制）新增三个并行 job：`build-flutter-apk`（Android APK，重命名为 `inori-music-<tag>.apk`）、`build-flutter-macos`（`flutter build macos` 产出的 `.app` 用 `ditto -c -k --sequesterRsrc --keepParent` 打包为 `inori-music-<tag>-macos.zip`——用 `ditto` 而非普通 `zip` 是为了正确保留 `.app` bundle 结构和资源分支）、`build-flutter-windows`（`flutter build windows` 产出目录用 PowerShell `Compress-Archive` 打包为 `inori-music-<tag>-windows.zip`，因为 Windows 产物是 exe + 一堆 DLL + `data/` 目录，不能只发布裸 exe）。`publish` job 的 `needs` 加上这三个新 job，其余逻辑不变——`actions/download-artifact` 的 `merge-multiple: true` 已经会把所有 job 的产物合并进同一个 `dist/` 目录，`softprops/action-gh-release` 的 `files: dist/*` 自动一并发布，不需要改 `publish` job 本身。刻意不包含 `flutter build ipa --no-codesign` 的产物——未签名 IPA 无法直接安装（需要越狱或重新签名），放进面向普通用户的 Release 里没有实际可用性，跟 CI 内部产物（用于验证构建本身能过）目的不同。
+- The phase output is version-tracked；`actionlint` 对修改后的 `release.yml`（及全部 workflow 文件对照）静态校验通过，YAML 语法另用 Ruby `YAML.load_file` 复核；工作流本身此前未在任何 tag 推送上跑过 Flutter 构建（`release.yml` 只有 Go job），新增 job 是否真的在远端跑通、Release 页面产物是否正确挂载，待本次推送打 tag 后现场确认。
 
 ### v5.12.3 - 2026-08-06
 
