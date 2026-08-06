@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:inori_music/src/local_library/local_library_notifier.dart'
+    show localTrackIdPrefix;
 import 'package:inori_music/src/lyrics/karaoke_progress.dart';
+import 'package:inori_music/src/lyrics/local_lyrics_provider.dart';
 import 'package:inori_music/src/lyrics/lyric_line.dart';
+import 'package:inori_music/src/lyrics/lyrics_background.dart';
 import 'package:inori_music/src/lyrics/lyrics_provider.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/theme/skin_provider.dart';
@@ -53,111 +57,134 @@ class _KaraokeScreenState extends ConsumerState<KaraokeScreen> {
     final state = ref.watch(playerProvider);
     final position = ref.watch(playerProvider.select((s) => s.position));
     final trackId = state.mediaItem?.id ?? '';
-    final lyricsAsync = ref.watch(lyricsProvider(trackId));
+    final isLocal = trackId.startsWith(localTrackIdPrefix);
+    final lyricsAsync = isLocal
+        ? ref.watch(localLyricsProvider(trackId))
+        : ref.watch(lyricsProvider(trackId));
 
     return Scaffold(
-      backgroundColor: context.skinColors.background,
-      body: SafeArea(
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'KARAOKE',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: 2,
-                            color: context.skinColors.sakuraPink,
-                          ),
-                        ),
-                        if (state.mediaItem != null)
+      body: LyricsBackground(
+        albumId: state.mediaItem?.extras?['albumId'] as String?,
+        localArtUri: state.mediaItem?.artUri,
+        child: SafeArea(
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                           Text(
-                            state.mediaItem!.artist?.isNotEmpty == true
-                                ? '${state.mediaItem!.title} — ${state.mediaItem!.artist}'
-                                : state.mediaItem!.title,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
+                            'KARAOKE',
                             style: TextStyle(
                               fontSize: 12,
-                              color: context.skinColors.onSurfaceVariant,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 2,
+                              color: context.skinColors.sakuraPink,
                             ),
                           ),
-                      ],
+                          if (state.mediaItem != null)
+                            Text(
+                              state.mediaItem!.artist?.isNotEmpty == true
+                                  ? '${state.mediaItem!.title} — ${state.mediaItem!.artist}'
+                                  : state.mediaItem!.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: context.skinColors.onSurfaceVariant,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(
+                        Icons.close,
+                        color: context.skinColors.onSurfaceVariant,
+                      ),
+                      tooltip: 'Close karaoke',
+                      onPressed: () => Navigator.of(context).maybePop(),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: lyricsAsync.when(
+                  loading: () => Center(
+                    child: Text(
+                      'Loading lyrics…',
+                      style: TextStyle(
+                        color: context.skinColors.onSurfaceVariant,
+                      ),
                     ),
                   ),
-                  IconButton(
-                    icon: Icon(Icons.close, color: context.skinColors.onSurfaceVariant),
-                    tooltip: 'Close karaoke',
-                    onPressed: () => Navigator.of(context).maybePop(),
-                  ),
-                ],
-              ),
-            ),
-            Expanded(
-              child: lyricsAsync.when(
-                loading: () => Center(
-                  child: Text(
-                    'Loading lyrics…',
-                    style: TextStyle(color: context.skinColors.onSurfaceVariant),
-                  ),
-                ),
-                error: (_, _) => Center(
-                  child: Text(
-                    'Could not load lyrics.',
-                    style: TextStyle(color: context.skinColors.onSurfaceVariant),
-                  ),
-                ),
-                data: (lines) {
-                  if (lines == null || lines.isEmpty) {
-                    return Center(
-                      child: Text(
-                        'No lyrics available.',
-                        style: TextStyle(color: context.skinColors.onSurfaceVariant),
+                  error: (_, _) => Center(
+                    child: Text(
+                      'Could not load lyrics.',
+                      style: TextStyle(
+                        color: context.skinColors.onSurfaceVariant,
                       ),
-                    );
-                  }
-                  final activeIndex = activeLineIndex(lines, position);
-                  _scrollToActive(activeIndex);
-                  final viewportPad = MediaQuery.of(context).size.height * 0.35;
-                  return ListView.builder(
-                    controller: _scrollController,
-                    padding: EdgeInsets.symmetric(horizontal: 24, vertical: viewportPad),
-                    itemCount: lines.length,
-                    itemBuilder: (ctx, i) {
-                      final key = _lineKeys.putIfAbsent(i, GlobalKey.new);
-                      final active = i == activeIndex;
-                      return Padding(
-                        key: key,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        child: AnimatedOpacity(
-                          duration: const Duration(milliseconds: 250),
-                          opacity: active ? 1 : 0.4,
-                          child: AnimatedScale(
-                            duration: const Duration(milliseconds: 250),
-                            scale: active ? 1 : 0.95,
-                            child: _KaraokeLine(
-                              line: lines[i],
-                              active: active,
-                              position: position,
-                              nextLineStart:
-                                  i + 1 < lines.length ? lines[i + 1].timestamp : null,
-                            ),
+                    ),
+                  ),
+                  data: (lines) {
+                    if (lines == null || lines.isEmpty) {
+                      return Center(
+                        child: Text(
+                          'No lyrics available.',
+                          style: TextStyle(
+                            color: context.skinColors.onSurfaceVariant,
                           ),
                         ),
                       );
-                    },
-                  );
-                },
+                    }
+                    final activeIndex = activeLineIndex(lines, position);
+                    _scrollToActive(activeIndex);
+                    final viewportPad =
+                        MediaQuery.of(context).size.height * 0.35;
+                    return ListView.builder(
+                      controller: _scrollController,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: viewportPad,
+                      ),
+                      itemCount: lines.length,
+                      itemBuilder: (ctx, i) {
+                        final key = _lineKeys.putIfAbsent(i, GlobalKey.new);
+                        final active = i == activeIndex;
+                        return Padding(
+                          key: key,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          child: AnimatedOpacity(
+                            duration: const Duration(milliseconds: 250),
+                            opacity: active ? 1 : 0.4,
+                            child: AnimatedScale(
+                              duration: const Duration(milliseconds: 250),
+                              scale: active ? 1 : 0.95,
+                              child: _KaraokeLine(
+                                line: lines[i],
+                                active: active,
+                                position: position,
+                                nextLineStart: i + 1 < lines.length
+                                    ? lines[i + 1].timestamp
+                                    : null,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    );
+                  },
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -191,7 +218,9 @@ class _KaraokeLine extends StatelessWidget {
         line.text,
         textAlign: TextAlign.center,
         style: _style.copyWith(
-          color: active ? context.skinColors.sakuraPink : context.skinColors.onSurfaceVariant,
+          color: active
+              ? context.skinColors.sakuraPink
+              : context.skinColors.onSurfaceVariant,
         ),
       );
     }
@@ -204,7 +233,9 @@ class _KaraokeLine extends StatelessWidget {
             WidgetSpan(
               child: _KaraokeWord(
                 text: words[i].text,
-                fill: active ? wordProgress(words, i, position, nextLineStart) : 0,
+                fill: active
+                    ? wordProgress(words, i, position, nextLineStart)
+                    : 0,
               ),
             ),
         ],
@@ -223,10 +254,20 @@ class _KaraokeWord extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (fill <= 0) {
-      return Text(text, style: _KaraokeLine._style.copyWith(color: context.skinColors.onSurfaceVariant));
+      return Text(
+        text,
+        style: _KaraokeLine._style.copyWith(
+          color: context.skinColors.onSurfaceVariant,
+        ),
+      );
     }
     if (fill >= 1) {
-      return Text(text, style: _KaraokeLine._style.copyWith(color: context.skinColors.sakuraPink));
+      return Text(
+        text,
+        style: _KaraokeLine._style.copyWith(
+          color: context.skinColors.sakuraPink,
+        ),
+      );
     }
     return ShaderMask(
       blendMode: BlendMode.srcIn,
@@ -234,9 +275,15 @@ class _KaraokeWord extends StatelessWidget {
         begin: Alignment.centerLeft,
         end: Alignment.centerRight,
         stops: [fill, fill],
-        colors: [context.skinColors.sakuraPink, context.skinColors.onSurfaceVariant],
+        colors: [
+          context.skinColors.sakuraPink,
+          context.skinColors.onSurfaceVariant,
+        ],
       ).createShader(bounds),
-      child: Text(text, style: _KaraokeLine._style.copyWith(color: Colors.white)),
+      child: Text(
+        text,
+        style: _KaraokeLine._style.copyWith(color: Colors.white),
+      ),
     );
   }
 }

@@ -13,7 +13,9 @@ import 'package:inori_music/src/local_library/local_library_db.dart';
 import 'package:inori_music/src/local_library/local_library_notifier.dart'
     show localTrackIdPrefix;
 import 'package:inori_music/src/lyrics/bilingual_lyrics_notifier.dart';
+import 'package:inori_music/src/lyrics/local_lyrics_provider.dart';
 import 'package:inori_music/src/lyrics/lyric_line.dart';
+import 'package:inori_music/src/lyrics/lyrics_background.dart';
 import 'package:inori_music/src/lyrics/lyrics_provider.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/player/karaoke_screen.dart';
@@ -51,6 +53,16 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
     final isBuffering = state.isBuffering;
     final trackId = state.mediaItem?.id ?? '';
     final position = ref.watch(playerProvider.select((s) => s.position));
+    final isLocalTrack = trackId.startsWith(localTrackIdPrefix);
+    // Only local tracks can lack lyrics entirely and still have a track —
+    // server tracks always get the Karaoke button enabled regardless (a
+    // missing-lyrics response is handled inside KaraokeScreen itself, same
+    // as it always was). Watching this only when relevant avoids a needless
+    // DB read on every server-track playback.
+    final hasLocalLyrics = isLocalTrack
+        ? (ref.watch(localLyricsProvider(trackId)).valueOrNull ?? const [])
+              .isNotEmpty
+        : false;
 
     return Scaffold(
       backgroundColor: context.skinColors.background,
@@ -97,8 +109,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                     ),
                     tooltip: 'Karaoke',
                     onPressed:
-                        (trackId.isEmpty ||
-                            trackId.startsWith(localTrackIdPrefix))
+                        (trackId.isEmpty || (isLocalTrack && !hasLocalLyrics))
                         ? null
                         : () => Navigator.of(context).push(
                             MaterialPageRoute<void>(
@@ -178,7 +189,12 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                     ),
                   ),
                   // Page 1: Lyrics
-                  _LyricsPage(trackId: trackId, position: position),
+                  _LyricsPage(
+                    trackId: trackId,
+                    position: position,
+                    albumId: state.mediaItem?.extras?['albumId'] as String?,
+                    localArtUri: state.mediaItem?.artUri,
+                  ),
                 ],
               ),
             ),
@@ -787,63 +803,75 @@ class _ArtworkFallback extends StatelessWidget {
   }
 }
 
-/// Lyrics page widget shown in the second page of the FullPlayerScreen PageView.
-class _LyricsPage extends ConsumerWidget {
-  const _LyricsPage({required this.trackId, required this.position});
+/// Lyrics page widget shown in the second page of the FullPlayerScreen
+/// PageView. The blurred-artwork [LyricsBackground] wraps every state
+/// (loading/empty/loaded) rather than just the successful-lines case, so the
+/// backdrop doesn't pop in/out as lyrics resolve.
+class _LyricsPage extends StatelessWidget {
+  const _LyricsPage({
+    required this.trackId,
+    required this.position,
+    required this.albumId,
+    required this.localArtUri,
+  });
+
+  final String trackId;
+  final Duration position;
+  final String? albumId;
+  final Uri? localArtUri;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: LyricsBackground(
+        albumId: albumId,
+        localArtUri: localArtUri,
+        child: _LyricsBody(trackId: trackId, position: position),
+      ),
+    );
+  }
+}
+
+Widget _emptyLyricsMessage(BuildContext context) => Center(
+  child: Text(
+    '暂无歌词',
+    style: TextStyle(
+      fontSize: 15,
+      color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+    ),
+  ),
+);
+
+class _LyricsBody extends ConsumerWidget {
+  const _LyricsBody({required this.trackId, required this.position});
 
   final String trackId;
   final Duration position;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    // Local (guest-mode) tracks have no server-side lyrics to fetch.
-    if (trackId.isEmpty || trackId.startsWith(localTrackIdPrefix)) {
-      return Center(
-        child: Text(
-          '暂无歌词',
-          style: TextStyle(
-            fontSize: 15,
-            color: Theme.of(
-              context,
-            ).colorScheme.onSurface.withValues(alpha: 0.5),
-          ),
-        ),
-      );
+    if (trackId.isEmpty) {
+      return _emptyLyricsMessage(context);
     }
-    final lyricsAsync = ref.watch(lyricsProvider(trackId));
+    final isLocal = trackId.startsWith(localTrackIdPrefix);
+    final lyricsAsync = isLocal
+        ? ref.watch(localLyricsProvider(trackId))
+        : ref.watch(lyricsProvider(trackId));
     if (lyricsAsync.isLoading) {
       return const Center(child: CircularProgressIndicator());
     }
     final lines = lyricsAsync.valueOrNull;
     if (lines == null || lines.isEmpty) {
-      return Center(
-        child: Text(
-          '暂无歌词',
-          style: TextStyle(
-            fontSize: 15,
-            color: Theme.of(
-              context,
-            ).colorScheme.onSurface.withValues(alpha: 0.5),
-          ),
-        ),
-      );
+      return _emptyLyricsMessage(context);
     }
     final currentIndex = lines.lastIndexWhere((l) => l.timestamp <= position);
     final bilingual = ref.watch(bilingualLyricsProvider);
-    return Container(
-      decoration: BoxDecoration(
-        color: context.skinColors.surfaceVariant,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(16),
-        child: _LyricsList(
-          lines: lines,
-          currentIndex: currentIndex,
-          position: position,
-          bilingual: bilingual,
-        ),
-      ),
+    return _LyricsList(
+      lines: lines,
+      currentIndex: currentIndex,
+      position: position,
+      bilingual: bilingual,
     );
   }
 }
