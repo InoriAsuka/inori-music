@@ -6,7 +6,7 @@ import 'package:inori_api/src/model/catalog_track.dart';
 
 import 'package:inori_music/src/catalog/catalog_repository.dart';
 import 'package:inori_music/src/favorites/track_favorite_notifier.dart';
-import 'package:inori_music/src/shared/theme/sakura_dusk.dart';
+import 'package:inori_music/src/shared/theme/skin_provider.dart';
 import 'package:inori_music/src/shared/widgets/track_list_tile.dart';
 
 final _albumDetailProvider = FutureProvider.family<CatalogAlbum, String>((ref, id) {
@@ -37,8 +37,8 @@ class AlbumDetailScreen extends ConsumerWidget {
             flexibleSpace: FlexibleSpaceBar(
               title: Text(albumTitle),
               background: Container(
-                color: SakuraDuskColors.surfaceContainer,
-                child: const Icon(Icons.album, size: 80, color: SakuraDuskColors.outlineVariant),
+                color: context.skinColors.surfaceContainer,
+                child: Icon(Icons.album, size: 80, color: context.skinColors.outlineVariant),
               ),
             ),
           ),
@@ -47,7 +47,7 @@ class AlbumDetailScreen extends ConsumerWidget {
             error: (e, _) => SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: Text('$e', style: const TextStyle(color: SakuraDuskColors.error)),
+                child: Text('$e', style: TextStyle(color: context.skinColors.error)),
               ),
             ),
             data: (album) => SliverToBoxAdapter(
@@ -73,7 +73,7 @@ class AlbumDetailScreen extends ConsumerWidget {
             error: (e, _) => SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: Text('Error: $e', style: const TextStyle(color: SakuraDuskColors.error)),
+                child: Text('Error: $e', style: TextStyle(color: context.skinColors.error)),
               ),
             ),
             data: (tracks) => SliverList(

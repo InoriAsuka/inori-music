@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:inori_music/src/shared/router.dart';
-import 'package:inori_music/src/shared/theme/sakura_dusk.dart';
+import 'package:inori_music/src/shared/theme/skin_provider.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/user_playlist/user_playlist_notifier.dart';
 
@@ -164,8 +164,8 @@ class _UserPlaylistDetailScreenState
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.error_outline,
-                          color: SakuraDuskColors.error, size: 48),
+                      Icon(Icons.error_outline,
+                          color: context.skinColors.error, size: 48),
                       const SizedBox(height: 12),
                       Text(_error!, textAlign: TextAlign.center),
                       const SizedBox(height: 12),
@@ -186,8 +186,8 @@ class _UserPlaylistDetailScreenState
                             children: [
                               Text(
                                 '${_trackIds!.length} tracks',
-                                style: const TextStyle(
-                                    color: SakuraDuskColors.onSurfaceVariant),
+                                style: TextStyle(
+                                    color: context.skinColors.onSurfaceVariant),
                               ),
                               const Spacer(),
                               FilledButton.icon(
@@ -216,25 +216,24 @@ class _UserPlaylistDetailScreenState
                                   child: Center(
                                     child: Text(
                                       '${i + 1}',
-                                      style: const TextStyle(
-                                          color: SakuraDuskColors
-                                              .onSurfaceVariant),
+                                      style: TextStyle(
+                                          color: context.skinColors.onSurfaceVariant),
                                     ),
                                   ),
                                 ),
                                 title: Text(
                                   tid,
-                                  style: const TextStyle(
-                                    color: SakuraDuskColors.onSurface,
+                                  style: TextStyle(
+                                    color: context.skinColors.onSurface,
                                     fontSize: 13,
                                   ),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
                                 trailing: IconButton(
-                                  icon: const Icon(Icons.remove_circle_outline,
+                                  icon: Icon(Icons.remove_circle_outline,
                                       size: 20,
-                                      color: SakuraDuskColors.onSurfaceVariant),
+                                      color: context.skinColors.onSurfaceVariant),
                                   onPressed: () async {
                                     try {
                                       await ref

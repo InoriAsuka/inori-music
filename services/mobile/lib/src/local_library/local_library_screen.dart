@@ -8,7 +8,7 @@ import 'package:inori_music/src/local_library/local_library_db.dart';
 import 'package:inori_music/src/local_library/local_library_notifier.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/router.dart';
-import 'package:inori_music/src/shared/theme/sakura_dusk.dart';
+import 'package:inori_music/src/shared/theme/skin_provider.dart';
 
 /// Guest mode's home screen: a flat list of locally-imported audio files.
 /// No account, no server — this is what makes the app usable without login.
@@ -55,7 +55,7 @@ class LocalLibraryScreen extends ConsumerWidget {
       body: state.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(
-          child: Text('$e', style: const TextStyle(color: SakuraDuskColors.error)),
+          child: Text('$e', style: TextStyle(color: context.skinColors.error)),
         ),
         data: (tracks) {
           if (tracks.isEmpty) return const _EmptyLocalLibrary();
@@ -112,17 +112,17 @@ class _EmptyLocalLibrary extends ConsumerWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.library_music_outlined, size: 64, color: SakuraDuskColors.onSurfaceVariant),
+            Icon(Icons.library_music_outlined, size: 64, color: context.skinColors.onSurfaceVariant),
             const SizedBox(height: 16),
-            const Text(
+            Text(
               '本地曲库还是空的',
-              style: TextStyle(fontSize: 18, color: SakuraDuskColors.onSurfaceVariant),
+              style: TextStyle(fontSize: 18, color: context.skinColors.onSurfaceVariant),
             ),
             const SizedBox(height: 8),
-            const Text(
+            Text(
               '以游客身份使用时，音乐来自你设备上的文件，不需要账号或服务器。',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: SakuraDuskColors.onSurfaceVariant),
+              style: TextStyle(fontSize: 13, color: context.skinColors.onSurfaceVariant),
             ),
             const SizedBox(height: 24),
             FilledButton.icon(
@@ -172,7 +172,7 @@ class _LocalTrackTile extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
-          color: isCurrent ? SakuraDuskColors.sakuraPink : SakuraDuskColors.onSurface,
+          color: isCurrent ? context.skinColors.sakuraPink : context.skinColors.onSurface,
           fontWeight: isCurrent ? FontWeight.w600 : FontWeight.normal,
         ),
       ),
@@ -183,12 +183,12 @@ class _LocalTrackTile extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (isCurrent && isPlaying)
-            const Padding(
-              padding: EdgeInsets.only(right: 4),
-              child: Icon(Icons.equalizer, color: SakuraDuskColors.sakuraPinkLight, size: 20),
+            Padding(
+              padding: const EdgeInsets.only(right: 4),
+              child: Icon(Icons.equalizer, color: context.skinColors.sakuraPinkLight, size: 20),
             ),
           IconButton(
-            icon: const Icon(Icons.delete_outline, color: SakuraDuskColors.onSurfaceVariant),
+            icon: Icon(Icons.delete_outline, color: context.skinColors.onSurfaceVariant),
             onPressed: onDelete,
           ),
         ],
@@ -216,7 +216,7 @@ class _Cover extends StatelessWidget {
       width: 44,
       height: 44,
       decoration: BoxDecoration(
-        color: SakuraDuskColors.surfaceContainer,
+        color: context.skinColors.surfaceContainer,
         borderRadius: BorderRadius.circular(8),
       ),
       clipBehavior: Clip.antiAlias,
@@ -224,14 +224,14 @@ class _Cover extends StatelessWidget {
           ? Image.file(
               File(path),
               fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => _fallbackIcon(),
+              errorBuilder: (_, _, _) => _fallbackIcon(context),
             )
-          : _fallbackIcon(),
+          : _fallbackIcon(context),
     );
   }
 
-  Widget _fallbackIcon() => Icon(
+  Widget _fallbackIcon(BuildContext context) => Icon(
         Icons.music_note_rounded,
-        color: highlighted ? SakuraDuskColors.sakuraPink : SakuraDuskColors.onSurfaceVariant,
+        color: highlighted ? context.skinColors.sakuraPink : context.skinColors.onSurfaceVariant,
       );
 }

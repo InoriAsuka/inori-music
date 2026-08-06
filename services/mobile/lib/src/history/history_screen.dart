@@ -9,7 +9,7 @@ import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/history/track_title_resolver.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/router.dart';
-import 'package:inori_music/src/shared/theme/sakura_dusk.dart';
+import 'package:inori_music/src/shared/theme/skin_provider.dart';
 
 // ---------------------------------------------------------------------------
 // Providers
@@ -62,11 +62,11 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: SakuraDuskColors.surfaceVariant,
-        title: Text(t.deleteHistory, style: const TextStyle(color: SakuraDuskColors.onSurface)),
+        backgroundColor: context.skinColors.surfaceVariant,
+        title: Text(t.deleteHistory, style: TextStyle(color: context.skinColors.onSurface)),
         content: Text(
           'Delete ${ids.length} event${ids.length > 1 ? 's' : ''}? (ID: ${ids.take(3).join(', ')}${ids.length > 3 ? '...' : ''})',
-          style: const TextStyle(color: SakuraDuskColors.onSurfaceVariant),
+          style: TextStyle(color: context.skinColors.onSurfaceVariant),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(t.cancel)),
@@ -95,7 +95,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to delete: $e'), backgroundColor: SakuraDuskColors.error),
+          SnackBar(content: Text('Failed to delete: $e'), backgroundColor: context.skinColors.error),
         );
       }
     }
@@ -112,7 +112,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
         actions: [
           if (_selectMode) ...[
             IconButton(
-              icon: const Icon(Icons.delete, color: SakuraDuskColors.error),
+              icon: Icon(Icons.delete, color: context.skinColors.error),
               tooltip: 'Delete selected',
               onPressed: _selected.isEmpty ? null : _deleteSelected,
             ),
@@ -144,7 +144,7 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline, color: SakuraDuskColors.error, size: 48),
+              Icon(Icons.error_outline, color: context.skinColors.error, size: 48),
               const SizedBox(height: 12),
               Text('$e', textAlign: TextAlign.center),
               const SizedBox(height: 12),
@@ -156,13 +156,13 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
           ),
         ),
         data: (events) => events.isEmpty
-            ? const Center(
+            ? Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.history, size: 64, color: SakuraDuskColors.onSurfaceVariant),
-                    SizedBox(height: 16),
-                    Text('No play history yet', style: TextStyle(fontSize: 18, color: SakuraDuskColors.onSurfaceVariant)),
+                    Icon(Icons.history, size: 64, color: context.skinColors.onSurfaceVariant),
+                    const SizedBox(height: 16),
+                    Text('No play history yet', style: TextStyle(fontSize: 18, color: context.skinColors.onSurfaceVariant)),
                   ],
                 ),
               )
@@ -242,24 +242,24 @@ class _HistoryTileState extends ConsumerState<_HistoryTile> {
               value: widget.isSelected,
               onChanged: (_) => widget.onToggleSelect(widget.event.id),
               checkColor: Colors.white,
-              activeColor: SakuraDuskColors.sakuraPink,
+              activeColor: context.skinColors.sakuraPink,
             )
-          : const CircleAvatar(
-              backgroundColor: SakuraDuskColors.surfaceContainer,
-              child: Icon(Icons.music_note, color: SakuraDuskColors.onSurfaceVariant, size: 18),
+          : CircleAvatar(
+              backgroundColor: context.skinColors.surfaceContainer,
+              child: Icon(Icons.music_note, color: context.skinColors.onSurfaceVariant, size: 18),
             ),
       title: Text(
         displayName,
-        style: const TextStyle(color: SakuraDuskColors.onSurface, fontSize: 14, fontWeight: FontWeight.w500),
+        style: TextStyle(color: context.skinColors.onSurface, fontSize: 14, fontWeight: FontWeight.w500),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
       subtitle: Text(
         _HistoryScreenState._formatEventDate(widget.event.playedAt, t),
-        style: const TextStyle(color: SakuraDuskColors.onSurfaceVariant, fontSize: 12),
+        style: TextStyle(color: context.skinColors.onSurfaceVariant, fontSize: 12),
       ),
       selected: widget.isSelected,
-      selectedTileColor: SakuraDuskColors.sakuraPinkDark.withValues(alpha: 0.2),
+      selectedTileColor: context.skinColors.sakuraPinkDark.withValues(alpha: 0.2),
       onTap: widget.selectMode ? () => widget.onToggleSelect(widget.event.id) : null,
       onLongPress: widget.selectMode ? null : () => widget.onEnterSelectMode(widget.event.id),
     );

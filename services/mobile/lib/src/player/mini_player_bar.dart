@@ -9,7 +9,7 @@ import 'package:inori_music/src/audio/sleep_timer_notifier.dart';
 import 'package:inori_music/src/catalog/artwork_provider.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/router.dart';
-import 'package:inori_music/src/shared/theme/sakura_dusk.dart';
+import 'package:inori_music/src/shared/theme/skin_provider.dart';
 
 /// Persistent mini-player bar displayed at the bottom of the shell scaffold.
 class MiniPlayerBar extends ConsumerWidget {
@@ -27,7 +27,7 @@ class MiniPlayerBar extends ConsumerWidget {
     final artist = mediaItem?.artist ?? '';
 
     return Material(
-      color: SakuraDuskColors.playerBar,
+      color: context.skinColors.playerBar,
       elevation: 8,
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -55,8 +55,8 @@ class MiniPlayerBar extends ConsumerWidget {
                     children: [
                       Text(
                         title,
-                        style: const TextStyle(
-                          color: SakuraDuskColors.onSurface,
+                        style: TextStyle(
+                          color: context.skinColors.onSurface,
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                         ),
@@ -66,8 +66,8 @@ class MiniPlayerBar extends ConsumerWidget {
                       if (artist.isNotEmpty)
                         Text(
                           artist,
-                          style: const TextStyle(
-                            color: SakuraDuskColors.onSurfaceVariant,
+                          style: TextStyle(
+                            color: context.skinColors.onSurfaceVariant,
                             fontSize: 11,
                           ),
                           maxLines: 1,
@@ -80,7 +80,7 @@ class MiniPlayerBar extends ConsumerWidget {
                 // Previous
                 IconButton(
                   icon: const Icon(Icons.skip_previous, size: 24),
-                  color: SakuraDuskColors.onSurfaceVariant,
+                  color: context.skinColors.onSurfaceVariant,
                   onPressed: () => ref.read(playerProvider.notifier).previous(),
                   tooltip: 'Previous',
                 ),
@@ -90,7 +90,7 @@ class MiniPlayerBar extends ConsumerWidget {
                   icon: Icon(
                     isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
                     size: 28,
-                    color: SakuraDuskColors.onBackground,
+                    color: context.skinColors.onBackground,
                   ),
                   tooltip: isPlaying ? 'Pause' : 'Play',
                   onPressed: isBuffering ? null : () => ref.read(playerProvider.notifier).togglePlayPause(),
@@ -99,7 +99,7 @@ class MiniPlayerBar extends ConsumerWidget {
                 // Next
                 IconButton(
                   icon: const Icon(Icons.skip_next, size: 24),
-                  color: SakuraDuskColors.onSurfaceVariant,
+                  color: context.skinColors.onSurfaceVariant,
                   onPressed: () => ref.read(playerProvider.notifier).next(),
                   tooltip: 'Next',
                 ),
@@ -134,7 +134,7 @@ class MiniPlayerBar extends ConsumerWidget {
                           )
                         : IconButton(
                             icon: const Icon(Icons.alarm, size: 22),
-                            color: SakuraDuskColors.onSurfaceVariant,
+                            color: context.skinColors.onSurfaceVariant,
                             tooltip: 'Sleep timer',
                             onPressed: () =>
                                 _showSleepTimerSheet(context, ref),
@@ -232,9 +232,9 @@ class _MiniPlayerProgressBarState extends ConsumerState<_MiniPlayerProgressBar> 
       child: SliderTheme(
         data: SliderTheme.of(context).copyWith(
           trackHeight: 2,
-          activeTrackColor: SakuraDuskColors.sakuraPink,
-          inactiveTrackColor: SakuraDuskColors.outline,
-          thumbColor: SakuraDuskColors.sakuraPinkLight,
+          activeTrackColor: context.skinColors.sakuraPink,
+          inactiveTrackColor: context.skinColors.outline,
+          thumbColor: context.skinColors.sakuraPinkLight,
           thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4),
           overlayShape: const RoundSliderOverlayShape(overlayRadius: 10),
         ),
@@ -269,12 +269,12 @@ class _MiniPlayerArtwork extends ConsumerWidget {
 
     Widget child;
     if (artworkAsync == null) {
-      child = const Icon(Icons.music_note, color: SakuraDuskColors.onSurfaceVariant, size: 22);
+      child = Icon(Icons.music_note, color: context.skinColors.onSurfaceVariant, size: 22);
     } else {
       child = artworkAsync.when(
         data: (url) {
           if (url == null || url.isEmpty) {
-            return const Icon(Icons.music_note, color: SakuraDuskColors.onSurfaceVariant, size: 22);
+            return Icon(Icons.music_note, color: context.skinColors.onSurfaceVariant, size: 22);
           }
           return CachedNetworkImage(
             imageUrl: url,
@@ -282,13 +282,13 @@ class _MiniPlayerArtwork extends ConsumerWidget {
             height: 44,
             fit: BoxFit.cover,
             placeholder: (context, _) =>
-                const Icon(Icons.music_note, color: SakuraDuskColors.onSurfaceVariant, size: 22),
+                Icon(Icons.music_note, color: context.skinColors.onSurfaceVariant, size: 22),
             errorWidget: (context, _, error) =>
-                const Icon(Icons.music_note, color: SakuraDuskColors.onSurfaceVariant, size: 22),
+                Icon(Icons.music_note, color: context.skinColors.onSurfaceVariant, size: 22),
           );
         },
-        loading: () => const Icon(Icons.music_note, color: SakuraDuskColors.onSurfaceVariant, size: 22),
-        error: (error, _) => const Icon(Icons.music_note, color: SakuraDuskColors.onSurfaceVariant, size: 22),
+        loading: () => Icon(Icons.music_note, color: context.skinColors.onSurfaceVariant, size: 22),
+        error: (error, _) => Icon(Icons.music_note, color: context.skinColors.onSurfaceVariant, size: 22),
       );
     }
 
@@ -296,7 +296,7 @@ class _MiniPlayerArtwork extends ConsumerWidget {
       width: 44,
       height: 44,
       decoration: BoxDecoration(
-        color: SakuraDuskColors.surfaceContainer,
+        color: context.skinColors.surfaceContainer,
         borderRadius: BorderRadius.circular(6),
       ),
       clipBehavior: Clip.antiAlias,

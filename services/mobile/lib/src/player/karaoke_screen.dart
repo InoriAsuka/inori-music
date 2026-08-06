@@ -5,7 +5,7 @@ import 'package:inori_music/src/lyrics/karaoke_progress.dart';
 import 'package:inori_music/src/lyrics/lyric_line.dart';
 import 'package:inori_music/src/lyrics/lyrics_provider.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
-import 'package:inori_music/src/shared/theme/sakura_dusk.dart';
+import 'package:inori_music/src/shared/theme/skin_provider.dart';
 
 /// Full-screen karaoke view with per-word progressive fill.
 ///
@@ -56,7 +56,7 @@ class _KaraokeScreenState extends ConsumerState<KaraokeScreen> {
     final lyricsAsync = ref.watch(lyricsProvider(trackId));
 
     return Scaffold(
-      backgroundColor: SakuraDuskColors.background,
+      backgroundColor: context.skinColors.background,
       body: SafeArea(
         child: Column(
           children: [
@@ -68,13 +68,13 @@ class _KaraokeScreenState extends ConsumerState<KaraokeScreen> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        Text(
                           'KARAOKE',
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w700,
                             letterSpacing: 2,
-                            color: SakuraDuskColors.sakuraPink,
+                            color: context.skinColors.sakuraPink,
                           ),
                         ),
                         if (state.mediaItem != null)
@@ -84,16 +84,16 @@ class _KaraokeScreenState extends ConsumerState<KaraokeScreen> {
                                 : state.mediaItem!.title,
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 12,
-                              color: SakuraDuskColors.onSurfaceVariant,
+                              color: context.skinColors.onSurfaceVariant,
                             ),
                           ),
                       ],
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.close, color: SakuraDuskColors.onSurfaceVariant),
+                    icon: Icon(Icons.close, color: context.skinColors.onSurfaceVariant),
                     tooltip: 'Close karaoke',
                     onPressed: () => Navigator.of(context).maybePop(),
                   ),
@@ -102,24 +102,24 @@ class _KaraokeScreenState extends ConsumerState<KaraokeScreen> {
             ),
             Expanded(
               child: lyricsAsync.when(
-                loading: () => const Center(
+                loading: () => Center(
                   child: Text(
                     'Loading lyrics…',
-                    style: TextStyle(color: SakuraDuskColors.onSurfaceVariant),
+                    style: TextStyle(color: context.skinColors.onSurfaceVariant),
                   ),
                 ),
-                error: (_, _) => const Center(
+                error: (_, _) => Center(
                   child: Text(
                     'Could not load lyrics.',
-                    style: TextStyle(color: SakuraDuskColors.onSurfaceVariant),
+                    style: TextStyle(color: context.skinColors.onSurfaceVariant),
                   ),
                 ),
                 data: (lines) {
                   if (lines == null || lines.isEmpty) {
-                    return const Center(
+                    return Center(
                       child: Text(
                         'No lyrics available.',
-                        style: TextStyle(color: SakuraDuskColors.onSurfaceVariant),
+                        style: TextStyle(color: context.skinColors.onSurfaceVariant),
                       ),
                     );
                   }
@@ -191,14 +191,14 @@ class _KaraokeLine extends StatelessWidget {
         line.text,
         textAlign: TextAlign.center,
         style: _style.copyWith(
-          color: active ? SakuraDuskColors.sakuraPink : SakuraDuskColors.onSurfaceVariant,
+          color: active ? context.skinColors.sakuraPink : context.skinColors.onSurfaceVariant,
         ),
       );
     }
     return RichText(
       textAlign: TextAlign.center,
       text: TextSpan(
-        style: _style.copyWith(color: SakuraDuskColors.onSurfaceVariant),
+        style: _style.copyWith(color: context.skinColors.onSurfaceVariant),
         children: [
           for (var i = 0; i < words.length; i++)
             WidgetSpan(
@@ -223,10 +223,10 @@ class _KaraokeWord extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (fill <= 0) {
-      return Text(text, style: _KaraokeLine._style.copyWith(color: SakuraDuskColors.onSurfaceVariant));
+      return Text(text, style: _KaraokeLine._style.copyWith(color: context.skinColors.onSurfaceVariant));
     }
     if (fill >= 1) {
-      return Text(text, style: _KaraokeLine._style.copyWith(color: SakuraDuskColors.sakuraPink));
+      return Text(text, style: _KaraokeLine._style.copyWith(color: context.skinColors.sakuraPink));
     }
     return ShaderMask(
       blendMode: BlendMode.srcIn,
@@ -234,7 +234,7 @@ class _KaraokeWord extends StatelessWidget {
         begin: Alignment.centerLeft,
         end: Alignment.centerRight,
         stops: [fill, fill],
-        colors: const [SakuraDuskColors.sakuraPink, SakuraDuskColors.onSurfaceVariant],
+        colors: [context.skinColors.sakuraPink, context.skinColors.onSurfaceVariant],
       ).createShader(bounds),
       child: Text(text, style: _KaraokeLine._style.copyWith(color: Colors.white)),
     );

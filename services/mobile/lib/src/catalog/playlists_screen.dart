@@ -7,7 +7,7 @@ import 'package:inori_api/src/model/playlist.dart';
 import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/catalog/catalog_repository.dart';
 import 'package:inori_music/src/shared/router.dart';
-import 'package:inori_music/src/shared/theme/sakura_dusk.dart';
+import 'package:inori_music/src/shared/theme/skin_provider.dart';
 
 final _playlistsProvider = FutureProvider<List<Playlist>>((ref) {
   return ref.watch(catalogRepositoryProvider).listPlaylists();
@@ -28,7 +28,7 @@ class PlaylistsScreen extends ConsumerWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline, color: SakuraDuskColors.error, size: 48),
+              Icon(Icons.error_outline, color: context.skinColors.error, size: 48),
               const SizedBox(height: 12),
               Text('$e', textAlign: TextAlign.center),
               const SizedBox(height: 12),
@@ -50,10 +50,10 @@ class PlaylistsScreen extends ConsumerWidget {
                       width: 44,
                       height: 44,
                       decoration: BoxDecoration(
-                        color: SakuraDuskColors.surfaceContainer,
+                        color: context.skinColors.surfaceContainer,
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Icon(Icons.playlist_play, color: SakuraDuskColors.sakuraPink),
+                      child: Icon(Icons.playlist_play, color: context.skinColors.sakuraPink),
                     ),
                     title: Text(pl.name),
                     subtitle: Text('${pl.trackIds.length} tracks'),

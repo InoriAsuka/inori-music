@@ -7,7 +7,7 @@ import 'package:inori_api/src/model/catalog_artist.dart';
 import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/catalog/catalog_repository.dart';
 import 'package:inori_music/src/shared/router.dart';
-import 'package:inori_music/src/shared/theme/sakura_dusk.dart';
+import 'package:inori_music/src/shared/theme/skin_provider.dart';
 
 final _artistsProvider = FutureProvider<List<CatalogArtist>>((ref) {
   return ref.watch(catalogRepositoryProvider).listArtists(limit: 200);
@@ -28,7 +28,7 @@ class ArtistsScreen extends ConsumerWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline, color: SakuraDuskColors.error, size: 48),
+              Icon(Icons.error_outline, color: context.skinColors.error, size: 48),
               const SizedBox(height: 12),
               Text('$e', textAlign: TextAlign.center),
               const SizedBox(height: 12),
@@ -75,9 +75,9 @@ class _ArtistCard extends StatelessWidget {
       onTap: onTap,
       child: Container(
         decoration: BoxDecoration(
-          color: SakuraDuskColors.surfaceVariant,
+          color: context.skinColors.surfaceVariant,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: SakuraDuskColors.outlineVariant, width: 0.5),
+          border: Border.all(color: context.skinColors.outlineVariant, width: 0.5),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,
@@ -85,14 +85,14 @@ class _ArtistCard extends StatelessWidget {
             Expanded(
               child: Container(
                 width: double.infinity,
-                decoration: const BoxDecoration(
-                  color: SakuraDuskColors.surfaceContainer,
+                decoration: BoxDecoration(
+                  color: context.skinColors.surfaceContainer,
                   borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.person,
                   size: 56,
-                  color: SakuraDuskColors.outlineVariant,
+                  color: context.skinColors.outlineVariant,
                 ),
               ),
             ),

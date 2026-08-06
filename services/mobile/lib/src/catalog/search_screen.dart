@@ -12,7 +12,7 @@ import 'package:inori_music/src/catalog/catalog_repository.dart';
 import 'package:inori_music/src/catalog/search_history_provider.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/router.dart';
-import 'package:inori_music/src/shared/theme/sakura_dusk.dart';
+import 'package:inori_music/src/shared/theme/skin_provider.dart';
 import 'package:inori_music/src/shared/widgets/track_list_tile.dart';
 
 // ---------------------------------------------------------------------------
@@ -136,7 +136,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
     } else if (showEmptyPrompt) {
       bodyContent = Center(
         child: Text(t.searchPrompt,
-            style: const TextStyle(color: SakuraDuskColors.onSurfaceVariant)),
+            style: TextStyle(color: context.skinColors.onSurfaceVariant)),
       );
     } else {
       bodyContent = TabBarView(
@@ -246,8 +246,8 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
                         children: [
                           Text(
                             t.recentSearches,
-                            style: const TextStyle(
-                              color: SakuraDuskColors.onSurfaceVariant,
+                            style: TextStyle(
+                              color: context.skinColors.onSurfaceVariant,
                               fontSize: 12,
                               fontWeight: FontWeight.w500,
                             ),
@@ -311,7 +311,7 @@ class _Highlighter {
 
   /// Returns null when [raw] is null/blank/no-mark-present, signalling the
   /// caller to render plain text instead.
-  static List<TextSpan>? spanify(String? raw, TextStyle base) {
+  static List<TextSpan>? spanify(String? raw, TextStyle base, Color highlightColor) {
     if (raw == null || raw.isEmpty) return null;
     if (!raw.contains(_markOpen)) return null;
     final out = <TextSpan>[];
@@ -336,7 +336,7 @@ class _Highlighter {
         text: inner,
         style: base.copyWith(
           fontWeight: FontWeight.bold,
-          color: SakuraDuskColors.sakuraPink,
+          color: highlightColor,
         ),
       ));
       rest = rest.substring(c + _markClose.length);
@@ -357,14 +357,14 @@ class _AllResults extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     if (items.isEmpty) {
-      return const Center(
+      return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.search_off, size: 64, color: SakuraDuskColors.onSurfaceVariant),
-            SizedBox(height: 16),
+            Icon(Icons.search_off, size: 64, color: context.skinColors.onSurfaceVariant),
+            const SizedBox(height: 16),
             Text('没有找到相关内容',
-                style: TextStyle(color: SakuraDuskColors.onSurfaceVariant)),
+                style: TextStyle(color: context.skinColors.onSurfaceVariant)),
           ],
         ),
       );
@@ -375,9 +375,9 @@ class _AllResults extends StatelessWidget {
         final item = items[i];
         if (item.artist != null) {
           return ListTile(
-            leading: const CircleAvatar(
-              backgroundColor: SakuraDuskColors.surfaceContainer,
-              child: Icon(Icons.person, color: SakuraDuskColors.outlineVariant),
+            leading: CircleAvatar(
+              backgroundColor: context.skinColors.surfaceContainer,
+              child: Icon(Icons.person, color: context.skinColors.outlineVariant),
             ),
             title: _HighlightedTitle(
                 raw: item.highlight, plain: item.artist!.name),
@@ -390,11 +390,11 @@ class _AllResults extends StatelessWidget {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: SakuraDuskColors.surfaceContainer,
+                color: context.skinColors.surfaceContainer,
                 borderRadius: BorderRadius.circular(6),
               ),
-              child: const Icon(Icons.album,
-                  color: SakuraDuskColors.outlineVariant, size: 28),
+              child: Icon(Icons.album,
+                  color: context.skinColors.outlineVariant, size: 28),
             ),
             title:
                 _HighlightedTitle(raw: item.highlight, plain: item.album!.title),
@@ -423,12 +423,11 @@ class _ArtistResults extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.search_off,
-                size: 64, color: SakuraDuskColors.onSurfaceVariant),
+            Icon(Icons.search_off,
+                size: 64, color: context.skinColors.onSurfaceVariant),
             const SizedBox(height: 16),
             Text(t.noResults,
-                style:
-                    const TextStyle(color: SakuraDuskColors.onSurfaceVariant)),
+                style: TextStyle(color: context.skinColors.onSurfaceVariant)),
           ],
         ),
       );
@@ -439,9 +438,9 @@ class _ArtistResults extends StatelessWidget {
         final artist = items[i].artist;
         if (artist == null) return const SizedBox();
         return ListTile(
-          leading: const CircleAvatar(
-            backgroundColor: SakuraDuskColors.surfaceContainer,
-            child: Icon(Icons.person, color: SakuraDuskColors.outlineVariant),
+          leading: CircleAvatar(
+            backgroundColor: context.skinColors.surfaceContainer,
+            child: Icon(Icons.person, color: context.skinColors.outlineVariant),
           ),
           title:
               _HighlightedTitle(raw: items[i].highlight, plain: artist.name),
@@ -464,12 +463,11 @@ class _AlbumResults extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.search_off,
-                size: 64, color: SakuraDuskColors.onSurfaceVariant),
+            Icon(Icons.search_off,
+                size: 64, color: context.skinColors.onSurfaceVariant),
             const SizedBox(height: 16),
             Text(t.noResults,
-                style:
-                    const TextStyle(color: SakuraDuskColors.onSurfaceVariant)),
+                style: TextStyle(color: context.skinColors.onSurfaceVariant)),
           ],
         ),
       );
@@ -484,11 +482,11 @@ class _AlbumResults extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: SakuraDuskColors.surfaceContainer,
+              color: context.skinColors.surfaceContainer,
               borderRadius: BorderRadius.circular(6),
             ),
-            child: const Icon(Icons.album,
-                color: SakuraDuskColors.outlineVariant, size: 28),
+            child: Icon(Icons.album,
+                color: context.skinColors.outlineVariant, size: 28),
           ),
           title:
               _HighlightedTitle(raw: items[i].highlight, plain: album.title),
@@ -512,12 +510,11 @@ class _TrackResults extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.search_off,
-                size: 64, color: SakuraDuskColors.onSurfaceVariant),
+            Icon(Icons.search_off,
+                size: 64, color: context.skinColors.onSurfaceVariant),
             const SizedBox(height: 16),
             Text(t.noResults,
-                style:
-                    const TextStyle(color: SakuraDuskColors.onSurfaceVariant)),
+                style: TextStyle(color: context.skinColors.onSurfaceVariant)),
           ],
         ),
       );
@@ -549,12 +546,12 @@ class _HighlightedTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const base = TextStyle(
-      color: SakuraDuskColors.onSurface,
+    final base = TextStyle(
+      color: context.skinColors.onSurface,
       fontSize: 14,
       fontWeight: FontWeight.w500,
     );
-    final spans = _Highlighter.spanify(raw, base);
+    final spans = _Highlighter.spanify(raw, base, context.skinColors.sakuraPink);
     if (spans == null) {
       return Text(plain,
           maxLines: 1,

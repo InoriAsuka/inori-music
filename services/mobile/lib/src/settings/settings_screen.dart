@@ -17,7 +17,8 @@ import 'package:inori_music/src/offline/offline_db.dart';
 import 'package:inori_music/src/shared/background_provider.dart';
 import 'package:inori_music/src/shared/locale_provider.dart';
 import 'package:inori_music/src/shared/router.dart';
-import 'package:inori_music/src/shared/theme/sakura_dusk.dart';
+import 'package:inori_music/src/shared/theme/skin_definition.dart';
+import 'package:inori_music/src/shared/theme/skin_provider.dart';
 
 // ---------------------------------------------------------------------------
 // Language picker data
@@ -60,9 +61,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           const _SectionHeader(title: 'Account'),
           if (isGuest)
             ListTile(
-              leading: const CircleAvatar(
-                backgroundColor: SakuraDuskColors.sakuraPinkDark,
-                child: Icon(Icons.person_outline, color: Colors.white),
+              leading: CircleAvatar(
+                backgroundColor: context.skinColors.sakuraPinkDark,
+                child: const Icon(Icons.person_outline, color: Colors.white),
               ),
               title: const Text('以游客身份使用'),
               subtitle: const Text('登录后可使用云端曲库、收藏与跨设备续播'),
@@ -73,9 +74,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             )
           else ...[
             ListTile(
-              leading: const CircleAvatar(
-                backgroundColor: SakuraDuskColors.sakuraPinkDark,
-                child: Icon(Icons.person, color: Colors.white),
+              leading: CircleAvatar(
+                backgroundColor: context.skinColors.sakuraPinkDark,
+                child: const Icon(Icons.person, color: Colors.white),
               ),
               title: Text(username.isNotEmpty ? username : 'User'),
               subtitle: const Text('Logged in'),
@@ -116,6 +117,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 title: const Text('登录页背景'),
                 subtitle: Text(background.imagePath != null ? '自定义图片' : '默认'),
                 onTap: () => _showBackgroundSheet(context, ref),
+              );
+            },
+          ),
+          Consumer(
+            builder: (context, ref, _) {
+              final skinState = ref.watch(skinProvider);
+              return ListTile(
+                leading: const Icon(Icons.palette_outlined),
+                title: const Text('皮肤'),
+                subtitle: Text(skinState.active.displayName),
+                onTap: () => _showSkinSheet(context, ref),
               );
             },
           ),
@@ -232,8 +244,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           if (!isGuest) ...[
             const _SectionHeader(title: 'Account Actions'),
             ListTile(
-              leading: const Icon(Icons.logout, color: SakuraDuskColors.error),
-              title: Text(t.logout, style: const TextStyle(color: SakuraDuskColors.error)),
+              leading: Icon(Icons.logout, color: context.skinColors.error),
+              title: Text(t.logout, style: TextStyle(color: context.skinColors.error)),
               onTap: () => _confirmLogout(context, ref, t),
             ),
           ],
@@ -435,7 +447,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
     final selected = await showModalBottomSheet<int>(
       context: context,
-      backgroundColor: SakuraDuskColors.surface,
+      backgroundColor: context.skinColors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -459,7 +471,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 return ListTile(
                   title: Text(opt.label),
                   leading: isSelected
-                      ? const Icon(Icons.check, color: SakuraDuskColors.sakuraPink)
+                      ? Icon(Icons.check, color: context.skinColors.sakuraPink)
                       : null,
                   onTap: () => Navigator.pop(ctx, i),
                 );
@@ -478,7 +490,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Future<void> _showBackgroundSheet(BuildContext context, WidgetRef ref) async {
     await showModalBottomSheet<void>(
       context: context,
-      backgroundColor: SakuraDuskColors.surface,
+      backgroundColor: context.skinColors.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
@@ -495,9 +507,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 children: [
                   Text('登录页背景', style: Theme.of(ctx).textTheme.headlineSmall),
                   const SizedBox(height: 4),
-                  const Text(
+                  Text(
                     '自定义启动页与登录页背后的图片，不影响其他页面。',
-                    style: TextStyle(color: SakuraDuskColors.onSurfaceVariant, fontSize: 13),
+                    style: TextStyle(color: context.skinColors.onSurfaceVariant, fontSize: 13),
                   ),
                   const SizedBox(height: 16),
                   if (background.imagePath != null) ...[
@@ -513,7 +525,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     const SizedBox(height: 12),
                     Row(
                       children: [
-                        const Icon(Icons.opacity, size: 18, color: SakuraDuskColors.onSurfaceVariant),
+                        Icon(Icons.opacity, size: 18, color: context.skinColors.onSurfaceVariant),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Slider(
@@ -547,6 +559,124 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         },
       ),
     );
+  }
+
+  Future<void> _showSkinSheet(BuildContext context, WidgetRef ref) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: context.skinColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      isScrollControlled: true,
+      builder: (ctx) => Consumer(
+        builder: (ctx, ref, _) {
+          final skinState = ref.watch(skinProvider);
+          final notifier = ref.read(skinProvider.notifier);
+          return SafeArea(
+            child: ConstrainedBox(
+              constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.7),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 16, 8, 8),
+                    child: Row(
+                      children: [
+                        Expanded(child: Text('皮肤', style: Theme.of(ctx).textTheme.headlineSmall)),
+                        IconButton(
+                          icon: const Icon(Icons.file_upload_outlined),
+                          tooltip: '导入皮肤',
+                          onPressed: () => _importSkin(ctx, notifier),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  Flexible(
+                    child: ListView(
+                      shrinkWrap: true,
+                      children: skinState.installed.map((skin) {
+                        final isSelected = skin.id == skinState.selectedId;
+                        return ListTile(
+                          leading: _SkinSwatch(skin: skin),
+                          title: Text(skin.displayName),
+                          subtitle: Text(skin.isBuiltIn ? '内置 · ${skin.brightness == Brightness.dark ? '深色' : '浅色'}' : (skin.author ?? '已导入')),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (isSelected) Icon(Icons.check, color: ctx.skinColors.sakuraPink),
+                              if (!skin.isBuiltIn)
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline, size: 20),
+                                  onPressed: () => _confirmDeleteSkin(ctx, notifier, skin),
+                                ),
+                            ],
+                          ),
+                          onTap: () => notifier.selectSkin(skin.id),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _importSkin(BuildContext context, SkinNotifier notifier) async {
+    try {
+      final warnings = await notifier.pickAndImportSkin();
+      if (warnings == null) return; // user cancelled the file picker
+      if (!context.mounted) return;
+      if (warnings.isNotEmpty) {
+        await showDialog<void>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('皮肤已导入，但存在对比度警告'),
+            content: SingleChildScrollView(child: Text(warnings.join('\n\n'))),
+            actions: [
+              FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('知道了')),
+            ],
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('皮肤已导入')));
+      }
+    } on SkinParseException catch (e) {
+      if (!context.mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('导入失败'),
+          content: Text(e.message),
+          actions: [
+            FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('知道了')),
+          ],
+        ),
+      );
+    }
+  }
+
+  Future<void> _confirmDeleteSkin(BuildContext context, SkinNotifier notifier, SkinDefinition skin) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('删除皮肤'),
+        content: Text('删除「${skin.displayName}」？此操作不可撤销。'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('删除')),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await notifier.deleteSkin(skin.id);
+    }
   }
 
   static bool _isSameLocale(Locale? a, Locale? b) {
@@ -592,11 +722,11 @@ class _OfflineLibrarySection extends ConsumerWidget {
       builder: (context, snapshot) {
         final tracks = snapshot.data ?? [];
         if (tracks.isEmpty) {
-          return const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Text(
               'No downloaded tracks.',
-              style: TextStyle(color: SakuraDuskColors.onSurfaceVariant),
+              style: TextStyle(color: context.skinColors.onSurfaceVariant),
             ),
           );
         }
@@ -609,8 +739,8 @@ class _OfflineLibrarySection extends ConsumerWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
               child: Text(
                 '${tracks.length} track${tracks.length == 1 ? '' : 's'} · $totalMb MB',
-                style: const TextStyle(
-                  color: SakuraDuskColors.onSurfaceVariant,
+                style: TextStyle(
+                  color: context.skinColors.onSurfaceVariant,
                   fontSize: 12,
                 ),
               ),
@@ -618,25 +748,25 @@ class _OfflineLibrarySection extends ConsumerWidget {
             ...tracks.map(
               (t) => ListTile(
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                leading: const Icon(Icons.download_done,
-                    color: SakuraDuskColors.sakuraPink),
+                leading: Icon(Icons.download_done,
+                    color: context.skinColors.sakuraPink),
                 title: Text(
                   t.title,
-                  style: const TextStyle(
-                      color: SakuraDuskColors.onSurface, fontSize: 14),
+                  style: TextStyle(
+                      color: context.skinColors.onSurface, fontSize: 14),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 subtitle: Text(
                   t.artistName,
-                  style: const TextStyle(
-                      color: SakuraDuskColors.onSurfaceVariant, fontSize: 12),
+                  style: TextStyle(
+                      color: context.skinColors.onSurfaceVariant, fontSize: 12),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 trailing: IconButton(
-                  icon: const Icon(Icons.delete_outline,
-                      color: SakuraDuskColors.error),
+                  icon: Icon(Icons.delete_outline,
+                      color: context.skinColors.error),
                   onPressed: () {
                     ref
                         .read(downloadProvider.notifier)
@@ -647,10 +777,10 @@ class _OfflineLibrarySection extends ConsumerWidget {
             ),
             ListTile(
               leading:
-                  const Icon(Icons.delete_sweep, color: SakuraDuskColors.error),
-              title: const Text(
+                  Icon(Icons.delete_sweep, color: context.skinColors.error),
+              title: Text(
                 'Delete all downloads',
-                style: TextStyle(color: SakuraDuskColors.error),
+                style: TextStyle(color: context.skinColors.error),
               ),
               onTap: () async {
                 final confirmed = await showDialog<bool>(
@@ -759,7 +889,7 @@ class _EqSection extends ConsumerWidget {
                       ),
                       Text(
                         _bandLabels[i],
-                        style: const TextStyle(fontSize: 10, color: SakuraDuskColors.onSurfaceVariant),
+                        style: TextStyle(fontSize: 10, color: context.skinColors.onSurfaceVariant),
                       ),
                     ],
                   ),
@@ -864,9 +994,38 @@ class _SectionHeader extends StatelessWidget {
       child: Text(
         title,
         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: SakuraDuskColors.sakuraPink,
+              color: context.skinColors.sakuraPink,
               fontWeight: FontWeight.w600,
             ),
+      ),
+    );
+  }
+}
+
+/// Small background+primary preview swatch shown next to each skin in the
+/// picker sheet — deliberately reads [skin]'s own colors rather than the
+/// active theme, since most rows here are previewing a skin that *isn't*
+/// currently applied.
+class _SkinSwatch extends StatelessWidget {
+  const _SkinSwatch({required this.skin});
+  final SkinDefinition skin;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 36,
+      height: 36,
+      decoration: BoxDecoration(
+        color: skin.colors.background,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: skin.colors.outlineVariant),
+      ),
+      child: Center(
+        child: Container(
+          width: 16,
+          height: 16,
+          decoration: BoxDecoration(color: skin.colors.sakuraPink, shape: BoxShape.circle),
+        ),
       ),
     );
   }

@@ -9,7 +9,7 @@ import 'package:inori_api/src/model/user_history_stats.dart';
 import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/history/track_title_resolver.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
-import 'package:inori_music/src/shared/theme/sakura_dusk.dart';
+import 'package:inori_music/src/shared/theme/skin_provider.dart';
 
 // ---------------------------------------------------------------------------
 // Providers
@@ -58,7 +58,7 @@ class HistoryStatsScreen extends ConsumerWidget {
           // Summary cards
           statsState.when(
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Text('$e', style: const TextStyle(color: SakuraDuskColors.error)),
+            error: (e, _) => Text('$e', style: TextStyle(color: context.skinColors.error)),
             data: (stats) => Row(
               children: [
                 Expanded(child: _StatCard(label: t.totalPlays, value: '${stats.totalEvents}')),
@@ -73,14 +73,14 @@ class HistoryStatsScreen extends ConsumerWidget {
           // 30-day chart
           Text(
             t.activityChart,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: SakuraDuskColors.onBackground),
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: context.skinColors.onBackground),
           ),
           const SizedBox(height: 12),
           timelineState.when(
             loading: () => const SizedBox(height: 150, child: Center(child: CircularProgressIndicator())),
-            error: (e, _) => SizedBox(height: 80, child: Center(child: Text('$e', style: const TextStyle(color: SakuraDuskColors.error)))),
+            error: (e, _) => SizedBox(height: 80, child: Center(child: Text('$e', style: TextStyle(color: context.skinColors.error)))),
             data: (buckets) => buckets.isEmpty
-                ? const SizedBox(height: 80, child: Center(child: Text('No data', style: TextStyle(color: SakuraDuskColors.onSurfaceVariant))))
+                ? SizedBox(height: 80, child: Center(child: Text('No data', style: TextStyle(color: context.skinColors.onSurfaceVariant))))
                 : SizedBox(
                     height: 160,
                     child: BarChart(
@@ -101,7 +101,7 @@ class HistoryStatsScreen extends ConsumerWidget {
                             barRods: [
                               BarChartRodData(
                                 toY: entry.value.eventCount.toDouble(),
-                                color: SakuraDuskColors.sakuraPink,
+                                color: context.skinColors.sakuraPink,
                                 width: 6,
                                 borderRadius: BorderRadius.circular(3),
                               ),
@@ -119,16 +119,16 @@ class HistoryStatsScreen extends ConsumerWidget {
           // Top tracks
           Text(
             t.topTracks,
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: SakuraDuskColors.onBackground),
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: context.skinColors.onBackground),
           ),
           const SizedBox(height: 8),
           topTracksState.when(
             loading: () => const SizedBox(height: 80, child: Center(child: CircularProgressIndicator())),
-            error: (e, _) => Text('$e', style: const TextStyle(color: SakuraDuskColors.error)),
+            error: (e, _) => Text('$e', style: TextStyle(color: context.skinColors.error)),
             data: (tracks) => tracks.isEmpty
-                ? const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 16),
-                    child: Text('No history yet', style: TextStyle(color: SakuraDuskColors.onSurfaceVariant)),
+                ? Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    child: Text('No history yet', style: TextStyle(color: context.skinColors.onSurfaceVariant)),
                   )
                 : Column(
                     children: tracks.asMap().entries.map((entry) {
@@ -159,16 +159,16 @@ class _StatCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: SakuraDuskColors.surfaceVariant,
+        color: context.skinColors.surfaceVariant,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: SakuraDuskColors.outlineVariant, width: 0.5),
+        border: Border.all(color: context.skinColors.outlineVariant, width: 0.5),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(value, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w700, color: SakuraDuskColors.sakuraPinkLight)),
+          Text(value, style: TextStyle(fontSize: 28, fontWeight: FontWeight.w700, color: context.skinColors.sakuraPinkLight)),
           const SizedBox(height: 4),
-          Text(label, style: const TextStyle(fontSize: 13, color: SakuraDuskColors.onSurfaceVariant)),
+          Text(label, style: TextStyle(fontSize: 13, color: context.skinColors.onSurfaceVariant)),
         ],
       ),
     );
@@ -206,7 +206,7 @@ class _TopTrackRowState extends ConsumerState<_TopTrackRow> {
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: SakuraDuskColors.surfaceVariant,
+        color: context.skinColors.surfaceVariant,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -215,10 +215,10 @@ class _TopTrackRowState extends ConsumerState<_TopTrackRow> {
             width: 28,
             child: Text(
               '#${widget.rank}',
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
-                color: SakuraDuskColors.sakuraPinkLight,
+                color: context.skinColors.sakuraPinkLight,
               ),
             ),
           ),
@@ -226,9 +226,9 @@ class _TopTrackRowState extends ConsumerState<_TopTrackRow> {
           Expanded(
             child: Text(
               displayName,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 14,
-                color: SakuraDuskColors.onSurface,
+                color: context.skinColors.onSurface,
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -238,11 +238,11 @@ class _TopTrackRowState extends ConsumerState<_TopTrackRow> {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.play_arrow, size: 14, color: SakuraDuskColors.onSurfaceVariant),
+              Icon(Icons.play_arrow, size: 14, color: context.skinColors.onSurfaceVariant),
               const SizedBox(width: 2),
               Text(
                 '${widget.playCount}',
-                style: const TextStyle(fontSize: 13, color: SakuraDuskColors.onSurfaceVariant),
+                style: TextStyle(fontSize: 13, color: context.skinColors.onSurfaceVariant),
               ),
             ],
           ),

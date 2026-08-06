@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:inori_music/src/shared/router.dart';
-import 'package:inori_music/src/shared/theme/sakura_dusk.dart';
+import 'package:inori_music/src/shared/theme/skin_provider.dart';
 import 'package:inori_music/src/user_playlist/user_playlist_notifier.dart';
 
 /// Library tab — lists all playlists owned by the current user.
@@ -31,8 +31,8 @@ class UserPlaylistListScreen extends ConsumerWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline,
-                  color: SakuraDuskColors.error, size: 48),
+              Icon(Icons.error_outline,
+                  color: context.skinColors.error, size: 48),
               const SizedBox(height: 12),
               Text(e.toString(), textAlign: TextAlign.center),
               const SizedBox(height: 12),
@@ -52,9 +52,9 @@ class UserPlaylistListScreen extends ConsumerWidget {
             itemBuilder: (ctx, i) {
               final pl = playlists[i];
               return ListTile(
-                leading: const Icon(
+                leading: Icon(
                   Icons.queue_music,
-                  color: SakuraDuskColors.sakuraPink,
+                  color: context.skinColors.sakuraPink,
                 ),
                 title: Text(pl.name),
                 subtitle: Text('${pl.trackIds.length} tracks'),

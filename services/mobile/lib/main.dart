@@ -8,7 +8,8 @@ import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/desktop_integration.dart';
 import 'package:inori_music/src/shared/locale_provider.dart';
 import 'package:inori_music/src/shared/router.dart';
-import 'package:inori_music/src/shared/theme/sakura_dusk.dart';
+import 'package:inori_music/src/shared/theme/skin_definition.dart';
+import 'package:inori_music/src/shared/theme/skin_provider.dart';
 
 /// Global [InoriAudioHandler] instance shared between main.dart and PlayerNotifier.
 late final InoriAudioHandler audioHandler;
@@ -70,6 +71,7 @@ class _InoriMusicAppState extends ConsumerState<InoriMusicApp>
   Widget build(BuildContext context) {
     final router = ref.watch(routerProvider);
     final locale = ref.watch(localeProvider);
+    final skin = ref.watch(skinProvider).active;
 
     // Resize the desktop window when crossing the login gate in either
     // direction (narrow fixed window pre-login, wide resizable shell after).
@@ -85,13 +87,14 @@ class _InoriMusicAppState extends ConsumerState<InoriMusicApp>
 
     return MaterialApp.router(
       title: 'Inori Music',
-      theme: buildSakuraDuskTheme(),
+      theme: buildThemeFromSkin(skin),
       themeMode: ThemeMode.light,
       routerConfig: router,
       debugShowCheckedModeBanner: false,
       locale: locale,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
+      builder: (context, child) => SkinScope(skin: skin, child: child!),
     );
   }
 }

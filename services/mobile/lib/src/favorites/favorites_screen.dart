@@ -8,7 +8,7 @@ import 'package:inori_music/src/catalog/catalog_repository.dart';
 import 'package:inori_music/src/favorites/track_favorite_notifier.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/router.dart';
-import 'package:inori_music/src/shared/theme/sakura_dusk.dart';
+import 'package:inori_music/src/shared/theme/skin_provider.dart';
 import 'package:inori_music/src/shared/widgets/track_list_tile.dart';
 import 'package:inori_music/src/user_playlist/user_playlist_notifier.dart';
 
@@ -75,17 +75,17 @@ class FavoritesScreen extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(16, 16, 8, 4),
               child: Row(
                 children: [
-                  const Text(
+                  Text(
                     'My Playlists',
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
-                      color: SakuraDuskColors.onSurface,
+                      color: context.skinColors.onSurface,
                     ),
                   ),
                   const Spacer(),
                   IconButton(
-                    icon: const Icon(Icons.add, color: SakuraDuskColors.sakuraPink),
+                    icon: Icon(Icons.add, color: context.skinColors.sakuraPink),
                     tooltip: 'New Playlist',
                     onPressed: () => _showCreateDialog(context, ref),
                   ),
@@ -104,16 +104,16 @@ class FavoritesScreen extends ConsumerWidget {
               child: Padding(
                 padding: const EdgeInsets.all(16),
                 child: Text('$e',
-                    style: const TextStyle(color: SakuraDuskColors.error)),
+                    style: TextStyle(color: context.skinColors.error)),
               ),
             ),
             data: (playlists) => playlists.isEmpty
-                ? const SliverToBoxAdapter(
+                ? SliverToBoxAdapter(
                     child: Padding(
-                      padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                       child: Text(
                         'No playlists yet. Tap + to create one.',
-                        style: TextStyle(color: SakuraDuskColors.onSurfaceVariant),
+                        style: TextStyle(color: context.skinColors.onSurfaceVariant),
                       ),
                     ),
                   )
@@ -126,18 +126,18 @@ class FavoritesScreen extends ConsumerWidget {
                             width: 44,
                             height: 44,
                             decoration: BoxDecoration(
-                              color: SakuraDuskColors.surfaceContainer,
+                              color: context.skinColors.surfaceContainer,
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: const Icon(Icons.queue_music,
-                                color: SakuraDuskColors.sakuraPink),
+                            child: Icon(Icons.queue_music,
+                                color: context.skinColors.sakuraPink),
                           ),
                           title: Text(pl.name),
                           subtitle: Text('${pl.trackIds.length} tracks'),
                           trailing: IconButton(
-                            icon: const Icon(Icons.delete_outline,
+                            icon: Icon(Icons.delete_outline,
                                 size: 20,
-                                color: SakuraDuskColors.onSurfaceVariant),
+                                color: context.skinColors.onSurfaceVariant),
                             onPressed: () async {
                               await ref
                                   .read(userPlaylistProvider.notifier)
@@ -152,15 +152,15 @@ class FavoritesScreen extends ConsumerWidget {
                   ),
           ),
           // ---- Favorites section ----
-          const SliverToBoxAdapter(
+          SliverToBoxAdapter(
             child: Padding(
-              padding: EdgeInsets.fromLTRB(16, 16, 16, 4),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
               child: Text(
                 'Favorites',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
-                  color: SakuraDuskColors.onSurface,
+                  color: context.skinColors.onSurface,
                 ),
               ),
             ),
@@ -174,8 +174,8 @@ class FavoritesScreen extends ConsumerWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Icon(Icons.error_outline,
-                        color: SakuraDuskColors.error, size: 48),
+                    Icon(Icons.error_outline,
+                        color: context.skinColors.error, size: 48),
                     const SizedBox(height: 12),
                     Text('$e', textAlign: TextAlign.center),
                     const SizedBox(height: 12),
@@ -188,19 +188,19 @@ class FavoritesScreen extends ConsumerWidget {
               ),
             ),
             data: (tracks) => tracks.isEmpty
-                ? const SliverToBoxAdapter(
+                ? SliverToBoxAdapter(
                     child: Center(
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(Icons.favorite_border,
                               size: 64,
-                              color: SakuraDuskColors.onSurfaceVariant),
-                          SizedBox(height: 16),
+                              color: context.skinColors.onSurfaceVariant),
+                          const SizedBox(height: 16),
                           Text('No favorites yet',
                               style: TextStyle(
                                   fontSize: 18,
-                                  color: SakuraDuskColors.onSurfaceVariant)),
+                                  color: context.skinColors.onSurfaceVariant)),
                         ],
                       ),
                     ),

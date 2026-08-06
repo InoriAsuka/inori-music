@@ -9,7 +9,7 @@ import 'package:inori_music/src/auth/auth_notifier.dart';
 import 'package:inori_music/src/player/mini_player_bar.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/router.dart';
-import 'package:inori_music/src/shared/theme/sakura_dusk.dart';
+import 'package:inori_music/src/shared/theme/skin_provider.dart';
 import 'package:inori_music/src/shared/widgets/inori_mark.dart';
 
 /// Adaptive shell scaffold:
@@ -302,7 +302,7 @@ class _DesktopSidebar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: SakuraDuskColors.surface,
+      color: context.skinColors.surface,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -315,7 +315,7 @@ class _DesktopSidebar extends StatelessWidget {
                 Text(
                   'Inori Music',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: SakuraDuskColors.onSurface,
+                        color: context.skinColors.onSurface,
                         fontWeight: FontWeight.w700,
                       ),
                 ),
@@ -332,17 +332,17 @@ class _DesktopSidebar extends StatelessWidget {
                 return ListTile(
                   leading: Icon(
                     item.icon,
-                    color: isSelected ? SakuraDuskColors.sakuraPinkLight : SakuraDuskColors.onSurfaceVariant,
+                    color: isSelected ? context.skinColors.sakuraPinkLight : context.skinColors.onSurfaceVariant,
                   ),
                   title: Text(
                     item.label,
                     style: TextStyle(
-                      color: isSelected ? SakuraDuskColors.onSurface : SakuraDuskColors.onSurfaceVariant,
+                      color: isSelected ? context.skinColors.onSurface : context.skinColors.onSurfaceVariant,
                       fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
                     ),
                   ),
                   selected: isSelected,
-                  selectedTileColor: SakuraDuskColors.sakuraPinkDark.withValues(alpha: 0.3),
+                  selectedTileColor: context.skinColors.sakuraPinkDark.withValues(alpha: 0.3),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   onTap: () => onItemTapped(i),
                 );

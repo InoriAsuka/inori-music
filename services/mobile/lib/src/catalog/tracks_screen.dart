@@ -6,7 +6,7 @@ import 'package:inori_api/src/model/catalog_track.dart';
 import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/catalog/catalog_repository.dart';
 import 'package:inori_music/src/favorites/track_favorite_notifier.dart';
-import 'package:inori_music/src/shared/theme/sakura_dusk.dart';
+import 'package:inori_music/src/shared/theme/skin_provider.dart';
 import 'package:inori_music/src/shared/widgets/track_list_tile.dart';
 
 final _tracksProvider = FutureProvider<List<CatalogTrack>>((ref) {
@@ -28,7 +28,7 @@ class TracksScreen extends ConsumerWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline, color: SakuraDuskColors.error, size: 48),
+              Icon(Icons.error_outline, color: context.skinColors.error, size: 48),
               const SizedBox(height: 12),
               Text('$e', textAlign: TextAlign.center),
               const SizedBox(height: 12),

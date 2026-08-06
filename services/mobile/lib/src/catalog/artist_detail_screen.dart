@@ -9,7 +9,7 @@ import 'package:inori_api/src/model/catalog_track.dart';
 import 'package:inori_music/src/catalog/catalog_repository.dart';
 import 'package:inori_music/src/favorites/track_favorite_notifier.dart';
 import 'package:inori_music/src/shared/router.dart';
-import 'package:inori_music/src/shared/theme/sakura_dusk.dart';
+import 'package:inori_music/src/shared/theme/skin_provider.dart';
 import 'package:inori_music/src/shared/widgets/track_list_tile.dart';
 
 final _artistDetailProvider = FutureProvider.family<CatalogArtist, String>((ref, id) {
@@ -54,7 +54,7 @@ class ArtistDetailScreen extends ConsumerWidget {
             error: (e, _) => SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: Text('Error: $e', style: const TextStyle(color: SakuraDuskColors.error)),
+                child: Text('Error: $e', style: TextStyle(color: context.skinColors.error)),
               ),
             ),
             data: (albums) => SliverToBoxAdapter(
@@ -79,10 +79,10 @@ class ArtistDetailScreen extends ConsumerWidget {
                                     width: 100,
                                     height: 100,
                                     decoration: BoxDecoration(
-                                      color: SakuraDuskColors.surfaceContainer,
+                                      color: context.skinColors.surfaceContainer,
                                       borderRadius: BorderRadius.circular(8),
                                     ),
-                                    child: const Icon(Icons.album, color: SakuraDuskColors.outlineVariant, size: 40),
+                                    child: Icon(Icons.album, color: context.skinColors.outlineVariant, size: 40),
                                   ),
                                   const SizedBox(height: 6),
                                   Text(
@@ -116,7 +116,7 @@ class ArtistDetailScreen extends ConsumerWidget {
             error: (e, _) => SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: Text('Error: $e', style: const TextStyle(color: SakuraDuskColors.error)),
+                child: Text('Error: $e', style: TextStyle(color: context.skinColors.error)),
               ),
             ),
             data: (tracks) => tracks.isEmpty

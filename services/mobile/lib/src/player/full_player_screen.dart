@@ -16,7 +16,7 @@ import 'package:inori_music/src/lyrics/lyrics_provider.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/player/karaoke_screen.dart';
 import 'package:inori_music/src/player/player_state.dart' as ps;
-import 'package:inori_music/src/shared/theme/sakura_dusk.dart';
+import 'package:inori_music/src/shared/theme/skin_provider.dart';
 
 /// Full-screen player overlay with progress bar, controls, and queue sheet.
 class FullPlayerScreen extends ConsumerStatefulWidget {
@@ -51,7 +51,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
     final position = ref.watch(playerProvider.select((s) => s.position));
 
     return Scaffold(
-      backgroundColor: SakuraDuskColors.background,
+      backgroundColor: context.skinColors.background,
       body: SafeArea(
         child: Column(
           children: [
@@ -61,24 +61,24 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
               child: Row(
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.keyboard_arrow_down, size: 32, color: SakuraDuskColors.onBackground),
+                    icon: Icon(Icons.keyboard_arrow_down, size: 32, color: context.skinColors.onBackground),
                     tooltip: 'Close player',
                     onPressed: () => Navigator.of(context).maybePop(),
                   ),
-                  const Expanded(
+                  Expanded(
                     child: Text(
                       'Now Playing',
                       textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: SakuraDuskColors.onSurfaceVariant),
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: context.skinColors.onSurfaceVariant),
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.queue_music, color: SakuraDuskColors.onSurfaceVariant),
+                    icon: Icon(Icons.queue_music, color: context.skinColors.onSurfaceVariant),
                     tooltip: 'Queue',
                     onPressed: () => _showQueueSheet(context, ref),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.mic_external_on, color: SakuraDuskColors.onSurfaceVariant),
+                    icon: Icon(Icons.mic_external_on, color: context.skinColors.onSurfaceVariant),
                     tooltip: 'Karaoke',
                     onPressed: (trackId.isEmpty || trackId.startsWith(localTrackIdPrefix))
                         ? null
@@ -97,8 +97,8 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                         icon: Icon(
                           Icons.equalizer,
                           color: eqEnabled
-                              ? SakuraDuskColors.sakuraPinkLight
-                              : SakuraDuskColors.onSurfaceVariant,
+                              ? context.skinColors.sakuraPinkLight
+                              : context.skinColors.onSurfaceVariant,
                         ),
                         tooltip: 'Equalizer',
                         onPressed: () => ref2.read(eqNotifierProvider.notifier).setEnabled(!eqEnabled),
@@ -124,11 +124,11 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                     width: 280,
                     height: 280,
                     decoration: BoxDecoration(
-                      color: SakuraDuskColors.surfaceVariant,
+                      color: context.skinColors.surfaceVariant,
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: SakuraDuskColors.sakuraPink.withValues(alpha: 0.15),
+                          color: context.skinColors.sakuraPink.withValues(alpha: 0.15),
                           blurRadius: 32,
                           offset: const Offset(0, 8),
                         ),
@@ -159,8 +159,8 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                   height: 6,
                   decoration: BoxDecoration(
                     color: _pageIndex == i
-                        ? SakuraDuskColors.sakuraPink
-                        : SakuraDuskColors.onSurfaceVariant.withValues(alpha: 0.4),
+                        ? context.skinColors.sakuraPink
+                        : context.skinColors.onSurfaceVariant.withValues(alpha: 0.4),
                     borderRadius: BorderRadius.circular(3),
                   ),
                 );
@@ -176,7 +176,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                 children: [
                   Text(
                     state.mediaItem?.title ?? 'Unknown Track',
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: SakuraDuskColors.onBackground),
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: context.skinColors.onBackground),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
@@ -184,7 +184,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                   const SizedBox(height: 4),
                   Text(
                     state.mediaItem?.artist ?? '',
-                    style: const TextStyle(fontSize: 15, color: SakuraDuskColors.onSurfaceVariant),
+                    style: TextStyle(fontSize: 15, color: context.skinColors.onSurfaceVariant),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
@@ -228,8 +228,8 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(_formatDuration(state.position), style: const TextStyle(fontSize: 12, color: SakuraDuskColors.onSurfaceVariant)),
-                        Text(_formatDuration(state.duration), style: const TextStyle(fontSize: 12, color: SakuraDuskColors.onSurfaceVariant)),
+                        Text(_formatDuration(state.position), style: TextStyle(fontSize: 12, color: context.skinColors.onSurfaceVariant)),
+                        Text(_formatDuration(state.duration), style: TextStyle(fontSize: 12, color: context.skinColors.onSurfaceVariant)),
                       ],
                     ),
                   ),
@@ -246,7 +246,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                   IconButton(
                     icon: Icon(
                       Icons.repeat,
-                      color: state.repeat != ps.RepeatMode.none ? SakuraDuskColors.sakuraPinkLight : SakuraDuskColors.onSurfaceVariant,
+                      color: state.repeat != ps.RepeatMode.none ? context.skinColors.sakuraPinkLight : context.skinColors.onSurfaceVariant,
                     ),
                     onPressed: () {
                       final notifier = ref.read(playerProvider.notifier);
@@ -270,7 +270,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                       return IconButton(
                         icon: Icon(
                           Icons.shuffle,
-                          color: isShuffle ? SakuraDuskColors.sakuraPinkLight : SakuraDuskColors.onSurfaceVariant,
+                          color: isShuffle ? context.skinColors.sakuraPinkLight : context.skinColors.onSurfaceVariant,
                         ),
                         onPressed: () => ref2.read(playerProvider.notifier).setShuffle(!isShuffle),
                         tooltip: 'Shuffle',
@@ -278,13 +278,13 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                     },
                   ),
                   IconButton(
-                    icon: const Icon(Icons.skip_previous, size: 36, color: SakuraDuskColors.onSurface),
+                    icon: Icon(Icons.skip_previous, size: 36, color: context.skinColors.onSurface),
                     onPressed: () => ref.read(playerProvider.notifier).previous(),
                   ),
                   // Play / Pause button
                   Container(
-                    decoration: const BoxDecoration(
-                      color: SakuraDuskColors.sakuraPink,
+                    decoration: BoxDecoration(
+                      color: context.skinColors.sakuraPink,
                       shape: BoxShape.circle,
                     ),
                     child: IconButton(
@@ -297,7 +297,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.skip_next, size: 36, color: SakuraDuskColors.onSurface),
+                    icon: Icon(Icons.skip_next, size: 36, color: context.skinColors.onSurface),
                     onPressed: () => ref.read(playerProvider.notifier).next(),
                   ),
                   // Speed control button
@@ -319,8 +319,8 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                         icon: Icon(
                           Icons.bedtime,
                           color: active
-                              ? SakuraDuskColors.sakuraPinkLight
-                              : SakuraDuskColors.onSurfaceVariant,
+                              ? context.skinColors.sakuraPinkLight
+                              : context.skinColors.onSurfaceVariant,
                         ),
                         tooltip: 'Sleep timer',
                         onPressed: () => _showSleepTimerSheet(context, ref),
@@ -340,10 +340,10 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                       icon: Icon(
                         isFav ? Icons.favorite : Icons.favorite_border,
                         color: isFav
-                            ? SakuraDuskColors.accentPink
+                            ? context.skinColors.accentPink
                             : (trackId != null && !isLocal
-                                ? SakuraDuskColors.onSurface
-                                : SakuraDuskColors.onSurfaceVariant),
+                                ? context.skinColors.onSurface
+                                : context.skinColors.onSurfaceVariant),
                       ),
                       onPressed: (trackId == null || isLocal)
                           ? null
@@ -444,8 +444,8 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
         maxChildSize: 0.9,
         minChildSize: 0.3,
         builder: (_, controller) => Container(
-          decoration: const BoxDecoration(
-            color: SakuraDuskColors.surface,
+          decoration: BoxDecoration(
+            color: context.skinColors.surface,
             borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
           ),
           child: Column(
@@ -455,15 +455,15 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                 width: 36,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: SakuraDuskColors.outlineVariant,
+                  color: context.skinColors.outlineVariant,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
-              const Padding(
-                padding: EdgeInsets.all(12),
+              Padding(
+                padding: const EdgeInsets.all(12),
                 child: Text(
                   'Queue',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: SakuraDuskColors.onBackground),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: context.skinColors.onBackground),
                 ),
               ),
               Expanded(
@@ -485,22 +485,22 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                           key: ValueKey(item.id),
                           leading: Icon(
                             Icons.music_note,
-                            color: isCurrent ? SakuraDuskColors.sakuraPinkLight : SakuraDuskColors.onSurfaceVariant,
+                            color: isCurrent ? context.skinColors.sakuraPinkLight : context.skinColors.onSurfaceVariant,
                           ),
                           title: Text(
                             item.title,
                             style: TextStyle(
-                              color: isCurrent ? SakuraDuskColors.sakuraPinkLight : SakuraDuskColors.onSurface,
+                              color: isCurrent ? context.skinColors.sakuraPinkLight : context.skinColors.onSurface,
                               fontWeight: isCurrent ? FontWeight.w600 : FontWeight.normal,
                             ),
                           ),
-                          subtitle: Text(item.artist ?? '', style: const TextStyle(color: SakuraDuskColors.onSurfaceVariant)),
+                          subtitle: Text(item.artist ?? '', style: TextStyle(color: context.skinColors.onSurfaceVariant)),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               if (isCurrent && playerState.isPlaying)
-                                const Icon(Icons.equalizer, color: SakuraDuskColors.sakuraPinkLight, size: 20),
-                              const Icon(Icons.drag_handle, color: SakuraDuskColors.onSurfaceVariant, size: 20),
+                                Icon(Icons.equalizer, color: context.skinColors.sakuraPinkLight, size: 20),
+                              Icon(Icons.drag_handle, color: context.skinColors.onSurfaceVariant, size: 20),
                             ],
                           ),
                           onTap: () {
@@ -578,11 +578,11 @@ class _ArtworkFallback extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Center(
+    return Center(
       child: Icon(
         Icons.music_note_rounded,
         size: 80,
-        color: SakuraDuskColors.sakuraPink,
+        color: context.skinColors.sakuraPink,
       ),
     );
   }
@@ -630,7 +630,7 @@ class _LyricsPage extends ConsumerWidget {
     final bilingual = ref.watch(bilingualLyricsProvider);
     return Container(
       decoration: BoxDecoration(
-        color: SakuraDuskColors.surfaceVariant,
+        color: context.skinColors.surfaceVariant,
         borderRadius: BorderRadius.circular(16),
       ),
       child: ClipRRect(
