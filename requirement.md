@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`5.12.1`
+`5.12.2`
 
 ## Product Goal
 
@@ -41,6 +41,11 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Committed lifecycle updates must record latest transition metadata for audit preparation.
 
 ## Requirement History
+
+### v5.12.2 - 2026-08-06
+
+- **feat: 桌面窗体按登录门禁状态自适应尺寸** — v5.12.1 由用户下载 CI 构建实机验证 v5.12.0/v5.12.1 后提出：启动/登录页窗口不应该像现在这样宽，应固定为接近手机竖屏的"优雅比例"；进入本地曲库/主界面后再放宽——参照的是成熟开源播放器的通用做法（登录态是紧凑对话框、主界面才是宽画布）。新增 `window_manager` 依赖（本来规划在 v5.15.0 桌面自定义窗体一并引入，这次只提前拿"尺寸控制"这一小块能力，标题栏自定义仍留在 v5.15.0）。`DesktopIntegration`（`lib/src/shared/desktop_integration.dart`）新增 `_initWindow()`：冷启动时按 `authProvider` 当前值（`AsyncLoading`/`unauthenticated` 都落在"未过闸"）用 `windowManager.waitUntilReadyToShow` 以窄尺寸 440×720（比例对齐用户截图参照的 443×727）非可调整大小显示；新增 `applyWindowForAuthState(bool isPastGate)`，登录/游客过闸后调用 `setResizable(true)` + `setSize` 放宽到 1440×840（比例对齐参照的 2042×1191）+ 最小尺寸 960×600，退出登录门禁则收窄复原。触发点在 `main.dart` 的 `InoriMusicApp.build()` 里用 `ref.listen(authProvider, ...)` 比对过闸状态是否翻转——没有放进 `DesktopIntegration` 自己的初始化逻辑里，因为 `WidgetRef.listen` 只能在 widget 的 `build()` 方法内调用，`DesktopIntegration` 是个普通类不满足这个前提。
+- The phase output is version-tracked and verified locally（`flutter analyze --no-fatal-infos` 0 issues，`flutter test --no-pub` 113/113 通过）；窗口尺寸切换的实际观感（是否有初始尺寸闪烁、动画过渡是否顺滑）待远端 CI 构建后由用户实机确认。
 
 ### v5.12.1 - 2026-08-06
 
