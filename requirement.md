@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`5.19.0`
+`5.20.0`
 
 ## Product Goal
 
@@ -41,6 +41,16 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Committed lifecycle updates must record latest transition metadata for audit preparation.
 
 ## Requirement History
+
+### v5.20.0 - 2026-08-06
+
+- **feat: 歌词页深度重做（对标开源/商业播放器布局改进第四阶段，本批次收官）** — 呼应参考资料 EchoMusic"写真模式全屏歌词"与原音HQ"逐字歌词带可选着色器背景"。歌词页（`karaoke_screen.dart` 全屏视图 + `full_player_screen.dart` 的 `_LyricsPage` 内嵌 tab）此前背景都是纯色 `skinColors.background`/`surfaceVariant`，没有任何背景处理。
+- **新增共享组件 `LyricsBackground`**（`lib/src/lyrics/lyrics_background.dart`）：`Stack` 叠三层——底层皮肤纯色兜底、中层 `_BlurredArtwork`（`ImageFiltered(imageFilter: ImageFilter.blur(sigmaX: 40, sigmaY: 40))` 包裹的封面图，本地曲目走 `Image.file`（`localArtUri` 为 `file://` scheme），服务端曲目走 `artworkUrlProvider`，无封面/加载失败时返回 `SizedBox.shrink()` 让底层纯色透出）、顶层固定强度的渐变暗角（`context.skinColors.background` 从 55% 到 82% 不透明度，保证文字对比度不随随机专辑封面失控——用固定值而非重新做一次 WCAG 审计，跟 v5.18.0 标题栏材质的 `tint` 处理是同一个思路）。`karaoke_screen.dart` 的 `Scaffold.body` 与 `full_player_screen.dart` 的 `_LyricsPage` 都换成这个背景层打底，不再各自维护纯色背景。
+- **本地曲目内嵌歌词支持**：v5.19.0 已经把 `meta.lyrics`（内嵌 LRC/纯文本）落到 `LocalLibraryTrack.embeddedLyrics` 列，之前只落库没有消费。新增 `localLyricsProvider`（`lib/src/lyrics/local_lyrics_provider.dart`，结构参照 `lyrics_provider.dart` 但读 `LocalLibraryDb.query()` 而非网络请求）。核心分支逻辑抽成顶层纯函数 `parseEmbeddedLyrics(String? raw)`——先喂给现成的 `LrcParser.parse()`（零新解析逻辑），如果没有任何 `[mm:ss.xx]` 时间戳匹配（纯文本歌词标签的常见情况），回退成一整块 `timestamp: Duration.zero` 的单行"歌词"整体展示，不做逐字/逐行高亮（`Duration.zero` 恒小于等于任意播放位置，天然表现为"当前行永远激活"）。`full_player_screen.dart:_LyricsBody`（原 `_LyricsPage` 拆出的内层）与 `karaoke_screen.dart` 均按 `trackId.startsWith(localTrackIdPrefix)` 分流到 `localLyricsProvider`，本地曲目不再无条件显示"暂无歌词"。
+- **放开本地曲目的 Karaoke 入口**：`full_player_screen.dart` 顶部 Karaoke 图标按钮原先对所有 `local:` 前缀曲目一律禁用，现在改为按 `ref.watch(localLyricsProvider(trackId))` 的结果判断——只在本地曲目确实没有任何内嵌歌词标签时才禁用，有内嵌歌词（无论是否带时间戳）就能进全屏卡拉OK。只在 `isLocalTrack` 为真时才 watch 这个 provider，避免服务端曲目播放时多一次不必要的本地 DB 查询。
+- **非目标（已记录，不在本次做）**：EchoMusic/原音HQ 提到的桌面歌词悬浮窗（独立于主窗口、置顶显示）需要 `desktop_multi_window` 这类完全不同的多窗口技术栈，体量对得上单独一个 phase，本次不做。逐字动画本身（`ShaderMask` 渐变填充）已是同类产品主流实现，未改动。
+- The phase output is version-tracked and verified locally（`flutter analyze --no-fatal-infos` 0 issues；`flutter test --no-pub` 163/163 通过，含新增 `local_lyrics_provider_test.dart` 4 例，覆盖 `parseEmbeddedLyrics` 的 null/空白/LRC 时间戳/纯文本回退四种输入）。`LyricsBackground`/`LocalLyricsNotifier` 本身依赖 Riverpod provider 与文件系统/网络 I/O，跟 `_FullPlayerArtwork`/`lyricsProvider` 这些既有同类代码一样未写组件级测试——延续本仓库"纯逻辑抽函数测试、屏幕组件与 I/O 绑定的 provider 不测试"的既有边界（如 `karaoke_progress_test.dart` 只测 `activeLineIndex`/`wordProgress`，不测 `KaraokeScreen` 本身）。实际模糊背景观感、暗角对比度、本地曲目内嵌歌词能否正确解析显示——待远端 CI 构建后用户实机确认。
+- **对标开源/商业播放器布局改进四阶段（v5.17.0–v5.20.0）到此收官**：标题栏整合、Fluent Design 材质、本地曲库浏览增强+技术参数、歌词页重做均已完成。用户额外提出的"支持插件"在规划阶段已明确移出本批次（架构量级不匹配，需要独立规划），未来如需推进应另开一次规划对话。
 
 ### v5.19.0 - 2026-08-06
 
