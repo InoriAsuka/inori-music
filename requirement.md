@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`5.12.4`
+`5.13.0`
 
 ## Product Goal
 
@@ -41,6 +41,14 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Committed lifecycle updates must record latest transition metadata for audit preparation.
 
 ## Requirement History
+
+### v5.13.0 - 2026-08-06
+
+- **feat: Flutter 启动页 + 登录页视觉重做 + 自定义背景（三项客户端深度改造第二阶段）** — 承接 v5.12.0（游客本地播放）与用户三项诉求中的第二项。改造前 `router.dart` 鉴权校验期间实际展示的是 `LoginScreen` 本身（注释写着"show a splash"但从未真正实现过独立启动页），登录页是纯 `Scaffold→Center→Column` 无背景层，Logo 是 `Icons.music_note_rounded` 套色块。新增品牌视觉标识 `InoriMark`（`lib/src/shared/widgets/inori_mark.dart`）：`CustomPainter` 手绘一枚带缺口的樱花花瓣剪影（缺口是花瓣尖端的浅 V 形凹陷——这是让轮廓读作"樱花"而非泛用树叶/水滴图形的关键细节），两侧曲线刻意不对称避免过于工整的"矢量素材"观感，实心填充用樱粉渐变（`sakuraPinkLight → sakuraPinkDark`）+ 一道半透明白色内凹弧线（暗示声纹/唱片纹路，不用直白的音符图形）。该标识同时替换了登录页、新增的启动页、以及桌面侧边栏（`shell_scaffold.dart`）里各自独立的旧图标，统一为一套视觉身份。
+- **feat: 真正的启动页** — 新增 `AppRoutes.splash` + `SplashScreen`（`lib/src/shared/splash_screen.dart`），`router.dart` 的 `redirect` 在 `authState is AsyncLoading` 时导向 `/splash` 而非 `/login`。品牌标识 260ms 缩放 0.9→1.0 + 淡入（`Curves.easeOutCubic`），无交互控件。修复了一个随之浮现的路由逻辑缺口：启动页只在"鉴权校验中"这一瞬时态有效，鉴权结果一出来就必须离开，但原有的 `isLoginRoute` 判断只认 `/login`，如果照搬同一套规则，已登录/游客用户短暂停留在 `/splash` 时会因为无一条规则匹配而卡死在启动页——新增专门针对 `state.matchedLocation == AppRoutes.splash` 的分支，无条件按当前鉴权结果分流到 `/artists`、本地曲库或 `/login`，不复用登录页那套规则。
+- **feat: 登录页毛玻璃卡片 + 自定义背景（Settings）** — 品牌标识与「Inori Music」字样直接浮在背景之上（与启动页视觉呼应），表单收进新增的毛玻璃卡片（`BackdropFilter` 24px 高斯模糊 + `surface` 72% 不透明度打底 + 24 圆角 + `miniPlayerShadow` token 投影）——高不透明度叠加强模糊能在任意背景图片上都把既有樱花薄暮配色审计过的对比度基本保住，不需要为每张用户自选图片单独调整文字颜色。新增 `AppBackground`（`lib/src/shared/widgets/app_background.dart`）与 `backgroundProvider`（`lib/src/shared/background_provider.dart`），Settings → Appearance 新增「登录页背景」入口：`file_picker` 选图后**复制**进 App 自己的 `appearance/` 目录（v5.12.3 才吸取的教训——不复制、直接引用外部路径在 macOS 沙盒下有失效风险）持久化，透明度滑块限制在 0.1–0.8 区间防止极端值破坏可读性。
+- **非目标调整（相对最初规划的偏离，附理由）**：(1) 原计划给登录页做宽屏双栏布局（`LayoutBuilder` 按 600/1200dp 断点），但 v5.12.2 已经把登录/游客态的窗口锁定为固定 440×720 且不可调整大小，宽屏场景在正常操作下已不可达，继续做双栏布局是给一个不会发生的场景做设计，故取消，登录页只做单栏窄屏优化。(2) 原计划背景层挂在 `main.dart` 的 `MaterialApp.router(builder:...)` 单点包裹、对全部路由生效，实现前重新评估发现这会让"自定义背景"从"登录页背景"变成"全局重新蒙皮"——`ShellScaffold` 之下十几个既有页面全部构建在不透明 Sakura Dusk 表面上，逐一为任意用户图片重新审计对比度是数倍于本阶段的工作量且并非用户诉求原文所指。改为只在 `SplashScreen`/`LoginScreen` 各自内部使用 `AppBackground`，UI 文案也明确标注「登录页背景」而非笼统的"自定义背景"，把范围收窄到实际截图展示的场景。
+- The phase output is version-tracked and verified locally（`flutter analyze --no-fatal-infos` 0 issues；`flutter test --no-pub` 121/121 通过，含新增 `background_provider_test.dart` 8 例——`BackgroundSettings.copyWith` 与不透明度夹取逻辑，`BackgroundNotifier` 本身因触碰 `SharedPreferences`/文件 I/O 沿用本仓库既有惯例不直接测试）；视觉效果（启动页动效时长是否合适、毛玻璃卡片在真实背景图片上的实际观感、品牌标识渲染是否符合预期）待远端 CI 构建后由用户实机确认——本地无 Xcode 无法本地走查。
 
 ### v5.12.4 - 2026-08-06
 
