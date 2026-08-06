@@ -1,5 +1,8 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/auth/auth_notifier.dart';
@@ -17,6 +20,15 @@ late final InoriAudioHandler audioHandler;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // sqflite has no native implementation on Windows/Linux desktop — without
+  // this, the first OfflineDb/LocalLibraryDb call on those platforms throws
+  // "databaseFactory not initialized" (macOS/Android/iOS use sqflite's own
+  // native plugin and don't need this). Must run before anything touches a
+  // database, so this comes first in main().
+  if (Platform.isWindows || Platform.isLinux) {
+    sqfliteFfiInit();
+    databaseFactory = databaseFactoryFfi;
+  }
   // Initialize audio_service so background audio, lock-screen controls, and
   // OS media sessions are available before any widget is created.
   audioHandler = await InoriAudioHandler.create();

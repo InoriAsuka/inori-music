@@ -139,7 +139,18 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
         currentIndex: clampedIndex,
       );
       // Resolve all URLs for gapless playback via ConcatenatingAudioSource.
-      _buildConcatQueue(queueIds, index, url, trackId);
+      // Must be awaited — this is what actually calls _audioPlayer.setAudioSource
+      // for the queued-playback path (the single-track branch below only runs
+      // when there's no queue). This used to be fire-and-forget, racing against
+      // play() below: server tracks had enough other network latency in this
+      // function to usually mask the race, but local files resolve near-
+      // instantly (plain SQLite lookups, no network), so play() routinely won
+      // the race and fired with no audio source set at all — correct metadata/
+      // artwork (from _resolveTrack/_makeMediaItem below, unrelated to this),
+      // but silent playback stuck at 0:00. _buildConcatQueue resolves the
+      // queue's URLs in parallel so this await doesn't reintroduce a
+      // perceptible delay for long server playlists.
+      await _buildConcatQueue(queueIds, clampedIndex, url, trackId);
     }
 
     // Resolve real track metadata (title, artist, album, duration) from catalog.
@@ -160,32 +171,32 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
     await _audioPlayer.play();
   }
 
-  /// Asynchronously pre-resolves all queue URLs and calls [audioHandler.updateQueue]
-  /// so ConcatenatingAudioSource enables gapless transitions.
-  void _buildConcatQueue(List<String> queueIds, int startIndex, String resolvedUrl, String resolvedTrackId) {
-    Future<void>(() async {
-      final urls = <String>[];
-      for (final id in queueIds) {
-        if (id == resolvedTrackId) {
-          urls.add(resolvedUrl);
-        } else {
-          final u = await resolvePlaybackUrl(id);
-          urls.add(u ?? '');
-        }
-      }
-      // Filter out empty URLs but rebuild index accordingly.
-      final validPairs = <MapEntry<int, String>>[];
-      for (var i = 0; i < urls.length; i++) {
-        if (urls[i].isNotEmpty) validPairs.add(MapEntry(i, urls[i]));
-      }
-      if (validPairs.isEmpty) return;
-      await audioHandler.updateConcatQueue(validPairs.map((e) => e.value).toList());
-      // Seek to the correct position in the ConcatenatingAudioSource.
-      final concatIndex = validPairs.indexWhere((e) => e.key == startIndex);
-      if (concatIndex > 0) {
-        await _audioPlayer.seek(Duration.zero, index: concatIndex);
-      }
-    });
+  /// Pre-resolves all queue URLs (in parallel — this is awaited by [playTrack]
+  /// before it calls play(), so a long queue must not turn into N sequential
+  /// round trips) and calls [audioHandler.updateConcatQueue] so
+  /// ConcatenatingAudioSource enables gapless transitions.
+  Future<void> _buildConcatQueue(
+    List<String> queueIds,
+    int startIndex,
+    String resolvedUrl,
+    String resolvedTrackId,
+  ) async {
+    final urls = await Future.wait(queueIds.map((id) async {
+      if (id == resolvedTrackId) return resolvedUrl;
+      return await resolvePlaybackUrl(id) ?? '';
+    }));
+    // Filter out empty URLs but rebuild index accordingly.
+    final validPairs = <MapEntry<int, String>>[];
+    for (var i = 0; i < urls.length; i++) {
+      if (urls[i].isNotEmpty) validPairs.add(MapEntry(i, urls[i]));
+    }
+    if (validPairs.isEmpty) return;
+    await audioHandler.updateConcatQueue(validPairs.map((e) => e.value).toList());
+    // Seek to the correct position in the ConcatenatingAudioSource.
+    final concatIndex = validPairs.indexWhere((e) => e.key == startIndex);
+    if (concatIndex > 0) {
+      await _audioPlayer.seek(Duration.zero, index: concatIndex);
+    }
   }
 
   /// Play a list of track IDs starting at [initialIndex].
