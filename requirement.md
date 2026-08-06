@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`5.15.0`
+`5.15.1`
 
 ## Product Goal
 
@@ -41,6 +41,15 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Committed lifecycle updates must record latest transition metadata for audit preparation.
 
 ## Requirement History
+
+### v5.15.1 - 2026-08-06
+
+- **fix: 桌面自定义标题栏在 macOS/Windows 上均未生效** — 用户下载 v5.15.0 构建实机验证，反馈两个平台窗体"看起来跟以前一样"。根因定位（对照 `window_manager` 官方 example app 的原生 runner 文件逐行核实，非猜测）：
+  - **macOS**：`macos/Runner/MainFlutterWindow.swift` 从 v3 阶段创建以来从未改过，缺少 `window_manager` 官方 example 里的 `override public func order(_:relativeTo:) { super.order(...); hiddenWindowAtLaunch() }`。没有这个覆写，AppKit 在 nib 加载阶段的默认"启动时可见"行为会在 Dart 侧 `windowManager.waitUntilReadyToShow()` 有机会应用 `titleBarStyle`/`windowButtonVisibility` 之前，就把窗口以默认原生标题栏样式显示出来——`AppTitleBar`（v5.15.0 新增）等于从没真正生效过。`hiddenWindowAtLaunch()` 是 `window_manager` 包自带的 `NSWindow` extension 方法（`setIsVisible(false)` 的一次性调用），补上这一个覆写即可让窗口按 `waitUntilReadyToShow` 的预期保持隐藏直到 Dart 侧显式调用 `show()`。
+  - **Windows**：`windows/runner/flutter_window.cpp` 的 `OnCreate()` 里有一段 `flutter_controller_->engine()->SetNextFrameCallback([&]() { this->Show(); })` + `ForceRedraw()`——`git log --follow` 确认这是 v3 阶段 `flutter create` 生成后从未被改动过的原始脚手架代码，早于 `window_manager` 在 v5.12.2 引入。这段代码会在 Flutter 首帧渲染完成的瞬间就无条件调用 `this->Show()`，与 Dart 侧 `windowManager.waitUntilReadyToShow()` 想要控制的"配置好 `WindowOptions`（含 `titleBarStyle`）之后才显示"顺序形成竞态——`Win32Window::Create()` 本身不会主动显示窗口（只有 `WS_OVERLAPPEDWINDOW` 但没有 `WS_VISIBLE`），核实 `window_manager` 的 Windows 插件源码确认 `windowManager.show()`（Dart 侧显式调用）本来就会对同一个 HWND 调用 `ShowWindowAsync`，这段脚手架代码是多余且有害的冗余触发。删除后与 `window_manager` 官方 example 的 `flutter_window.cpp` 完全一致（该文件没有这段回调）。
+  - 这条 bug 很可能同时也是 v5.12.2 窗口尺寸功能"在 Windows 上从未被真正验证过"的同一根因——用户此前所有实机验证均在 macOS 上进行，Windows 构建直到 v5.13.0 才第一次被人工运行。
+- 两处都是原生 runner 文件改动（Swift / C++），本地没有 Xcode/Windows 工具链无法编译验证，只能靠远端 CI 的 `Build macOS`/`Build Windows` job 真实编译来兜底——如果这两个改动有语法或逻辑问题，会在 CI 阶段直接暴露，而不是留到用户手动验证时才发现。
+- The phase output is version-tracked; Dart 侧无改动，`flutter analyze`/`flutter test` 分别保持 0 issues / 149/149（与 v5.15.0 一致，仅为存量结果复核）。窗体是否真正显示自定义标题栏、拖拽/双击最大化还原是否正常——待远端 CI 构建后由用户实机确认。
 
 ### v5.15.0 - 2026-08-06
 
