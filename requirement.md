@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`5.18.0`
+`5.19.0`
 
 ## Product Goal
 
@@ -41,6 +41,15 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Committed lifecycle updates must record latest transition metadata for audit preparation.
 
 ## Requirement History
+
+### v5.19.0 - 2026-08-06
+
+- **feat: 本地曲库浏览增强 + 技术参数展示（对标开源/商业播放器布局改进第三阶段）** — 呼应参考资料"原音HQ播放器"（播放页实时展示采样率/码率/文件格式）。核实 `audio_metadata_reader` 包源码（`lib/src/parsers/tags/tag_parser.dart`）确认 `_importOne` 早就在用的 `AudioMetadata` 对象本来就带 `bitrate`（int?，单位 bps）、`sampleRate`（int?，单位 Hz）、`genres`（`List<String>`）、`trackNumber`、`lyrics`（内嵌 LRC/纯文本）字段——此前只取了 `title/artist/album/duration/pictures`，其余字段解析出来后直接丢弃。本次是纯粹的"接上已经解析出来的数据"，没有新增任何解析逻辑。
+- **`local_library_db.dart` schema v1→v2 迁移**：`LocalLibraryTrack` 新增 6 个可空字段（`sampleRate`/`bitrate`/`fileFormat`/`genre`/`trackNumber`/`embeddedLyrics`），`_open()` 的 `openDatabase` 加 `version: 2` 与 `onUpgrade`（`oldVersion < 2` 时执行 6 条 `ALTER TABLE ADD COLUMN`）。已导入的旧记录这些新列落地为 `NULL`，不强制、也没有能力重新触发已丢失原始文件访问权限的重新导入——`LocalLibraryTrack.fromMap()`/UI 侧一律把 `null` 当作"未知"处理，不是待修的 bug。`file_format` 不是从标签读的，是从源文件扩展名推导大写字符串（如 `FLAC`）——与其在少数没写规范 tag 的文件上得到错误的容器格式，不如直接用文件系统事实。
+- **曲库列表排序**：新增 `LocalLibrarySortOrder`（艺术家/专辑/标题、最近导入、标题 A-Z、时长）与顶层纯函数 `localLibraryOrderByClause()`（不内联进 `queryAll`，是为了能在不碰 sqflite/平台通道的情况下单独测试）。排序选择通过新增 `localLibrarySortProvider`（`shared_preferences` 持久化，模式与既有 provider 一致）持久化；`LocalLibraryNotifier.build()` 用 `ref.watch`（不是 `ref.read`）监听这个 provider，切换排序自动触发重新查询，两处手动刷新 state 的调用点（`_importPaths`/`remove`）同步传入当前排序维度，避免刷新后又跳回默认排序。入口 UI 复用 `settings_screen.dart` 现成的"底部弹层单选列表"范式，而不是新写一套选择器组件。
+- **技术参数展示位置分层**：曲库列表行（`_LocalTrackTile`）只加一个紧凑的格式徽标（`_FormatBadge`，如"FLAC"）；完整参数（格式/采样率/码率/文件大小/流派）放在播放页——`full_player_screen.dart` 新增一个仅本地曲目（`local:` 前缀）可见的详情图标按钮，点开一个底部弹层列出 label/value 行。核实 `audio_metadata_reader` 的 `mp3.dart` 解析器源码确认 `bitrate` 字段单位是 bps（如标准"320"码率的 MP3 值为 320000），展示前除以 1000 转换为 kbps，采样率同理除以 1000 转换为 kHz——没有假设包的字段单位，读源码逐一核实后再写格式化逻辑。
+- **测试**：新增 `local_library_db_test.dart`（6 例：4 个排序枚举值各自的 `ORDER BY` 子句、`LocalLibraryTrack.toMap()/fromMap()` 完整字段往返、模拟 v5.19.0 迁移前的旧记录 map（缺少新增列的 key）还原为全 `null`）。踩坑记录：`fromMap()` 用 `DateTime.fromMillisecondsSinceEpoch()`（不带 `isUtc: true`）还原本地时区 `DateTime`，直接拿去跟测试夹具的 `DateTime.utc(...)` 做 `==` 比较会失败——两者代表同一时刻但 `isUtc` 标志不同，Dart 的 `DateTime.==` 把这个也纳入比较。这是 v5.12.0 就存在的既有行为，不是本次改动引入的问题，因此修的是测试断言（改成比较 `.millisecondsSinceEpoch`）而不是生产代码。
+- The phase output is version-tracked and verified locally（`flutter analyze --no-fatal-infos` 0 issues；`flutter test --no-pub` 159/159 通过，含新增 6 例）。实际重新导入曲目后列表格式徽标显示、排序切换效果、播放页详情面板数值是否正确——本地无法驱动真实文件选择器/播放，待远端 CI 构建后用户实机确认。
 
 ### v5.18.0 - 2026-08-06
 
