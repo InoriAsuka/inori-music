@@ -6,9 +6,43 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import 'package:inori_music/src/local_library/local_library_db.dart';
+
+const _kLocalLibrarySortKey = 'localLibrary.sortOrder';
+
+final localLibrarySortProvider =
+    NotifierProvider<LocalLibrarySortNotifier, LocalLibrarySortOrder>(
+      LocalLibrarySortNotifier.new,
+    );
+
+/// Persists the flat-list sort dimension shown in Settings' local library
+/// sort sheet (see local_library_screen.dart). [LocalLibraryNotifier] watches
+/// this so changing it automatically re-queries in the new order.
+class LocalLibrarySortNotifier extends Notifier<LocalLibrarySortOrder> {
+  @override
+  LocalLibrarySortOrder build() {
+    _restore();
+    return LocalLibrarySortOrder.artistAlbumTitle;
+  }
+
+  Future<void> _restore() async {
+    final prefs = await SharedPreferences.getInstance();
+    final raw = prefs.getString(_kLocalLibrarySortKey);
+    state = LocalLibrarySortOrder.values.firstWhere(
+      (s) => s.name == raw,
+      orElse: () => LocalLibrarySortOrder.artistAlbumTitle,
+    );
+  }
+
+  Future<void> setSort(LocalLibrarySortOrder sort) async {
+    state = sort;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_kLocalLibrarySortKey, sort.name);
+  }
+}
 
 /// Prefix marking a track id as locally-imported (guest mode / no account).
 /// [PlayerNotifier] branches on this prefix at the handful of trackId-keyed
@@ -18,19 +52,35 @@ const localTrackIdPrefix = 'local:';
 /// Audio container extensions [audio_metadata_reader] (and just_audio) can
 /// handle. Lowercase, no leading dot.
 const supportedLocalAudioExtensions = [
-  'mp3', 'flac', 'm4a', 'mp4', 'ogg', 'oga', 'opus', 'wav', 'aiff', 'aif', 'ape',
+  'mp3',
+  'flac',
+  'm4a',
+  'mp4',
+  'ogg',
+  'oga',
+  'opus',
+  'wav',
+  'aiff',
+  'aif',
+  'ape',
 ];
 
-final localLibraryProvider = AsyncNotifierProvider<LocalLibraryNotifier, List<LocalLibraryTrack>>(
-  LocalLibraryNotifier.new,
-);
+final localLibraryProvider =
+    AsyncNotifierProvider<LocalLibraryNotifier, List<LocalLibraryTrack>>(
+      LocalLibraryNotifier.new,
+    );
 
 /// Owns the "guest local library": importing files/folders, extracting
 /// embedded metadata, and persisting to [LocalLibraryDb]. Pure client-side,
 /// no server/account involvement — this is what makes guest mode usable.
 class LocalLibraryNotifier extends AsyncNotifier<List<LocalLibraryTrack>> {
   @override
-  Future<List<LocalLibraryTrack>> build() => LocalLibraryDb.instance.queryAll();
+  Future<List<LocalLibraryTrack>> build() {
+    // Watched (not read) so changing the sort preference elsewhere
+    // automatically re-triggers this build and re-queries in the new order.
+    final sort = ref.watch(localLibrarySortProvider);
+    return LocalLibraryDb.instance.queryAll(sort: sort);
+  }
 
   /// Opens a multi-file picker filtered to supported audio extensions.
   Future<void> importFiles() async {
@@ -50,7 +100,9 @@ class LocalLibraryNotifier extends AsyncNotifier<List<LocalLibraryTrack>> {
     final dirPath = await FilePicker.platform.getDirectoryPath();
     if (dirPath == null) return;
     final paths = <String>[];
-    await for (final entity in Directory(dirPath).list(recursive: true, followLinks: false)) {
+    await for (final entity in Directory(
+      dirPath,
+    ).list(recursive: true, followLinks: false)) {
       if (entity is! File) continue;
       final ext = p.extension(entity.path).replaceFirst('.', '').toLowerCase();
       if (supportedLocalAudioExtensions.contains(ext)) paths.add(entity.path);
@@ -69,10 +121,18 @@ class LocalLibraryNotifier extends AsyncNotifier<List<LocalLibraryTrack>> {
         debugPrint('LocalLibrary: failed to import $path: $e');
       }
     }
-    state = AsyncData(await LocalLibraryDb.instance.queryAll());
+    state = AsyncData(
+      await LocalLibraryDb.instance.queryAll(
+        sort: ref.read(localLibrarySortProvider),
+      ),
+    );
   }
 
-  Future<void> _importOne(String path, Directory audioDir, Directory coverDir) async {
+  Future<void> _importOne(
+    String path,
+    Directory audioDir,
+    Directory coverDir,
+  ) async {
     final sourceFile = File(path);
     if (!sourceFile.existsSync()) return;
     // Read tags from the original picked file first (that access is only
@@ -87,7 +147,9 @@ class LocalLibraryNotifier extends AsyncNotifier<List<LocalLibraryTrack>> {
     // attempt reopening the *original* path can silently fail (metadata
     // reads fine here, but the track never actually plays). Owning a copy
     // also survives the user later moving/renaming/deleting the source file.
-    final copiedFile = await sourceFile.copy(p.join(audioDir.path, '$id${p.extension(path)}'));
+    final copiedFile = await sourceFile.copy(
+      p.join(audioDir.path, '$id${p.extension(path)}'),
+    );
 
     String? coverPath;
     if (meta.pictures.isNotEmpty) {
@@ -99,17 +161,33 @@ class LocalLibraryNotifier extends AsyncNotifier<List<LocalLibraryTrack>> {
     }
 
     final title = meta.title?.trim();
-    await LocalLibraryDb.instance.insert(LocalLibraryTrack(
-      id: id,
-      title: (title == null || title.isEmpty) ? p.basenameWithoutExtension(path) : title,
-      artistName: meta.artist?.trim() ?? '',
-      albumTitle: meta.album?.trim() ?? '',
-      localPath: copiedFile.path,
-      durationMs: meta.duration?.inMilliseconds,
-      coverArtPath: coverPath,
-      sizeBytes: await copiedFile.length(),
-      importedAt: DateTime.now(),
-    ));
+    final genre = meta.genres.isNotEmpty ? meta.genres.first : null;
+    final ext = p.extension(path).replaceFirst('.', '');
+    await LocalLibraryDb.instance.insert(
+      LocalLibraryTrack(
+        id: id,
+        title: (title == null || title.isEmpty)
+            ? p.basenameWithoutExtension(path)
+            : title,
+        artistName: meta.artist?.trim() ?? '',
+        albumTitle: meta.album?.trim() ?? '',
+        localPath: copiedFile.path,
+        durationMs: meta.duration?.inMilliseconds,
+        coverArtPath: coverPath,
+        sizeBytes: await copiedFile.length(),
+        importedAt: DateTime.now(),
+        // These were already sitting on `meta` before v5.19.0 — readMetadata()
+        // parses them regardless, they just weren't being kept.
+        sampleRate: meta.sampleRate,
+        bitrate: meta.bitrate,
+        fileFormat: ext.isEmpty ? null : ext.toUpperCase(),
+        genre: (genre != null && genre.trim().isNotEmpty) ? genre.trim() : null,
+        trackNumber: meta.trackNumber,
+        embeddedLyrics: (meta.lyrics != null && meta.lyrics!.trim().isNotEmpty)
+            ? meta.lyrics
+            : null,
+      ),
+    );
   }
 
   Future<Directory> _localLibraryDir(String subdir) async {
@@ -131,6 +209,10 @@ class LocalLibraryNotifier extends AsyncNotifier<List<LocalLibraryTrack>> {
         if (coverFile.existsSync()) await coverFile.delete();
       }
     }
-    state = AsyncData(await LocalLibraryDb.instance.queryAll());
+    state = AsyncData(
+      await LocalLibraryDb.instance.queryAll(
+        sort: ref.read(localLibrarySortProvider),
+      ),
+    );
   }
 }

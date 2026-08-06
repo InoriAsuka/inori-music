@@ -47,6 +47,11 @@ class LocalLibraryScreen extends ConsumerWidget {
             ],
           ),
           IconButton(
+            icon: const Icon(Icons.sort),
+            tooltip: '排序',
+            onPressed: () => _showSortSheet(context, ref),
+          ),
+          IconButton(
             icon: const Icon(Icons.settings_outlined),
             tooltip: '设置',
             onPressed: () => context.push(AppRoutes.settings),
@@ -108,6 +113,54 @@ class LocalLibraryScreen extends ConsumerWidget {
     if (confirmed == true) {
       await ref.read(localLibraryProvider.notifier).remove(track.id);
     }
+  }
+
+  static String _sortLabel(LocalLibrarySortOrder sort) => switch (sort) {
+    LocalLibrarySortOrder.artistAlbumTitle => '艺术家 / 专辑 / 标题',
+    LocalLibrarySortOrder.recentlyAdded => '最近导入',
+    LocalLibrarySortOrder.titleAZ => '标题 A-Z',
+    LocalLibrarySortOrder.duration => '时长',
+  };
+
+  Future<void> _showSortSheet(BuildContext context, WidgetRef ref) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: context.skinColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => Consumer(
+        builder: (ctx, ref, _) {
+          final current = ref.watch(localLibrarySortProvider);
+          return SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    '排序方式',
+                    style: Theme.of(ctx).textTheme.headlineSmall,
+                  ),
+                ),
+                const Divider(height: 1),
+                for (final sort in LocalLibrarySortOrder.values)
+                  ListTile(
+                    title: Text(_sortLabel(sort)),
+                    leading: current == sort
+                        ? Icon(Icons.check, color: ctx.skinColors.sakuraPink)
+                        : const SizedBox(width: 24),
+                    onTap: () {
+                      ref.read(localLibrarySortProvider.notifier).setSort(sort);
+                      Navigator.pop(ctx);
+                    },
+                  ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
   }
 }
 
@@ -212,9 +265,10 @@ class _LocalTrackTile extends StatelessWidget {
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
+          if (track.fileFormat != null) _FormatBadge(format: track.fileFormat!),
           if (isCurrent && isPlaying)
             Padding(
-              padding: const EdgeInsets.only(right: 4),
+              padding: const EdgeInsets.only(left: 6),
               child: Icon(
                 Icons.equalizer,
                 color: context.skinColors.sakuraPinkLight,
@@ -238,6 +292,38 @@ class _LocalTrackTile extends StatelessWidget {
     final mins = d.inMinutes;
     final secs = d.inSeconds % 60;
     return '$mins:${secs.toString().padLeft(2, '0')}';
+  }
+}
+
+/// Compact file-format hint (e.g. "FLAC") — the list row equivalent of the
+/// full technical-detail panel on the player screen. Only shown for tracks
+/// imported after v5.19.0 added the capture (older rows have a null format).
+class _FormatBadge extends StatelessWidget {
+  const _FormatBadge({required this.format});
+  final String format;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(right: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: context.skinColors.surfaceContainer,
+        borderRadius: BorderRadius.circular(4),
+        border: Border.all(
+          color: context.skinColors.outlineVariant,
+          width: 0.5,
+        ),
+      ),
+      child: Text(
+        format,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          color: context.skinColors.onSurfaceVariant,
+        ),
+      ),
+    );
   }
 }
 

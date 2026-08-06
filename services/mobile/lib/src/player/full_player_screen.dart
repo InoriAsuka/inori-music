@@ -9,7 +9,9 @@ import 'package:inori_music/src/audio/sleep_timer_notifier.dart';
 import 'package:inori_music/src/audio/speed_notifier.dart';
 import 'package:inori_music/src/catalog/artwork_provider.dart';
 import 'package:inori_music/src/favorites/track_favorite_notifier.dart';
-import 'package:inori_music/src/local_library/local_library_notifier.dart' show localTrackIdPrefix;
+import 'package:inori_music/src/local_library/local_library_db.dart';
+import 'package:inori_music/src/local_library/local_library_notifier.dart'
+    show localTrackIdPrefix;
 import 'package:inori_music/src/lyrics/bilingual_lyrics_notifier.dart';
 import 'package:inori_music/src/lyrics/lyric_line.dart';
 import 'package:inori_music/src/lyrics/lyrics_provider.dart';
@@ -61,7 +63,11 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
               child: Row(
                 children: [
                   IconButton(
-                    icon: Icon(Icons.keyboard_arrow_down, size: 32, color: context.skinColors.onBackground),
+                    icon: Icon(
+                      Icons.keyboard_arrow_down,
+                      size: 32,
+                      color: context.skinColors.onBackground,
+                    ),
                     tooltip: 'Close player',
                     onPressed: () => Navigator.of(context).maybePop(),
                   ),
@@ -69,26 +75,51 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                     child: Text(
                       'Now Playing',
                       textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: context.skinColors.onSurfaceVariant),
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: context.skinColors.onSurfaceVariant,
+                      ),
                     ),
                   ),
                   IconButton(
-                    icon: Icon(Icons.queue_music, color: context.skinColors.onSurfaceVariant),
+                    icon: Icon(
+                      Icons.queue_music,
+                      color: context.skinColors.onSurfaceVariant,
+                    ),
                     tooltip: 'Queue',
                     onPressed: () => _showQueueSheet(context, ref),
                   ),
                   IconButton(
-                    icon: Icon(Icons.mic_external_on, color: context.skinColors.onSurfaceVariant),
+                    icon: Icon(
+                      Icons.mic_external_on,
+                      color: context.skinColors.onSurfaceVariant,
+                    ),
                     tooltip: 'Karaoke',
-                    onPressed: (trackId.isEmpty || trackId.startsWith(localTrackIdPrefix))
+                    onPressed:
+                        (trackId.isEmpty ||
+                            trackId.startsWith(localTrackIdPrefix))
                         ? null
                         : () => Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => const KaraokeScreen(),
-                                fullscreenDialog: true,
-                              ),
+                            MaterialPageRoute<void>(
+                              builder: (_) => const KaraokeScreen(),
+                              fullscreenDialog: true,
                             ),
+                          ),
                   ),
+                  // Technical detail (sample rate/bitrate/format) — only
+                  // meaningful for local files; the server catalog has no
+                  // equivalent metadata to show (out of scope, see
+                  // requirement.md v5.19.0).
+                  if (trackId.startsWith(localTrackIdPrefix))
+                    IconButton(
+                      icon: Icon(
+                        Icons.info_outline,
+                        color: context.skinColors.onSurfaceVariant,
+                      ),
+                      tooltip: '详情',
+                      onPressed: () => _showLocalTrackDetails(context, trackId),
+                    ),
                   // EQ icon button
                   Consumer(
                     builder: (ctx, ref2, _) {
@@ -101,7 +132,9 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                               : context.skinColors.onSurfaceVariant,
                         ),
                         tooltip: 'Equalizer',
-                        onPressed: () => ref2.read(eqNotifierProvider.notifier).setEnabled(!eqEnabled),
+                        onPressed: () => ref2
+                            .read(eqNotifierProvider.notifier)
+                            .setEnabled(!eqEnabled),
                       );
                     },
                   ),
@@ -128,7 +161,9 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                       borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: context.skinColors.sakuraPink.withValues(alpha: 0.15),
+                          color: context.skinColors.sakuraPink.withValues(
+                            alpha: 0.15,
+                          ),
                           blurRadius: 32,
                           offset: const Offset(0, 8),
                         ),
@@ -160,7 +195,9 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                   decoration: BoxDecoration(
                     color: _pageIndex == i
                         ? context.skinColors.sakuraPink
-                        : context.skinColors.onSurfaceVariant.withValues(alpha: 0.4),
+                        : context.skinColors.onSurfaceVariant.withValues(
+                            alpha: 0.4,
+                          ),
                     borderRadius: BorderRadius.circular(3),
                   ),
                 );
@@ -176,7 +213,11 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                 children: [
                   Text(
                     state.mediaItem?.title ?? 'Unknown Track',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: context.skinColors.onBackground),
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w700,
+                      color: context.skinColors.onBackground,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
@@ -184,7 +225,10 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                   const SizedBox(height: 4),
                   Text(
                     state.mediaItem?.artist ?? '',
-                    style: TextStyle(fontSize: 15, color: context.skinColors.onSurfaceVariant),
+                    style: TextStyle(
+                      fontSize: 15,
+                      color: context.skinColors.onSurfaceVariant,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,
@@ -203,24 +247,30 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                   SliderTheme(
                     data: SliderTheme.of(context).copyWith(
                       trackHeight: 3,
-                      thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
-                      overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+                      thumbShape: const RoundSliderThumbShape(
+                        enabledThumbRadius: 6,
+                      ),
+                      overlayShape: const RoundSliderOverlayShape(
+                        overlayRadius: 14,
+                      ),
                     ),
                     child: Slider(
                       value: isBuffering
                           ? 0
                           : state.position.inMilliseconds.toDouble().clamp(
-                                0,
-                                state.duration.inMilliseconds.toDouble() > 0
-                                    ? state.duration.inMilliseconds.toDouble()
-                                    : 1,
-                              ),
+                              0,
+                              state.duration.inMilliseconds.toDouble() > 0
+                                  ? state.duration.inMilliseconds.toDouble()
+                                  : 1,
+                            ),
                       max: state.duration.inMilliseconds.toDouble() > 0
                           ? state.duration.inMilliseconds.toDouble()
                           : 1,
                       onChanged: isBuffering
                           ? null
-                          : (v) => ref.read(playerProvider.notifier).seekTo(Duration(milliseconds: v.toInt())),
+                          : (v) => ref
+                                .read(playerProvider.notifier)
+                                .seekTo(Duration(milliseconds: v.toInt())),
                     ),
                   ),
                   Padding(
@@ -228,8 +278,20 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(_formatDuration(state.position), style: TextStyle(fontSize: 12, color: context.skinColors.onSurfaceVariant)),
-                        Text(_formatDuration(state.duration), style: TextStyle(fontSize: 12, color: context.skinColors.onSurfaceVariant)),
+                        Text(
+                          _formatDuration(state.position),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: context.skinColors.onSurfaceVariant,
+                          ),
+                        ),
+                        Text(
+                          _formatDuration(state.duration),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: context.skinColors.onSurfaceVariant,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -246,7 +308,9 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                   IconButton(
                     icon: Icon(
                       Icons.repeat,
-                      color: state.repeat != ps.RepeatMode.none ? context.skinColors.sakuraPinkLight : context.skinColors.onSurfaceVariant,
+                      color: state.repeat != ps.RepeatMode.none
+                          ? context.skinColors.sakuraPinkLight
+                          : context.skinColors.onSurfaceVariant,
                     ),
                     onPressed: () {
                       final notifier = ref.read(playerProvider.notifier);
@@ -270,16 +334,25 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                       return IconButton(
                         icon: Icon(
                           Icons.shuffle,
-                          color: isShuffle ? context.skinColors.sakuraPinkLight : context.skinColors.onSurfaceVariant,
+                          color: isShuffle
+                              ? context.skinColors.sakuraPinkLight
+                              : context.skinColors.onSurfaceVariant,
                         ),
-                        onPressed: () => ref2.read(playerProvider.notifier).setShuffle(!isShuffle),
+                        onPressed: () => ref2
+                            .read(playerProvider.notifier)
+                            .setShuffle(!isShuffle),
                         tooltip: 'Shuffle',
                       );
                     },
                   ),
                   IconButton(
-                    icon: Icon(Icons.skip_previous, size: 36, color: context.skinColors.onSurface),
-                    onPressed: () => ref.read(playerProvider.notifier).previous(),
+                    icon: Icon(
+                      Icons.skip_previous,
+                      size: 36,
+                      color: context.skinColors.onSurface,
+                    ),
+                    onPressed: () =>
+                        ref.read(playerProvider.notifier).previous(),
                   ),
                   // Play / Pause button
                   Container(
@@ -289,15 +362,27 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                     ),
                     child: IconButton(
                       icon: Icon(
-                        isBuffering ? Icons.play_arrow_rounded : (isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded),
+                        isBuffering
+                            ? Icons.play_arrow_rounded
+                            : (isPlaying
+                                  ? Icons.pause_rounded
+                                  : Icons.play_arrow_rounded),
                         size: 36,
                         color: Colors.white,
                       ),
-                      onPressed: isBuffering ? null : () => ref.read(playerProvider.notifier).togglePlayPause(),
+                      onPressed: isBuffering
+                          ? null
+                          : () => ref
+                                .read(playerProvider.notifier)
+                                .togglePlayPause(),
                     ),
                   ),
                   IconButton(
-                    icon: Icon(Icons.skip_next, size: 36, color: context.skinColors.onSurface),
+                    icon: Icon(
+                      Icons.skip_next,
+                      size: 36,
+                      color: context.skinColors.onSurface,
+                    ),
                     onPressed: () => ref.read(playerProvider.notifier).next(),
                   ),
                   // Speed control button
@@ -306,7 +391,10 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                       final speed = ref.watch(speedNotifierProvider);
                       return TextButton(
                         onPressed: () => _showSpeedSheet(context, ref),
-                        child: Text('$speed×', style: const TextStyle(fontSize: 14)),
+                        child: Text(
+                          '$speed×',
+                          style: const TextStyle(fontSize: 14),
+                        ),
                       );
                     },
                   ),
@@ -329,28 +417,33 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                   ),
                   // Favorite button — wrapped in Consumer so icon and onPressed
                   // always use the same live trackId from the reactive ref.
-                  Consumer(builder: (context2, ref2, child2) {
-                    final trackId = ref2.watch(playerProvider).mediaItem?.id;
-                    // Local (guest-mode) tracks have no server-side favorite state.
-                    final isLocal = trackId?.startsWith(localTrackIdPrefix) ?? false;
-                    final isFav = (trackId != null && !isLocal)
-                        ? ref2.watch(trackFavoriteProvider(trackId))
-                        : false;
-                    return IconButton(
-                      icon: Icon(
-                        isFav ? Icons.favorite : Icons.favorite_border,
-                        color: isFav
-                            ? context.skinColors.accentPink
-                            : (trackId != null && !isLocal
-                                ? context.skinColors.onSurface
-                                : context.skinColors.onSurfaceVariant),
-                      ),
-                      onPressed: (trackId == null || isLocal)
-                          ? null
-                          : () => ref2.read(trackFavoriteProvider(trackId).notifier).toggle(),
-                      tooltip: 'Favorite',
-                    );
-                  }),
+                  Consumer(
+                    builder: (context2, ref2, child2) {
+                      final trackId = ref2.watch(playerProvider).mediaItem?.id;
+                      // Local (guest-mode) tracks have no server-side favorite state.
+                      final isLocal =
+                          trackId?.startsWith(localTrackIdPrefix) ?? false;
+                      final isFav = (trackId != null && !isLocal)
+                          ? ref2.watch(trackFavoriteProvider(trackId))
+                          : false;
+                      return IconButton(
+                        icon: Icon(
+                          isFav ? Icons.favorite : Icons.favorite_border,
+                          color: isFav
+                              ? context.skinColors.accentPink
+                              : (trackId != null && !isLocal
+                                    ? context.skinColors.onSurface
+                                    : context.skinColors.onSurfaceVariant),
+                        ),
+                        onPressed: (trackId == null || isLocal)
+                            ? null
+                            : () => ref2
+                                  .read(trackFavoriteProvider(trackId).notifier)
+                                  .toggle(),
+                        tooltip: 'Favorite',
+                      );
+                    },
+                  ),
                 ],
               ),
             ),
@@ -372,8 +465,10 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
           children: [
             const Padding(
               padding: EdgeInsets.all(16),
-              child: Text('睡眠定时器',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              child: Text(
+                '睡眠定时器',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
             ),
             for (final mins in [15, 30, 45, 60])
               ListTile(
@@ -394,8 +489,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
             ),
             if (timerActive)
               ListTile(
-                title: const Text('取消定时器',
-                    style: TextStyle(color: Colors.red)),
+                title: const Text('取消定时器', style: TextStyle(color: Colors.red)),
                 onTap: () {
                   ref.read(sleepTimerProvider.notifier).cancel();
                   Navigator.pop(context);
@@ -417,7 +511,10 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
           children: [
             const Padding(
               padding: EdgeInsets.all(16),
-              child: Text('播放速度', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              child: Text(
+                '播放速度',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
             ),
             for (final s in speedPresets)
               ListTile(
@@ -428,6 +525,81 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                   Navigator.pop(context);
                 },
               ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showLocalTrackDetails(
+    BuildContext context,
+    String trackId,
+  ) async {
+    final track = await LocalLibraryDb.instance.query(trackId);
+    if (!context.mounted) return;
+    final rows = <(String, String)>[
+      ('格式', track?.fileFormat ?? '未知'),
+      (
+        '采样率',
+        track?.sampleRate != null
+            ? '${(track!.sampleRate! / 1000).toStringAsFixed(1)} kHz'
+            : '未知',
+      ),
+      // bitrate is stored in bps (audio_metadata_reader's own unit) — kbps
+      // is what listeners actually recognize (e.g. "320" for MP3).
+      (
+        '码率',
+        track?.bitrate != null
+            ? '${(track!.bitrate! / 1000).round()} kbps'
+            : '未知',
+      ),
+      (
+        '文件大小',
+        track != null
+            ? '${(track.sizeBytes / (1024 * 1024)).toStringAsFixed(1)} MB'
+            : '未知',
+      ),
+      if (track?.genre != null) ('流派', track!.genre!),
+    ];
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: context.skinColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text('曲目详情', style: Theme.of(ctx).textTheme.headlineSmall),
+            ),
+            const Divider(height: 1),
+            for (final (label, value) in rows)
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 10,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        label,
+                        style: TextStyle(
+                          color: ctx.skinColors.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      value,
+                      style: TextStyle(color: ctx.skinColors.onSurface),
+                    ),
+                  ],
+                ),
+              ),
+            const SizedBox(height: 8),
           ],
         ),
       ),
@@ -463,7 +635,11 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                 padding: const EdgeInsets.all(12),
                 child: Text(
                   'Queue',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: context.skinColors.onBackground),
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: context.skinColors.onBackground,
+                  ),
                 ),
               ),
               Expanded(
@@ -476,7 +652,9 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                       scrollController: controller,
                       itemCount: queue.length,
                       onReorderItem: (oldIdx, newIdx) {
-                        ref2.read(playerProvider.notifier).reorderQueue(oldIdx, newIdx);
+                        ref2
+                            .read(playerProvider.notifier)
+                            .reorderQueue(oldIdx, newIdx);
                       },
                       itemBuilder: (_, i) {
                         final item = queue[i];
@@ -485,29 +663,50 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                           key: ValueKey(item.id),
                           leading: Icon(
                             Icons.music_note,
-                            color: isCurrent ? context.skinColors.sakuraPinkLight : context.skinColors.onSurfaceVariant,
+                            color: isCurrent
+                                ? context.skinColors.sakuraPinkLight
+                                : context.skinColors.onSurfaceVariant,
                           ),
                           title: Text(
                             item.title,
                             style: TextStyle(
-                              color: isCurrent ? context.skinColors.sakuraPinkLight : context.skinColors.onSurface,
-                              fontWeight: isCurrent ? FontWeight.w600 : FontWeight.normal,
+                              color: isCurrent
+                                  ? context.skinColors.sakuraPinkLight
+                                  : context.skinColors.onSurface,
+                              fontWeight: isCurrent
+                                  ? FontWeight.w600
+                                  : FontWeight.normal,
                             ),
                           ),
-                          subtitle: Text(item.artist ?? '', style: TextStyle(color: context.skinColors.onSurfaceVariant)),
+                          subtitle: Text(
+                            item.artist ?? '',
+                            style: TextStyle(
+                              color: context.skinColors.onSurfaceVariant,
+                            ),
+                          ),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               if (isCurrent && playerState.isPlaying)
-                                Icon(Icons.equalizer, color: context.skinColors.sakuraPinkLight, size: 20),
-                              Icon(Icons.drag_handle, color: context.skinColors.onSurfaceVariant, size: 20),
+                                Icon(
+                                  Icons.equalizer,
+                                  color: context.skinColors.sakuraPinkLight,
+                                  size: 20,
+                                ),
+                              Icon(
+                                Icons.drag_handle,
+                                color: context.skinColors.onSurfaceVariant,
+                                size: 20,
+                              ),
                             ],
                           ),
                           onTap: () {
-                            ref2.read(playerProvider.notifier).playQueue(
-                              queue.map((m) => m.id).toList(),
-                              initialIndex: i,
-                            );
+                            ref2
+                                .read(playerProvider.notifier)
+                                .playQueue(
+                                  queue.map((m) => m.id).toList(),
+                                  initialIndex: i,
+                                );
                           },
                         );
                       },
@@ -604,7 +803,9 @@ class _LyricsPage extends ConsumerWidget {
           '暂无歌词',
           style: TextStyle(
             fontSize: 15,
-            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+            color: Theme.of(
+              context,
+            ).colorScheme.onSurface.withValues(alpha: 0.5),
           ),
         ),
       );
@@ -620,13 +821,14 @@ class _LyricsPage extends ConsumerWidget {
           '暂无歌词',
           style: TextStyle(
             fontSize: 15,
-            color: Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5),
+            color: Theme.of(
+              context,
+            ).colorScheme.onSurface.withValues(alpha: 0.5),
           ),
         ),
       );
     }
-    final currentIndex =
-        lines.lastIndexWhere((l) => l.timestamp <= position);
+    final currentIndex = lines.lastIndexWhere((l) => l.timestamp <= position);
     final bilingual = ref.watch(bilingualLyricsProvider);
     return Container(
       decoration: BoxDecoration(
@@ -675,13 +877,14 @@ class _LyricsListState extends State<_LyricsList> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!_scrollController.hasClients) return;
         final itemHeight = _itemHeight;
-        final offset = (widget.currentIndex * itemHeight -
-                _scrollController.position.viewportDimension / 2 +
-                itemHeight / 2)
-            .clamp(
-          _scrollController.position.minScrollExtent,
-          _scrollController.position.maxScrollExtent,
-        );
+        final offset =
+            (widget.currentIndex * itemHeight -
+                    _scrollController.position.viewportDimension / 2 +
+                    itemHeight / 2)
+                .clamp(
+                  _scrollController.position.minScrollExtent,
+                  _scrollController.position.maxScrollExtent,
+                );
         _scrollController.animateTo(
           offset,
           duration: const Duration(milliseconds: 300),
@@ -707,7 +910,9 @@ class _LyricsListState extends State<_LyricsList> {
         final isCurrent = i == widget.currentIndex;
         final line = widget.lines[i];
         final showTranslation =
-            widget.bilingual && line.translation != null && line.translation!.isNotEmpty;
+            widget.bilingual &&
+            line.translation != null &&
+            line.translation!.isNotEmpty;
         return SizedBox(
           height: _itemHeight,
           child: Center(
@@ -723,9 +928,7 @@ class _LyricsListState extends State<_LyricsList> {
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: isCurrent ? 13 : 11,
-                        color: Theme.of(context)
-                            .colorScheme
-                            .onSurfaceVariant
+                        color: Theme.of(context).colorScheme.onSurfaceVariant
                             .withValues(alpha: isCurrent ? 0.85 : 0.4),
                       ),
                     ),
@@ -742,7 +945,9 @@ class _LyricsListState extends State<_LyricsList> {
   /// current line when word-level timing is available, and falling back to
   /// whole-line highlighting otherwise.
   Widget _buildLineText(BuildContext context, LyricLine line, bool isCurrent) {
-    final dimColor = Theme.of(context).colorScheme.onSurface.withValues(alpha: 0.5);
+    final dimColor = Theme.of(
+      context,
+    ).colorScheme.onSurface.withValues(alpha: 0.5);
     final activeColor = Theme.of(context).colorScheme.primary;
     final words = line.words;
     if (isCurrent && words != null && words.isNotEmpty) {
@@ -762,10 +967,14 @@ class _LyricsListState extends State<_LyricsList> {
           final doneMs = (widget.position - word.offset).inMilliseconds;
           progress = totalMs > 0 ? (doneMs / totalMs).clamp(0.0, 1.0) : 1.0;
         }
-        spans.add(TextSpan(
-          text: word.text,
-          style: TextStyle(color: Color.lerp(dimColor, activeColor, progress)),
-        ));
+        spans.add(
+          TextSpan(
+            text: word.text,
+            style: TextStyle(
+              color: Color.lerp(dimColor, activeColor, progress),
+            ),
+          ),
+        );
       }
       return RichText(
         textAlign: TextAlign.center,
