@@ -10,6 +10,7 @@ import 'package:inori_music/src/player/mini_player_bar.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/theme/sakura_dusk.dart';
+import 'package:inori_music/src/shared/widgets/inori_mark.dart';
 
 /// Adaptive shell scaffold:
 /// - Mobile (<600dp): BottomNavigationBar + MiniPlayerBar
@@ -309,7 +310,7 @@ class _DesktopSidebar extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
             child: Row(
               children: [
-                const Icon(Icons.music_note_rounded, color: SakuraDuskColors.sakuraPink, size: 22),
+                const InoriMark(size: 22),
                 const SizedBox(width: 8),
                 Text(
                   'Inori Music',

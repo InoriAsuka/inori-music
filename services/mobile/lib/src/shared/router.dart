@@ -19,6 +19,7 @@ import 'package:inori_music/src/history/history_screen.dart';
 import 'package:inori_music/src/history/history_stats_screen.dart';
 import 'package:inori_music/src/local_library/local_library_screen.dart';
 import 'package:inori_music/src/settings/settings_screen.dart';
+import 'package:inori_music/src/shared/splash_screen.dart';
 import 'package:inori_music/src/shared/widgets/shell_scaffold.dart';
 import 'package:inori_music/src/user_playlist/user_playlist_detail_screen.dart';
 import 'package:inori_music/src/user_playlist/user_playlist_list_screen.dart';
@@ -29,6 +30,7 @@ import 'package:inori_music/src/user_playlist/user_playlist_list_screen.dart';
 
 abstract class AppRoutes {
   static const login = '/login';
+  static const splash = '/splash';
   static const home = '/';
   static const artists = '/artists';
   static const artistDetail = '/artists/:id';
@@ -160,14 +162,25 @@ final routerProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) {
       final authState = ref.read(authProvider);
 
-      // While auth is loading, show a splash instead of flashing content.
-      if (authState is AsyncLoading) return AppRoutes.login;
+      // While auth is loading, show a real splash instead of flashing content.
+      if (authState is AsyncLoading) return AppRoutes.splash;
 
       final authValue = authState.valueOrNull;
       final isLoggedIn = authValue?.isAuthenticated ?? false;
       final isGuest = authValue?.isGuest ?? false;
       final isPastGate = isLoggedIn || isGuest;
       final isLoginRoute = state.matchedLocation == AppRoutes.login;
+
+      // Splash is only ever valid while loading (handled above) — once auth
+      // has resolved, always move off it immediately no matter the result,
+      // rather than falling through to the isLoginRoute-keyed rules below
+      // (which don't match "/splash" and would otherwise strand the user
+      // there indefinitely).
+      if (state.matchedLocation == AppRoutes.splash) {
+        if (isLoggedIn) return AppRoutes.artists;
+        if (isGuest) return AppRoutes.localLibrary;
+        return AppRoutes.login;
+      }
 
       if (!isPastGate && !isLoginRoute) return AppRoutes.login;
       if (isLoggedIn && isLoginRoute) return AppRoutes.artists;
@@ -184,6 +197,12 @@ final routerProvider = Provider<GoRouter>((ref) {
       return null;
     },
     routes: [
+      // Splash — no shell, transient (see redirect above)
+      GoRoute(
+        path: AppRoutes.splash,
+        builder: (context, state) => const SplashScreen(),
+      ),
+
       // Login — no shell
       GoRoute(
         path: AppRoutes.login,

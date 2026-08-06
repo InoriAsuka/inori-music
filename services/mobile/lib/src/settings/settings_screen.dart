@@ -1,4 +1,4 @@
-import 'dart:io' show Platform;
+import 'dart:io' show File, Platform;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -14,6 +14,7 @@ import 'package:inori_music/src/auth/auth_notifier.dart';
 import 'package:inori_music/src/lyrics/bilingual_lyrics_notifier.dart';
 import 'package:inori_music/src/offline/download_notifier.dart';
 import 'package:inori_music/src/offline/offline_db.dart';
+import 'package:inori_music/src/shared/background_provider.dart';
 import 'package:inori_music/src/shared/locale_provider.dart';
 import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/theme/sakura_dusk.dart';
@@ -106,6 +107,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             title: Text(t.language),
             subtitle: Text(_currentLabel(locale)),
             onTap: () => _showLanguagePicker(context, ref, t),
+          ),
+          Consumer(
+            builder: (context, ref, _) {
+              final background = ref.watch(backgroundProvider);
+              return ListTile(
+                leading: const Icon(Icons.image_outlined),
+                title: const Text('登录页背景'),
+                subtitle: Text(background.imagePath != null ? '自定义图片' : '默认'),
+                onTap: () => _showBackgroundSheet(context, ref),
+              );
+            },
           ),
           const Divider(),
 
@@ -461,6 +473,80 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (selected != null && context.mounted) {
       ref.read(localeProvider.notifier).state = _langOptions[selected].locale;
     }
+  }
+
+  Future<void> _showBackgroundSheet(BuildContext context, WidgetRef ref) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: SakuraDuskColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => Consumer(
+        builder: (ctx, ref, _) {
+          final background = ref.watch(backgroundProvider);
+          final notifier = ref.read(backgroundProvider.notifier);
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text('登录页背景', style: Theme.of(ctx).textTheme.headlineSmall),
+                  const SizedBox(height: 4),
+                  const Text(
+                    '自定义启动页与登录页背后的图片，不影响其他页面。',
+                    style: TextStyle(color: SakuraDuskColors.onSurfaceVariant, fontSize: 13),
+                  ),
+                  const SizedBox(height: 16),
+                  if (background.imagePath != null) ...[
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.file(
+                        File(background.imagePath!),
+                        height: 140,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        const Icon(Icons.opacity, size: 18, color: SakuraDuskColors.onSurfaceVariant),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Slider(
+                            value: background.opacity,
+                            min: 0.1,
+                            max: 0.8,
+                            onChanged: (v) => notifier.setOpacity(v),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                  const SizedBox(height: 8),
+                  FilledButton.icon(
+                    icon: const Icon(Icons.add_photo_alternate_outlined),
+                    label: Text(background.imagePath != null ? '更换图片' : '选择图片'),
+                    onPressed: notifier.pickImage,
+                  ),
+                  if (background.imagePath != null) ...[
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.delete_outline),
+                      label: const Text('恢复默认'),
+                      onPressed: notifier.clearImage,
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          );
+        },
+      ),
+    );
   }
 
   static bool _isSameLocale(Locale? a, Locale? b) {
