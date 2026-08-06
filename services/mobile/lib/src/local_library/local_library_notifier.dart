@@ -59,10 +59,11 @@ class LocalLibraryNotifier extends AsyncNotifier<List<LocalLibraryTrack>> {
   }
 
   Future<void> _importPaths(List<String> paths) async {
-    final coverDir = await _coverArtDir();
+    final audioDir = await _localLibraryDir('local_library_audio');
+    final coverDir = await _localLibraryDir('local_library_covers');
     for (final path in paths) {
       try {
-        await _importOne(path, coverDir);
+        await _importOne(path, audioDir, coverDir);
       } catch (e) {
         // One unreadable/corrupt file must not abort the rest of the batch.
         debugPrint('LocalLibrary: failed to import $path: $e');
@@ -71,11 +72,22 @@ class LocalLibraryNotifier extends AsyncNotifier<List<LocalLibraryTrack>> {
     state = AsyncData(await LocalLibraryDb.instance.queryAll());
   }
 
-  Future<void> _importOne(String path, Directory coverDir) async {
-    final file = File(path);
-    if (!file.existsSync()) return;
-    final meta = readMetadata(file, getImage: true);
+  Future<void> _importOne(String path, Directory audioDir, Directory coverDir) async {
+    final sourceFile = File(path);
+    if (!sourceFile.existsSync()) return;
+    // Read tags from the original picked file first (that access is only
+    // guaranteed to be valid for the duration of this import call — see the
+    // copy step below for why playback can't rely on the original path).
+    final meta = readMetadata(sourceFile, getImage: true);
     final id = '$localTrackIdPrefix${const Uuid().v4()}';
+
+    // Copy into the app's own storage rather than keeping the picked path.
+    // On macOS, file_picker's NSOpenPanel grants sandbox read access that
+    // isn't guaranteed to outlive this import call — a later playback
+    // attempt reopening the *original* path can silently fail (metadata
+    // reads fine here, but the track never actually plays). Owning a copy
+    // also survives the user later moving/renaming/deleting the source file.
+    final copiedFile = await sourceFile.copy(p.join(audioDir.path, '$id${p.extension(path)}'));
 
     String? coverPath;
     if (meta.pictures.isNotEmpty) {
@@ -92,28 +104,32 @@ class LocalLibraryNotifier extends AsyncNotifier<List<LocalLibraryTrack>> {
       title: (title == null || title.isEmpty) ? p.basenameWithoutExtension(path) : title,
       artistName: meta.artist?.trim() ?? '',
       albumTitle: meta.album?.trim() ?? '',
-      localPath: path,
+      localPath: copiedFile.path,
       durationMs: meta.duration?.inMilliseconds,
       coverArtPath: coverPath,
-      sizeBytes: file.lengthSync(),
+      sizeBytes: await copiedFile.length(),
       importedAt: DateTime.now(),
     ));
   }
 
-  Future<Directory> _coverArtDir() async {
+  Future<Directory> _localLibraryDir(String subdir) async {
     final dir = await getApplicationSupportDirectory();
-    final coverDir = Directory(p.join(dir.path, 'local_library_covers'));
-    if (!coverDir.existsSync()) coverDir.createSync(recursive: true);
-    return coverDir;
+    final target = Directory(p.join(dir.path, subdir));
+    if (!target.existsSync()) target.createSync(recursive: true);
+    return target;
   }
 
   Future<void> remove(String id) async {
     final track = await LocalLibraryDb.instance.query(id);
     await LocalLibraryDb.instance.delete(id);
-    final coverPath = track?.coverArtPath;
-    if (coverPath != null) {
-      final f = File(coverPath);
-      if (f.existsSync()) await f.delete();
+    if (track != null) {
+      final audioFile = File(track.localPath);
+      if (audioFile.existsSync()) await audioFile.delete();
+      final coverPath = track.coverArtPath;
+      if (coverPath != null) {
+        final coverFile = File(coverPath);
+        if (coverFile.existsSync()) await coverFile.delete();
+      }
     }
     state = AsyncData(await LocalLibraryDb.instance.queryAll());
   }
