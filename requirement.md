@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`5.14.0`
+`5.15.0`
 
 ## Product Goal
 
@@ -41,6 +41,15 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Committed lifecycle updates must record latest transition metadata for audit preparation.
 
 ## Requirement History
+
+### v5.15.0 - 2026-08-06
+
+- **feat: 桌面自定义窗体（三项客户端深度改造第三阶段之二，也是本轮三项诉求的收尾）** — 承接 v5.12.0–v5.14.0。改造前 `macos/Runner/MainFlutterWindow.swift` 是空的 `NSWindow` 子类、`windows/runner/win32_window.cpp` 是 `flutter create` 默认的 `WS_OVERLAPPEDWINDOW`，桌面端零自定义，用完全依赖 OS 原生标题栏。`window_manager` 依赖从 v5.12.2（窗口尺寸）就已引入，本 phase 零新增依赖，只是用了它更多的 API 面：`desktop_integration.dart` 的 `_initWindow()` 在 `WindowOptions` 里新增 `titleBarStyle: TitleBarStyle.hidden` + `windowButtonVisibility: <是否 macOS>`——原生标题栏统一隐藏，按用户已确认的平台分工（Windows 完全自定义、macOS 保留系统红绿灯）分别处理："隐藏标题栏但保留窗口按钮"是 `window_manager`/系统级别对"macOS 沉浸式标题栏、红黄绿灯仍由 OS 绘制在最上层"这一经典模式的标准支持方式，不需要在 Swift 侧另写代码。
+- **新增 `AppTitleBar`**（`lib/src/shared/widgets/app_title_bar.dart`）——28px（macOS）/32px（Windows/Linux）高的替代标题栏，背景色跟随当前皮肤的 `playerBar` token（`ref.watch(skinProvider)`，与 v5.14.0 皮肤系统联动，换皮肤后标题栏颜色同步更新，不需要额外接线）。不放品牌 Logo/文字——`ShellScaffold` 侧边栏与登录/启动页已经各自展示品牌标识，标题栏里再重复一遍纯属视觉噪音，也让它在固定 440×720 的登录/启动窗口和 1440×840 的主窗口上都不显得挤。macOS 分支：左侧留 78px 空间给系统绘制的红黄绿灯（macOS 会把它们画在 Flutter 内容之上，本身不需要 Flutter 侧的组件去"占位"，留白只是避免可拖拽色块看起来在和它们抢位置），其余区域整条可拖拽，不自绘任何按钮。Windows/Linux 分支：三枚按钮直接复用 `window_manager` 包自带的 `WindowCaptionButton.minimize/maximize/unmaximize/close`——这是该包自绘的图标（不是调用系统标题栏),满足"不使用系统 Windows 窗体样式"的前提下没有必要再重新画一遍相同效果的图标；`brightness` 参数直接传入当前皮肤的 `SkinDefinition.brightness`，深色皮肤下按钮自动切换到白色图标配色方案。用 `WindowListener` 的 `onWindowMaximize`/`onWindowUnmaximize` 回调驱动最大化/还原按钮图标切换，覆盖"双击标题栏"（`DragToMoveArea` 自带的双击最大化/还原手势）触发的状态变化，不只是点按钮那一条路径。
+- **单点接入** — `AppTitleBar` 与 v5.13.0 的 `SkinScope`、v5.14.0 的皮肤系统一样，在 `main.dart` 的 `MaterialApp.router(builder: ...)` 单点插入（`DesktopIntegration.isDesktop` 门控，移动端 `builder` 直接原样返回 `child`，零影响）：`Column([AppTitleBar(), Expanded(child: 原有内容)])`。因为 `builder` 包裹的是整个 `Navigator`（含其 `Overlay`），所有弹窗/BottomSheet/SnackBar 依然渲染在 `Expanded` 区域内、不会被标题栏遮挡或穿透到标题栏上方——登录页/启动页由于是鉴权关卡前后都会经过的路由，同样能拿到这条标题栏（否则原生标题栏隐藏后用户会在登录页没有任何移动/关闭窗口的手段）。
+- **新增 `app_title_bar_test.dart`**：3 例，用 `debugDefaultTargetPlatformOverride` 模拟 macOS/Windows 两种平台而不需要真实桌面窗口（未点击任何按钮，因此不会触碰 `window_manager` 在测试环境下不存在的原生通道——`isMaximized()` 在 `AppTitleBar.initState` 里包了 `catchError`，专门覆盖这种"没有真实原生窗口"的场景）。踩了一个坑：`debugDefaultTargetPlatformOverride` 必须在测试函数体自身同步收尾时重置，而不是放进 `tearDown`/`addTearDown`——Flutter 测试框架的"结束时校验 debug 变量都被清空"检查在 `_runTestBody` 里紧跟测试体之后就执行，比 `addTearDown` 回调触发得更早，放 `tearDown` 里会导致校验先跑到、每个用了平台覆盖的测试必现"a foundation debug variable was changed"报错。
+- 本 phase 零新增依赖，零 native 代码改动（`window_manager` 的 macOS/Windows 插件已经在原生侧实现了 `setTitleBarStyle`/`windowButtonVisibility` 的运行时切换）。
+- The phase output is version-tracked and verified locally（`flutter analyze --no-fatal-infos` 0 issues；`flutter test --no-pub` 149/149 通过，含新增 `app_title_bar_test.dart` 3 例）。实际拖拽/双击最大化还原、Windows 三按钮功能、macOS 红黄绿灯与自定义标题栏背景的协调观感、切换皮肤后标题栏颜色是否同步——本地无 Xcode/桌面窗口无法走查，待远端 CI 构建后由用户实机确认。
 
 ### v5.14.0 - 2026-08-06
 
