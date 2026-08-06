@@ -27,14 +27,15 @@ bool FlutterWindow::OnCreate() {
   RegisterPlugins(flutter_controller_->engine());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
-  flutter_controller_->engine()->SetNextFrameCallback([&]() {
-    this->Show();
-  });
-
-  // Flutter can complete the first frame before the "show window" callback is
-  // registered. The following call ensures a frame is pending to ensure the
-  // window is shown. It is a no-op if the first frame hasn't completed yet.
-  flutter_controller_->ForceRedraw();
+  // Deliberately no auto-show-on-first-frame here (stock `flutter create`
+  // boilerplate called `this->Show()` from a SetNextFrameCallback) — that
+  // raced ahead of window_manager's `waitUntilReadyToShow`, showing the
+  // window at its default size/native title bar before Dart had a chance
+  // to apply WindowOptions (size, titleBarStyle). window_manager's own
+  // `windowManager.show()` (see WindowManager::Show() in its Windows
+  // plugin) already calls ShowWindowAsync on this same HWND once Dart's
+  // side is ready — matching window_manager's own reference example, which
+  // doesn't have this callback either.
 
   return true;
 }
