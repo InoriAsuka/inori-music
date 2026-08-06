@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`5.15.1`
+`5.16.0`
 
 ## Product Goal
 
@@ -41,6 +41,14 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Committed lifecycle updates must record latest transition metadata for audit preparation.
 
 ## Requirement History
+
+### v5.16.0 - 2026-08-06
+
+- **fix: Windows 上 sqflite 未接 FFI 后端，登录/播放触发 `databaseFactory not init`** — 根因见 v5.13.0 条目后追加的已知问题记录：`pubspec.yaml` 只声明了 `sqflite`（Android/iOS/macOS 有原生实现），Windows/Linux 桌面端从未接入 `sqflite_common_ffi`。新增该依赖（纯 Dart 包，不含任何平台插件注册，`pubspec.yaml` 里没有 `flutter:`/`plugin:` 声明，因此对 iOS/Android/macOS 的构建流程零影响，只在被显式调用时才生效），`main.dart` 的 `main()` 最前面按 `Platform.isWindows || Platform.isLinux` 分支调用 `sqfliteFfiInit()` + `databaseFactory = databaseFactoryFfi`——必须在任何 `OfflineDb`/`LocalLibraryDb` 访问之前完成，所以放在 `WidgetsFlutterBinding.ensureInitialized()` 之后、`InoriAudioHandler.create()` 之前，是 `main()` 里最早执行的业务逻辑。
+- **fix: 本地曲库导入的曲目播放静音、进度条卡在 0:00（v5.12.0 遗留，v5.12.3 的沙盒复制修复未能解决）** — 重新阅读 `player_notifier.dart` 后确认了记忆里记录的假设之一：`playTrack()` 对"带队列播放"（`queueIds` 非空——**本地曲库任何一次点击都走这条路径**）的处理，实际设置 `_audioPlayer` 播放源的逻辑全部委托给 `_buildConcatQueue()`，而这个方法此前是包在 `Future<void>(() async {...})()` 里**不被 await** 调用的（`_buildConcatQueue(queueIds, index, url, trackId);`，没有 `await`），与紧随其后的 `await _audioPlayer.play()` 之间是一个真实存在的竞态：`play()` 完全可能在 `_buildConcatQueue` 内部真正调用 `audioHandler.updateConcatQueue()`（这是唯一实际调用 `_audioPlayer.setAudioSource()` 的地方）之前就执行，导致播放器在"没有设置任何播放源"或"沿用上一首的播放源"的状态下收到播放指令——表现正是用户实机复现的"标题/艺术家/封面全部正确渲染（来自不相关的 `_resolveTrack`/`_makeMediaItem` 分支）但进度条与时长卡 0:00、无声音"。此前怀疑"服务端曲目这条路径在生产环境可用"，推测原因是服务端播放每一步都有网络往返延迟，客观上给了这个未 await 的 Future 足够时间在 `play()` 前抢跑完成；本地曲库的 `resolvePlaybackUrl` 是纯本地 SQLite 查询，各处 await 之间几乎没有真实等待时间，这个竞态因此频繁地朝错误的方向倒——这也解释了为什么这个 bug 只在本地播放场景稳定复现。修复：`_buildConcatQueue` 改为返回 `Future<void>` 并在 `playTrack()` 里正确 `await`；同时把队列内逐首 URL 解析从原来的顺序 `for` 循环（每首歌一次 `await`，长队列等于多次串行网络往返）改为 `Future.wait` 并行解析，避免"让 play() 等待"这个必要的修复反过来在大播放列表上引入可感知的启动延迟。顺带修正了一个次要的既有不一致：调用 `_buildConcatQueue` 时传入的起始下标此前用的是未夹取的原始 `index`（跟同一处 `state.copyWith` 用的 `clampedIndex` 不一致），现在统一用 `clampedIndex`。
+- 同时用直接阅读 `just_audio` 包源码的方式排除了记忆里记录的另一个候选假设——`ProgressiveAudioSource` 对 `file://` scheme 处理不同于 `AudioSource.uri()`：`AudioSource.uri()` 的实现只按 URL **扩展名**（`.mpd`→Dash、`.m3u8`→Hls，其余一律 `ProgressiveAudioSource`）分支，与 URI scheme 完全无关，本地音频文件的常见扩展名（`.mp3`/`.flac`/`.m4a` 等）不会走 Dash/Hls 分支，两种写法对本项目场景产出完全相同的 `ProgressiveAudioSource`——这个假设不成立，不需要改动 `audio_handler.dart` 的 `updateConcatQueue()`。
+- 本地无 Xcode/Android SDK/Windows 工具链，两处修复均无法在本机实机复现验证，`flutter analyze`/`flutter test` 覆盖不到播放竞态与 sqflite 平台分支这类需要真实运行时环境的问题——这两个修复是基于逐行阅读代码 + 对照三方库源码（`sqflite_common`、`just_audio`）得出的高置信度诊断，而非盲目试错，但仍待用户下载新构建后实机复认，如果验证后发现依旧有问题，需要用户提供具体现象（例如是否有任何错误提示、是不是所有本地文件还是只有部分文件）以便加诊断日志而不是再猜一次。
+- The phase output is version-tracked and verified locally（`flutter analyze --no-fatal-infos` 0 issues；`flutter test --no-pub` 149/149 通过，均为存量测试复核——`player_notifier_test.dart` 现有用例覆盖的是纯逻辑分支，不实际驱动 `AudioPlayer`/`_buildConcatQueue`，本次改动未新增测试，理由与 `_buildConcatQueue` 此前从未被测试覆盖过一致）。
 
 ### v5.15.1 - 2026-08-06
 
