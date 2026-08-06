@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`5.12.2`
+`5.12.3`
 
 ## Product Goal
 
@@ -41,6 +41,11 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Committed lifecycle updates must record latest transition metadata for audit preparation.
 
 ## Requirement History
+
+### v5.12.3 - 2026-08-06
+
+- **fix: 游客本地导入的曲目元数据/封面正常但实际不播放** — 用户下载 v5.12.2 构建实机导入一首真实歌曲后反馈：标题「Emmanuel」、艺术家「Botti, Chris」、专辑封面均正确显示（证明 `audio_metadata_reader` 解析与 `_localMediaItem` 渲染链路是通的），但进度条与总时长一直停在 0:00，未见音频播放。根因是 v5.12.0 让 `LocalLibraryDb.localPath` 直接引用 `file_picker` 返回的原始选中路径——macOS App Sandbox 下，`NSOpenPanel` 选中文件后授予的临时读权限**不保证在选择这一动作之后持续有效**：导入当下同步调用 `readMetadata()` 读标签能成功，是因为读取发生在选择操作的同一时间窗口内；但用户点击播放是后续一次独立交互，`just_audio` 底层 `AVPlayer` 用同一路径重新打开文件时，沙盒授权很可能已经失效，导致资源加载静默失败（表现为 duration 卡 0，而不是抛出明显错误）。修复：`local_library_notifier.dart` 的 `_importOne` 在读完标签后把文件**复制**进 App 自己的存储目录（新增 `local_library_audio/` 子目录，与既有的 `local_library_covers/` 同级），`LocalLibraryTrack.localPath` 存复制后的路径而非原始选中路径——彻底绕开沙盒临时授权的生命周期问题，副作用是也顺带修复了"用户后续移动/重命名/删除原始文件会导致本地曲库播放失效"这一独立的健壮性缺口。做法与本项目既有的服务端离线下载（`offline_db.dart`/`download_notifier.dart`：下载后落盘到 App 自己的目录，从不引用外部路径）完全一致，補上了本地导入场景遗漏的同一原则。配套修复 `remove()`：之前只删封面文件、遗留复制出的音频文件永久占用磁盘空间，现在两者一起清理。
+- The phase output is version-tracked and verified locally（`flutter analyze --no-fatal-infos` 0 issues，`flutter test --no-pub` 113/113 通过）；本地无 Xcode 无法直接复现"导入后播放"的完整链路，该假设（沙盒临时授权生命周期）基于 macOS App Sandbox 已知行为模式推导，修复后的实际播放效果待远端 CI 构建后由用户实机确认——如果确认仍不播放，需要用户提供更多现象细节（是否有错误提示、其他格式文件是否同样失败）以缩小范围。
 
 ### v5.12.2 - 2026-08-06
 
