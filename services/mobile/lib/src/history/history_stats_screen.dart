@@ -10,6 +10,7 @@ import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/history/track_title_resolver.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/theme/skin_provider.dart';
+import 'package:inori_music/src/shared/widgets/desktop_app_bar.dart';
 
 // ---------------------------------------------------------------------------
 // Providers
@@ -21,16 +22,24 @@ final historyStatsProvider = FutureProvider<UserHistoryStats>((ref) async {
   return resp.data!;
 });
 
-final historyTimelineProvider = FutureProvider<List<TimelineBucket>>((ref) async {
+final historyTimelineProvider = FutureProvider<List<TimelineBucket>>((
+  ref,
+) async {
   final api = ref.read(historyApiProvider);
   // Last 30 days
   final until = DateTime.now();
   final since = until.subtract(const Duration(days: 30));
-  final resp = await api.getMyHistoryTimeline(since: since, until: until, granularity: 'day');
+  final resp = await api.getMyHistoryTimeline(
+    since: since,
+    until: until,
+    granularity: 'day',
+  );
   return resp.data?.buckets ?? [];
 });
 
-final historyTopTracksProvider = FutureProvider<List<TrackPlayCount>>((ref) async {
+final historyTopTracksProvider = FutureProvider<List<TrackPlayCount>>((
+  ref,
+) async {
   final api = ref.read(historyApiProvider);
   final resp = await api.apiV1MeHistoryTopTracksGet(limit: 5);
   return resp.data?.tracks ?? [];
@@ -51,19 +60,30 @@ class HistoryStatsScreen extends ConsumerWidget {
     final t = AppLocalizations.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: Text(t.historyStats)),
+      appBar: DesktopAppBar(title: Text(t.historyStats)),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           // Summary cards
           statsState.when(
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Text('$e', style: TextStyle(color: context.skinColors.error)),
+            error: (e, _) =>
+                Text('$e', style: TextStyle(color: context.skinColors.error)),
             data: (stats) => Row(
               children: [
-                Expanded(child: _StatCard(label: t.totalPlays, value: '${stats.totalEvents}')),
+                Expanded(
+                  child: _StatCard(
+                    label: t.totalPlays,
+                    value: '${stats.totalEvents}',
+                  ),
+                ),
                 const SizedBox(width: 12),
-                Expanded(child: _StatCard(label: t.uniqueTracks, value: '${stats.uniqueTracks}')),
+                Expanded(
+                  child: _StatCard(
+                    label: t.uniqueTracks,
+                    value: '${stats.uniqueTracks}',
+                  ),
+                ),
               ],
             ),
           ),
@@ -73,14 +93,39 @@ class HistoryStatsScreen extends ConsumerWidget {
           // 30-day chart
           Text(
             t.activityChart,
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: context.skinColors.onBackground),
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: context.skinColors.onBackground,
+            ),
           ),
           const SizedBox(height: 12),
           timelineState.when(
-            loading: () => const SizedBox(height: 150, child: Center(child: CircularProgressIndicator())),
-            error: (e, _) => SizedBox(height: 80, child: Center(child: Text('$e', style: TextStyle(color: context.skinColors.error)))),
+            loading: () => const SizedBox(
+              height: 150,
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (e, _) => SizedBox(
+              height: 80,
+              child: Center(
+                child: Text(
+                  '$e',
+                  style: TextStyle(color: context.skinColors.error),
+                ),
+              ),
+            ),
             data: (buckets) => buckets.isEmpty
-                ? SizedBox(height: 80, child: Center(child: Text('No data', style: TextStyle(color: context.skinColors.onSurfaceVariant))))
+                ? SizedBox(
+                    height: 80,
+                    child: Center(
+                      child: Text(
+                        'No data',
+                        style: TextStyle(
+                          color: context.skinColors.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  )
                 : SizedBox(
                     height: 160,
                     child: BarChart(
@@ -90,10 +135,18 @@ class HistoryStatsScreen extends ConsumerWidget {
                         gridData: FlGridData(show: false),
                         titlesData: FlTitlesData(
                           show: true,
-                          leftTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                          rightTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                          topTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                          bottomTitles: AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                          leftTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          rightTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          topTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
+                          bottomTitles: AxisTitles(
+                            sideTitles: SideTitles(showTitles: false),
+                          ),
                         ),
                         barGroups: buckets.asMap().entries.map((entry) {
                           return BarChartGroupData(
@@ -119,22 +172,40 @@ class HistoryStatsScreen extends ConsumerWidget {
           // Top tracks
           Text(
             t.topTracks,
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600, color: context.skinColors.onBackground),
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+              color: context.skinColors.onBackground,
+            ),
           ),
           const SizedBox(height: 8),
           topTracksState.when(
-            loading: () => const SizedBox(height: 80, child: Center(child: CircularProgressIndicator())),
-            error: (e, _) => Text('$e', style: TextStyle(color: context.skinColors.error)),
+            loading: () => const SizedBox(
+              height: 80,
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (e, _) =>
+                Text('$e', style: TextStyle(color: context.skinColors.error)),
             data: (tracks) => tracks.isEmpty
                 ? Padding(
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    child: Text('No history yet', style: TextStyle(color: context.skinColors.onSurfaceVariant)),
+                    child: Text(
+                      'No history yet',
+                      style: TextStyle(
+                        color: context.skinColors.onSurfaceVariant,
+                      ),
+                    ),
                   )
                 : Column(
                     children: tracks.asMap().entries.map((entry) {
                       final rank = entry.key + 1;
                       final tc = entry.value;
-                      return _TopTrackRow(key: ValueKey(tc.trackId), rank: rank, trackId: tc.trackId, playCount: tc.playCount);
+                      return _TopTrackRow(
+                        key: ValueKey(tc.trackId),
+                        rank: rank,
+                        trackId: tc.trackId,
+                        playCount: tc.playCount,
+                      );
                     }).toList(),
                   ),
           ),
@@ -161,14 +232,30 @@ class _StatCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: context.skinColors.surfaceVariant,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: context.skinColors.outlineVariant, width: 0.5),
+        border: Border.all(
+          color: context.skinColors.outlineVariant,
+          width: 0.5,
+        ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(value, style: TextStyle(fontSize: 28, fontWeight: FontWeight.w700, color: context.skinColors.sakuraPinkLight)),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 28,
+              fontWeight: FontWeight.w700,
+              color: context.skinColors.sakuraPinkLight,
+            ),
+          ),
           const SizedBox(height: 4),
-          Text(label, style: TextStyle(fontSize: 13, color: context.skinColors.onSurfaceVariant)),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              color: context.skinColors.onSurfaceVariant,
+            ),
+          ),
         ],
       ),
     );
@@ -176,7 +263,12 @@ class _StatCard extends StatelessWidget {
 }
 
 class _TopTrackRow extends ConsumerStatefulWidget {
-  const _TopTrackRow({super.key, required this.rank, required this.trackId, required this.playCount});
+  const _TopTrackRow({
+    super.key,
+    required this.rank,
+    required this.trackId,
+    required this.playCount,
+  });
 
   final int rank;
   final String trackId;
@@ -238,11 +330,18 @@ class _TopTrackRowState extends ConsumerState<_TopTrackRow> {
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.play_arrow, size: 14, color: context.skinColors.onSurfaceVariant),
+              Icon(
+                Icons.play_arrow,
+                size: 14,
+                color: context.skinColors.onSurfaceVariant,
+              ),
               const SizedBox(width: 2),
               Text(
                 '${widget.playCount}',
-                style: TextStyle(fontSize: 13, color: context.skinColors.onSurfaceVariant),
+                style: TextStyle(
+                  fontSize: 13,
+                  color: context.skinColors.onSurfaceVariant,
+                ),
               ),
             ],
           ),

@@ -9,6 +9,7 @@ import 'package:inori_music/src/local_library/local_library_notifier.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/theme/skin_provider.dart';
+import 'package:inori_music/src/shared/widgets/desktop_app_bar.dart';
 
 /// Guest mode's home screen: a flat list of locally-imported audio files.
 /// No account, no server — this is what makes the app usable without login.
@@ -25,7 +26,7 @@ class LocalLibraryScreen extends ConsumerWidget {
     final playerState = ref.watch(playerProvider);
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: DesktopAppBar(
         title: const Text('本地曲库'),
         actions: [
           PopupMenuButton<_ImportAction>(
@@ -70,7 +71,9 @@ class LocalLibraryScreen extends ConsumerWidget {
                 track: track,
                 isCurrent: isCurrent,
                 isPlaying: isCurrent && playerState.isPlaying,
-                onTap: () => ref.read(playerProvider.notifier).playQueue(ids, initialIndex: i),
+                onTap: () => ref
+                    .read(playerProvider.notifier)
+                    .playQueue(ids, initialIndex: i),
                 onDelete: () => _confirmDelete(context, ref, track),
               );
             },
@@ -80,15 +83,25 @@ class LocalLibraryScreen extends ConsumerWidget {
     );
   }
 
-  Future<void> _confirmDelete(BuildContext context, WidgetRef ref, LocalLibraryTrack track) async {
+  Future<void> _confirmDelete(
+    BuildContext context,
+    WidgetRef ref,
+    LocalLibraryTrack track,
+  ) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('移除曲目'),
         content: Text('从本地曲库中移除「${track.title}」？不会删除原始文件。'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('移除')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('移除'),
+          ),
         ],
       ),
     );
@@ -112,17 +125,27 @@ class _EmptyLocalLibrary extends ConsumerWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.library_music_outlined, size: 64, color: context.skinColors.onSurfaceVariant),
+            Icon(
+              Icons.library_music_outlined,
+              size: 64,
+              color: context.skinColors.onSurfaceVariant,
+            ),
             const SizedBox(height: 16),
             Text(
               '本地曲库还是空的',
-              style: TextStyle(fontSize: 18, color: context.skinColors.onSurfaceVariant),
+              style: TextStyle(
+                fontSize: 18,
+                color: context.skinColors.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: 8),
             Text(
               '以游客身份使用时，音乐来自你设备上的文件，不需要账号或服务器。',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: context.skinColors.onSurfaceVariant),
+              style: TextStyle(
+                fontSize: 13,
+                color: context.skinColors.onSurfaceVariant,
+              ),
             ),
             const SizedBox(height: 24),
             FilledButton.icon(
@@ -163,7 +186,8 @@ class _LocalTrackTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final subtitleParts = [
       if (track.artistName.isNotEmpty) track.artistName,
-      if (track.durationMs != null) _formatDuration(Duration(milliseconds: track.durationMs!)),
+      if (track.durationMs != null)
+        _formatDuration(Duration(milliseconds: track.durationMs!)),
     ];
     return ListTile(
       leading: _Cover(coverPath: track.coverArtPath, highlighted: isCurrent),
@@ -172,23 +196,36 @@ class _LocalTrackTile extends StatelessWidget {
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
-          color: isCurrent ? context.skinColors.sakuraPink : context.skinColors.onSurface,
+          color: isCurrent
+              ? context.skinColors.sakuraPink
+              : context.skinColors.onSurface,
           fontWeight: isCurrent ? FontWeight.w600 : FontWeight.normal,
         ),
       ),
       subtitle: subtitleParts.isEmpty
           ? null
-          : Text(subtitleParts.join(' · '), maxLines: 1, overflow: TextOverflow.ellipsis),
+          : Text(
+              subtitleParts.join(' · '),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
       trailing: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           if (isCurrent && isPlaying)
             Padding(
               padding: const EdgeInsets.only(right: 4),
-              child: Icon(Icons.equalizer, color: context.skinColors.sakuraPinkLight, size: 20),
+              child: Icon(
+                Icons.equalizer,
+                color: context.skinColors.sakuraPinkLight,
+                size: 20,
+              ),
             ),
           IconButton(
-            icon: Icon(Icons.delete_outline, color: context.skinColors.onSurfaceVariant),
+            icon: Icon(
+              Icons.delete_outline,
+              color: context.skinColors.onSurfaceVariant,
+            ),
             onPressed: onDelete,
           ),
         ],
@@ -231,7 +268,9 @@ class _Cover extends StatelessWidget {
   }
 
   Widget _fallbackIcon(BuildContext context) => Icon(
-        Icons.music_note_rounded,
-        color: highlighted ? context.skinColors.sakuraPink : context.skinColors.onSurfaceVariant,
-      );
+    Icons.music_note_rounded,
+    color: highlighted
+        ? context.skinColors.sakuraPink
+        : context.skinColors.onSurfaceVariant,
+  );
 }

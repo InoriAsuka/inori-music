@@ -8,6 +8,7 @@ import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/catalog/catalog_repository.dart';
 import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/theme/skin_provider.dart';
+import 'package:inori_music/src/shared/widgets/desktop_app_bar.dart';
 
 final _playlistsProvider = FutureProvider<List<Playlist>>((ref) {
   return ref.watch(catalogRepositoryProvider).listPlaylists();
@@ -21,14 +22,18 @@ class PlaylistsScreen extends ConsumerWidget {
     final t = AppLocalizations.of(context);
     final state = ref.watch(_playlistsProvider);
     return Scaffold(
-      appBar: AppBar(title: Text(t.playlists)),
+      appBar: DesktopAppBar(title: Text(t.playlists)),
       body: state.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.error_outline, color: context.skinColors.error, size: 48),
+              Icon(
+                Icons.error_outline,
+                color: context.skinColors.error,
+                size: 48,
+              ),
               const SizedBox(height: 12),
               Text('$e', textAlign: TextAlign.center),
               const SizedBox(height: 12),
@@ -53,11 +58,15 @@ class PlaylistsScreen extends ConsumerWidget {
                         color: context.skinColors.surfaceContainer,
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: Icon(Icons.playlist_play, color: context.skinColors.sakuraPink),
+                      child: Icon(
+                        Icons.playlist_play,
+                        color: context.skinColors.sakuraPink,
+                      ),
                     ),
                     title: Text(pl.name),
                     subtitle: Text('${pl.trackIds.length} tracks'),
-                    onTap: () => context.go(AppRoutes.playlistDetailPath(pl.id)),
+                    onTap: () =>
+                        context.go(AppRoutes.playlistDetailPath(pl.id)),
                   );
                 },
               ),

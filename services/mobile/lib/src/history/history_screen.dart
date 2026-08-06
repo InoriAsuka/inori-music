@@ -10,6 +10,7 @@ import 'package:inori_music/src/history/track_title_resolver.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/theme/skin_provider.dart';
+import 'package:inori_music/src/shared/widgets/desktop_app_bar.dart';
 
 // ---------------------------------------------------------------------------
 // Providers
@@ -63,14 +64,23 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: context.skinColors.surfaceVariant,
-        title: Text(t.deleteHistory, style: TextStyle(color: context.skinColors.onSurface)),
+        title: Text(
+          t.deleteHistory,
+          style: TextStyle(color: context.skinColors.onSurface),
+        ),
         content: Text(
           'Delete ${ids.length} event${ids.length > 1 ? 's' : ''}? (ID: ${ids.take(3).join(', ')}${ids.length > 3 ? '...' : ''})',
           style: TextStyle(color: context.skinColors.onSurfaceVariant),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(t.cancel)),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: Text(t.delete)),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(t.cancel),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(t.delete),
+          ),
         ],
       ),
     );
@@ -95,7 +105,10 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Failed to delete: $e'), backgroundColor: context.skinColors.error),
+          SnackBar(
+            content: Text('Failed to delete: $e'),
+            backgroundColor: context.skinColors.error,
+          ),
         );
       }
     }
@@ -107,8 +120,10 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
     final t = AppLocalizations.of(context);
 
     return Scaffold(
-      appBar: AppBar(
-        title: _selectMode ? Text('${_selected.length} selected') : Text(t.history),
+      appBar: DesktopAppBar(
+        title: _selectMode
+            ? Text('${_selected.length} selected')
+            : Text(t.history),
         actions: [
           if (_selectMode) ...[
             IconButton(
@@ -144,7 +159,11 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.error_outline, color: context.skinColors.error, size: 48),
+              Icon(
+                Icons.error_outline,
+                color: context.skinColors.error,
+                size: 48,
+              ),
               const SizedBox(height: 12),
               Text('$e', textAlign: TextAlign.center),
               const SizedBox(height: 12),
@@ -160,9 +179,19 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.history, size: 64, color: context.skinColors.onSurfaceVariant),
+                    Icon(
+                      Icons.history,
+                      size: 64,
+                      color: context.skinColors.onSurfaceVariant,
+                    ),
                     const SizedBox(height: 16),
-                    Text('No play history yet', style: TextStyle(fontSize: 18, color: context.skinColors.onSurfaceVariant)),
+                    Text(
+                      'No play history yet',
+                      style: TextStyle(
+                        fontSize: 18,
+                        color: context.skinColors.onSurfaceVariant,
+                      ),
+                    ),
                   ],
                 ),
               )
@@ -188,7 +217,8 @@ class _HistoryScreenState extends ConsumerState<HistoryScreen> {
   static String _formatEventDate(DateTime dt, AppLocalizations t) {
     final now = DateTime.now();
     final diff = now.difference(dt);
-    final hhmm = '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    final hhmm =
+        '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
     if (diff.inDays == 0) {
       return '${t.today} $hhmm';
     } else if (diff.inDays == 1) {
@@ -225,7 +255,9 @@ class _HistoryTileState extends ConsumerState<_HistoryTile> {
     // Seed the resolver so the title is fetched eagerly.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        ref.read(trackTitleResolverProvider(widget.event.trackId).notifier).resolve();
+        ref
+            .read(trackTitleResolverProvider(widget.event.trackId).notifier)
+            .resolve();
       }
     });
   }
@@ -246,23 +278,39 @@ class _HistoryTileState extends ConsumerState<_HistoryTile> {
             )
           : CircleAvatar(
               backgroundColor: context.skinColors.surfaceContainer,
-              child: Icon(Icons.music_note, color: context.skinColors.onSurfaceVariant, size: 18),
+              child: Icon(
+                Icons.music_note,
+                color: context.skinColors.onSurfaceVariant,
+                size: 18,
+              ),
             ),
       title: Text(
         displayName,
-        style: TextStyle(color: context.skinColors.onSurface, fontSize: 14, fontWeight: FontWeight.w500),
+        style: TextStyle(
+          color: context.skinColors.onSurface,
+          fontSize: 14,
+          fontWeight: FontWeight.w500,
+        ),
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
       ),
       subtitle: Text(
         _HistoryScreenState._formatEventDate(widget.event.playedAt, t),
-        style: TextStyle(color: context.skinColors.onSurfaceVariant, fontSize: 12),
+        style: TextStyle(
+          color: context.skinColors.onSurfaceVariant,
+          fontSize: 12,
+        ),
       ),
       selected: widget.isSelected,
-      selectedTileColor: context.skinColors.sakuraPinkDark.withValues(alpha: 0.2),
-      onTap: widget.selectMode ? () => widget.onToggleSelect(widget.event.id) : null,
-      onLongPress: widget.selectMode ? null : () => widget.onEnterSelectMode(widget.event.id),
+      selectedTileColor: context.skinColors.sakuraPinkDark.withValues(
+        alpha: 0.2,
+      ),
+      onTap: widget.selectMode
+          ? () => widget.onToggleSelect(widget.event.id)
+          : null,
+      onLongPress: widget.selectMode
+          ? null
+          : () => widget.onEnterSelectMode(widget.event.id),
     );
   }
 }
-

@@ -13,6 +13,7 @@ import 'package:inori_music/src/catalog/search_history_provider.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/theme/skin_provider.dart';
+import 'package:inori_music/src/shared/widgets/desktop_app_bar.dart';
 import 'package:inori_music/src/shared/widgets/track_list_tile.dart';
 
 // ---------------------------------------------------------------------------
@@ -20,7 +21,12 @@ import 'package:inori_music/src/shared/widgets/track_list_tile.dart';
 // ---------------------------------------------------------------------------
 
 class _SearchState {
-  const _SearchState({this.query = '', this.result, this.isLoading = false, this.error});
+  const _SearchState({
+    this.query = '',
+    this.result,
+    this.isLoading = false,
+    this.error,
+  });
   final String query;
   final CatalogSearchResult? result;
   final bool isLoading;
@@ -58,7 +64,9 @@ class _SearchNotifier extends AutoDisposeNotifier<_SearchState> {
 }
 
 final _searchNotifierProvider =
-    AutoDisposeNotifierProvider<_SearchNotifier, _SearchState>(_SearchNotifier.new);
+    AutoDisposeNotifierProvider<_SearchNotifier, _SearchState>(
+      _SearchNotifier.new,
+    );
 
 // ---------------------------------------------------------------------------
 // Screen
@@ -105,9 +113,14 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
     }
     _suggestionDebounce = Timer(const Duration(milliseconds: 150), () async {
       try {
-        final result = await ref.read(catalogRepositoryProvider).search(q, limit: 5);
+        final result = await ref
+            .read(catalogRepositoryProvider)
+            .search(q, limit: 5);
         if (!mounted) return;
-        final tracks = result.items.where((i) => i.track != null).take(5).toList();
+        final tracks = result.items
+            .where((i) => i.track != null)
+            .take(5)
+            .toList();
         setState(() {
           _suggestions = tracks;
           _showSuggestions = tracks.isNotEmpty;
@@ -122,11 +135,18 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
     final state = ref.watch(_searchNotifierProvider);
     final history = ref.watch(searchHistoryProvider);
     final allItems = state.result?.items ?? [];
-    final artists = allItems.where((i) => i.kind == SearchResultKind.artist).toList();
-    final albums = allItems.where((i) => i.kind == SearchResultKind.album).toList();
-    final tracks = allItems.where((i) => i.kind == SearchResultKind.track).toList();
+    final artists = allItems
+        .where((i) => i.kind == SearchResultKind.artist)
+        .toList();
+    final albums = allItems
+        .where((i) => i.kind == SearchResultKind.album)
+        .toList();
+    final tracks = allItems
+        .where((i) => i.kind == SearchResultKind.track)
+        .toList();
 
-    final showEmptyPrompt = state.query.isEmpty && state.result == null && !state.isLoading;
+    final showEmptyPrompt =
+        state.query.isEmpty && state.result == null && !state.isLoading;
 
     Widget bodyContent;
     if (state.isLoading) {
@@ -135,8 +155,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
       bodyContent = Center(child: Text(state.error!));
     } else if (showEmptyPrompt) {
       bodyContent = Center(
-        child: Text(t.searchPrompt,
-            style: TextStyle(color: context.skinColors.onSurfaceVariant)),
+        child: Text(
+          t.searchPrompt,
+          style: TextStyle(color: context.skinColors.onSurfaceVariant),
+        ),
       );
     } else {
       bodyContent = TabBarView(
@@ -151,7 +173,7 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
     }
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: DesktopAppBar(
         title: TextField(
           controller: _ctrl,
           autofocus: true,
@@ -172,7 +194,9 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
                     icon: const Icon(Icons.clear),
                     onPressed: () {
                       _ctrl.clear();
-                      ref.read(_searchNotifierProvider.notifier).updateQuery('');
+                      ref
+                          .read(_searchNotifierProvider.notifier)
+                          .updateQuery('');
                       setState(() {
                         _suggestions = [];
                         _showSuggestions = false;
@@ -214,8 +238,10 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
                     return ListTile(
                       dense: true,
                       leading: const Icon(Icons.music_note, size: 16),
-                      title: Text(track.title,
-                          style: const TextStyle(fontSize: 13)),
+                      title: Text(
+                        track.title,
+                        style: const TextStyle(fontSize: 13),
+                      ),
                       onTap: () {
                         setState(() {
                           _showSuggestions = false;
@@ -263,28 +289,36 @@ class _SearchScreenState extends ConsumerState<SearchScreen>
                         ],
                       ),
                     ),
-                    ...history.take(10).map((query) => ListTile(
-                          dense: true,
-                          leading: const Icon(Icons.history, size: 18),
-                          title: Text(query, style: const TextStyle(fontSize: 14)),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.close, size: 16),
-                            onPressed: () => ref
-                                .read(searchHistoryProvider.notifier)
-                                .remove(query),
+                    ...history
+                        .take(10)
+                        .map(
+                          (query) => ListTile(
+                            dense: true,
+                            leading: const Icon(Icons.history, size: 18),
+                            title: Text(
+                              query,
+                              style: const TextStyle(fontSize: 14),
+                            ),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.close, size: 16),
+                              onPressed: () => ref
+                                  .read(searchHistoryProvider.notifier)
+                                  .remove(query),
+                            ),
+                            onTap: () {
+                              _ctrl.text = query;
+                              _ctrl.selection = TextSelection.collapsed(
+                                offset: query.length,
+                              );
+                              ref
+                                  .read(_searchNotifierProvider.notifier)
+                                  .updateQuery(query);
+                              setState(() {
+                                _showSuggestions = false;
+                              });
+                            },
                           ),
-                          onTap: () {
-                            _ctrl.text = query;
-                            _ctrl.selection = TextSelection.collapsed(
-                                offset: query.length);
-                            ref
-                                .read(_searchNotifierProvider.notifier)
-                                .updateQuery(query);
-                            setState(() {
-                              _showSuggestions = false;
-                            });
-                          },
-                        )),
+                        ),
                     // Leave bottom padding so content doesn't stick to card edge.
                     const SizedBox(height: 4),
                   ],
@@ -311,7 +345,11 @@ class _Highlighter {
 
   /// Returns null when [raw] is null/blank/no-mark-present, signalling the
   /// caller to render plain text instead.
-  static List<TextSpan>? spanify(String? raw, TextStyle base, Color highlightColor) {
+  static List<TextSpan>? spanify(
+    String? raw,
+    TextStyle base,
+    Color highlightColor,
+  ) {
     if (raw == null || raw.isEmpty) return null;
     if (!raw.contains(_markOpen)) return null;
     final out = <TextSpan>[];
@@ -332,13 +370,15 @@ class _Highlighter {
         break;
       }
       final inner = rest.substring(o + _markOpen.length, c);
-      out.add(TextSpan(
-        text: inner,
-        style: base.copyWith(
-          fontWeight: FontWeight.bold,
-          color: highlightColor,
+      out.add(
+        TextSpan(
+          text: inner,
+          style: base.copyWith(
+            fontWeight: FontWeight.bold,
+            color: highlightColor,
+          ),
         ),
-      ));
+      );
       rest = rest.substring(c + _markClose.length);
     }
     return out;
@@ -361,10 +401,16 @@ class _AllResults extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.search_off, size: 64, color: context.skinColors.onSurfaceVariant),
+            Icon(
+              Icons.search_off,
+              size: 64,
+              color: context.skinColors.onSurfaceVariant,
+            ),
             const SizedBox(height: 16),
-            Text('没有找到相关内容',
-                style: TextStyle(color: context.skinColors.onSurfaceVariant)),
+            Text(
+              '没有找到相关内容',
+              style: TextStyle(color: context.skinColors.onSurfaceVariant),
+            ),
           ],
         ),
       );
@@ -377,11 +423,17 @@ class _AllResults extends StatelessWidget {
           return ListTile(
             leading: CircleAvatar(
               backgroundColor: context.skinColors.surfaceContainer,
-              child: Icon(Icons.person, color: context.skinColors.outlineVariant),
+              child: Icon(
+                Icons.person,
+                color: context.skinColors.outlineVariant,
+              ),
             ),
             title: _HighlightedTitle(
-                raw: item.highlight, plain: item.artist!.name),
-            onTap: () => context.go(AppRoutes.artistDetailPath(item.artist!.id)),
+              raw: item.highlight,
+              plain: item.artist!.name,
+            ),
+            onTap: () =>
+                context.go(AppRoutes.artistDetailPath(item.artist!.id)),
           );
         }
         if (item.album != null) {
@@ -393,17 +445,24 @@ class _AllResults extends StatelessWidget {
                 color: context.skinColors.surfaceContainer,
                 borderRadius: BorderRadius.circular(6),
               ),
-              child: Icon(Icons.album,
-                  color: context.skinColors.outlineVariant, size: 28),
+              child: Icon(
+                Icons.album,
+                color: context.skinColors.outlineVariant,
+                size: 28,
+              ),
             ),
-            title:
-                _HighlightedTitle(raw: item.highlight, plain: item.album!.title),
+            title: _HighlightedTitle(
+              raw: item.highlight,
+              plain: item.album!.title,
+            ),
             onTap: () => context.go(AppRoutes.albumDetailPath(item.album!.id)),
           );
         }
         if (item.track != null) {
           return TrackListTile(
-              track: item.track!, isFavorite: item.track!.isFavorite ?? false);
+            track: item.track!,
+            isFavorite: item.track!.isFavorite ?? false,
+          );
         }
         return const SizedBox.shrink();
       },
@@ -423,11 +482,16 @@ class _ArtistResults extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.search_off,
-                size: 64, color: context.skinColors.onSurfaceVariant),
+            Icon(
+              Icons.search_off,
+              size: 64,
+              color: context.skinColors.onSurfaceVariant,
+            ),
             const SizedBox(height: 16),
-            Text(t.noResults,
-                style: TextStyle(color: context.skinColors.onSurfaceVariant)),
+            Text(
+              t.noResults,
+              style: TextStyle(color: context.skinColors.onSurfaceVariant),
+            ),
           ],
         ),
       );
@@ -442,8 +506,7 @@ class _ArtistResults extends StatelessWidget {
             backgroundColor: context.skinColors.surfaceContainer,
             child: Icon(Icons.person, color: context.skinColors.outlineVariant),
           ),
-          title:
-              _HighlightedTitle(raw: items[i].highlight, plain: artist.name),
+          title: _HighlightedTitle(raw: items[i].highlight, plain: artist.name),
           onTap: () => context.go(AppRoutes.artistDetailPath(artist.id)),
         );
       },
@@ -463,11 +526,16 @@ class _AlbumResults extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.search_off,
-                size: 64, color: context.skinColors.onSurfaceVariant),
+            Icon(
+              Icons.search_off,
+              size: 64,
+              color: context.skinColors.onSurfaceVariant,
+            ),
             const SizedBox(height: 16),
-            Text(t.noResults,
-                style: TextStyle(color: context.skinColors.onSurfaceVariant)),
+            Text(
+              t.noResults,
+              style: TextStyle(color: context.skinColors.onSurfaceVariant),
+            ),
           ],
         ),
       );
@@ -485,12 +553,16 @@ class _AlbumResults extends StatelessWidget {
               color: context.skinColors.surfaceContainer,
               borderRadius: BorderRadius.circular(6),
             ),
-            child: Icon(Icons.album,
-                color: context.skinColors.outlineVariant, size: 28),
+            child: Icon(
+              Icons.album,
+              color: context.skinColors.outlineVariant,
+              size: 28,
+            ),
           ),
-          title:
-              _HighlightedTitle(raw: items[i].highlight, plain: album.title),
-          subtitle: album.releaseYear != null ? Text('${album.releaseYear}') : null,
+          title: _HighlightedTitle(raw: items[i].highlight, plain: album.title),
+          subtitle: album.releaseYear != null
+              ? Text('${album.releaseYear}')
+              : null,
           onTap: () => context.go(AppRoutes.albumDetailPath(album.id)),
         );
       },
@@ -510,11 +582,16 @@ class _TrackResults extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.search_off,
-                size: 64, color: context.skinColors.onSurfaceVariant),
+            Icon(
+              Icons.search_off,
+              size: 64,
+              color: context.skinColors.onSurfaceVariant,
+            ),
             const SizedBox(height: 16),
-            Text(t.noResults,
-                style: TextStyle(color: context.skinColors.onSurfaceVariant)),
+            Text(
+              t.noResults,
+              style: TextStyle(color: context.skinColors.onSurfaceVariant),
+            ),
           ],
         ),
       );
@@ -551,12 +628,18 @@ class _HighlightedTitle extends StatelessWidget {
       fontSize: 14,
       fontWeight: FontWeight.w500,
     );
-    final spans = _Highlighter.spanify(raw, base, context.skinColors.sakuraPink);
+    final spans = _Highlighter.spanify(
+      raw,
+      base,
+      context.skinColors.sakuraPink,
+    );
     if (spans == null) {
-      return Text(plain,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: base);
+      return Text(
+        plain,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: base,
+      );
     }
     return RichText(
       maxLines: 1,

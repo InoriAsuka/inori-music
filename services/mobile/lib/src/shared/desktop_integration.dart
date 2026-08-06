@@ -3,12 +3,14 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart' show WidgetsBinding;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:hotkey_manager/hotkey_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
 import 'package:inori_music/src/auth/auth_notifier.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
+import 'package:inori_music/src/shared/system_titlebar_provider.dart';
 
 /// Initialises system-tray, global hotkeys, and window sizing on
 /// macOS / Windows / Linux.
@@ -44,19 +46,22 @@ class DesktopIntegration with TrayListener {
   Future<void> _initWindow() async {
     await windowManager.ensureInitialized();
     final isPastGate = _ref.read(authProvider).valueOrNull?.isPastGate ?? false;
-    // Hidden title bar everywhere — AppTitleBar (main.dart's MaterialApp
-    // builder) supplies the draggable, skin-colored replacement. macOS keeps
-    // the native traffic-light buttons per Apple HIG; Windows (and Linux,
-    // which has no equivalent OS convention to defer to) gets window_manager's
-    // own custom-drawn caption buttons instead of the native ones.
-    final isMac = defaultTargetPlatform == TargetPlatform.macOS;
+    // Read the persisted preference directly via SharedPreferences rather
+    // than `_ref.read(systemTitleBarProvider)` — that provider's own async
+    // restore hasn't resolved yet this early in startup, so going through it
+    // here would always see the hardcoded `false` default instead of what
+    // the user actually chose last time.
+    final prefs = await SharedPreferences.getInstance();
+    final useSystemTitleBar = prefs.getBool(kSystemTitleBarKey) ?? false;
     await windowManager.waitUntilReadyToShow(
       WindowOptions(
         size: isPastGate ? _mainWindowSize : _gateWindowSize,
         minimumSize: isPastGate ? _mainMinimumSize : _gateWindowSize,
         center: true,
-        titleBarStyle: TitleBarStyle.hidden,
-        windowButtonVisibility: isMac,
+        titleBarStyle: useSystemTitleBar
+            ? TitleBarStyle.normal
+            : TitleBarStyle.hidden,
+        windowButtonVisibility: useSystemTitleBar || _isMac,
       ),
       () async {
         await windowManager.setResizable(isPastGate);
@@ -66,6 +71,8 @@ class DesktopIntegration with TrayListener {
     );
   }
 
+  static bool get _isMac => defaultTargetPlatform == TargetPlatform.macOS;
+
   /// Resizes the window when crossing the login gate in either direction.
   /// Called from a `ref.listen(authProvider, ...)` registered in
   /// [InoriMusicApp]'s build method — [WidgetRef.listen] isn't valid outside
@@ -73,9 +80,28 @@ class DesktopIntegration with TrayListener {
   Future<void> applyWindowForAuthState(bool isPastGate) async {
     if (!isDesktop) return;
     await windowManager.setResizable(isPastGate);
-    await windowManager.setMinimumSize(isPastGate ? _mainMinimumSize : _gateWindowSize);
-    await windowManager.setSize(isPastGate ? _mainWindowSize : _gateWindowSize, animate: true);
+    await windowManager.setMinimumSize(
+      isPastGate ? _mainMinimumSize : _gateWindowSize,
+    );
+    await windowManager.setSize(
+      isPastGate ? _mainWindowSize : _gateWindowSize,
+      animate: true,
+    );
     await windowManager.center();
+  }
+
+  /// Applies the "use system title bar" setting live — hidden title bar +
+  /// [DesktopAppBar]'s custom drag region/buttons (macOS keeps native
+  /// traffic-light buttons either way per Apple HIG) versus the fully
+  /// native OS title bar. Called directly from the Settings toggle — static
+  /// because it only ever touches the global `windowManager` singleton, not
+  /// any state owned by a particular [DesktopIntegration] instance.
+  static Future<void> applyTitleBarPreference(bool useSystemTitleBar) async {
+    if (!isDesktop) return;
+    await windowManager.setTitleBarStyle(
+      useSystemTitleBar ? TitleBarStyle.normal : TitleBarStyle.hidden,
+      windowButtonVisibility: useSystemTitleBar || _isMac,
+    );
   }
 
   Future<void> dispose() async {
@@ -90,13 +116,17 @@ class DesktopIntegration with TrayListener {
 
   Future<void> _initTray() async {
     await trayManager.setIcon('assets/images/tray_icon.png');
-    await trayManager.setContextMenu(Menu(items: [
-      MenuItem(key: 'play_pause', label: 'Play / Pause'),
-      MenuItem(key: 'next', label: 'Next'),
-      MenuItem(key: 'previous', label: 'Previous'),
-      MenuItem.separator(),
-      MenuItem(key: 'quit', label: 'Quit'),
-    ]));
+    await trayManager.setContextMenu(
+      Menu(
+        items: [
+          MenuItem(key: 'play_pause', label: 'Play / Pause'),
+          MenuItem(key: 'next', label: 'Next'),
+          MenuItem(key: 'previous', label: 'Previous'),
+          MenuItem.separator(),
+          MenuItem(key: 'quit', label: 'Quit'),
+        ],
+      ),
+    );
     trayManager.addListener(this);
   }
 
@@ -132,7 +162,8 @@ class DesktopIntegration with TrayListener {
         modifiers: [HotKeyModifier.alt],
         scope: HotKeyScope.system,
       ),
-      keyDownHandler: (_) => _ref.read(playerProvider.notifier).togglePlayPause(),
+      keyDownHandler: (_) =>
+          _ref.read(playerProvider.notifier).togglePlayPause(),
     );
 
     // Alt+Right → next

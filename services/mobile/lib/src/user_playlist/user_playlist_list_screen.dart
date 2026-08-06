@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/theme/skin_provider.dart';
+import 'package:inori_music/src/shared/widgets/desktop_app_bar.dart';
 import 'package:inori_music/src/user_playlist/user_playlist_notifier.dart';
 
 /// Library tab — lists all playlists owned by the current user.
@@ -15,7 +16,7 @@ class UserPlaylistListScreen extends ConsumerWidget {
     final playlistsAsync = ref.watch(userPlaylistProvider);
 
     return Scaffold(
-      appBar: AppBar(
+      appBar: DesktopAppBar(
         title: const Text('My Playlists'),
         actions: [
           IconButton(
@@ -31,8 +32,11 @@ class UserPlaylistListScreen extends ConsumerWidget {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.error_outline,
-                  color: context.skinColors.error, size: 48),
+              Icon(
+                Icons.error_outline,
+                color: context.skinColors.error,
+                size: 48,
+              ),
               const SizedBox(height: 12),
               Text(e.toString(), textAlign: TextAlign.center),
               const SizedBox(height: 12),
@@ -45,7 +49,9 @@ class UserPlaylistListScreen extends ConsumerWidget {
         ),
         data: (playlists) {
           if (playlists.isEmpty) {
-            return const Center(child: Text('No playlists yet. Tap + to create one.'));
+            return const Center(
+              child: Text('No playlists yet. Tap + to create one.'),
+            );
           }
           return ListView.builder(
             itemCount: playlists.length,
@@ -58,8 +64,7 @@ class UserPlaylistListScreen extends ConsumerWidget {
                 ),
                 title: Text(pl.name),
                 subtitle: Text('${pl.trackIds.length} tracks'),
-                onTap: () =>
-                    ctx.push(AppRoutes.myPlaylistDetailPath(pl.id)),
+                onTap: () => ctx.push(AppRoutes.myPlaylistDetailPath(pl.id)),
               );
             },
           );
@@ -80,10 +85,7 @@ class UserPlaylistListScreen extends ConsumerWidget {
           decoration: const InputDecoration(labelText: 'Name'),
         ),
         actions: [
-          TextButton(
-            onPressed: () => ctx.pop(),
-            child: const Text('Cancel'),
-          ),
+          TextButton(onPressed: () => ctx.pop(), child: const Text('Cancel')),
           FilledButton(
             onPressed: () => ctx.pop(controller.text.trim()),
             child: const Text('Create'),

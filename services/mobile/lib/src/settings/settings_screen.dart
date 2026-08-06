@@ -15,10 +15,13 @@ import 'package:inori_music/src/lyrics/bilingual_lyrics_notifier.dart';
 import 'package:inori_music/src/offline/download_notifier.dart';
 import 'package:inori_music/src/offline/offline_db.dart';
 import 'package:inori_music/src/shared/background_provider.dart';
+import 'package:inori_music/src/shared/desktop_integration.dart';
 import 'package:inori_music/src/shared/locale_provider.dart';
 import 'package:inori_music/src/shared/router.dart';
+import 'package:inori_music/src/shared/system_titlebar_provider.dart';
 import 'package:inori_music/src/shared/theme/skin_definition.dart';
 import 'package:inori_music/src/shared/theme/skin_provider.dart';
+import 'package:inori_music/src/shared/widgets/desktop_app_bar.dart';
 
 // ---------------------------------------------------------------------------
 // Language picker data
@@ -54,7 +57,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     final t = AppLocalizations.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: Text(t.settings)),
+      appBar: DesktopAppBar(title: Text(t.settings)),
       body: ListView(
         children: [
           // Account section
@@ -68,7 +71,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               title: const Text('以游客身份使用'),
               subtitle: const Text('登录后可使用云端曲库、收藏与跨设备续播'),
               trailing: FilledButton.tonal(
-                onPressed: () => ref.read(authProvider.notifier).exitGuestMode(),
+                onPressed: () =>
+                    ref.read(authProvider.notifier).exitGuestMode(),
                 child: const Text('登录'),
               ),
             )
@@ -131,6 +135,22 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               );
             },
           ),
+          if (DesktopIntegration.isDesktop)
+            Consumer(
+              builder: (context, ref, _) {
+                final useSystemTitleBar = ref.watch(systemTitleBarProvider);
+                return SwitchListTile(
+                  secondary: const Icon(Icons.web_asset_outlined),
+                  title: const Text('使用系统标题栏'),
+                  subtitle: const Text('关闭后使用自定义标题栏与窗口按钮'),
+                  value: useSystemTitleBar,
+                  onChanged: (v) {
+                    ref.read(systemTitleBarProvider.notifier).setEnabled(v);
+                    DesktopIntegration.applyTitleBarPreference(v);
+                  },
+                );
+              },
+            ),
           const Divider(),
 
           // Offline Library section — downloads require an account; a guest
@@ -150,7 +170,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 title: const Text('双语歌词'),
                 subtitle: const Text('在原文下方显示翻译歌词'),
                 value: enabled,
-                onChanged: (v) => ref.read(bilingualLyricsProvider.notifier).setEnabled(v),
+                onChanged: (v) =>
+                    ref.read(bilingualLyricsProvider.notifier).setEnabled(v),
               );
             },
           ),
@@ -175,7 +196,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 title: const Text('响度归一化 (ReplayGain)'),
                 subtitle: const Text('自动调整音量，使不同曲目听感一致'),
                 value: enabled,
-                onChanged: (v) => ref.read(replayGainEnabledProvider.notifier).setEnabled(v),
+                onChanged: (v) =>
+                    ref.read(replayGainEnabledProvider.notifier).setEnabled(v),
               );
             },
           ),
@@ -245,7 +267,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             const _SectionHeader(title: 'Account Actions'),
             ListTile(
               leading: Icon(Icons.logout, color: context.skinColors.error),
-              title: Text(t.logout, style: TextStyle(color: context.skinColors.error)),
+              title: Text(
+                t.logout,
+                style: TextStyle(color: context.skinColors.error),
+              ),
               onTap: () => _confirmLogout(context, ref, t),
             ),
           ],
@@ -264,8 +289,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           children: [
             const Padding(
               padding: EdgeInsets.all(16),
-              child: Text('睡眠定时器',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              child: Text(
+                '睡眠定时器',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
             ),
             for (final mins in [15, 30, 45, 60])
               ListTile(
@@ -286,8 +313,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             ),
             if (timerActive)
               ListTile(
-                title: const Text('取消定时器',
-                    style: TextStyle(color: Colors.red)),
+                title: const Text('取消定时器', style: TextStyle(color: Colors.red)),
                 onTap: () {
                   ref.read(sleepTimerProvider.notifier).cancel();
                   Navigator.pop(context);
@@ -309,7 +335,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           children: [
             const Padding(
               padding: EdgeInsets.all(16),
-              child: Text('播放速度', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              child: Text(
+                '播放速度',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
             ),
             for (final s in speedPresets)
               ListTile(
@@ -355,7 +384,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 controller: currentCtrl,
                 decoration: InputDecoration(labelText: t.currentPassword),
                 obscureText: true,
-                validator: (v) => (v == null || v.isEmpty) ? t.fieldRequired : null,
+                validator: (v) =>
+                    (v == null || v.isEmpty) ? t.fieldRequired : null,
               ),
               const SizedBox(height: 12),
               TextFormField(
@@ -391,9 +421,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 }
               } catch (e) {
                 if (ctx.mounted) {
-                  ScaffoldMessenger.of(ctx).showSnackBar(
-                    SnackBar(content: Text('Error: $e')),
-                  );
+                  ScaffoldMessenger.of(
+                    ctx,
+                  ).showSnackBar(SnackBar(content: Text('Error: $e')));
                 }
               }
             },
@@ -431,9 +461,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (confirmed == true) {
       await ref.read(authProvider.notifier).revokeAllOtherSessions();
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(t.revokeAllConfirmBody)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(t.revokeAllConfirmBody)));
       }
     }
   }
@@ -463,20 +493,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               ),
             ),
             const Divider(height: 1),
-            ..._langOptions.asMap().entries.map(
-              (entry) {
-                final i = entry.key;
-                final opt = entry.value;
-                final isSelected = _isSameLocale(opt.locale, currentLocale);
-                return ListTile(
-                  title: Text(opt.label),
-                  leading: isSelected
-                      ? Icon(Icons.check, color: context.skinColors.sakuraPink)
-                      : null,
-                  onTap: () => Navigator.pop(ctx, i),
-                );
-              },
-            ),
+            ..._langOptions.asMap().entries.map((entry) {
+              final i = entry.key;
+              final opt = entry.value;
+              final isSelected = _isSameLocale(opt.locale, currentLocale);
+              return ListTile(
+                title: Text(opt.label),
+                leading: isSelected
+                    ? Icon(Icons.check, color: context.skinColors.sakuraPink)
+                    : null,
+                onTap: () => Navigator.pop(ctx, i),
+              );
+            }),
           ],
         ),
       ),
@@ -509,7 +537,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   const SizedBox(height: 4),
                   Text(
                     '自定义启动页与登录页背后的图片，不影响其他页面。',
-                    style: TextStyle(color: context.skinColors.onSurfaceVariant, fontSize: 13),
+                    style: TextStyle(
+                      color: context.skinColors.onSurfaceVariant,
+                      fontSize: 13,
+                    ),
                   ),
                   const SizedBox(height: 16),
                   if (background.imagePath != null) ...[
@@ -525,7 +556,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     const SizedBox(height: 12),
                     Row(
                       children: [
-                        Icon(Icons.opacity, size: 18, color: context.skinColors.onSurfaceVariant),
+                        Icon(
+                          Icons.opacity,
+                          size: 18,
+                          color: context.skinColors.onSurfaceVariant,
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Slider(
@@ -575,7 +610,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           final notifier = ref.read(skinProvider.notifier);
           return SafeArea(
             child: ConstrainedBox(
-              constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.7),
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.of(ctx).size.height * 0.7,
+              ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -583,7 +620,12 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     padding: const EdgeInsets.fromLTRB(16, 16, 8, 8),
                     child: Row(
                       children: [
-                        Expanded(child: Text('皮肤', style: Theme.of(ctx).textTheme.headlineSmall)),
+                        Expanded(
+                          child: Text(
+                            '皮肤',
+                            style: Theme.of(ctx).textTheme.headlineSmall,
+                          ),
+                        ),
                         IconButton(
                           icon: const Icon(Icons.file_upload_outlined),
                           tooltip: '导入皮肤',
@@ -601,15 +643,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                         return ListTile(
                           leading: _SkinSwatch(skin: skin),
                           title: Text(skin.displayName),
-                          subtitle: Text(skin.isBuiltIn ? '内置 · ${skin.brightness == Brightness.dark ? '深色' : '浅色'}' : (skin.author ?? '已导入')),
+                          subtitle: Text(
+                            skin.isBuiltIn
+                                ? '内置 · ${skin.brightness == Brightness.dark ? '深色' : '浅色'}'
+                                : (skin.author ?? '已导入'),
+                          ),
                           trailing: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              if (isSelected) Icon(Icons.check, color: ctx.skinColors.sakuraPink),
+                              if (isSelected)
+                                Icon(
+                                  Icons.check,
+                                  color: ctx.skinColors.sakuraPink,
+                                ),
                               if (!skin.isBuiltIn)
                                 IconButton(
-                                  icon: const Icon(Icons.delete_outline, size: 20),
-                                  onPressed: () => _confirmDeleteSkin(ctx, notifier, skin),
+                                  icon: const Icon(
+                                    Icons.delete_outline,
+                                    size: 20,
+                                  ),
+                                  onPressed: () =>
+                                      _confirmDeleteSkin(ctx, notifier, skin),
                                 ),
                             ],
                           ),
@@ -640,12 +694,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             title: const Text('皮肤已导入，但存在对比度警告'),
             content: SingleChildScrollView(child: Text(warnings.join('\n\n'))),
             actions: [
-              FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('知道了')),
+              FilledButton(
+                onPressed: () => Navigator.pop(ctx),
+                child: const Text('知道了'),
+              ),
             ],
           ),
         );
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('皮肤已导入')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('皮肤已导入')));
       }
     } on SkinParseException catch (e) {
       if (!context.mounted) return;
@@ -655,22 +714,35 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           title: const Text('导入失败'),
           content: Text(e.message),
           actions: [
-            FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('知道了')),
+            FilledButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('知道了'),
+            ),
           ],
         ),
       );
     }
   }
 
-  Future<void> _confirmDeleteSkin(BuildContext context, SkinNotifier notifier, SkinDefinition skin) async {
+  Future<void> _confirmDeleteSkin(
+    BuildContext context,
+    SkinNotifier notifier,
+    SkinDefinition skin,
+  ) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('删除皮肤'),
         content: Text('删除「${skin.displayName}」？此操作不可撤销。'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('取消')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('删除')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('取消'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('删除'),
+          ),
         ],
       ),
     );
@@ -748,25 +820,33 @@ class _OfflineLibrarySection extends ConsumerWidget {
             ...tracks.map(
               (t) => ListTile(
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                leading: Icon(Icons.download_done,
-                    color: context.skinColors.sakuraPink),
+                leading: Icon(
+                  Icons.download_done,
+                  color: context.skinColors.sakuraPink,
+                ),
                 title: Text(
                   t.title,
                   style: TextStyle(
-                      color: context.skinColors.onSurface, fontSize: 14),
+                    color: context.skinColors.onSurface,
+                    fontSize: 14,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 subtitle: Text(
                   t.artistName,
                   style: TextStyle(
-                      color: context.skinColors.onSurfaceVariant, fontSize: 12),
+                    color: context.skinColors.onSurfaceVariant,
+                    fontSize: 12,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 trailing: IconButton(
-                  icon: Icon(Icons.delete_outline,
-                      color: context.skinColors.error),
+                  icon: Icon(
+                    Icons.delete_outline,
+                    color: context.skinColors.error,
+                  ),
                   onPressed: () {
                     ref
                         .read(downloadProvider.notifier)
@@ -776,8 +856,10 @@ class _OfflineLibrarySection extends ConsumerWidget {
               ),
             ),
             ListTile(
-              leading:
-                  Icon(Icons.delete_sweep, color: context.skinColors.error),
+              leading: Icon(
+                Icons.delete_sweep,
+                color: context.skinColors.error,
+              ),
               title: Text(
                 'Delete all downloads',
                 style: TextStyle(color: context.skinColors.error),
@@ -788,7 +870,8 @@ class _OfflineLibrarySection extends ConsumerWidget {
                   builder: (ctx) => AlertDialog(
                     title: const Text('Delete all downloads'),
                     content: const Text(
-                        'This will remove all offline tracks from your device.'),
+                      'This will remove all offline tracks from your device.',
+                    ),
                     actions: [
                       TextButton(
                         onPressed: () => Navigator.pop(ctx, false),
@@ -821,7 +904,18 @@ class _EqSection extends ConsumerWidget {
 
   static const _presetKeys = ['flat', 'bassBoost', 'vocal', 'electronic'];
   static const _presetLabels = ['Flat', 'Bass', 'Vocal', 'Electronic'];
-  static const _bandLabels = ['31', '62', '125', '250', '500', '1K', '2K', '4K', '8K', '16K'];
+  static const _bandLabels = [
+    '31',
+    '62',
+    '125',
+    '250',
+    '500',
+    '1K',
+    '2K',
+    '4K',
+    '8K',
+    '16K',
+  ];
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -845,7 +939,8 @@ class _EqSection extends ConsumerWidget {
               title: const Text('均衡器 (EQ)'),
               subtitle: const Text('10 频段均衡器'),
               value: enabled,
-              onChanged: (v) => ref.read(eqNotifierProvider.notifier).setEnabled(v),
+              onChanged: (v) =>
+                  ref.read(eqNotifierProvider.notifier).setEnabled(v),
             );
           },
         ),
@@ -857,10 +952,17 @@ class _EqSection extends ConsumerWidget {
                 _presetKeys.length,
                 (i) => ButtonSegment<String>(
                   value: _presetKeys[i],
-                  label: Text(_presetLabels[i], style: const TextStyle(fontSize: 12)),
+                  label: Text(
+                    _presetLabels[i],
+                    style: const TextStyle(fontSize: 12),
+                  ),
                 ),
               ),
-              selected: {eq.preset.isEmpty || !_presetKeys.contains(eq.preset) ? 'flat' : eq.preset},
+              selected: {
+                eq.preset.isEmpty || !_presetKeys.contains(eq.preset)
+                    ? 'flat'
+                    : eq.preset,
+              },
               onSelectionChanged: (s) =>
                   ref.read(eqNotifierProvider.notifier).setPreset(s.first),
               multiSelectionEnabled: false,
@@ -882,14 +984,18 @@ class _EqSection extends ConsumerWidget {
                             min: -12.0,
                             max: 12.0,
                             divisions: 48,
-                            onChanged: (v) =>
-                                ref.read(eqNotifierProvider.notifier).setBand(i, v),
+                            onChanged: (v) => ref
+                                .read(eqNotifierProvider.notifier)
+                                .setBand(i, v),
                           ),
                         ),
                       ),
                       Text(
                         _bandLabels[i],
-                        style: TextStyle(fontSize: 10, color: context.skinColors.onSurfaceVariant),
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: context.skinColors.onSurfaceVariant,
+                        ),
                       ),
                     ],
                   ),
@@ -908,7 +1014,9 @@ class _EqSection extends ConsumerWidget {
                   return InputChip(
                     label: Text(name, style: const TextStyle(fontSize: 12)),
                     selected: eq.preset == name,
-                    onPressed: () => ref.read(eqNotifierProvider.notifier).selectCustomPreset(name),
+                    onPressed: () => ref
+                        .read(eqNotifierProvider.notifier)
+                        .selectCustomPreset(name),
                     onDeleted: () => _confirmDeletePreset(context, ref, name),
                   );
                 }).toList(),
@@ -931,7 +1039,10 @@ class _EqSection extends ConsumerWidget {
     );
   }
 
-  static Future<void> _showSavePresetDialog(BuildContext context, WidgetRef ref) async {
+  static Future<void> _showSavePresetDialog(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
     final controller = TextEditingController();
     final name = await showDialog<String>(
       context: context,
@@ -948,7 +1059,8 @@ class _EqSection extends ConsumerWidget {
             child: const Text('取消'),
           ),
           TextButton(
-            onPressed: () => Navigator.pop(dialogContext, controller.text.trim()),
+            onPressed: () =>
+                Navigator.pop(dialogContext, controller.text.trim()),
             child: const Text('保存'),
           ),
         ],
@@ -959,7 +1071,11 @@ class _EqSection extends ConsumerWidget {
     }
   }
 
-  static Future<void> _confirmDeletePreset(BuildContext context, WidgetRef ref, String name) async {
+  static Future<void> _confirmDeletePreset(
+    BuildContext context,
+    WidgetRef ref,
+    String name,
+  ) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => AlertDialog(
@@ -994,9 +1110,9 @@ class _SectionHeader extends StatelessWidget {
       child: Text(
         title,
         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: context.skinColors.sakuraPink,
-              fontWeight: FontWeight.w600,
-            ),
+          color: context.skinColors.sakuraPink,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
   }
@@ -1024,7 +1140,10 @@ class _SkinSwatch extends StatelessWidget {
         child: Container(
           width: 16,
           height: 16,
-          decoration: BoxDecoration(color: skin.colors.sakuraPink, shape: BoxShape.circle),
+          decoration: BoxDecoration(
+            color: skin.colors.sakuraPink,
+            shape: BoxShape.circle,
+          ),
         ),
       ),
     );

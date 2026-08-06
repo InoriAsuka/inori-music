@@ -9,6 +9,7 @@ import 'package:inori_music/src/favorites/track_favorite_notifier.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/theme/skin_provider.dart';
+import 'package:inori_music/src/shared/widgets/desktop_app_bar.dart';
 import 'package:inori_music/src/shared/widgets/track_list_tile.dart';
 import 'package:inori_music/src/user_playlist/user_playlist_notifier.dart';
 
@@ -30,21 +31,23 @@ final favoritesProvider = FutureProvider<List<CatalogTrack>>((ref) async {
       final trackResp = await catalogApi.getCatalogTrack(id: id);
       if (trackResp.data != null) {
         final t = trackResp.data!;
-        tracks.add(CatalogTrack(
-          id: t.id,
-          artistId: t.artistId,
-          createdAt: t.createdAt,
-          mediaObjectId: t.mediaObjectId,
-          title: t.title,
-          updatedAt: t.updatedAt,
-          albumId: t.albumId,
-          discNumber: t.discNumber,
-          durationMs: t.durationMs,
-          genre: t.genre,
-          isFavorite: true,
-          sortTitle: t.sortTitle,
-          trackNumber: t.trackNumber,
-        ));
+        tracks.add(
+          CatalogTrack(
+            id: t.id,
+            artistId: t.artistId,
+            createdAt: t.createdAt,
+            mediaObjectId: t.mediaObjectId,
+            title: t.title,
+            updatedAt: t.updatedAt,
+            albumId: t.albumId,
+            discNumber: t.discNumber,
+            durationMs: t.durationMs,
+            genre: t.genre,
+            isFavorite: true,
+            sortTitle: t.sortTitle,
+            trackNumber: t.trackNumber,
+          ),
+        );
       }
     } catch (_) {
       // Skip tracks that can't be resolved
@@ -66,7 +69,7 @@ class FavoritesScreen extends ConsumerWidget {
     final playlistsState = ref.watch(userPlaylistProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Library')),
+      appBar: DesktopAppBar(title: const Text('Library')),
       body: CustomScrollView(
         slivers: [
           // ---- My Playlists section ----
@@ -103,8 +106,10 @@ class FavoritesScreen extends ConsumerWidget {
             error: (e, _) => SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: Text('$e',
-                    style: TextStyle(color: context.skinColors.error)),
+                child: Text(
+                  '$e',
+                  style: TextStyle(color: context.skinColors.error),
+                ),
               ),
             ),
             data: (playlists) => playlists.isEmpty
@@ -113,42 +118,46 @@ class FavoritesScreen extends ConsumerWidget {
                       padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                       child: Text(
                         'No playlists yet. Tap + to create one.',
-                        style: TextStyle(color: context.skinColors.onSurfaceVariant),
+                        style: TextStyle(
+                          color: context.skinColors.onSurfaceVariant,
+                        ),
                       ),
                     ),
                   )
                 : SliverList(
-                    delegate: SliverChildBuilderDelegate(
-                      (context, i) {
-                        final pl = playlists[i];
-                        return ListTile(
-                          leading: Container(
-                            width: 44,
-                            height: 44,
-                            decoration: BoxDecoration(
-                              color: context.skinColors.surfaceContainer,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Icon(Icons.queue_music,
-                                color: context.skinColors.sakuraPink),
+                    delegate: SliverChildBuilderDelegate((context, i) {
+                      final pl = playlists[i];
+                      return ListTile(
+                        leading: Container(
+                          width: 44,
+                          height: 44,
+                          decoration: BoxDecoration(
+                            color: context.skinColors.surfaceContainer,
+                            borderRadius: BorderRadius.circular(8),
                           ),
-                          title: Text(pl.name),
-                          subtitle: Text('${pl.trackIds.length} tracks'),
-                          trailing: IconButton(
-                            icon: Icon(Icons.delete_outline,
-                                size: 20,
-                                color: context.skinColors.onSurfaceVariant),
-                            onPressed: () async {
-                              await ref
-                                  .read(userPlaylistProvider.notifier)
-                                  .delete(pl.id);
-                            },
+                          child: Icon(
+                            Icons.queue_music,
+                            color: context.skinColors.sakuraPink,
                           ),
-                          onTap: () => context.go(AppRoutes.myPlaylistDetailPath(pl.id)),
-                        );
-                      },
-                      childCount: playlists.length,
-                    ),
+                        ),
+                        title: Text(pl.name),
+                        subtitle: Text('${pl.trackIds.length} tracks'),
+                        trailing: IconButton(
+                          icon: Icon(
+                            Icons.delete_outline,
+                            size: 20,
+                            color: context.skinColors.onSurfaceVariant,
+                          ),
+                          onPressed: () async {
+                            await ref
+                                .read(userPlaylistProvider.notifier)
+                                .delete(pl.id);
+                          },
+                        ),
+                        onTap: () =>
+                            context.go(AppRoutes.myPlaylistDetailPath(pl.id)),
+                      );
+                    }, childCount: playlists.length),
                   ),
           ),
           // ---- Favorites section ----
@@ -174,8 +183,11 @@ class FavoritesScreen extends ConsumerWidget {
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.error_outline,
-                        color: context.skinColors.error, size: 48),
+                    Icon(
+                      Icons.error_outline,
+                      color: context.skinColors.error,
+                      size: 48,
+                    ),
                     const SizedBox(height: 12),
                     Text('$e', textAlign: TextAlign.center),
                     const SizedBox(height: 12),
@@ -193,14 +205,19 @@ class FavoritesScreen extends ConsumerWidget {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.favorite_border,
-                              size: 64,
-                              color: context.skinColors.onSurfaceVariant),
+                          Icon(
+                            Icons.favorite_border,
+                            size: 64,
+                            color: context.skinColors.onSurfaceVariant,
+                          ),
                           const SizedBox(height: 16),
-                          Text('No favorites yet',
-                              style: TextStyle(
-                                  fontSize: 18,
-                                  color: context.skinColors.onSurfaceVariant)),
+                          Text(
+                            'No favorites yet',
+                            style: TextStyle(
+                              fontSize: 18,
+                              color: context.skinColors.onSurfaceVariant,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -233,10 +250,7 @@ class FavoritesScreen extends ConsumerWidget {
           decoration: const InputDecoration(labelText: 'Playlist name'),
         ),
         actions: [
-          TextButton(
-            onPressed: () => ctx.pop(),
-            child: const Text('Cancel'),
-          ),
+          TextButton(onPressed: () => ctx.pop(), child: const Text('Cancel')),
           FilledButton(
             onPressed: () => ctx.pop(controller.text.trim()),
             child: const Text('Create'),

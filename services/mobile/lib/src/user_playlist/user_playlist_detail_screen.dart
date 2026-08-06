@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/theme/skin_provider.dart';
+import 'package:inori_music/src/shared/widgets/desktop_app_bar.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/user_playlist/user_playlist_notifier.dart';
 
@@ -77,10 +78,7 @@ class _UserPlaylistDetailScreenState
           decoration: const InputDecoration(labelText: 'Name'),
         ),
         actions: [
-          TextButton(
-            onPressed: () => ctx.pop(),
-            child: const Text('Cancel'),
-          ),
+          TextButton(onPressed: () => ctx.pop(), child: const Text('Cancel')),
           FilledButton(
             onPressed: () => ctx.pop(controller.text.trim()),
             child: const Text('Save'),
@@ -96,9 +94,9 @@ class _UserPlaylistDetailScreenState
         // Name is now derived from the provider — no local setState needed.
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Rename failed: $e')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Rename failed: $e')));
         }
       }
     }
@@ -125,15 +123,13 @@ class _UserPlaylistDetailScreenState
     );
     if (ok == true && mounted) {
       try {
-        await ref
-            .read(userPlaylistProvider.notifier)
-            .delete(widget.playlistId);
+        await ref.read(userPlaylistProvider.notifier).delete(widget.playlistId);
         if (mounted) context.pop();
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Delete failed: $e')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Delete failed: $e')));
         }
       }
     }
@@ -142,7 +138,7 @@ class _UserPlaylistDetailScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
+      appBar: DesktopAppBar(
         title: Text(_currentName().isEmpty ? 'My Playlist' : _currentName()),
         actions: [
           IconButton(
@@ -160,103 +156,110 @@ class _UserPlaylistDetailScreenState
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
+          ? Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.error_outline,
+                    color: context.skinColors.error,
+                    size: 48,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(_error!, textAlign: TextAlign.center),
+                  const SizedBox(height: 12),
+                  FilledButton(
+                    onPressed: _loadTracks,
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            )
+          : _trackIds == null || _trackIds!.isEmpty
+          ? const Center(child: Text('No tracks in this playlist'))
+          : Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                  child: Row(
                     children: [
-                      Icon(Icons.error_outline,
-                          color: context.skinColors.error, size: 48),
-                      const SizedBox(height: 12),
-                      Text(_error!, textAlign: TextAlign.center),
-                      const SizedBox(height: 12),
-                      FilledButton(
-                        onPressed: _loadTracks,
-                        child: const Text('Retry'),
+                      Text(
+                        '${_trackIds!.length} tracks',
+                        style: TextStyle(
+                          color: context.skinColors.onSurfaceVariant,
+                        ),
+                      ),
+                      const Spacer(),
+                      FilledButton.icon(
+                        icon: const Icon(Icons.play_arrow, size: 18),
+                        label: const Text('Play All'),
+                        onPressed: () async {
+                          await ref
+                              .read(playerProvider.notifier)
+                              .playQueue(_trackIds!);
+                          if (context.mounted) {
+                            context.go(AppRoutes.player);
+                          }
+                        },
                       ),
                     ],
                   ),
-                )
-              : _trackIds == null || _trackIds!.isEmpty
-                  ? const Center(child: Text('No tracks in this playlist'))
-                  : Column(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-                          child: Row(
-                            children: [
-                              Text(
-                                '${_trackIds!.length} tracks',
-                                style: TextStyle(
-                                    color: context.skinColors.onSurfaceVariant),
+                ),
+                Expanded(
+                  child: ListView.builder(
+                    itemCount: _trackIds!.length,
+                    itemBuilder: (ctx, i) {
+                      final tid = _trackIds![i];
+                      return ListTile(
+                        leading: SizedBox(
+                          width: 40,
+                          child: Center(
+                            child: Text(
+                              '${i + 1}',
+                              style: TextStyle(
+                                color: context.skinColors.onSurfaceVariant,
                               ),
-                              const Spacer(),
-                              FilledButton.icon(
-                                icon: const Icon(Icons.play_arrow, size: 18),
-                                label: const Text('Play All'),
-                                onPressed: () async {
-                                  await ref
-                                      .read(playerProvider.notifier)
-                                      .playQueue(_trackIds!);
-                                  if (context.mounted) {
-                                    context.go(AppRoutes.player);
-                                  }
-                                },
-                              ),
-                            ],
+                            ),
                           ),
                         ),
-                        Expanded(
-                          child: ListView.builder(
-                            itemCount: _trackIds!.length,
-                            itemBuilder: (ctx, i) {
-                              final tid = _trackIds![i];
-                              return ListTile(
-                                leading: SizedBox(
-                                  width: 40,
-                                  child: Center(
-                                    child: Text(
-                                      '${i + 1}',
-                                      style: TextStyle(
-                                          color: context.skinColors.onSurfaceVariant),
-                                    ),
-                                  ),
-                                ),
-                                title: Text(
-                                  tid,
-                                  style: TextStyle(
-                                    color: context.skinColors.onSurface,
-                                    fontSize: 13,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                                trailing: IconButton(
-                                  icon: Icon(Icons.remove_circle_outline,
-                                      size: 20,
-                                      color: context.skinColors.onSurfaceVariant),
-                                  onPressed: () async {
-                                    try {
-                                      await ref
-                                          .read(userPlaylistProvider.notifier)
-                                          .removeTrack(widget.playlistId, tid);
-                                      await _loadTracks();
-                                    } catch (e) {
-                                      if (context.mounted) {
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(SnackBar(
-                                          content: Text(
-                                              'Could not remove track: $e'),
-                                        ));
-                                      }
-                                    }
-                                  },
-                                ),
-                              );
-                            },
+                        title: Text(
+                          tid,
+                          style: TextStyle(
+                            color: context.skinColors.onSurface,
+                            fontSize: 13,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                      ],
-                    ),
+                        trailing: IconButton(
+                          icon: Icon(
+                            Icons.remove_circle_outline,
+                            size: 20,
+                            color: context.skinColors.onSurfaceVariant,
+                          ),
+                          onPressed: () async {
+                            try {
+                              await ref
+                                  .read(userPlaylistProvider.notifier)
+                                  .removeTrack(widget.playlistId, tid);
+                              await _loadTracks();
+                            } catch (e) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Could not remove track: $e'),
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
     );
   }
 }

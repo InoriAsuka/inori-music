@@ -7,6 +7,7 @@ import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/auth/auth_notifier.dart';
 import 'package:inori_music/src/shared/theme/sakura_dusk.dart';
 import 'package:inori_music/src/shared/widgets/app_background.dart';
+import 'package:inori_music/src/shared/widgets/gate_window_chrome.dart';
 import 'package:inori_music/src/shared/widgets/inori_mark.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
@@ -35,7 +36,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   Future<void> _submit() async {
     if (!_formKey.currentState!.validate()) return;
-    await ref.read(authProvider.notifier).login(
+    await ref
+        .read(authProvider.notifier)
+        .login(
           _usernameCtrl.text.trim(),
           _passwordCtrl.text,
           baseUrl: _showServerField ? _serverCtrl.text.trim() : null,
@@ -50,125 +53,168 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final error = auth.valueOrNull?.error;
 
     return Scaffold(
-      body: AppBackground(
-        child: SafeArea(
-          child: Center(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  // Brand mark floats directly over the background, same
-                  // treatment as the splash screen it follows.
-                  const InoriMark(size: 76),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Inori Music',
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          color: SakuraDuskColors.onBackground,
-                          fontWeight: FontWeight.w700,
-                        ),
+      body: Stack(
+        children: [
+          AppBackground(
+            child: SafeArea(
+              child: Center(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 28,
+                    vertical: 32,
                   ),
-                  const SizedBox(height: 40),
-
-                  _GlassCard(
-                    child: Form(
-                      key: _formKey,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Text(
-                            'Sign in to your library',
-                            textAlign: TextAlign.center,
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: SakuraDuskColors.onSurfaceVariant,
-                                ),
-                          ),
-                          const SizedBox(height: 20),
-
-                          _ServerUrlToggle(
-                            show: _showServerField,
-                            controller: _serverCtrl,
-                            onToggle: () => setState(() => _showServerField = !_showServerField),
-                          ),
-                          if (_showServerField) const SizedBox(height: 16),
-
-                          TextFormField(
-                            controller: _usernameCtrl,
-                            decoration: InputDecoration(
-                              labelText: t.username,
-                              prefixIcon: const Icon(Icons.person_outline),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      // Brand mark floats directly over the background, same
+                      // treatment as the splash screen it follows.
+                      const InoriMark(size: 76),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Inori Music',
+                        style: Theme.of(context).textTheme.headlineMedium
+                            ?.copyWith(
+                              color: SakuraDuskColors.onBackground,
+                              fontWeight: FontWeight.w700,
                             ),
-                            textInputAction: TextInputAction.next,
-                            autofillHints: const [AutofillHints.username],
-                            validator: (v) => (v == null || v.trim().isEmpty) ? t.fieldRequired : null,
-                          ),
-                          const SizedBox(height: 16),
-
-                          TextFormField(
-                            controller: _passwordCtrl,
-                            decoration: InputDecoration(
-                              labelText: t.password,
-                              prefixIcon: const Icon(Icons.lock_outline),
-                              suffixIcon: IconButton(
-                                icon: Icon(
-                                  _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                                ),
-                                onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                              ),
-                            ),
-                            obscureText: _obscurePassword,
-                            textInputAction: TextInputAction.done,
-                            autofillHints: const [AutofillHints.password],
-                            onFieldSubmitted: (_) => _submit(),
-                            validator: (v) => (v == null || v.isEmpty) ? t.fieldRequired : null,
-                          ),
-                          const SizedBox(height: 8),
-
-                          if (error != null)
-                            Padding(
-                              padding: const EdgeInsets.only(top: 4, bottom: 4),
-                              child: Text(
-                                error,
-                                style: TextStyle(
-                                  color: Theme.of(context).colorScheme.error,
-                                  fontSize: 13,
-                                ),
-                                textAlign: TextAlign.center,
-                              ),
-                            ),
-                          const SizedBox(height: 24),
-
-                          FilledButton(
-                            onPressed: isLoading ? null : _submit,
-                            child: isLoading
-                                ? const SizedBox(
-                                    height: 20,
-                                    width: 20,
-                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                  )
-                                : Text(t.login, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
-                          ),
-                          const SizedBox(height: 12),
-
-                          // Guest entry point — a local-files player, no
-                          // account needed.
-                          TextButton(
-                            onPressed: isLoading
-                                ? null
-                                : () => ref.read(authProvider.notifier).continueAsGuest(),
-                            child: const Text('以游客身份继续'),
-                          ),
-                        ],
                       ),
-                    ),
+                      const SizedBox(height: 40),
+
+                      _GlassCard(
+                        child: Form(
+                          key: _formKey,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Text(
+                                'Sign in to your library',
+                                textAlign: TextAlign.center,
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(
+                                      color: SakuraDuskColors.onSurfaceVariant,
+                                    ),
+                              ),
+                              const SizedBox(height: 20),
+
+                              _ServerUrlToggle(
+                                show: _showServerField,
+                                controller: _serverCtrl,
+                                onToggle: () => setState(
+                                  () => _showServerField = !_showServerField,
+                                ),
+                              ),
+                              if (_showServerField) const SizedBox(height: 16),
+
+                              TextFormField(
+                                controller: _usernameCtrl,
+                                decoration: InputDecoration(
+                                  labelText: t.username,
+                                  prefixIcon: const Icon(Icons.person_outline),
+                                ),
+                                textInputAction: TextInputAction.next,
+                                autofillHints: const [AutofillHints.username],
+                                validator: (v) =>
+                                    (v == null || v.trim().isEmpty)
+                                    ? t.fieldRequired
+                                    : null,
+                              ),
+                              const SizedBox(height: 16),
+
+                              TextFormField(
+                                controller: _passwordCtrl,
+                                decoration: InputDecoration(
+                                  labelText: t.password,
+                                  prefixIcon: const Icon(Icons.lock_outline),
+                                  suffixIcon: IconButton(
+                                    icon: Icon(
+                                      _obscurePassword
+                                          ? Icons.visibility_off_outlined
+                                          : Icons.visibility_outlined,
+                                    ),
+                                    onPressed: () => setState(
+                                      () =>
+                                          _obscurePassword = !_obscurePassword,
+                                    ),
+                                  ),
+                                ),
+                                obscureText: _obscurePassword,
+                                textInputAction: TextInputAction.done,
+                                autofillHints: const [AutofillHints.password],
+                                onFieldSubmitted: (_) => _submit(),
+                                validator: (v) => (v == null || v.isEmpty)
+                                    ? t.fieldRequired
+                                    : null,
+                              ),
+                              const SizedBox(height: 8),
+
+                              if (error != null)
+                                Padding(
+                                  padding: const EdgeInsets.only(
+                                    top: 4,
+                                    bottom: 4,
+                                  ),
+                                  child: Text(
+                                    error,
+                                    style: TextStyle(
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.error,
+                                      fontSize: 13,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                              const SizedBox(height: 24),
+
+                              FilledButton(
+                                onPressed: isLoading ? null : _submit,
+                                child: isLoading
+                                    ? const SizedBox(
+                                        height: 20,
+                                        width: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Colors.white,
+                                        ),
+                                      )
+                                    : Text(
+                                        t.login,
+                                        style: const TextStyle(
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                              ),
+                              const SizedBox(height: 12),
+
+                              // Guest entry point — a local-files player, no
+                              // account needed.
+                              TextButton(
+                                onPressed: isLoading
+                                    ? null
+                                    : () => ref
+                                          .read(authProvider.notifier)
+                                          .continueAsGuest(),
+                                child: const Text('以游客身份继续'),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ),
-        ),
+          const Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: GateWindowChrome(),
+          ),
+        ],
       ),
     );
   }

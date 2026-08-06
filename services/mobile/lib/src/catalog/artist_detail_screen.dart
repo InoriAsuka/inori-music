@@ -10,19 +10,27 @@ import 'package:inori_music/src/catalog/catalog_repository.dart';
 import 'package:inori_music/src/favorites/track_favorite_notifier.dart';
 import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/theme/skin_provider.dart';
+import 'package:inori_music/src/shared/widgets/desktop_app_bar.dart';
 import 'package:inori_music/src/shared/widgets/track_list_tile.dart';
 
-final _artistDetailProvider = FutureProvider.family<CatalogArtist, String>((ref, id) {
+final _artistDetailProvider = FutureProvider.family<CatalogArtist, String>((
+  ref,
+  id,
+) {
   return ref.watch(catalogRepositoryProvider).getArtist(id);
 });
 
-final _artistAlbumsProvider = FutureProvider.family<List<CatalogAlbum>, String>((ref, id) {
-  return ref.watch(catalogRepositoryProvider).albumsByArtist(id);
-});
+final _artistAlbumsProvider = FutureProvider.family<List<CatalogAlbum>, String>(
+  (ref, id) {
+    return ref.watch(catalogRepositoryProvider).albumsByArtist(id);
+  },
+);
 
-final _artistTracksProvider = FutureProvider.family<List<CatalogTrack>, String>((ref, id) {
-  return ref.watch(catalogRepositoryProvider).tracksByArtist(id);
-});
+final _artistTracksProvider = FutureProvider.family<List<CatalogTrack>, String>(
+  (ref, id) {
+    return ref.watch(catalogRepositoryProvider).tracksByArtist(id);
+  },
+);
 
 class ArtistDetailScreen extends ConsumerWidget {
   const ArtistDetailScreen({super.key, required this.id});
@@ -37,24 +45,33 @@ class ArtistDetailScreen extends ConsumerWidget {
     final artistName = artistState.valueOrNull?.name ?? 'Artist';
 
     return Scaffold(
-      appBar: AppBar(title: Text(artistName)),
+      appBar: DesktopAppBar(title: Text(artistName)),
       body: CustomScrollView(
         slivers: [
           // Albums section
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Text('Albums', style: Theme.of(context).textTheme.titleLarge),
+              child: Text(
+                'Albums',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
             ),
           ),
           albumsState.when(
             loading: () => const SliverToBoxAdapter(
-              child: SizedBox(height: 80, child: Center(child: CircularProgressIndicator())),
+              child: SizedBox(
+                height: 80,
+                child: Center(child: CircularProgressIndicator()),
+              ),
             ),
             error: (e, _) => SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: Text('Error: $e', style: TextStyle(color: context.skinColors.error)),
+                child: Text(
+                  'Error: $e',
+                  style: TextStyle(color: context.skinColors.error),
+                ),
               ),
             ),
             data: (albums) => SliverToBoxAdapter(
@@ -69,7 +86,8 @@ class ArtistDetailScreen extends ConsumerWidget {
                         itemBuilder: (context, i) {
                           final album = albums[i];
                           return GestureDetector(
-                            onTap: () => context.go(AppRoutes.albumDetailPath(album.id)),
+                            onTap: () =>
+                                context.go(AppRoutes.albumDetailPath(album.id)),
                             child: Container(
                               width: 120,
                               margin: const EdgeInsets.symmetric(horizontal: 4),
@@ -79,15 +97,22 @@ class ArtistDetailScreen extends ConsumerWidget {
                                     width: 100,
                                     height: 100,
                                     decoration: BoxDecoration(
-                                      color: context.skinColors.surfaceContainer,
+                                      color:
+                                          context.skinColors.surfaceContainer,
                                       borderRadius: BorderRadius.circular(8),
                                     ),
-                                    child: Icon(Icons.album, color: context.skinColors.outlineVariant, size: 40),
+                                    child: Icon(
+                                      Icons.album,
+                                      color: context.skinColors.outlineVariant,
+                                      size: 40,
+                                    ),
                                   ),
                                   const SizedBox(height: 6),
                                   Text(
                                     album.title,
-                                    style: Theme.of(context).textTheme.labelMedium,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.labelMedium,
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
                                     textAlign: TextAlign.center,
@@ -106,21 +131,32 @@ class ArtistDetailScreen extends ConsumerWidget {
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Text('Tracks', style: Theme.of(context).textTheme.titleLarge),
+              child: Text(
+                'Tracks',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
             ),
           ),
           tracksState.when(
             loading: () => const SliverToBoxAdapter(
-              child: SizedBox(height: 80, child: Center(child: CircularProgressIndicator())),
+              child: SizedBox(
+                height: 80,
+                child: Center(child: CircularProgressIndicator()),
+              ),
             ),
             error: (e, _) => SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: Text('Error: $e', style: TextStyle(color: context.skinColors.error)),
+                child: Text(
+                  'Error: $e',
+                  style: TextStyle(color: context.skinColors.error),
+                ),
               ),
             ),
             data: (tracks) => tracks.isEmpty
-                ? const SliverToBoxAdapter(child: Center(child: Text('No tracks')))
+                ? const SliverToBoxAdapter(
+                    child: Center(child: Text('No tracks')),
+                  )
                 : SliverList(
                     delegate: SliverChildBuilderDelegate(
                       (context, i) => _TrackTile(track: tracks[i]),

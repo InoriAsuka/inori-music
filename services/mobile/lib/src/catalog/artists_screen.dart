@@ -8,6 +8,7 @@ import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/catalog/catalog_repository.dart';
 import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/theme/skin_provider.dart';
+import 'package:inori_music/src/shared/widgets/desktop_app_bar.dart';
 
 final _artistsProvider = FutureProvider<List<CatalogArtist>>((ref) {
   return ref.watch(catalogRepositoryProvider).listArtists(limit: 200);
@@ -21,14 +22,18 @@ class ArtistsScreen extends ConsumerWidget {
     final t = AppLocalizations.of(context);
     final state = ref.watch(_artistsProvider);
     return Scaffold(
-      appBar: AppBar(title: Text(t.artists)),
+      appBar: DesktopAppBar(title: Text(t.artists)),
       body: state.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.error_outline, color: context.skinColors.error, size: 48),
+              Icon(
+                Icons.error_outline,
+                color: context.skinColors.error,
+                size: 48,
+              ),
               const SizedBox(height: 12),
               Text('$e', textAlign: TextAlign.center),
               const SizedBox(height: 12),
@@ -54,7 +59,8 @@ class ArtistsScreen extends ConsumerWidget {
                   final artist = artists[i];
                   return _ArtistCard(
                     artist: artist,
-                    onTap: () => context.go(AppRoutes.artistDetailPath(artist.id)),
+                    onTap: () =>
+                        context.go(AppRoutes.artistDetailPath(artist.id)),
                   );
                 },
               ),
@@ -77,7 +83,10 @@ class _ArtistCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: context.skinColors.surfaceVariant,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: context.skinColors.outlineVariant, width: 0.5),
+          border: Border.all(
+            color: context.skinColors.outlineVariant,
+            width: 0.5,
+          ),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.center,

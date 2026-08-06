@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import 'package:inori_music/src/shared/theme/sakura_dusk.dart';
 import 'package:inori_music/src/shared/widgets/app_background.dart';
+import 'package:inori_music/src/shared/widgets/gate_window_chrome.dart';
 import 'package:inori_music/src/shared/widgets/inori_mark.dart';
 
 /// Shown while auth status resolves (a single `/me` round-trip, typically
@@ -14,7 +15,8 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<double> _scale;
   late final Animation<double> _opacity;
@@ -26,10 +28,14 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
       vsync: this,
       duration: const Duration(milliseconds: 260),
     );
-    _scale = Tween(begin: 0.9, end: 1.0)
-        .animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
-    _opacity = Tween(begin: 0.0, end: 1.0)
-        .animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
+    _scale = Tween(
+      begin: 0.9,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
+    _opacity = Tween(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
     _controller.forward();
   }
 
@@ -42,29 +48,40 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: AppBackground(
-        child: Center(
-          child: FadeTransition(
-            opacity: _opacity,
-            child: ScaleTransition(
-              scale: _scale,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const InoriMark(size: 88),
-                  const SizedBox(height: 20),
-                  Text(
-                    'Inori Music',
-                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                          color: SakuraDuskColors.onBackground,
-                          fontWeight: FontWeight.w700,
-                        ),
+      body: Stack(
+        children: [
+          AppBackground(
+            child: Center(
+              child: FadeTransition(
+                opacity: _opacity,
+                child: ScaleTransition(
+                  scale: _scale,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const InoriMark(size: 88),
+                      const SizedBox(height: 20),
+                      Text(
+                        'Inori Music',
+                        style: Theme.of(context).textTheme.headlineMedium
+                            ?.copyWith(
+                              color: SakuraDuskColors.onBackground,
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ),
           ),
-        ),
+          const Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: GateWindowChrome(),
+          ),
+        ],
       ),
     );
   }

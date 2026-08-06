@@ -13,7 +13,6 @@ import 'package:inori_music/src/shared/locale_provider.dart';
 import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/theme/skin_definition.dart';
 import 'package:inori_music/src/shared/theme/skin_provider.dart';
-import 'package:inori_music/src/shared/widgets/app_title_bar.dart';
 
 /// Global [InoriAudioHandler] instance shared between main.dart and PlayerNotifier.
 late final InoriAudioHandler audioHandler;
@@ -33,11 +32,7 @@ void main() async {
   // OS media sessions are available before any widget is created.
   audioHandler = await InoriAudioHandler.create();
   audioHandler.initCrossfade();
-  runApp(
-    const ProviderScope(
-      child: InoriMusicApp(),
-    ),
-  );
+  runApp(const ProviderScope(child: InoriMusicApp()));
 }
 
 class InoriMusicApp extends ConsumerStatefulWidget {
@@ -107,17 +102,7 @@ class _InoriMusicAppState extends ConsumerState<InoriMusicApp>
       locale: locale,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
-      builder: (context, child) => SkinScope(
-        skin: skin,
-        child: DesktopIntegration.isDesktop
-            ? Column(
-                children: [
-                  const AppTitleBar(),
-                  Expanded(child: child!),
-                ],
-              )
-            : child!,
-      ),
+      builder: (context, child) => SkinScope(skin: skin, child: child!),
     );
   }
 }
