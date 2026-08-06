@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`5.17.0`
+`5.18.0`
 
 ## Product Goal
 
@@ -41,6 +41,15 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Committed lifecycle updates must record latest transition metadata for audit preparation.
 
 ## Requirement History
+
+### v5.18.0 - 2026-08-06
+
+- **feat: Windows Fluent Design 材质（对标开源/商业播放器布局改进第二阶段）** — 呼应参考资料"原音HQ播放器"（WinUI 3，Mica/亚克力材质+系统深浅色主题）。新增依赖 `flutter_acrylic`（核实其 `Window.setEffect({required WindowEffect effect, Color color, bool dark})` API 与 `WindowEffect.disabled/acrylic/mica` 枚举值后接入）。
+- **范围界定的技术实现**：`flutter_acrylic` 没有"只对某个区域生效"的 API——`Window.setEffect()` 是整个原生窗体级别的合成器效果，Flutter 侧无法局部应用。按 v5.17.0 计划里"只作用于标题栏区域，主内容区保持不透明"的范围决定，实际做法是：全局启用原生 Mica/亚克力背景合成，但只让 `DesktopAppBar` 自己的 `AppBar.backgroundColor` 在材质开启时变成 `Colors.transparent`，应用其余所有页面（`Scaffold`/`Card`/皮肤表面色）继续用不透明颜色正常绘制——Flutter 的不透明像素会完全遮住其下方的原生合成效果，只有标题栏这一处特意留透明的区域才会真正看见模糊背景，这样不用把 v5.14.0 皮肤系统"全部 token 都是不透明色、WCAG 对比度审计成立"的前提推倒重来。
+- **可读性处理**：没有另外在 Flutter 侧叠一层暗角/scrim，而是直接用 `Window.setEffect` 自带的 `color` 参数——这个参数由原生合成器混合进模糊背景里（`flutter_acrylic` 官方示例 `Window.setEffect(effect: WindowEffect.acrylic, color: Color(0xCC222222))` 正是这个用法），传入当前皮肤 `playerBar` 色值（80% 不透明度）作为色调，保证标题栏文字对比度不随用户桌面壁纸的随机内容而失控，不需要重新做一次 WCAG 审计。
+- **新增设置项"标题栏材质"**（Settings，仅 Windows 显示，且"使用系统标题栏"开启时隐藏——两者语义冲突）：无/亚克力/Mica 三选一，复用既有的底部弹层单选范式（`_showSkinSheet`/`_showLanguagePicker` 同款结构）。新增 `titlebar_material_provider.dart`（`shared_preferences` 持久化，模式与既有 provider 一致）。`main.dart` 里 `ref.watch(titlebarMaterialProvider)` 加上直接调用（不是 `ref.listen`——这个 Riverpod 版本（2.6.1）的 `WidgetRef.listen` 没有 `fireImmediately` 参数，`ref.watch` 天然覆盖首次构建与后续变化两种情形，`Window.setEffect` 本身幂等，多余的重复调用无副作用）。
+- **平台范围**：整个功能只在 `Platform.isWindows` 为真时生效（Settings 入口隐藏、`DesktopIntegration.applyTitlebarMaterial` 直接跳过、`DesktopAppBar` 的透明背景分支不触发）——macOS 有自己的 vibrancy 语义体系，`flutter_acrylic` 虽然也支持 macOS 效果，但这不在本 phase 范围内，`Window.initialize()` 同样只在 Windows 上调用，不影响 macOS 现状。
+- The phase output is version-tracked and verified locally（`flutter analyze --no-fatal-infos` 0 issues；`flutter test --no-pub` 153/153 通过，含新增 `titlebar_material_provider_test.dart` 3 例）。本次改动波及的 `linux`/`macos`/`windows` 三份 `generated_plugin_registrant`/`GeneratedPluginRegistrant` 文件是 `flutter pub get` 引入新插件依赖后的正常自动更新，一并提交。实际 Mica/亚克力视觉效果、深浅皮肤下材质协调度、关闭材质后正确回退——本地无 Windows 环境无法本地走查，待远端 CI 构建后由用户在 Windows 上实机确认。
 
 ### v5.17.0 - 2026-08-06
 
