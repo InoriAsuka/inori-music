@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`5.16.0`
+`5.17.0`
 
 ## Product Goal
 
@@ -41,6 +41,16 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Committed lifecycle updates must record latest transition metadata for audit preparation.
 
 ## Requirement History
+
+### v5.17.0 - 2026-08-06
+
+- **feat: 标题栏整合优化（对标开源/商业播放器布局改进第一阶段）** — 用户提供 4 份参考资料（EchoMusic、原音HQ播放器、开源播放器盘点博客、Spotube）要求调研布局设计并改进。逐一核实内容后确认 Spotube（4.8万 star，纯 Flutter 跨平台，技术栈与本项目一致）参考价值最高，读取其 `components/titlebar/titlebar.dart` + `pages/root/root_app.dart` 源码确认两点可直接复用的具体做法：标题栏是否用系统原生样式做成用户偏好开关而非写死；不单独维护"全局细横条 + 每页独立 AppBar"两层桌面 chrome，而是把拖拽区域与窗口按钮整合进每个页面自己的 AppBar。v5.15.0/v5.15.1 刚做的 `AppTitleBar` 正是前者的反面——一条不含任何内容的独立 28/32px 横条叠在 13 个页面各自的 `AppBar` 之上，垂直空间被两层 chrome 占用。
+- **新增 `DesktopAppBar`**（`lib/src/shared/widgets/desktop_app_bar.dart`）——`AppBar` 的 drop-in 替代，接受与 `AppBar` 相同的 `title`/`actions`/`leading`/`automaticallyImplyLeading`/`bottom` 具名参数。移动端或用户选择"使用系统标题栏"时行为与普通 `AppBar` 完全一致；桌面端且未选系统标题栏时，用 `window_manager` 的 `DragToMoveArea` 包裹整个 `AppBar`（包括按钮——参照 Spotube 的做法验证过这个模式：`GestureDetector`/`DragToMoveArea` 的拖拽手势与内部按钮的点击手势在 Flutter 手势竞技场里可以共存，未越过拖拽阈值时点击手势胜出），`actions` 末尾追加窗口按钮（Windows/Linux 追加三枚 `WindowCaptionButton`，跟随当前皮肤明暗；macOS 不追加按钮，改为给整条 AppBar 加 70px 左内边距给原生红绿灯让出位置）。**机械迁移**全部 13 个使用 `Scaffold(appBar: AppBar(...))` 的页面（`artists_screen.dart`/`albums_screen.dart`/`playlists_screen.dart`/`search_screen.dart`/`tracks_screen.dart`/`favorites_screen.dart`/`history_screen.dart`/`history_stats_screen.dart`/`local_library_screen.dart`/`settings_screen.dart`/`user_playlist_detail_screen.dart`/`user_playlist_list_screen.dart`/`artist_detail_screen.dart`）为 `DesktopAppBar(...)`——逐一核实这 13 处全部只用到 `title`/`actions`/`bottom`（`search_screen.dart` 的 `TabBar`）参数，`AppBar(` → `DesktopAppBar(` 纯字符串替换零参数不兼容问题。`main.dart` 的 `MaterialApp.router(builder:)` 移除 `AppTitleBar` 的 `Column` 包裹（不再需要独立横条），旧的 `app_title_bar.dart`/`app_title_bar_test.dart` 确认无其他引用后删除。
+- 服务端曲目详情页（`album_detail_screen.dart`/`playlist_detail_screen.dart`）用的是 `CustomScrollView` + `SliverAppBar`，跟本次迁移的"`Scaffold.appBar` 插槽"是两套不同 API，**不在本次迁移范围**——`SliverAppBar` 会随内容滚动折叠，把它改造成持久拖拽区域是另一套改法，本次不做，留作已知的小缺口（这两个详情页顶部暂时仍无法拖拽窗口，可以从其他页面或系统窗口管理方式操作）。
+- **新增设置项"使用系统标题栏"**（Settings → Appearance，仅桌面显示）：新增 `system_titlebar_provider.dart`（`shared_preferences` 持久化，模式与既有 `bilingualLyricsProvider` 一致），切换时调用 `DesktopIntegration.applyTitleBarPreference()`（改为 `static`——只操作全局 `windowManager` 单例，不依赖某个 `DesktopIntegration` 实例的状态）立即调用 `windowManager.setTitleBarStyle()` 生效，不需要重启。`desktop_integration.dart` 的 `_initWindow()` 启动时读取这个偏好——直接读 `SharedPreferences`（而不是 `_ref.read(systemTitleBarProvider)`），因为窗口初始化发生得太早，Riverpod provider 自己的异步 `_restore()` 这时还没跑完，走 provider 拿到的永远是硬编码默认值。
+- **登录页/启动页补一个最小化的可拖拽入口**：这两个页面不走 `ShellScaffold`/独立 `AppBar`，原生标题栏隐藏后如果什么都不加，用户在鉴权关卡卡住时会完全没有移动或关闭窗口的手段。新增 `GateWindowChrome`（32px 透明条，`Positioned` 叠在背景之上），只提供拖拽 + 一个关闭按钮（不需要最小化/最大化——这两个窗口是固定尺寸不可缩放的，最大化没有意义）；按钮固定用浅色样式，不跟随皮肤——延续 v5.13.0"登录/启动页保持固定樱花薄暮品牌呈现，不随皮肤变化"的既有范围决定。
+- **踩坑记录**：完成迁移后顺手跑了一次不限定路径的 `dart format`，结果把仓库里 354 个文件都重新格式化了一遍——包括 OpenAPI 生成的 `lib/src/api/generated/` 目录（完全不该手动改动生成代码的格式）和大量本 phase 完全没碰过的既有文件。已用 `git checkout --` 精确回退到只保留本 phase 实际改动的文件，之后只对新增/改动的具体文件单独跑 `dart format`，不再对整个目录树跑。
+- The phase output is version-tracked and verified locally（`flutter analyze --no-fatal-infos` 0 issues；`flutter test --no-pub` 150/150 通过，含新增 `desktop_app_bar_test.dart` 4 例：移动端透传、Windows 桌面三按钮+拖拽、macOS 桌面仅拖拽无按钮、"使用系统标题栏"开启时回退为普通 AppBar）。实际拖拽/双击最大化还原、Windows 三按钮、macOS 红绿灯、"使用系统标题栏"开关两种模式切换、垂直空间是否比 v5.15.0 更紧凑——本地无 Xcode/桌面窗口无法走查，待远端 CI 构建后用户实机确认。
 
 ### v5.16.0 - 2026-08-06
 
