@@ -20,6 +20,7 @@ import 'package:inori_music/src/shared/locale_provider.dart';
 import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/system_titlebar_provider.dart';
 import 'package:inori_music/src/shared/theme/skin_definition.dart';
+import 'package:inori_music/src/shared/titlebar_material_provider.dart';
 import 'package:inori_music/src/shared/theme/skin_provider.dart';
 import 'package:inori_music/src/shared/widgets/desktop_app_bar.dart';
 
@@ -148,6 +149,23 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     ref.read(systemTitleBarProvider.notifier).setEnabled(v);
                     DesktopIntegration.applyTitleBarPreference(v);
                   },
+                );
+              },
+            ),
+          // Fluent Design material is Windows-only (macOS has its own
+          // vibrancy conventions, out of scope here — see requirement.md
+          // v5.18.0) and meaningless once the system title bar is in use.
+          if (Platform.isWindows)
+            Consumer(
+              builder: (context, ref, _) {
+                final useSystemTitleBar = ref.watch(systemTitleBarProvider);
+                if (useSystemTitleBar) return const SizedBox.shrink();
+                final material = ref.watch(titlebarMaterialProvider);
+                return ListTile(
+                  leading: const Icon(Icons.blur_on),
+                  title: const Text('标题栏材质'),
+                  subtitle: Text(_titlebarMaterialLabel(material)),
+                  onTap: () => _showTitlebarMaterialSheet(context, ref),
                 );
               },
             ),
@@ -749,6 +767,59 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     if (confirmed == true) {
       await notifier.deleteSkin(skin.id);
     }
+  }
+
+  static String _titlebarMaterialLabel(TitlebarMaterial material) =>
+      switch (material) {
+        TitlebarMaterial.none => '无',
+        TitlebarMaterial.acrylic => '亚克力',
+        TitlebarMaterial.mica => 'Mica',
+      };
+
+  Future<void> _showTitlebarMaterialSheet(
+    BuildContext context,
+    WidgetRef ref,
+  ) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: context.skinColors.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => Consumer(
+        builder: (ctx, ref, _) {
+          final current = ref.watch(titlebarMaterialProvider);
+          return SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    '标题栏材质',
+                    style: Theme.of(ctx).textTheme.headlineSmall,
+                  ),
+                ),
+                const Divider(height: 1),
+                for (final material in TitlebarMaterial.values)
+                  ListTile(
+                    title: Text(_titlebarMaterialLabel(material)),
+                    leading: current == material
+                        ? Icon(Icons.check, color: ctx.skinColors.sakuraPink)
+                        : const SizedBox(width: 24),
+                    onTap: () {
+                      ref
+                          .read(titlebarMaterialProvider.notifier)
+                          .setMaterial(material);
+                      Navigator.pop(ctx);
+                    },
+                  ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
   }
 
   static bool _isSameLocale(Locale? a, Locale? b) {

@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_acrylic/flutter_acrylic.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -13,6 +14,7 @@ import 'package:inori_music/src/shared/locale_provider.dart';
 import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/theme/skin_definition.dart';
 import 'package:inori_music/src/shared/theme/skin_provider.dart';
+import 'package:inori_music/src/shared/titlebar_material_provider.dart';
 
 /// Global [InoriAudioHandler] instance shared between main.dart and PlayerNotifier.
 late final InoriAudioHandler audioHandler;
@@ -27,6 +29,12 @@ void main() async {
   if (Platform.isWindows || Platform.isLinux) {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
+  }
+  // Windows-only Fluent Design backdrop (Mica/acrylic) — must be initialized
+  // before any Window.setEffect() call. macOS/Linux/mobile skip this
+  // entirely; see DesktopIntegration.applyTitlebarMaterial for the scope note.
+  if (Platform.isWindows) {
+    await Window.initialize();
   }
   // Initialize audio_service so background audio, lock-screen controls, and
   // OS media sessions are available before any widget is created.
@@ -75,6 +83,17 @@ class _InoriMusicAppState extends ConsumerState<InoriMusicApp>
     }
   }
 
+  void _applyTitlebarMaterial(WidgetRef ref) {
+    if (!Platform.isWindows) return;
+    final material = ref.read(titlebarMaterialProvider);
+    final skin = ref.read(skinProvider).active;
+    DesktopIntegration.applyTitlebarMaterial(
+      material,
+      tint: skin.colors.playerBar.withValues(alpha: 0.8),
+      isDark: skin.brightness == Brightness.dark,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final router = ref.watch(routerProvider);
@@ -92,6 +111,14 @@ class _InoriMusicAppState extends ConsumerState<InoriMusicApp>
         _desktop?.applyWindowForAuthState(isPastGate);
       }
     });
+
+    // Watching (not just listening) means this also runs on the very first
+    // build, with whatever the not-yet-restored default is — and again once
+    // the persisted preference/skin actually resolve, since either watch
+    // changing re-triggers this build. Window.setEffect() is idempotent, so
+    // re-applying on unrelated rebuilds (e.g. a locale change) is harmless.
+    ref.watch(titlebarMaterialProvider);
+    _applyTitlebarMaterial(ref);
 
     return MaterialApp.router(
       title: 'Inori Music',

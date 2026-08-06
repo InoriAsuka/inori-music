@@ -1,7 +1,10 @@
 // ignore_for_file: implementation_imports
+import 'dart:io' show Platform;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart' show WidgetsBinding;
+import 'package:flutter_acrylic/flutter_acrylic.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tray_manager/tray_manager.dart';
@@ -11,6 +14,7 @@ import 'package:window_manager/window_manager.dart';
 import 'package:inori_music/src/auth/auth_notifier.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/system_titlebar_provider.dart';
+import 'package:inori_music/src/shared/titlebar_material_provider.dart';
 
 /// Initialises system-tray, global hotkeys, and window sizing on
 /// macOS / Windows / Linux.
@@ -102,6 +106,31 @@ class DesktopIntegration with TrayListener {
       useSystemTitleBar ? TitleBarStyle.normal : TitleBarStyle.hidden,
       windowButtonVisibility: useSystemTitleBar || _isMac,
     );
+  }
+
+  /// Applies (or clears) the Windows 11 Fluent Design backdrop — Windows
+  /// only, per the plan's scope note: macOS has its own vibrancy
+  /// conventions and this deliberately doesn't touch it.
+  ///
+  /// This is a *window-level* effect (flutter_acrylic has no per-region
+  /// API), so it's only actually visible where [DesktopAppBar] renders its
+  /// own background transparent — everywhere else in the app keeps painting
+  /// an opaque skin-colored surface on top, which fully occludes it. [tint]
+  /// should be the active skin's title-bar color (semi-opaque); the native
+  /// compositor blends it with the blur so legibility doesn't depend on
+  /// whatever happens to be behind the window on the user's desktop.
+  static Future<void> applyTitlebarMaterial(
+    TitlebarMaterial material, {
+    required Color tint,
+    required bool isDark,
+  }) async {
+    if (!Platform.isWindows) return;
+    final effect = switch (material) {
+      TitlebarMaterial.none => WindowEffect.disabled,
+      TitlebarMaterial.acrylic => WindowEffect.acrylic,
+      TitlebarMaterial.mica => WindowEffect.mica,
+    };
+    await Window.setEffect(effect: effect, color: tint, dark: isDark);
   }
 
   Future<void> dispose() async {

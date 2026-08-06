@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -6,6 +8,7 @@ import 'package:window_manager/window_manager.dart';
 import 'package:inori_music/src/shared/desktop_integration.dart';
 import 'package:inori_music/src/shared/system_titlebar_provider.dart';
 import 'package:inori_music/src/shared/theme/skin_provider.dart';
+import 'package:inori_music/src/shared/titlebar_material_provider.dart';
 
 /// Drop-in [AppBar] replacement that doubles as the window's draggable
 /// title-bar region on desktop, replacing the standalone strip that shipped
@@ -55,9 +58,18 @@ class DesktopAppBar extends StatelessWidget implements PreferredSizeWidget {
 
         final skin = ref.watch(skinProvider).active;
         final isMac = defaultTargetPlatform == TargetPlatform.macOS;
+        // flutter_acrylic has no per-region API — the Mica/acrylic backdrop
+        // is a window-level effect (see DesktopIntegration.applyTitlebarMaterial).
+        // It only becomes visible here, where the AppBar's own background is
+        // made transparent; everywhere else keeps its normal opaque skin
+        // surface painted on top, which fully hides the native backdrop.
+        final hasMaterial =
+            Platform.isWindows &&
+            ref.watch(titlebarMaterialProvider) != TitlebarMaterial.none;
 
         final appBar = AppBar(
           title: title,
+          backgroundColor: hasMaterial ? Colors.transparent : null,
           actions: [
             ...?actions,
             if (!isMac) ...[
