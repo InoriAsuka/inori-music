@@ -44,11 +44,19 @@ class DesktopIntegration with TrayListener {
   Future<void> _initWindow() async {
     await windowManager.ensureInitialized();
     final isPastGate = _ref.read(authProvider).valueOrNull?.isPastGate ?? false;
+    // Hidden title bar everywhere — AppTitleBar (main.dart's MaterialApp
+    // builder) supplies the draggable, skin-colored replacement. macOS keeps
+    // the native traffic-light buttons per Apple HIG; Windows (and Linux,
+    // which has no equivalent OS convention to defer to) gets window_manager's
+    // own custom-drawn caption buttons instead of the native ones.
+    final isMac = defaultTargetPlatform == TargetPlatform.macOS;
     await windowManager.waitUntilReadyToShow(
       WindowOptions(
         size: isPastGate ? _mainWindowSize : _gateWindowSize,
         minimumSize: isPastGate ? _mainMinimumSize : _gateWindowSize,
         center: true,
+        titleBarStyle: TitleBarStyle.hidden,
+        windowButtonVisibility: isMac,
       ),
       () async {
         await windowManager.setResizable(isPastGate);
