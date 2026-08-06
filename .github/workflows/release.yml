@@ -60,10 +60,116 @@ jobs:
           path: dist/*
           if-no-files-found: error
 
+  build-flutter-apk:
+    name: Build Flutter APK (release)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.x'
+          channel: 'stable'
+          cache: true
+      - name: Get dependencies
+        working-directory: services/mobile
+        run: flutter pub get
+      - name: Generate API client
+        working-directory: services/mobile
+        run: make gen-api
+      - name: Run build_runner
+        working-directory: services/mobile
+        run: dart run build_runner build --delete-conflicting-outputs
+      - name: Build APK
+        working-directory: services/mobile
+        run: flutter build apk --release
+      - name: Rename for release
+        run: |
+          mkdir -p dist
+          cp services/mobile/build/app/outputs/flutter-apk/app-release.apk \
+            "dist/inori-music-${GITHUB_REF_NAME}.apk"
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: inori-music-apk-release
+          path: dist/*
+          if-no-files-found: error
+
+  build-flutter-macos:
+    name: Build Flutter macOS (release)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.x'
+          channel: 'stable'
+          cache: true
+      - name: Get dependencies
+        working-directory: services/mobile
+        run: flutter pub get
+      - name: Generate API client
+        working-directory: services/mobile
+        run: make gen-api
+      - name: Run build_runner
+        working-directory: services/mobile
+        run: dart run build_runner build --delete-conflicting-outputs
+      - name: Build macOS
+        working-directory: services/mobile
+        run: flutter build macos --release
+      - name: Zip app bundle for release
+        # ditto (not plain zip) preserves the .app bundle structure and
+        # resource forks correctly on macOS.
+        run: |
+          mkdir -p dist
+          ditto -c -k --sequesterRsrc --keepParent \
+            "services/mobile/build/macos/Build/Products/Release/inori_music.app" \
+            "dist/inori-music-${GITHUB_REF_NAME}-macos.zip"
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: inori-music-macos-release
+          path: dist/*
+          if-no-files-found: error
+
+  build-flutter-windows:
+    name: Build Flutter Windows (release)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.x'
+          channel: 'stable'
+          cache: true
+      - name: Get dependencies
+        working-directory: services/mobile
+        run: flutter pub get
+      - name: Generate API client
+        working-directory: services/mobile
+        run: make gen-api
+      - name: Run build_runner
+        working-directory: services/mobile
+        run: dart run build_runner build --delete-conflicting-outputs
+      - name: Build Windows
+        working-directory: services/mobile
+        run: flutter build windows --release
+      - name: Zip release folder
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Compress-Archive -Path "services/mobile/build/windows/x64/runner/Release/*" `
+            -DestinationPath "dist/inori-music-$env:GITHUB_REF_NAME-windows.zip"
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: inori-music-windows-release
+          path: dist/*
+          if-no-files-found: error
+
   publish:
     name: Publish GitHub release
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build, build-flutter-apk, build-flutter-macos, build-flutter-windows]
     steps:
       - name: Download artifacts
         uses: actions/download-artifact@v4
