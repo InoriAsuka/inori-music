@@ -31,12 +31,15 @@ class EqNotifier extends Notifier<EqSettings> {
   // ---- Public API ----
 
   Future<void> setEnabled(bool enabled) async {
-    if (enabled && !Platform.isAndroid) {
-      // Non-Android platforms have no wired equalizer effect — refuse to enable.
+    if (!Platform.isAndroid) {
+      // Non-Android platforms have no wired equalizer effect at all (see
+      // audio_handler.dart's androidEqualizer doc) — nothing to enable or
+      // disable. Previously this only guarded the enable path, so a disable
+      // call still fell through to androidEqualizer.setEnabled() below.
       return;
     }
     state = state.copyWith(enabled: enabled);
-    await audioHandler.androidEqualizer.setEnabled(enabled);
+    await audioHandler.androidEqualizer?.setEnabled(enabled);
     if (enabled) {
       await _applyEqualizerBands(state.bands);
     } else {
@@ -90,7 +93,8 @@ class EqNotifier extends Notifier<EqSettings> {
   /// Delete a saved custom preset. Falls back to 'flat' if it was selected.
   Future<void> deleteCustomPreset(String name) async {
     if (!state.customPresets.containsKey(name)) return;
-    final updated = Map<String, List<double>>.from(state.customPresets)..remove(name);
+    final updated = Map<String, List<double>>.from(state.customPresets)
+      ..remove(name);
     final wasSelected = state.preset == name;
     state = state.copyWith(
       customPresets: updated,
@@ -108,9 +112,10 @@ class EqNotifier extends Notifier<EqSettings> {
   /// Map the UI's 10 fixed bands onto the device's actual band count
   /// (commonly 5 on Android) via nearest-neighbor, and push gains.
   Future<void> _applyEqualizerBands(List<double> bands) async {
-    if (!Platform.isAndroid) return;
+    final eq = audioHandler.androidEqualizer;
+    if (!Platform.isAndroid || eq == null) return;
     try {
-      final params = await audioHandler.androidEqualizer.parameters;
+      final params = await eq.parameters;
       for (var i = 0; i < params.bands.length; i++) {
         final uiIdx = (i * bands.length / params.bands.length).floor();
         await params.bands[i].setGain(
@@ -121,9 +126,10 @@ class EqNotifier extends Notifier<EqSettings> {
   }
 
   Future<void> _resetEqualizerBands() async {
-    if (!Platform.isAndroid) return;
+    final eq = audioHandler.androidEqualizer;
+    if (!Platform.isAndroid || eq == null) return;
     try {
-      final params = await audioHandler.androidEqualizer.parameters;
+      final params = await eq.parameters;
       for (final band in params.bands) {
         await band.setGain(0);
       }
@@ -148,12 +154,19 @@ class EqNotifier extends Notifier<EqSettings> {
       final customPresets = <String, List<double>>{
         if (rawCustom != null)
           for (final entry in rawCustom.entries)
-            entry.key: (entry.value as List<dynamic>).map((e) => (e as num).toDouble()).toList(),
+            entry.key: (entry.value as List<dynamic>)
+                .map((e) => (e as num).toDouble())
+                .toList(),
       };
       final effectiveEnabled = enabled && Platform.isAndroid;
-      state = EqSettings(enabled: effectiveEnabled, bands: bands, preset: preset, customPresets: customPresets);
+      state = EqSettings(
+        enabled: effectiveEnabled,
+        bands: bands,
+        preset: preset,
+        customPresets: customPresets,
+      );
       if (effectiveEnabled) {
-        await audioHandler.androidEqualizer.setEnabled(true);
+        await audioHandler.androidEqualizer?.setEnabled(true);
         await _applyEqualizerBands(bands);
       }
     } catch (_) {

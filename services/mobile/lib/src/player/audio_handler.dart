@@ -1,5 +1,6 @@
 // ignore_for_file: implementation_imports
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart' show Color;
@@ -12,7 +13,8 @@ import 'package:just_audio/just_audio.dart';
 ///
 /// The actual playback state is managed by [PlayerNotifier]; this handler
 /// acts as the bridge between the OS / notification layer and Riverpod.
-class InoriAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler {
+class InoriAudioHandler extends BaseAudioHandler
+    with QueueHandler, SeekHandler {
   final AudioPlayer _player;
 
   InoriAudioHandler(this._player) {
@@ -54,23 +56,25 @@ class InoriAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
     _player.playerStateStream.listen((ps) {
       final playing = ps.playing;
       final processingState = _toAudioProcessingState(ps.processingState);
-      playbackState.add(PlaybackState(
-        playing: playing,
-        processingState: processingState,
-        controls: [
-          MediaControl.skipToPrevious,
-          if (playing) MediaControl.pause else MediaControl.play,
-          MediaControl.skipToNext,
-        ],
-        systemActions: const {
-          MediaAction.seek,
-          MediaAction.skipToNext,
-          MediaAction.skipToPrevious,
-        },
-        updatePosition: _player.position,
-        bufferedPosition: _player.bufferedPosition,
-        speed: _player.speed,
-      ));
+      playbackState.add(
+        PlaybackState(
+          playing: playing,
+          processingState: processingState,
+          controls: [
+            MediaControl.skipToPrevious,
+            if (playing) MediaControl.pause else MediaControl.play,
+            MediaControl.skipToNext,
+          ],
+          systemActions: const {
+            MediaAction.seek,
+            MediaAction.skipToNext,
+            MediaAction.skipToPrevious,
+          },
+          updatePosition: _player.position,
+          bufferedPosition: _player.bufferedPosition,
+          speed: _player.speed,
+        ),
+      );
     });
 
     _player.positionStream.listen((pos) {
@@ -119,11 +123,21 @@ class InoriAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
 
   // ---- Equalizer ----
 
-  late final AndroidEqualizer _equalizer;
+  AndroidEqualizer? _equalizer;
 
-  /// Native Android equalizer effect. Only meaningful on Android — callers
-  /// must guard with `Platform.isAndroid` before use.
-  AndroidEqualizer get androidEqualizer => _equalizer;
+  /// Native Android equalizer effect — null on every other platform.
+  ///
+  /// This MUST stay null off Android: just_audio activates every effect in
+  /// the pipeline unconditionally the moment the player becomes active (i.e.
+  /// on every play() attempt), and AndroidEqualizer._activate() unconditionally
+  /// calls the platform-channel method `androidEqualizerGetParameters` —
+  /// implemented only by the Android native plugin. Constructing one and
+  /// wiring it into the AudioPipeline on macOS/Windows/Linux/iOS throws
+  /// MissingPluginException on the very first playback attempt, on every
+  /// track (confirmed by reading just_audio 0.9.46's AudioPlayer.setPlatform()
+  /// and AndroidEqualizer._activate() source directly — this was a real
+  /// unconditional construction in `create()` below, not a hypothesis).
+  AndroidEqualizer? get androidEqualizer => _equalizer;
 
   // ---- Crossfade support (fade-out at track end, fade-in on track change) ----
 
@@ -156,10 +170,16 @@ class InoriAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
     final dur = _player.duration;
     if (dur == null || dur == Duration.zero) return;
     final remaining = dur - position;
-    if (remaining.inMilliseconds > crossfadeSeconds * 1000 || remaining <= Duration.zero) return;
+    if (remaining.inMilliseconds > crossfadeSeconds * 1000 ||
+        remaining <= Duration.zero) {
+      return;
+    }
     _fading = true;
     _fadeOutDone = true;
-    final steps = (remaining.inMilliseconds ~/ 100).clamp(1, crossfadeSeconds * 10);
+    final steps = (remaining.inMilliseconds ~/ 100).clamp(
+      1,
+      crossfadeSeconds * 10,
+    );
     for (int i = steps; i >= 0; i--) {
       if (!_player.playing) break;
       await _player.setVolume(targetVolume * i / steps);
@@ -197,9 +217,11 @@ class InoriAudioHandler extends BaseAudioHandler with QueueHandler, SeekHandler 
   }
 
   static Future<InoriAudioHandler> create() async {
-    final equalizer = AndroidEqualizer();
+    final equalizer = Platform.isAndroid ? AndroidEqualizer() : null;
     final player = AudioPlayer(
-      audioPipeline: AudioPipeline(androidAudioEffects: [equalizer]),
+      audioPipeline: equalizer != null
+          ? AudioPipeline(androidAudioEffects: [equalizer])
+          : null,
     );
     final handler = InoriAudioHandler(player);
     handler._equalizer = equalizer;
