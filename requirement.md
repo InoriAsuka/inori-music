@@ -40,6 +40,18 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Bulk lifecycle updates must support dry-run previews that do not persist metadata changes.
 - Committed lifecycle updates must record latest transition metadata for audit preparation.
 
+### v5.24.0 - 2026-08-07
+
+- **feat: 封面动态取色（分层交互架构重做第四阶段）** — 歌词页背景的渐变遮罩改用当前曲目封面提取的颜色，而不是固定皮肤色。这是 EchoMusic（强调色随封面变化）和 OriginalSound（歌词页取色渐变过渡）两份调研共同指向的点，跟 v5.22/v5.23 的导航重做相互独立。
+- 新增依赖 `palette_generator: ^0.3.3+7`（Flutter 官方包，与 Material 动态取色同一套量化算法），新增 `lib/src/catalog/cover_palette_provider.dart`。
+- **family key 用记录类型 `CoverSource({albumId, localArtUri})`** 而不是把两种来源编码进一个字符串：记录自带结构化相等，省掉编码/解析这一层。本地封面走 `FileImage`、服务端封面走 `CachedNetworkImageProvider`（跟 `CachedNetworkImage` 同一个 provider，读的是已经下载好的字节而不是重新拉一次）。
+- **`CoverPalette` 值类只暴露 UI 真正会用的几个色板 + `backdropFor(Brightness)`，刻意不暴露 `PaletteGenerator` 本身**：调用方不该需要知道它那七个可空色板里哪个合适；包类型不进 widget 代码，以后换取色实现也不会外溢到界面层。降级顺序对齐 Spotube 的 `usePaletteColor`：muted → vibrant → dominant，按主题明暗取对应档；vibrant 永远不是首选——歌词背后放高饱和色会读成"上了色的洗底"而不是背景。
+- **取色前先把图缩到 96×96 再量化**：色彩分布不受影响，避免大封面第一次显示时把量化开销压在 raster 线程上。
+- **所有失败路径返回 null 而不是抛异常**（无封面 / 空 albumId / 本地文件不存在 / 解码失败 / 图片压根没产出可用色），`LyricsBackground` 一律回退到皮肤固定色——这是纯装饰特性，一张封面解码失败绝不能带垮显示它的页面。已写单测锁定其中一条容易被忽略的情况：**取色进行中的第一帧就必须已经有遮罩**，否则歌词会短暂压在未加遮罩的封面上。
+- `lib/src/lyrics/lyrics_background.dart` 从 `StatelessWidget` 改为 `ConsumerWidget`，两档不透明度（0.55/0.82）保持不变，遮罩包 400ms `AnimatedContainer` 做切歌过渡。
+- **本 phase 明确没做悬浮播放条进度条跟随取色**（原计划标注为"视时间成本决定，非必须项"）：`MiniPlayerBar` 是常驻组件，在那里挂取色等于**每次切歌都在全 App 范围跑一次图片解码 + 量化**，代价跟一条 2px 强调线完全不成比例。取色的开销应该只由真正展示它的页面承担。同样地，取色结果不去驱动整个 App 的强调色——现有皮肤系统是"整体替换 18 个固定 token"的模型，动态替换 `ColorScheme.primary` 这类全局槽位会跟它正面冲突。
+- The phase output is version-tracked and verified locally（`flutter analyze --no-fatal-infos` 0 error/warning，仅 1 条存量 info 属未触碰文件；`flutter test` 207/207 通过，197 存量 + 10 新增，见 `test/cover_palette_test.dart`：`backdropFor` 四档降级含"深色专属色板不会串给浅色主题"这条不对称性、provider 三条 null 路径、`LyricsBackground` 取色生效 / 取色为空回退 / 取色进行中已有遮罩）。切歌时遮罩颜色是否真的随封面变化、深浅皮肤下取色结果是否都可读，待远端 CI 构建后用户实机确认。
+
 ### v5.23.0 - 2026-08-07
 
 - **feat: 游客模式导航重做（分层交互架构重做第三阶段，Spotube 对标）** — 对标对象按用户拆分的用途取 Spotube（未登录、只播本地文件时的整个交互架构）。调研时的一条重要澄清在这里直接决定了做法：**Spotube 自己并没有独立的"游客 UI"**，跳过登录后落地的是和登录后完全一样的一套导航壳，Local Library 只是其中一个入口——所以"采用 Spotube 的主界面布局"不是再写一套界面，而是让游客模式复用同一套壳。
