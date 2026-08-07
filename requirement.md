@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`5.20.0`
+`5.20.1`
 
 ## Product Goal
 
@@ -40,7 +40,14 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Bulk lifecycle updates must support dry-run previews that do not persist metadata changes.
 - Committed lifecycle updates must record latest transition metadata for audit preparation.
 
-## Requirement History
+### v5.20.1 - 2026-08-07
+
+- **fix: 本地/队列播放失败时完全无提示（用户实机反馈 v5.16.0 修复后仍"点击完全没反应"）** — 重新核查 v5.16.0 提交（`aaf751d`）发现此前会话总结记录的"已加诊断日志+10秒超时保护"**从未真正落地**——实际提交只包含 `_buildConcatQueue` 的 await 修复本身，没有任何诊断代码，这是本次开工前才通过 `git show` 直接核实澄清的（不能只信之前的会话摘要，必须核实当前代码实际状态）。
+- **根因分析**：`playTrack()` 内部从 URL 解析到 `_audioPlayer.play()` 的整条链路此前完全没有 try/catch。`_buildConcatQueue`→`audioHandler.updateConcatQueue`→`_player.setAudioSource()` 一旦抛出异常（例如 just_audio 原生层拒绝某个本地文件），这是一个在 `onTap: () => ref.read(...).playQueue(...)` 这类裸调用里产生的未捕获 Future 异常——Flutter 默认只会把它打到 zone 的错误处理器（release 构建下用户完全看不到），UI 侧此前没有任何反馈，表现正是"点击无响应"。v5.16.0 的 await 修复本身没有错——修复前"竞态"掩盖了这条链路本来就可能失败的事实（无论是否等待，之前失败也是静默的），修复后开始真正等待整条链路，失败路径反而第一次变得"看得见的什么都不做"。
+- **已排除的假设（实测排除，非猜测）**：怀疑本地文件路径（例如 `getApplicationSupportDirectory()` 在 macOS 上包含空格的 "Application Support" 目录）在 `'file://$path'` 朴素字符串拼接下产生未转义 URL，写了独立 Dart 脚本验证——`Uri.parse()` 本身会在生成 `.toString()`/`.path` 时自动对空格等字符做 `%20` 百分号编码，`Uri.file(path)` 与朴素拼接后再 `Uri.parse()` 得到完全相同的最终编码结果，两者行为一致，排除此假设。
+- **本次实际修复**：(1) `PlayerState` 新增 `playbackError`（`PlaybackFailure?`，故意不重写 `==`，保证同一错误文本连续出现两次也能各自触发一次 `ref.listen`，不被"值未变化"误判去重）与配套的 `clearPlaybackError` copyWith 标志；(2) `playTrack()` 整体包一层 try/catch，进入时先清空旧错误，URL 解析失败或链路任意环节抛出异常时都写入 `playbackError` 并 `debugPrint` 完整堆栈；(3) `ShellScaffold`（游客模式与登录模式共用的唯一根 Scaffold）新增 `ref.listen(playerProvider.select((s) => s.playbackError))`，非空时弹 SnackBar——选在这里而不是每个触发播放的调用点（本地曲库、曲目列表项、搜索结果等）各自加 try/catch，因为这是唯一保证包住所有入口的公共祖先；(4) `resolvePlaybackUrl` 的本地曲库分支补上了 `File(local.localPath).existsSync()` 校验（此前紧邻的 `OfflineDb` 分支已有这个检查，本地曲库分支却没有——文件被移动/删除或沙盒容器重置后，此前会带着一个指向不存在文件的 `file://` URL 继续往下走，而不是提前判断清楚返回 null）。
+- **这不是确认修复，是让失败可诊断**：本地没有 macOS/Windows 运行环境，这次改动的目的不是"猜一个新原因去修"，而是把此前完全静默的失败路径变成用户能看到、能截图反馈给我的具体错误文本——下一步真正的根因定位依赖用户下次实机点击后看到的 SnackBar 文案。
+- The phase output is version-tracked and verified locally（`flutter analyze --no-fatal-infos` 0 issues；`flutter test --no-pub` 166/166 通过，含新增 3 例：`playbackError`/`clearPlaybackError` 的 copyWith 行为、`PlaybackFailure` 两个相同文本实例不相等的身份语义）。
 
 ### v5.20.0 - 2026-08-06
 
