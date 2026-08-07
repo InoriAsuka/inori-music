@@ -40,6 +40,14 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Bulk lifecycle updates must support dry-run previews that do not persist metadata changes.
 - Committed lifecycle updates must record latest transition metadata for audit preparation.
 
+### v5.25.1 - 2026-08-08
+
+- **fix: 歌词页入口与导入失败的两处静默失败** — 用户实机反馈触发。两个问题是同一类：功能失效时界面上什么都不显示，跟 v5.20.1 之前播放失败的表现完全一样。这已经是这个项目第三次栽在"静默失败"上（前两次是播放、是 Windows sqflite），所以这次两处都补了明确反馈而不是只修逻辑。
+- **歌词页按钮对无内嵌歌词的本地曲目被静默禁用**：`full_player_screen.dart` 的门控是 `(trackId.isEmpty || (isLocalTrack && !hasLocalLyrics))`，本地曲目必须带内嵌歌词标签才允许打开歌词页——轻音乐/未打标的本地文件直接 `onPressed: null`，按钮禁用、点了没反应、没有任何说明。这个门控本身就是多余的：`KaraokeScreen` 自己已经处理空歌词（显示「No lyrics available.」），服务端曲目一直是这么走的。**影响远比"一个按钮"大**——歌词页是 v5.24.0（封面取色遮罩）和 v5.25.0（边缘渐隐、逐行虚化）**全部**视觉改动的唯一入口，游客模式 + 无歌词本地文件的用户永远看不到这两个版本做的任何东西，这正是用户反馈"只有主界面播放器控制部分有效果"的直接原因之一。顺带修掉次生问题：`hasLocalLyrics` 用 `.valueOrNull ?? const []`，provider 加载期间会让本来有歌词的曲目也短暂禁用按钮。
+- **导入失败没有任何反馈**：`importFiles()`/`importFolder()` 返回 `Future<void>`，按钮直接绑 `onPressed: notifier.importFiles`（抛异常就是未捕获异步错误，UI 上什么都没有），`_importPaths` 的逐文件 catch 也只 `debugPrint`。于是「选择器没打开」「元数据读失败」「文件复制失败」「写库失败」「用户取消」五种情况在界面上**完全无法区分**，都是点了没反应。用户在 Windows 上"连文件都没能导进来"正是撞在这里，而且这就是它一直没被发现的原因。新增 `ImportOutcome`（imported/failed/firstError/cancelled），三个导入入口全部经由 `_runImport` 上报：整体失败给具体异常、部分失败同时报两个数和首个异常、全部成功报数量、"选了但没有可用文件"单独一档、用户取消不提示。空状态页的两个导入按钮改为父组件传回调（`_EmptyLocalLibrary` 由 `ConsumerWidget` 改 `StatelessWidget`），因为**空曲库页正是失败最不可见的地方**——空的曲库保持空，看起来和取消一模一样。
+- **本版本未解决、需要单独决策的问题：Windows 根本没有播放后端**。已核实 `just_audio` 0.9.46 的 `pubspec.yaml` 只注册了 android/ios/macos/web，且 `just_audio_platform_interface` 的默认实现是 `MethodChannelJustAudio()`、**没有任何平台兜底**；作为对照，`audio_service_platform_interface` 明确写了 `(Platform.isWindows || Platform.isLinux) ? NoOpAudioService() : MethodChannelAudioService()`，所以 App 在 Windows 上能正常启动、但一播放就必然抛 `MissingPluginException`。这不是配置问题，是 Windows 版从来就没有播放能力，而 Release 一直在发 Windows 包。修它需要更换输出层（media_kit/libmpv，Spotube 走的就是这条路，且顺带能拿到 WASAPI 独占/设备选择/采样率控制），属于独立的一批工作。
+- The phase output is version-tracked and verified locally（`flutter analyze --no-fatal-infos` 0 error/warning，仅 1 条存量 info 属未触碰文件；`flutter test` 223/223 通过，218 存量 + 5 新增，见 `test/local_library_screen_test.dart` 的 `import outcome reporting` 组：整体失败给出具体异常、取消保持安静、成功报数量、部分失败同时报两个数和首个异常、"选了但没有可用文件"与"失败"区分开）。
+
 ### v5.25.0 - 2026-08-07
 
 - **feat: 视觉材质深化（分层交互架构重做第五阶段，OriginalSound 对标子集）** — 在明确排除的整窗透明化和多着色器背景之外，落地性价比最高的四个具体细节。本批（v5.21.0–v5.25.0）到此收尾。
