@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`5.20.2`
+`5.21.0`
 
 ## Product Goal
 
@@ -39,6 +39,16 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Media object administration must support metadata-only bulk lifecycle updates scoped by exactly one safe selection filter.
 - Bulk lifecycle updates must support dry-run previews that do not persist metadata changes.
 - Committed lifecycle updates must record latest transition metadata for audit preparation.
+
+### v5.21.0 - 2026-08-07
+
+- **feat: 可折叠桌面头部 + 悬浮播放条（分层交互架构重做第一阶段，对标 EchoMusic/Spotube/OriginalSound HQ 源码深度调研第一批交付）** — 用户反馈上一批（v5.17.0–v5.20.2）标题栏整合+材质效果虽然生效，但"界面布局几乎没有变化"，明确要求这次要触及导航结构本身，并按用途把三份参考资料拆开、要求下载源码分析而非凭截图臆测。已用 3 个 general-purpose agent 分别 clone `hoowhoami/EchoMusic`、`KRTirtho/spotube`、`Johnwikix/original-sound-hq-player` 深度读码，3 个 Explore agent 摸清本仓库现状，产出六份调研交叉比对后的分层实现计划（完整调研发现见 Claude Code 会话保存的计划文件，非本仓库 `.plan/` 目录）。本 phase 是后续两个导航重做 phase（服务端模式对标 EchoMusic、游客模式对标 Spotube）都要依赖的基础设施。
+- **新增 `DesktopSliverAppBar`**（`lib/src/shared/widgets/desktop_app_bar.dart`，跟 `DesktopAppBar` 同文件——它需要复用 `DesktopAppBar` 已有的私有 `_MaximizeButton`/窗口按钮三件套逻辑，Dart 的可见性按文件而不是按类）：`DesktopAppBar` 此前是纯定高组件，不能塞进 `CustomScrollView` 的 `slivers` 列表，这是"可折叠头部+桌面拖拽"必须先解决的架构缺口——专辑/歌单详情页此前用裸 `SliverAppBar` 完全绕开了 `DesktopAppBar`，因此从 v5.17.0 起就没有桌面拖拽/窗口按钮（当时已知但未修的缺口，见 v5.17.0 条目）。
+- **踩坑记录（写代码时发现，不是猜测）**：最初设计是照抄 `DesktopAppBar` 的做法，把整个 `SliverAppBar` 包进 `DragToMoveArea`——直接读 `window_manager` 包源码确认 `DragToMoveArea` 内部就是一个 `GestureDetector`（盒模型 widget），而 `SliverAppBar` 是 Sliver widget，两者不能这样嵌套后还塞进 `CustomScrollView.slivers`（会在运行时抛出 Sliver/Box 协议不匹配的错误）。改为只把 `DragToMoveArea` 套在 `FlexibleSpaceBar` 的 `background` 插槽上（背景本身是普通盒模型 widget，覆盖展开态的大面积封面区域，是最自然的拖拽区）；常驻工具栏行（标题/操作按钮）不做拖拽处理，窗口按钮保持简单点击语义。macOS 红绿灯让位的处理也相应调整——不能像 `DesktopAppBar` 那样对整个组件加左内边距（会连带把展开态的封面背景也往右推），改成只对常驻工具栏行的 `leading` 插槽加内边距。
+- **第二个踩坑（被自己写的单测抓住的真 bug）**：初版实现把 `title` 同时传给了 `SliverAppBar.title` 和 `FlexibleSpaceBar.title`——这是一个真实存在的 Flutter 反模式，`FlexibleSpaceBar` 自己的渐变机制已经负责展开态大标题收缩成迷你标题的全过程，同时设置 `SliverAppBar.title` 不是无操作而是真的在屏幕上重复渲染一份标题文字。写单测断言标题只出现一次时直接暴露（`findsOneWidget` 失败，实际找到两个），修复为"标题要么去 `SliverAppBar.title`（无背景时），要么去 `FlexibleSpaceBar.title`（有背景时），二选一"——这跟改造前专辑/歌单详情页原本的写法（标题只给 `FlexibleSpaceBar`）是一致的。
+- 迁移专辑详情页（`album_detail_screen.dart`）和歌单详情页（`playlist_detail_screen.dart`）到 `DesktopSliverAppBar`，找回桌面拖拽/窗口按钮；艺术家详情页留到 v5.22.0（它目前完全没有 `SliverAppBar`，需要更大改动，跟"补齐服务端导航"那批一起做更合理）。
+- **`MiniPlayerBar` 从通栏直角矩形改为悬浮圆角卡片**：外层加 8px 侧边距+8px 底边距的 `Padding`，`Material` 加 `shape: RoundedRectangleBorder(borderRadius: 16)` + `clipBehavior: Clip.antiAlias`——对标 EchoMusic（播放条只占内容区宽度、圆角+阴影）与 Spotube（`SurfaceCard` 悬浮于导航之上）的共同做法。内部三段式布局（曲目信息/核心控制/次要功能）不变，只改外壳；游客模式和服务端模式共用同一个组件，两边都自动生效，不需要分别改。之前通栏铺满时 `elevation: 8` 的投影其实很难看出来（两侧都跑出屏幕外没有东西可以承接阴影），现在加了边距后阴影才真正可见。
+- The phase output is version-tracked and verified locally（`flutter analyze --no-fatal-infos` 0 issues；`flutter test --no-pub` 172/172 通过，含 `desktop_app_bar_test.dart` 新增 4 例专门覆盖 `DesktopSliverAppBar` 在 mobile/Windows/macOS/系统标题栏开启四种场景下的拖拽区域与窗口按钮行为，其中一例最初捕获了上面提到的标题重复渲染 bug）。实际视觉效果——专辑/歌单详情页是否真的可以拖拽窗口、悬浮播放条的圆角阴影观感——本地无桌面窗口环境无法走查，待远端 CI 构建后用户实机确认。
 
 ### v5.20.2 - 2026-08-07
 
