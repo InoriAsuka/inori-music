@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'package:inori_music/src/catalog/artwork_provider.dart';
+import 'package:inori_music/src/catalog/cover_palette_provider.dart';
 import 'package:inori_music/src/shared/theme/skin_provider.dart';
 
 /// Full-bleed blurred-artwork backdrop shared by [KaraokeScreen] and
@@ -13,7 +14,12 @@ import 'package:inori_music/src/shared/theme/skin_provider.dart';
 /// background color when there's no artwork to show (no album, no embedded
 /// cover, or the image fails to load) — the gradient scrim is still applied
 /// in that case so [child] doesn't need two different contrast assumptions.
-class LyricsBackground extends StatelessWidget {
+///
+/// Since v5.24.0 the scrim is tinted with a colour sampled from the artwork
+/// ([coverPaletteProvider]) instead of always being the flat skin background,
+/// so the backdrop shifts with each track the way EchoMusic's and
+/// OriginalSound's lyrics pages do.
+class LyricsBackground extends ConsumerWidget {
   const LyricsBackground({
     super.key,
     required this.albumId,
@@ -31,20 +37,37 @@ class LyricsBackground extends StatelessWidget {
   final Widget child;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final skin = ref.watch(skinProvider).active;
+    final palette = ref
+        .watch(
+          coverPaletteProvider((albumId: albumId, localArtUri: localArtUri)),
+        )
+        .valueOrNull;
+    // valueOrNull covers loading, extraction failure and "no artwork at all"
+    // in one branch: this is decoration, and it must never leave the lyrics
+    // sitting on an unscrimmed image while a palette resolves.
+    final scrim =
+        palette?.backdropFor(skin.brightness) ?? context.skinColors.background;
+
     return Stack(
       fit: StackFit.expand,
       children: [
         ColoredBox(color: context.skinColors.background),
         _BlurredArtwork(albumId: albumId, localArtUri: localArtUri),
-        DecoratedBox(
+        // Two fixed opacity stops rather than an animated transition — the
+        // blurred artwork underneath already changes with the track, and a
+        // crossfading scrim on top of it reads as a lag, not a flourish.
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeOut,
           decoration: BoxDecoration(
             gradient: LinearGradient(
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                context.skinColors.background.withValues(alpha: 0.55),
-                context.skinColors.background.withValues(alpha: 0.82),
+                scrim.withValues(alpha: 0.55),
+                scrim.withValues(alpha: 0.82),
               ],
             ),
           ),

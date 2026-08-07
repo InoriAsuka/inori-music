@@ -52,6 +52,9 @@ dependencies:
 
   # Images
   cached_network_image: ^3.4.1
+  # Cover-art colour extraction for the lyrics backdrop (v5.24.0). Flutter's
+  # own package — the same quantiser Material uses for dynamic colour.
+  palette_generator: ^0.3.3+7
 
   # Utils
   freezed_annotation: ^2.4.4
