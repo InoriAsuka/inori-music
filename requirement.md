@@ -40,6 +40,17 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Bulk lifecycle updates must support dry-run previews that do not persist metadata changes.
 - Committed lifecycle updates must record latest transition metadata for audit preparation.
 
+### v5.25.0 - 2026-08-07
+
+- **feat: 视觉材质深化（分层交互架构重做第五阶段，OriginalSound 对标子集）** — 在明确排除的整窗透明化和多着色器背景之外，落地性价比最高的四个具体细节。本批（v5.21.0–v5.25.0）到此收尾。
+- **按钮弹簧微交互**（新增 `lib/src/shared/widgets/spring_interaction.dart`）：`AnimationController.unbounded` + `SpringSimulation` 驱动 hover 上浮 2px、按下缩到 0.90，阻尼比 0.30/0.40 取自调研读到的 OriginalSound 动效定义。**关键设计：用 `Listener` 观察指针事件而不是 `GestureDetector` 处理**——包的都是现成的 `IconButton`，它们保留自己原有的点击逻辑，这里只叠动效，不消费手势也不进手势竞技场。控制器必须 `unbounded`：欠阻尼弹簧会越过目标值，有界控制器会把"弹"这个特征本身夹掉。`animateWith` 时带上当前速度，快速按下-松开这类中途反向的操作从实际运动状态接着走而不是从静止重开。刚度不是那份源码里能直接搬的量，按"约 250ms 稳定"调的，代码注释里写明了这一点而不是假装是照抄的。应用到两个播放器的传输控制三件套，周边次要控件刻意不加，让主操作是唯一会响应的那组。
+- **HQ 徽标**（新增 `lib/src/local_library/audio_quality.dart`）：OriginalSound 的判定是采样率 ≥48kHz **且位深 ≥24**，但 v5.19.0 就核实过 `audio_metadata_reader` 的公开 `AudioMetadata` 模型根本不暴露位深，要拿到得 fork 或换包，跟"一个徽标"完全不成比例。改用码率顶替位深，并且理由是具体的而不是凑合：**码率正是区分 24bit 无损与高采样率有损的那个量，也正是位深检查存在的目的**。阈值取 700 kbps——有损编码器实际上限都远低于它（MP3 320，AAC/Opus 极限也就 ~500），而 16bit/48kHz FLAC 已稳稳高于它。两个值必须都已知：v5.19.0 之前导入的曲目这两个字段是 null，"未知"绝不能显示成质量声明。
+- **歌词页上下边缘渐隐**：`ShaderMask` + `LinearGradient` + `BlendMode.dstIn`，歌词接近上下边缘时淡出而不是硬切——调研报告里判定"可以 1:1 直译"的那一项，OriginalSound 自己也是同一套 gradient-into-dstIn。
+- **歌词逐行按距离虚化**（`_DepthBlur`）：真实高斯模糊（`ImageFiltered` + `ImageFilter.blur`），每行 0.6 sigma、上限 2.0。**当前行完全跳过模糊**——正在读的那行不该被重采样；同时每个模糊行都是一次 `saveLayer`，屏幕上有多少行就有多少次，所以刻意做浅、做封顶，也不加用户可调滑杆。
+- **实现中发现的一个真实问题（值得记下来的那种）**：写单测断言"按下后缩放变小"时一直读到 1.0。加临时日志逐帧打印后确认**是测试辅助函数错了，不是组件错了**——`Matrix4.getMaxScaleOnAxis()` 取的是三个轴里最大的缩放，而 `Transform.scale` 只改 x/y、把 z 留在 1.0，所以它对任何缩小都返回 1.0；改成直接读 m00。排查过程中顺带给 `SpringInteraction` 的 `Listener` 补了 `HitTestBehavior.translucent`：默认的 `deferToChild` 会让"子组件本身恰好不可命中"时按下动效静默失效，一个对某些子组件悄悄不工作的包装器是个陷阱。
+- The phase output is version-tracked and verified locally（`flutter analyze --no-fatal-infos` 0 error/warning，仅 1 条存量 info 属未触碰文件；`flutter test` 218/218 通过，207 存量 + 11 新增：`audio_quality_test.dart` 7 例含"48kHz 320kbps MP3 被排除"这条位深检查存在意义所在的用例与"未知元数据不算 Hi-Res"，`spring_interaction_test.dart` 4 例含"被包装的按钮仍能收到点击"这条最容易被破坏的性质）。弹簧手感、HQ 徽标、歌词渐隐与虚化的实际观感待远端 CI 构建后用户实机确认。
+- **本批（v5.21.0–v5.25.0，分层交互架构重做）全部完成**：v5.21 基础设施（可折叠桌面头部 + 悬浮播放条）、v5.22 服务端模式导航（EchoMusic）、v5.23 游客模式导航（Spotube）、v5.24 封面动态取色、v5.25 视觉材质。等待用户实机验证后决定下一批方向。
+
 ### v5.24.0 - 2026-08-07
 
 - **feat: 封面动态取色（分层交互架构重做第四阶段）** — 歌词页背景的渐变遮罩改用当前曲目封面提取的颜色，而不是固定皮肤色。这是 EchoMusic（强调色随封面变化）和 OriginalSound（歌词页取色渐变过渡）两份调研共同指向的点，跟 v5.22/v5.23 的导航重做相互独立。
