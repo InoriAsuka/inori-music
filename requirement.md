@@ -40,6 +40,19 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Bulk lifecycle updates must support dry-run previews that do not persist metadata changes.
 - Committed lifecycle updates must record latest transition metadata for audit preparation.
 
+### v5.22.0 - 2026-08-07
+
+- **feat: 服务端模式导航重做（分层交互架构重做第二阶段，EchoMusic 对标）** — 承接 v5.21.0 产出的 `DesktopSliverAppBar`/悬浮 `MiniPlayerBar` 基础设施，这一批开始动导航结构本身，正面回应用户"界面布局几乎没有变化"的反馈。对标对象按用户拆分的用途取 EchoMusic（登录后对接服务端目录的整个交互架构）。
+- **侧栏按分组重做，并补上账号信息区**（`lib/src/shared/widgets/shell_scaffold.dart`）：导航项拆成"发现"（Artists/Albums/Search）与"资料库"（Favorites/History/Playlists）两组，桌面侧栏渲染分组标题；窄布局（`NavigationBar`/`NavigationRail`）没有分组概念，仍然拍平成一条，所以两处共用同一份拍平后的索引，分组只是渲染层的事。新增 `_AccountBlock`（头像首字母 + 用户名 + 设置入口）——不照抄 EchoMusic 的等级/VIP 徽标体系，本项目的用户模型里没有对应概念。
+- **补上两条实际不可达的路由**：`AppRoutes.playlists` 和对应的 `PlaylistsScreen` 从很早就存在，但全仓库搜索确认没有任何地方链接过去，目录播放列表除了深链接以外进不去；`AppRoutes.settings` 更严重——全仓库唯一的入口在 `local_library_screen.dart`（游客模式专属），也就是**登录用户根本没有任何办法打开设置页**。前者接进"资料库"分组，后者进侧栏账号区（桌面）、`NavigationRail.trailing`（平板）、Library 页 AppBar 操作（手机，这三种布局里唯一一个既没有侧栏也没有 rail trailing 槽的）。
+- **移动端导航项从 5 个变 6 个**，改用 `NavigationDestinationLabelBehavior.onlyShowSelected`——6 个常驻标签在手机宽度下放不下，这是 Material 自己对拥挤导航条给出的答案。
+- **Artists/Albums 网格接入真实封面**：`albums_screen.dart` 里的私有 `_AlbumCard` 提为共享组件 `lib/src/shared/widgets/album_card.dart` 并接上早就存在却一直没用的 `artworkUrlProvider`。艺术家这边没有现成方案——`CatalogArtist` 生成模型里根本没有封面字段，后端也没有对应接口（已核对生成代码确认，不是猜测），改用"该艺术家名下任一专辑的封面"顶替；映射关系用一次全量 `listAlbums` 在客户端解析成 `artistId → albumId`，而不是每个网格单元发一次 `albumsByArtist`——网格最多 200 项，后者等于为了缩略图多打 200 次请求。
+- **艺术家详情页统一到可折叠头部**：此前它是三个详情页里唯一用固定 `DesktopAppBar` 的（v5.21.0 只迁了专辑/歌单两个），现在同样用 `DesktopSliverAppBar`；页内手搓的一次性横向专辑轮播换成共享 `AlbumCard`，跟 Albums 页视觉一致。
+- **三个集合详情页补上"播放全部/随机播放"**（新增 `lib/src/shared/widgets/play_actions_row.dart`）：此前专辑/歌单/艺术家页完全没有集合级播放入口，只能一首首点。集合级收藏/关注没做——本项目后端只有单曲收藏，没有集合收藏接口，硬加会是个假按钮。
+- **`TrackListTile` 补桌面端指针交互**：hover 时封面叠半透明播放图标（对标 Spotube `TrackTile`；`MouseRegion` 对触摸输入天然不触发，手机端渲染完全不变），右键弹出跟长按同一个菜单——桌面用户没有长按手势，此前"加入播放列表/下载"这两个操作对鼠标**完全不可达**。
+- **实现中发现并修复了三个真实 bug，全部是新写的单测抓出来的，不是走查猜到的**：(1) 侧栏根节点是 `Container(color:)`，而 `ListTile` 的 `selectedTileColor` 和水波纹必须画在最近的 `Material` 祖先上，中间夹一层 `ColoredBox` 会把两者一起吃掉——也就是说**侧栏的选中高亮从改造前就一直没有真正画出来过**，Flutter 自带断言在单测里直接报了这个，改成 `Material(color:)`；(2) 侧栏品牌行 `InoriMark + Text('Inori Music')` 在 220px 侧栏的 188px 内容宽度里溢出 20px，同样是改造前就存在的，加 `Expanded` + 省略号；(3) 分组渲染时跨组累加的 `flatIndex` 被每个 `ListTile` 的 `onTap` 闭包按**变量**而不是按值捕获，所有行点下去都传最终值 6，`items[6]` 直接越界——点任何一个导航项都没反应，这个是本次改动引入的，被"跨组选中态索引"那例单测当场抓住。
+- The phase output is version-tracked and verified locally（`flutter analyze --no-fatal-infos` 0 error/warning，仅 1 条存量 info 属未触碰文件 `player_state_reporter.dart`；`flutter test` 184/184 通过，172 存量 + 12 新增：`shell_scaffold_nav_test.dart` 6 例覆盖分组标题/账号区/设置跳转/Playlists 可达性回归/跨组选中索引/移动端导航项数，`play_actions_row_test.dart` 4 例覆盖加载中与空集合禁用、Play 按序入队、Shuffle 元素一致，`track_list_tile_test.dart` 新增 2 例覆盖 hover 遮罩进入离开与右键开菜单）。侧栏分组观感、真实封面加载、桌面端 hover/右键的实际手感本地无桌面窗口环境无法走查，待远端 CI 构建后用户实机确认。
+
 ### v5.21.0 - 2026-08-07
 
 - **feat: 可折叠桌面头部 + 悬浮播放条（分层交互架构重做第一阶段，对标 EchoMusic/Spotube/OriginalSound HQ 源码深度调研第一批交付）** — 用户反馈上一批（v5.17.0–v5.20.2）标题栏整合+材质效果虽然生效，但"界面布局几乎没有变化"，明确要求这次要触及导航结构本身，并按用途把三份参考资料拆开、要求下载源码分析而非凭截图臆测。已用 3 个 general-purpose agent 分别 clone `hoowhoami/EchoMusic`、`KRTirtho/spotube`、`Johnwikix/original-sound-hq-player` 深度读码，3 个 Explore agent 摸清本仓库现状，产出六份调研交叉比对后的分层实现计划（完整调研发现见 Claude Code 会话保存的计划文件，非本仓库 `.plan/` 目录）。本 phase 是后续两个导航重做 phase（服务端模式对标 EchoMusic、游客模式对标 Spotube）都要依赖的基础设施。
