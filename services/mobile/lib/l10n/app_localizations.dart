@@ -184,6 +184,18 @@ abstract class AppLocalizations {
   /// **'Discover'**
   String get discover;
 
+  /// Guest-mode nav destination: locally imported audio files
+  ///
+  /// In en, this message translates to:
+  /// **'Local Library'**
+  String get localLibrary;
+
+  /// Placeholder account name shown in guest mode
+  ///
+  /// In en, this message translates to:
+  /// **'Guest'**
+  String get guest;
+
   /// No description provided for @favorites.
   ///
   /// In en, this message translates to:

@@ -1,13 +1,12 @@
 import 'dart:io';
 
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import 'package:inori_music/src/local_library/local_library_db.dart';
 import 'package:inori_music/src/local_library/local_library_notifier.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
-import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/theme/skin_provider.dart';
 import 'package:inori_music/src/shared/widgets/desktop_app_bar.dart';
 
@@ -17,47 +16,73 @@ import 'package:inori_music/src/shared/widgets/desktop_app_bar.dart';
 /// than a full Artists→Albums→Tracks hierarchy: a personal local file
 /// collection is typically far smaller than a server catalog, so grouped
 /// browsing is a later candidate, not core scope.
-class LocalLibraryScreen extends ConsumerWidget {
+///
+/// The toolbar/row interactions follow Spotube's local-library page: a
+/// play-all/shuffle pair, an in-library filter, hover-to-play on the artwork,
+/// and long-press multi-select for bulk removal.
+class LocalLibraryScreen extends ConsumerStatefulWidget {
   const LocalLibraryScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<LocalLibraryScreen> createState() => _LocalLibraryScreenState();
+}
+
+class _LocalLibraryScreenState extends ConsumerState<LocalLibraryScreen> {
+  final _searchController = TextEditingController();
+
+  /// Purely client-side filter over the already-loaded rows — the local
+  /// library is a single small table, so there is nothing to query remotely
+  /// and no debounce worth adding.
+  String _query = '';
+
+  /// Non-empty means selection mode is active. Ids rather than indices, so a
+  /// concurrent import/removal reordering the list can't shift the selection
+  /// onto different tracks.
+  final _selected = <String>{};
+
+  bool get _selectionMode => _selected.isNotEmpty;
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  List<LocalLibraryTrack> _filter(List<LocalLibraryTrack> tracks) {
+    if (_query.isEmpty) return tracks;
+    final q = _query.toLowerCase();
+    return tracks
+        .where(
+          (t) =>
+              t.title.toLowerCase().contains(q) ||
+              t.artistName.toLowerCase().contains(q) ||
+              t.albumTitle.toLowerCase().contains(q),
+        )
+        .toList();
+  }
+
+  void _exitSelection() => setState(_selected.clear);
+
+  void _toggleSelected(String id) {
+    setState(() {
+      if (!_selected.remove(id)) _selected.add(id);
+    });
+  }
+
+  void _play(List<LocalLibraryTrack> tracks, {required bool shuffle}) {
+    if (tracks.isEmpty) return;
+    final ids = tracks.map((t) => t.id).toList();
+    if (shuffle) ids.shuffle();
+    ref.read(playerProvider.notifier).playQueue(ids);
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(localLibraryProvider);
     final playerState = ref.watch(playerProvider);
 
     return Scaffold(
-      appBar: DesktopAppBar(
-        title: const Text('本地曲库'),
-        actions: [
-          PopupMenuButton<_ImportAction>(
-            icon: const Icon(Icons.add),
-            tooltip: '导入',
-            onSelected: (action) {
-              final notifier = ref.read(localLibraryProvider.notifier);
-              switch (action) {
-                case _ImportAction.files:
-                  notifier.importFiles();
-                case _ImportAction.folder:
-                  notifier.importFolder();
-              }
-            },
-            itemBuilder: (context) => const [
-              PopupMenuItem(value: _ImportAction.files, child: Text('导入文件')),
-              PopupMenuItem(value: _ImportAction.folder, child: Text('导入文件夹')),
-            ],
-          ),
-          IconButton(
-            icon: const Icon(Icons.sort),
-            tooltip: '排序',
-            onPressed: () => _showSortSheet(context, ref),
-          ),
-          IconButton(
-            icon: const Icon(Icons.settings_outlined),
-            tooltip: '设置',
-            onPressed: () => context.push(AppRoutes.settings),
-          ),
-        ],
-      ),
+      appBar: _selectionMode ? _selectionAppBar() : _browseAppBar(),
       body: state.when(
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(
@@ -65,39 +90,151 @@ class LocalLibraryScreen extends ConsumerWidget {
         ),
         data: (tracks) {
           if (tracks.isEmpty) return const _EmptyLocalLibrary();
-          final ids = tracks.map((t) => t.id).toList();
-          return ListView.builder(
-            itemCount: tracks.length,
-            itemBuilder: (context, i) {
-              final track = tracks[i];
-              final isCurrent = playerState.mediaItem?.id == track.id;
-              return _LocalTrackTile(
-                key: ValueKey(track.id),
-                track: track,
-                isCurrent: isCurrent,
-                isPlaying: isCurrent && playerState.isPlaying,
-                onTap: () => ref
-                    .read(playerProvider.notifier)
-                    .playQueue(ids, initialIndex: i),
-                onDelete: () => _confirmDelete(context, ref, track),
-              );
-            },
+          final visible = _filter(tracks);
+          return Column(
+            children: [
+              _Toolbar(
+                controller: _searchController,
+                onQueryChanged: (q) => setState(() => _query = q),
+                trackCount: visible.length,
+                onPlayAll: visible.isEmpty
+                    ? null
+                    : () => _play(visible, shuffle: false),
+                onShuffle: visible.isEmpty
+                    ? null
+                    : () => _play(visible, shuffle: true),
+              ),
+              const Divider(height: 1),
+              Expanded(
+                child: visible.isEmpty
+                    ? Center(
+                        child: Text(
+                          '没有匹配「$_query」的曲目',
+                          style: TextStyle(
+                            color: context.skinColors.onSurfaceVariant,
+                          ),
+                        ),
+                      )
+                    : ListView.builder(
+                        itemCount: visible.length,
+                        itemBuilder: (context, i) {
+                          final track = visible[i];
+                          final isCurrent =
+                              playerState.mediaItem?.id == track.id;
+                          return _LocalTrackTile(
+                            key: ValueKey(track.id),
+                            track: track,
+                            isCurrent: isCurrent,
+                            isPlaying: isCurrent && playerState.isPlaying,
+                            selectionMode: _selectionMode,
+                            isSelected: _selected.contains(track.id),
+                            // In selection mode a plain tap extends the
+                            // selection instead of starting playback — the
+                            // usual mobile file-manager convention.
+                            onTap: () => _selectionMode
+                                ? _toggleSelected(track.id)
+                                : ref
+                                      .read(playerProvider.notifier)
+                                      .playQueue(
+                                        visible.map((t) => t.id).toList(),
+                                        initialIndex: i,
+                                      ),
+                            onToggleSelected: () => _toggleSelected(track.id),
+                            onDelete: () => _confirmDelete(context, track),
+                          );
+                        },
+                      ),
+              ),
+            ],
           );
         },
       ),
     );
   }
 
+  DesktopAppBar _browseAppBar() => DesktopAppBar(
+    title: const Text('本地曲库'),
+    actions: [
+      PopupMenuButton<_ImportAction>(
+        icon: const Icon(Icons.add),
+        tooltip: '导入',
+        onSelected: (action) {
+          final notifier = ref.read(localLibraryProvider.notifier);
+          switch (action) {
+            case _ImportAction.files:
+              notifier.importFiles();
+            case _ImportAction.folder:
+              notifier.importFolder();
+          }
+        },
+        itemBuilder: (context) => const [
+          PopupMenuItem(value: _ImportAction.files, child: Text('导入文件')),
+          PopupMenuItem(value: _ImportAction.folder, child: Text('导入文件夹')),
+        ],
+      ),
+      IconButton(
+        icon: const Icon(Icons.sort),
+        tooltip: '排序',
+        onPressed: () => _showSortSheet(context, ref),
+      ),
+    ],
+  );
+
+  DesktopAppBar _selectionAppBar() => DesktopAppBar(
+    automaticallyImplyLeading: false,
+    leading: IconButton(
+      icon: const Icon(Icons.close),
+      tooltip: '退出选择',
+      onPressed: _exitSelection,
+    ),
+    title: Text('已选择 ${_selected.length} 项'),
+    actions: [
+      IconButton(
+        icon: const Icon(Icons.delete_outline),
+        tooltip: '移除所选',
+        onPressed: _confirmDeleteSelected,
+      ),
+    ],
+  );
+
   Future<void> _confirmDelete(
     BuildContext context,
-    WidgetRef ref,
     LocalLibraryTrack track,
   ) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await _confirm(
+      context,
+      title: '移除曲目',
+      body: '从本地曲库中移除「${track.title}」？不会删除原始文件。',
+    );
+    if (confirmed) {
+      await ref.read(localLibraryProvider.notifier).remove(track.id);
+    }
+  }
+
+  Future<void> _confirmDeleteSelected() async {
+    final count = _selected.length;
+    final confirmed = await _confirm(
+      context,
+      title: '移除所选曲目',
+      body: '从本地曲库中移除 $count 首曲目？不会删除原始文件。',
+    );
+    if (!confirmed) return;
+    // Snapshot before clearing: _exitSelection empties the same set.
+    final ids = _selected.toList();
+    _exitSelection();
+    await ref.read(localLibraryProvider.notifier).removeAll(ids);
+  }
+
+  Future<bool> _confirm(
+    BuildContext context, {
+    required String title,
+    required String body,
+  }) async {
+    final result = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('移除曲目'),
-        content: Text('从本地曲库中移除「${track.title}」？不会删除原始文件。'),
+        title: Text(title),
+        content: Text(body),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -110,9 +247,7 @@ class LocalLibraryScreen extends ConsumerWidget {
         ],
       ),
     );
-    if (confirmed == true) {
-      await ref.read(localLibraryProvider.notifier).remove(track.id);
-    }
+    return result ?? false;
   }
 
   static String _sortLabel(LocalLibrarySortOrder sort) => switch (sort) {
@@ -165,6 +300,85 @@ class LocalLibraryScreen extends ConsumerWidget {
 }
 
 enum _ImportAction { files, folder }
+
+/// Play-all / shuffle / filter strip above the list. Before this the screen
+/// had no way to start playback other than tapping a row, and no way to find
+/// a track in a large import other than scrolling.
+class _Toolbar extends StatelessWidget {
+  const _Toolbar({
+    required this.controller,
+    required this.onQueryChanged,
+    required this.trackCount,
+    required this.onPlayAll,
+    required this.onShuffle,
+  });
+
+  final TextEditingController controller;
+  final ValueChanged<String> onQueryChanged;
+  final int trackCount;
+  final VoidCallback? onPlayAll;
+  final VoidCallback? onShuffle;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+      child: Row(
+        children: [
+          FilledButton.icon(
+            onPressed: onPlayAll,
+            icon: const Icon(Icons.play_arrow_rounded, size: 20),
+            label: const Text('播放全部'),
+            style: FilledButton.styleFrom(
+              backgroundColor: context.skinColors.sakuraPink,
+              foregroundColor: Colors.white,
+            ),
+          ),
+          const SizedBox(width: 8),
+          IconButton(
+            onPressed: onShuffle,
+            icon: const Icon(Icons.shuffle),
+            tooltip: '随机播放',
+            color: context.skinColors.onSurfaceVariant,
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              onChanged: onQueryChanged,
+              decoration: InputDecoration(
+                isDense: true,
+                hintText: '在曲库中搜索',
+                prefixIcon: const Icon(Icons.search, size: 20),
+                suffixIcon: controller.text.isEmpty
+                    ? null
+                    : IconButton(
+                        icon: const Icon(Icons.clear, size: 18),
+                        onPressed: () {
+                          controller.clear();
+                          onQueryChanged('');
+                        },
+                      ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                contentPadding: const EdgeInsets.symmetric(vertical: 8),
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            '$trackCount 首',
+            style: TextStyle(
+              fontSize: 12,
+              color: context.skinColors.onSurfaceVariant,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 class _EmptyLocalLibrary extends ConsumerWidget {
   const _EmptyLocalLibrary();
@@ -219,40 +433,71 @@ class _EmptyLocalLibrary extends ConsumerWidget {
   }
 }
 
-class _LocalTrackTile extends StatelessWidget {
+class _LocalTrackTile extends StatefulWidget {
   const _LocalTrackTile({
     super.key,
     required this.track,
     required this.isCurrent,
     required this.isPlaying,
+    required this.selectionMode,
+    required this.isSelected,
     required this.onTap,
+    required this.onToggleSelected,
     required this.onDelete,
   });
 
   final LocalLibraryTrack track;
   final bool isCurrent;
   final bool isPlaying;
+  final bool selectionMode;
+  final bool isSelected;
   final VoidCallback onTap;
+  final VoidCallback onToggleSelected;
   final VoidCallback onDelete;
 
   @override
+  State<_LocalTrackTile> createState() => _LocalTrackTileState();
+}
+
+class _LocalTrackTileState extends State<_LocalTrackTile> {
+  /// Pointer-driven only — MouseRegion never fires for touch, so phones see
+  /// exactly the row this screen has always rendered.
+  bool _hovering = false;
+
+  @override
   Widget build(BuildContext context) {
+    final track = widget.track;
     final subtitleParts = [
       if (track.artistName.isNotEmpty) track.artistName,
       if (track.durationMs != null)
         _formatDuration(Duration(milliseconds: track.durationMs!)),
     ];
-    return ListTile(
-      leading: _Cover(coverPath: track.coverArtPath, highlighted: isCurrent),
+
+    final tile = ListTile(
+      selected: widget.isSelected,
+      selectedTileColor: context.skinColors.sakuraPinkDark.withValues(
+        alpha: 0.25,
+      ),
+      leading: widget.selectionMode
+          ? Checkbox(
+              value: widget.isSelected,
+              onChanged: (_) => widget.onToggleSelected(),
+            )
+          : _Cover(
+              coverPath: track.coverArtPath,
+              highlighted: widget.isCurrent,
+              showPlayOverlay: _hovering,
+              isPlaying: widget.isCurrent && widget.isPlaying,
+            ),
       title: Text(
         track.title,
         maxLines: 1,
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
-          color: isCurrent
+          color: widget.isCurrent
               ? context.skinColors.sakuraPink
               : context.skinColors.onSurface,
-          fontWeight: isCurrent ? FontWeight.w600 : FontWeight.normal,
+          fontWeight: widget.isCurrent ? FontWeight.w600 : FontWeight.normal,
         ),
       ),
       subtitle: subtitleParts.isEmpty
@@ -266,7 +511,7 @@ class _LocalTrackTile extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           if (track.fileFormat != null) _FormatBadge(format: track.fileFormat!),
-          if (isCurrent && isPlaying)
+          if (widget.isCurrent && widget.isPlaying)
             Padding(
               padding: const EdgeInsets.only(left: 6),
               child: Icon(
@@ -275,16 +520,36 @@ class _LocalTrackTile extends StatelessWidget {
                 size: 20,
               ),
             ),
-          IconButton(
-            icon: Icon(
-              Icons.delete_outline,
-              color: context.skinColors.onSurfaceVariant,
+          // Per-row delete would be redundant (and easy to mis-tap) once the
+          // selection app bar owns removal.
+          if (!widget.selectionMode)
+            IconButton(
+              icon: Icon(
+                Icons.delete_outline,
+                color: context.skinColors.onSurfaceVariant,
+              ),
+              onPressed: widget.onDelete,
             ),
-            onPressed: onDelete,
-          ),
         ],
       ),
-      onTap: onTap,
+      onTap: widget.onTap,
+      onLongPress: widget.onToggleSelected,
+    );
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovering = true),
+      onExit: (_) => setState(() => _hovering = false),
+      child: Listener(
+        // Right-click enters/extends the selection: desktop has no long-press
+        // gesture, so multi-select would otherwise be mouse-unreachable.
+        onPointerDown: (event) {
+          if (event.kind == PointerDeviceKind.mouse &&
+              event.buttons == kSecondaryMouseButton) {
+            widget.onToggleSelected();
+          }
+        },
+        child: tile,
+      ),
     );
   }
 
@@ -328,9 +593,20 @@ class _FormatBadge extends StatelessWidget {
 }
 
 class _Cover extends StatelessWidget {
-  const _Cover({required this.coverPath, required this.highlighted});
+  const _Cover({
+    required this.coverPath,
+    required this.highlighted,
+    this.showPlayOverlay = false,
+    this.isPlaying = false,
+  });
+
   final String? coverPath;
   final bool highlighted;
+  final bool showPlayOverlay;
+
+  /// Drives which glyph the hover overlay shows — pausing the row you are
+  /// already listening to is the useful action there, not restarting it.
+  final bool isPlaying;
 
   @override
   Widget build(BuildContext context) {
@@ -343,13 +619,28 @@ class _Cover extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       clipBehavior: Clip.antiAlias,
-      child: path != null
-          ? Image.file(
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (path != null)
+            Image.file(
               File(path),
               fit: BoxFit.cover,
               errorBuilder: (_, _, _) => _fallbackIcon(context),
             )
-          : _fallbackIcon(context),
+          else
+            _fallbackIcon(context),
+          if (showPlayOverlay)
+            Container(
+              color: Colors.black.withValues(alpha: 0.45),
+              child: Icon(
+                isPlaying ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                size: 24,
+                color: Colors.white,
+              ),
+            ),
+        ],
+      ),
     );
   }
 

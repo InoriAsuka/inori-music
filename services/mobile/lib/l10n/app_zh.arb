@@ -14,6 +14,8 @@
   "search": "搜索",
   "library": "资料库",
   "discover": "发现",
+  "localLibrary": "本地曲库",
+  "guest": "游客",
   "favorites": "收藏",
   "history": "历史",
   "settings": "设置",

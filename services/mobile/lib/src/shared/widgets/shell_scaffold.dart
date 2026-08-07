@@ -74,6 +74,26 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
     ..._libraryItems(t),
   ];
 
+  /// Guest mode is a local-files player with no server catalog behind it, so
+  /// it gets the same responsive shell with a much shorter destination list
+  /// rather than the bare Scaffold it used to fall back to — that left guest
+  /// mode with no navigation chrome at all, and made Settings reachable only
+  /// from the local library screen's own app bar. Mirrors Spotube, which does
+  /// not switch to a separate UI when you skip sign-in either: the local
+  /// library is a destination inside the same shell.
+  List<_NavItem> _guestItems(AppLocalizations t) => [
+    _NavItem(
+      label: t.localLibrary,
+      icon: Icons.library_music_outlined,
+      route: AppRoutes.localLibrary,
+    ),
+    _NavItem(
+      label: t.settings,
+      icon: Icons.settings_outlined,
+      route: AppRoutes.settings,
+    ),
+  ];
+
   late final HardwareKeyboard _keyboard;
 
   @override
@@ -137,34 +157,26 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
 
     const bottomBar = MiniPlayerBar();
 
-    // Guest mode is a local-files-only player — the whole server-catalog nav
-    // (Artists/Albums/Search/Favorites/History) is meaningless without an
-    // account, so it's dropped entirely rather than shown pointing at empty
-    // screens. Local Library and Settings are reachable from
-    // LocalLibraryScreen's own AppBar instead of a multi-item nav bar.
+    // Guest mode drops the whole server-catalog nav (Artists/Albums/Search/
+    // Favorites/History) — meaningless without an account — but keeps the
+    // shell itself; see [_guestItems].
     final isGuest = ref.watch(authProvider).valueOrNull?.isGuest ?? false;
-    if (isGuest) {
-      return Scaffold(
-        body: Column(
-          children: [
-            Expanded(child: widget.child),
-            bottomBar,
-          ],
-        ),
-      );
-    }
 
     final t = AppLocalizations.of(context);
-    final items = _navItems(t);
+    final items = isGuest ? _guestItems(t) : _navItems(t);
     final width = MediaQuery.sizeOf(context).width;
     final selectedIndex = _selectedIndex(context, items);
 
     if (width >= 1200) {
       return _DesktopLayout(
-        navGroups: [
-          (header: t.discover, items: _discoverItems(t)),
-          (header: t.library, items: _libraryItems(t)),
-        ],
+        // Two guest destinations under a section header would be more chrome
+        // than content, so guest mode gets one unlabelled group.
+        navGroups: isGuest
+            ? [(header: null, items: items)]
+            : [
+                (header: t.discover, items: _discoverItems(t)),
+                (header: t.library, items: _libraryItems(t)),
+              ],
         selectedIndex: selectedIndex,
         onItemTapped: (i) => _onItemTapped(context, items, i),
         bottomBar: bottomBar,
@@ -221,10 +233,12 @@ class _MobileLayout extends StatelessWidget {
       bottomNavigationBar: NavigationBar(
         selectedIndex: selectedIndex,
         onDestinationSelected: onItemTapped,
-        // Six destinations is past what fits with always-on labels at phone
+        // Past four destinations, always-on labels stop fitting at phone
         // widths — Material's own answer for a crowded bar is to label only
-        // the selected one.
-        labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
+        // the selected one. Guest mode has two, so it keeps full labels.
+        labelBehavior: navItems.length > 4
+            ? NavigationDestinationLabelBehavior.onlyShowSelected
+            : NavigationDestinationLabelBehavior.alwaysShow,
         destinations: navItems
             .map(
               (item) => NavigationDestination(
@@ -272,19 +286,23 @@ class _TabletLayout extends StatelessWidget {
                   // The rail's counterpart to the desktop sidebar's account
                   // block: at this width there's no room for the name, but
                   // Settings still needs a way in (see _AccountBlock).
-                  trailing: Expanded(
-                    child: Align(
-                      alignment: Alignment.bottomCenter,
-                      child: Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: IconButton(
-                          icon: const Icon(Icons.settings_outlined),
-                          tooltip: AppLocalizations.of(context).settings,
-                          onPressed: () => context.go(AppRoutes.settings),
+                  // Suppressed when Settings is already one of the
+                  // destinations, which is the case in guest mode.
+                  trailing: navItems.any((i) => i.route == AppRoutes.settings)
+                      ? null
+                      : Expanded(
+                          child: Align(
+                            alignment: Alignment.bottomCenter,
+                            child: Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: IconButton(
+                                icon: const Icon(Icons.settings_outlined),
+                                tooltip: AppLocalizations.of(context).settings,
+                                onPressed: () => context.go(AppRoutes.settings),
+                              ),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                  ),
                   destinations: navItems
                       .map(
                         (item) => NavigationRailDestination(
@@ -374,7 +392,8 @@ class _DesktopSidebar extends ConsumerWidget {
     var flatIndex = 0;
     final rows = <Widget>[];
     for (final group in navGroups) {
-      rows.add(_SectionHeader(label: group.header));
+      final header = group.header;
+      if (header != null) rows.add(_SectionHeader(label: header));
       for (final item in group.items) {
         // Snapshot per row: the callback would otherwise close over the loop
         // counter itself and every tile would report the final index.
@@ -443,8 +462,10 @@ class _AccountBlock extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final t = AppLocalizations.of(context);
     final auth = ref.watch(authProvider).valueOrNull;
-    final username = auth?.username ?? '';
+    final isGuest = auth?.isGuest ?? false;
+    final username = isGuest ? t.guest : (auth?.username ?? '');
     final initial = username.isEmpty ? '?' : username[0].toUpperCase();
 
     return Padding(
@@ -475,15 +496,18 @@ class _AccountBlock extends ConsumerWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          IconButton(
-            icon: Icon(
-              Icons.settings_outlined,
-              size: 18,
-              color: context.skinColors.onSurfaceVariant,
+          // Guest mode already has Settings as a nav destination of its own
+          // (see _guestItems) — a second copy right above it is just noise.
+          if (!isGuest)
+            IconButton(
+              icon: Icon(
+                Icons.settings_outlined,
+                size: 18,
+                color: context.skinColors.onSurfaceVariant,
+              ),
+              tooltip: t.settings,
+              onPressed: () => context.go(AppRoutes.settings),
             ),
-            tooltip: AppLocalizations.of(context).settings,
-            onPressed: () => context.go(AppRoutes.settings),
-          ),
         ],
       ),
     );
@@ -564,4 +588,6 @@ class _NavItem {
   final String route;
 }
 
-typedef _NavGroup = ({String header, List<_NavItem> items});
+/// A sidebar section. A null [header] renders the items with no section
+/// label — used by guest mode, whose two destinations don't need grouping.
+typedef _NavGroup = ({String? header, List<_NavItem> items});

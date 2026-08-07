@@ -51,6 +51,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get discover => 'Discover';
 
   @override
+  String get localLibrary => 'Local Library';
+
+  @override
+  String get guest => 'Guest';
+
+  @override
   String get favorites => 'Favorites';
 
   @override

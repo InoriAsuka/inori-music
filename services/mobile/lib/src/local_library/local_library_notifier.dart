@@ -198,17 +198,39 @@ class LocalLibraryNotifier extends AsyncNotifier<List<LocalLibraryTrack>> {
   }
 
   Future<void> remove(String id) async {
-    final track = await LocalLibraryDb.instance.query(id);
-    await LocalLibraryDb.instance.delete(id);
-    if (track != null) {
-      final audioFile = File(track.localPath);
-      if (audioFile.existsSync()) await audioFile.delete();
-      final coverPath = track.coverArtPath;
-      if (coverPath != null) {
-        final coverFile = File(coverPath);
-        if (coverFile.existsSync()) await coverFile.delete();
+    await _deleteOne(id);
+    await _refresh();
+  }
+
+  /// Batch counterpart to [remove], for the list's multi-select mode. Deletes
+  /// every id before re-querying once, rather than re-reading the whole table
+  /// per track. One unreadable file must not abort the rest of the batch —
+  /// same rule the import path follows.
+  Future<void> removeAll(Iterable<String> ids) async {
+    for (final id in ids) {
+      try {
+        await _deleteOne(id);
+      } catch (e) {
+        debugPrint('LocalLibrary: failed to remove $id: $e');
       }
     }
+    await _refresh();
+  }
+
+  Future<void> _deleteOne(String id) async {
+    final track = await LocalLibraryDb.instance.query(id);
+    await LocalLibraryDb.instance.delete(id);
+    if (track == null) return;
+    final audioFile = File(track.localPath);
+    if (audioFile.existsSync()) await audioFile.delete();
+    final coverPath = track.coverArtPath;
+    if (coverPath != null) {
+      final coverFile = File(coverPath);
+      if (coverFile.existsSync()) await coverFile.delete();
+    }
+  }
+
+  Future<void> _refresh() async {
     state = AsyncData(
       await LocalLibraryDb.instance.queryAll(
         sort: ref.read(localLibrarySortProvider),

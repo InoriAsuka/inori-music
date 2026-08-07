@@ -51,6 +51,12 @@ class AppLocalizationsJa extends AppLocalizations {
   String get discover => '見つける';
 
   @override
+  String get localLibrary => 'ローカルライブラリ';
+
+  @override
+  String get guest => 'ゲスト';
+
+  @override
   String get favorites => 'お気に入り';
 
   @override

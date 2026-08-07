@@ -51,6 +51,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get discover => '发现';
 
   @override
+  String get localLibrary => '本地曲库';
+
+  @override
+  String get guest => '游客';
+
+  @override
   String get favorites => '收藏';
 
   @override

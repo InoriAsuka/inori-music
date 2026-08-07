@@ -35,8 +35,8 @@ class _StubPlayerNotifier extends PlayerNotifier {
 
 /// The routes the shell navigates between. Bodies are placeholders — this
 /// exercises the shell chrome, not the screens.
-GoRouter _router() => GoRouter(
-  initialLocation: AppRoutes.artists,
+GoRouter _router({String initialLocation = AppRoutes.artists}) => GoRouter(
+  initialLocation: initialLocation,
   routes: [
     ShellRoute(
       builder: (context, state, child) => ShellScaffold(child: child),
@@ -49,6 +49,7 @@ GoRouter _router() => GoRouter(
           AppRoutes.history,
           AppRoutes.playlists,
           AppRoutes.settings,
+          AppRoutes.localLibrary,
         ])
           GoRoute(
             path: path,
@@ -60,25 +61,25 @@ GoRouter _router() => GoRouter(
   ],
 );
 
-Widget _buildApp(GoRouter router) => ProviderScope(
-  overrides: [
-    authProvider.overrideWith(
-      () => _StubAuthNotifier(
-        const AuthState(
-          status: AuthStatus.authenticated,
-          username: 'inori',
-          userId: 'u-1',
-        ),
-      ),
-    ),
-    playerProvider.overrideWith(_StubPlayerNotifier.new),
-  ],
-  child: MaterialApp.router(
-    localizationsDelegates: AppLocalizations.localizationsDelegates,
-    supportedLocales: AppLocalizations.supportedLocales,
-    routerConfig: router,
-  ),
+const _signedIn = AuthState(
+  status: AuthStatus.authenticated,
+  username: 'inori',
+  userId: 'u-1',
 );
+const _guest = AuthState(status: AuthStatus.guest);
+
+Widget _buildApp(GoRouter router, {AuthState auth = _signedIn}) =>
+    ProviderScope(
+      overrides: [
+        authProvider.overrideWith(() => _StubAuthNotifier(auth)),
+        playerProvider.overrideWith(_StubPlayerNotifier.new),
+      ],
+      child: MaterialApp.router(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        routerConfig: router,
+      ),
+    );
 
 /// Drives the shell into the layout branch that renders `_DesktopSidebar`
 /// (>= 1200 logical px wide).
@@ -187,5 +188,74 @@ void main() {
       NavigationDestinationLabelBehavior.onlyShowSelected,
       reason: 'Six labelled destinations do not fit at phone widths',
     );
+  });
+
+  // -------------------------------------------------------------------------
+  // v5.23.0 — guest mode gets the same shell, not a bare Scaffold
+  // -------------------------------------------------------------------------
+
+  Widget guestApp() =>
+      _buildApp(_router(initialLocation: AppRoutes.localLibrary), auth: _guest);
+
+  testWidgets('guest mode gets navigation chrome instead of a bare body', (
+    tester,
+  ) async {
+    // Before v5.23.0 the guest branch returned a Scaffold with no nav at all,
+    // leaving Settings reachable only from the local library's own app bar.
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.physicalSize = const Size(420, 900);
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(guestApp());
+    await tester.pumpAndSettle();
+
+    final bar = tester.widget<NavigationBar>(find.byType(NavigationBar));
+    expect(bar.destinations, hasLength(2));
+    expect(
+      bar.labelBehavior,
+      NavigationDestinationLabelBehavior.alwaysShow,
+      reason: 'Two destinations comfortably fit full labels',
+    );
+    expect(find.text('Local Library'), findsOneWidget);
+    expect(find.text('Settings'), findsOneWidget);
+    // No server-catalog destinations leak into guest mode.
+    expect(find.text('Artists'), findsNothing);
+    expect(find.text('Favorites'), findsNothing);
+  });
+
+  testWidgets('guest mode can reach Settings from the nav', (tester) async {
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.physicalSize = const Size(420, 900);
+    addTearDown(tester.view.reset);
+
+    await tester.pumpWidget(guestApp());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Settings'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('body:${AppRoutes.settings}'), findsOneWidget);
+  });
+
+  testWidgets('guest sidebar labels the account block without a second '
+      'settings button', (tester) async {
+    _useDesktopWindow(tester);
+    await tester.pumpWidget(guestApp());
+    await tester.pumpAndSettle();
+
+    expect(find.text('Guest'), findsOneWidget);
+    // Settings is already a destination here, so the account block must not
+    // duplicate it — the only settings glyph on screen is the nav row's.
+    expect(find.byIcon(Icons.settings_outlined), findsOneWidget);
+    expect(
+      find.descendant(
+        of: find.byType(ListTile),
+        matching: find.byIcon(Icons.settings_outlined),
+      ),
+      findsOneWidget,
+    );
+    // Two destinations don't warrant a section header.
+    expect(find.text('DISCOVER'), findsNothing);
+    expect(find.text('LIBRARY'), findsNothing);
   });
 }
