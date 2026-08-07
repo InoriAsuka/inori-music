@@ -40,6 +40,17 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Bulk lifecycle updates must support dry-run previews that do not persist metadata changes.
 - Committed lifecycle updates must record latest transition metadata for audit preparation.
 
+### v5.23.0 - 2026-08-07
+
+- **feat: 游客模式导航重做（分层交互架构重做第三阶段，Spotube 对标）** — 对标对象按用户拆分的用途取 Spotube（未登录、只播本地文件时的整个交互架构）。调研时的一条重要澄清在这里直接决定了做法：**Spotube 自己并没有独立的"游客 UI"**，跳过登录后落地的是和登录后完全一样的一套导航壳，Local Library 只是其中一个入口——所以"采用 Spotube 的主界面布局"不是再写一套界面，而是让游客模式复用同一套壳。
+- **游客模式从"单屏无导航"升级为同一套响应式导航壳**（`shell_scaffold.dart`）：`isGuest` 分支此前直接返回一个裸 `Scaffold`（只有内容 + 迷你播放条），完全没有导航 chrome；现在走同一套 `_MobileLayout`/`_TabletLayout`/`_DesktopLayout`，只是传入精简后的导航项（本地曲库 + 设置）——不是新写一套布局系统，是把现有响应式壳参数化。
+- 配套的三处去重：`_NavGroup.header` 改可空，游客模式两项不套分组标题；`_AccountBlock` 游客分支显示"游客"占位名且不渲染设置图标（设置在游客模式本身就是导航项）；`_TabletLayout` 的 rail trailing 设置按钮在设置已进 destinations 时不渲染。移动端 `labelBehavior` 改成按导航项数量决定——>4 项用 `onlyShowSelected`（服务端模式 6 项），否则 `alwaysShow`（游客模式 2 项）。
+- **本地曲库列表交互对齐 Spotube 的 `TrackTile`/工具栏范式**（`local_library_screen.dart`，`ConsumerWidget` → `ConsumerStatefulWidget`）：新增工具栏（播放全部 / 随机播放 / 库内搜索 / 曲目计数）——**此前这一页完全没有集合级播放入口，只能一首首点，也没有任何查找手段**；库内搜索是纯客户端过滤（标题/艺术家/专辑，大小写不敏感），本地曲库是单张小表，没有远端查询可打也不需要防抖；多选（长按进入，桌面端右键等价）+ 批量移除，选择模式下 leading 换 `Checkbox`、行内删除按钮隐藏；封面 hover 叠播放/暂停遮罩（正在播放该曲时显示暂停图标）。
+- **两个实现细节上的刻意选择**：(1) 播放全部/随机/点行播放都作用于**过滤后**的列表而不是整表——否则筛完再点播放会静默忽略筛选条件，已写单测锁定；(2) 选中集用 track id 而不是列表下标——并发导入/移除重排列表时下标会指向别的曲目。
+- `local_library_notifier.dart` 新增 `removeAll(Iterable<String>)`：删完一批再重查一次，而不是每删一首重读整表；单首失败不中断整批（跟导入路径同一条规则）。`remove` 与它共用抽出的 `_deleteOne`/`_refresh`。
+- **与计划的一处偏离，附理由**：原计划写"`LocalLibraryScreen` 改用 `DesktopSliverAppBar`"。实际读 v5.21.0 自己写的那份实现确认，它的拖拽区只包在 `FlexibleSpaceBar.background` 上（因为 `DragToMoveArea` 是盒模型 widget，不能包 Sliver——这正是 v5.21.0 记录过的坑），而本地曲库是列表页、不需要展开态大封面。传 `background: null` 迁过去等于**丢掉整条桌面拖拽区**，比现状更差；Spotube 的本地库页本身也是"固定工具栏 + 列表"，没有折叠 hero 头部。所以保留 `DesktopAppBar`（本来就有全宽拖拽），工具栏放 body 顶部。
+- The phase output is version-tracked and verified locally（`flutter analyze --no-fatal-infos` 0 error/warning，仅 1 条存量 info 属未触碰文件；`flutter test` 197/197 通过，184 存量 + 13 新增：`local_library_screen_test.dart` 10 例覆盖播放全部/随机、搜索按标题与艺术家匹配、播放全部遵循筛选、点行按筛选后下标播放、长按多选+批量移除、退出选择不动数据、hover 遮罩进出、右键切换选中、空结果提示与按钮禁用；`shell_scaffold_nav_test.dart` 新增 3 例覆盖游客导航壳项数与标签行为、游客从导航进设置、游客侧栏不重复设置按钮）。游客模式导航壳观感、工具栏与多选手感待远端 CI 构建后用户实机确认。
+
 ### v5.22.0 - 2026-08-07
 
 - **feat: 服务端模式导航重做（分层交互架构重做第二阶段，EchoMusic 对标）** — 承接 v5.21.0 产出的 `DesktopSliverAppBar`/悬浮 `MiniPlayerBar` 基础设施，这一批开始动导航结构本身，正面回应用户"界面布局几乎没有变化"的反馈。对标对象按用户拆分的用途取 EchoMusic（登录后对接服务端目录的整个交互架构）。
