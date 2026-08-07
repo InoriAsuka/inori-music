@@ -8,6 +8,7 @@ import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/catalog/catalog_repository.dart';
 import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/theme/skin_provider.dart';
+import 'package:inori_music/src/shared/widgets/album_card.dart';
 import 'package:inori_music/src/shared/widgets/desktop_app_bar.dart';
 
 final _albumsProvider = FutureProvider<List<CatalogAlbum>>((ref) {
@@ -57,72 +58,13 @@ class AlbumsScreen extends ConsumerWidget {
                 itemCount: albums.length,
                 itemBuilder: (context, i) {
                   final album = albums[i];
-                  return _AlbumCard(
+                  return AlbumCard(
                     album: album,
                     onTap: () =>
                         context.go(AppRoutes.albumDetailPath(album.id)),
                   );
                 },
               ),
-      ),
-    );
-  }
-}
-
-class _AlbumCard extends StatelessWidget {
-  const _AlbumCard({required this.album, required this.onTap});
-
-  final CatalogAlbum album;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        decoration: BoxDecoration(
-          color: context.skinColors.surfaceVariant,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(
-            color: context.skinColors.outlineVariant,
-            width: 0.5,
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: context.skinColors.surfaceContainer,
-                  borderRadius: BorderRadius.vertical(top: Radius.circular(12)),
-                ),
-                child: Icon(
-                  Icons.album,
-                  size: 56,
-                  color: context.skinColors.outlineVariant,
-                ),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 8, 8, 2),
-              child: Text(
-                album.title,
-                style: Theme.of(context).textTheme.titleSmall,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
-              child: Text(
-                album.releaseYear?.toString() ?? '',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ),
-          ],
-        ),
       ),
     );
   }

@@ -10,7 +10,9 @@ import 'package:inori_music/src/catalog/catalog_repository.dart';
 import 'package:inori_music/src/favorites/track_favorite_notifier.dart';
 import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/theme/skin_provider.dart';
+import 'package:inori_music/src/shared/widgets/album_card.dart';
 import 'package:inori_music/src/shared/widgets/desktop_app_bar.dart';
+import 'package:inori_music/src/shared/widgets/play_actions_row.dart';
 import 'package:inori_music/src/shared/widgets/track_list_tile.dart';
 
 final _artistDetailProvider = FutureProvider.family<CatalogArtist, String>((
@@ -45,17 +47,31 @@ class ArtistDetailScreen extends ConsumerWidget {
     final artistName = artistState.valueOrNull?.name ?? 'Artist';
 
     return Scaffold(
-      appBar: DesktopAppBar(title: Text(artistName)),
       body: CustomScrollView(
         slivers: [
+          DesktopSliverAppBar(
+            title: Text(artistName),
+            expandedHeight: 160,
+            background: Container(
+              color: context.skinColors.surfaceContainer,
+              child: Icon(
+                Icons.person,
+                size: 80,
+                color: context.skinColors.outlineVariant,
+              ),
+            ),
+          ),
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+              child: PlayActionsRow(tracksState: tracksState),
+            ),
+          ),
           // Albums section
           SliverToBoxAdapter(
             child: Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-              child: Text(
-                'Albums',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
+              child: Text('Albums', style: Theme.of(context).textTheme.titleLarge),
             ),
           ),
           albumsState.when(
@@ -76,7 +92,7 @@ class ArtistDetailScreen extends ConsumerWidget {
             ),
             data: (albums) => SliverToBoxAdapter(
               child: SizedBox(
-                height: 160,
+                height: 176,
                 child: albums.isEmpty
                     ? const Center(child: Text('No albums'))
                     : ListView.builder(
@@ -85,39 +101,15 @@ class ArtistDetailScreen extends ConsumerWidget {
                         itemCount: albums.length,
                         itemBuilder: (context, i) {
                           final album = albums[i];
-                          return GestureDetector(
-                            onTap: () =>
-                                context.go(AppRoutes.albumDetailPath(album.id)),
-                            child: Container(
-                              width: 120,
-                              margin: const EdgeInsets.symmetric(horizontal: 4),
-                              child: Column(
-                                children: [
-                                  Container(
-                                    width: 100,
-                                    height: 100,
-                                    decoration: BoxDecoration(
-                                      color:
-                                          context.skinColors.surfaceContainer,
-                                      borderRadius: BorderRadius.circular(8),
-                                    ),
-                                    child: Icon(
-                                      Icons.album,
-                                      color: context.skinColors.outlineVariant,
-                                      size: 40,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    album.title,
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.labelMedium,
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    textAlign: TextAlign.center,
-                                  ),
-                                ],
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            child: SizedBox(
+                              width: 128,
+                              child: AlbumCard(
+                                album: album,
+                                onTap: () => context.go(
+                                  AppRoutes.albumDetailPath(album.id),
+                                ),
                               ),
                             ),
                           );

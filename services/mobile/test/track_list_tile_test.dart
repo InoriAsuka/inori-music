@@ -1,5 +1,6 @@
 // ignore_for_file: implementation_imports
 import 'package:dio/dio.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -134,5 +135,67 @@ void main() {
     // The title must still be present.
     expect(find.text('Idol'), findsOneWidget,
         reason: 'Track title is always visible');
+  });
+
+  // -------------------------------------------------------------------------
+  // v5.22.0 — desktop pointer affordances
+  // -------------------------------------------------------------------------
+
+  Widget buildTile() => ProviderScope(
+        overrides: [
+          catalogRepositoryProvider.overrideWithValue(
+            _StubCatalogRepository(resolvedName),
+          ),
+        ],
+        child: MaterialApp(
+          home: Scaffold(body: TrackListTile(track: _makeTrack())),
+        ),
+      );
+
+  testWidgets('play glyph appears over the thumbnail only while hovered',
+      (tester) async {
+    await tester.pumpWidget(buildTile());
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.byIcon(Icons.play_arrow_rounded), findsNothing,
+        reason: 'No hover overlay before the pointer enters the row');
+
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: Offset.zero);
+    addTearDown(mouse.removePointer);
+    await mouse.moveTo(tester.getCenter(find.byType(ListTile)));
+    await tester.pump();
+
+    expect(find.byIcon(Icons.play_arrow_rounded), findsOneWidget,
+        reason: 'Hovering the row reveals the play affordance');
+
+    // Move well clear of the tile — the overlay must not stick.
+    await mouse.moveTo(const Offset(-100, -100));
+    await tester.pump();
+
+    expect(find.byIcon(Icons.play_arrow_rounded), findsNothing,
+        reason: 'Overlay is cleared once the pointer leaves');
+  });
+
+  testWidgets('right-click opens the same menu long-press does',
+      (tester) async {
+    await tester.pumpWidget(buildTile());
+    await tester.pump();
+    await tester.pump();
+
+    expect(find.text('Add to playlist'), findsNothing);
+
+    final mouse = await tester.createGesture(
+      kind: PointerDeviceKind.mouse,
+      buttons: kSecondaryMouseButton,
+    );
+    await mouse.down(tester.getCenter(find.byType(ListTile)));
+    await mouse.up();
+    await tester.pumpAndSettle();
+
+    expect(find.text('Add to playlist'), findsOneWidget,
+        reason: 'Secondary click must reach the track actions on desktop, '
+            'where there is no long-press gesture');
   });
 }

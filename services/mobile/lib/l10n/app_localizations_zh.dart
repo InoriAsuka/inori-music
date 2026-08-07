@@ -48,6 +48,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get library => '资料库';
 
   @override
+  String get discover => '发现';
+
+  @override
   String get favorites => '收藏';
 
   @override

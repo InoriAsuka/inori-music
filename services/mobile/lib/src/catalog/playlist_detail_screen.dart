@@ -8,6 +8,7 @@ import 'package:inori_music/src/catalog/catalog_repository.dart';
 import 'package:inori_music/src/favorites/track_favorite_notifier.dart';
 import 'package:inori_music/src/shared/theme/skin_provider.dart';
 import 'package:inori_music/src/shared/widgets/desktop_app_bar.dart';
+import 'package:inori_music/src/shared/widgets/play_actions_row.dart';
 import 'package:inori_music/src/shared/widgets/track_list_tile.dart';
 
 final _playlistDetailProvider = FutureProvider.family<Playlist, String>((
@@ -77,9 +78,16 @@ class PlaylistDetailScreen extends ConsumerWidget {
             data: (playlist) => SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                child: Text(
-                  '${playlist.trackIds.length} tracks',
-                  style: Theme.of(context).textTheme.bodySmall,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${playlist.trackIds.length} tracks',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 8),
+                    PlayActionsRow(tracksState: tracksState),
+                  ],
                 ),
               ),
             ),

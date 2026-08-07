@@ -31,41 +31,47 @@ class ShellScaffold extends ConsumerStatefulWidget {
 }
 
 class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
-  // Routes are stable constants; labels are resolved at build-time from l10n.
-  static const _navRoutes = [
-    (icon: Icons.people_outline, route: AppRoutes.artists),
-    (icon: Icons.album_outlined, route: AppRoutes.albums),
-    (icon: Icons.search, route: AppRoutes.search),
-    (icon: Icons.favorite_outline, route: AppRoutes.favorites),
-    (icon: Icons.history, route: AppRoutes.history),
-  ];
-
-  List<_NavItem> _navItems(AppLocalizations t) => [
+  /// Navigation split into the two groups EchoMusic uses — browsing the
+  /// server's catalog vs. the things this account has accumulated. The
+  /// grouping is only rendered by the desktop sidebar; the narrower layouts
+  /// flatten it back into a single strip (NavigationBar/NavigationRail have
+  /// no section-header concept), which is why [_navItems] concatenates them
+  /// and every index-based helper works off that flat list.
+  ///
+  /// `AppRoutes.playlists` is new here: the route and its screen already
+  /// existed but nothing anywhere in the app linked to them, so catalog
+  /// playlists were unreachable outside a deep link.
+  List<_NavItem> _discoverItems(AppLocalizations t) => [
     _NavItem(
       label: t.artists,
-      icon: _navRoutes[0].icon,
-      route: _navRoutes[0].route,
+      icon: Icons.people_outline,
+      route: AppRoutes.artists,
     ),
     _NavItem(
       label: t.albums,
-      icon: _navRoutes[1].icon,
-      route: _navRoutes[1].route,
+      icon: Icons.album_outlined,
+      route: AppRoutes.albums,
     ),
-    _NavItem(
-      label: t.search,
-      icon: _navRoutes[2].icon,
-      route: _navRoutes[2].route,
-    ),
+    _NavItem(label: t.search, icon: Icons.search, route: AppRoutes.search),
+  ];
+
+  List<_NavItem> _libraryItems(AppLocalizations t) => [
     _NavItem(
       label: t.favorites,
-      icon: _navRoutes[3].icon,
-      route: _navRoutes[3].route,
+      icon: Icons.favorite_outline,
+      route: AppRoutes.favorites,
     ),
+    _NavItem(label: t.history, icon: Icons.history, route: AppRoutes.history),
     _NavItem(
-      label: t.history,
-      icon: _navRoutes[4].icon,
-      route: _navRoutes[4].route,
+      label: t.playlists,
+      icon: Icons.queue_music_outlined,
+      route: AppRoutes.playlists,
     ),
+  ];
+
+  List<_NavItem> _navItems(AppLocalizations t) => [
+    ..._discoverItems(t),
+    ..._libraryItems(t),
   ];
 
   late final HardwareKeyboard _keyboard;
@@ -155,7 +161,10 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
 
     if (width >= 1200) {
       return _DesktopLayout(
-        navItems: items,
+        navGroups: [
+          (header: t.discover, items: _discoverItems(t)),
+          (header: t.library, items: _libraryItems(t)),
+        ],
         selectedIndex: selectedIndex,
         onItemTapped: (i) => _onItemTapped(context, items, i),
         bottomBar: bottomBar,
@@ -212,6 +221,10 @@ class _MobileLayout extends StatelessWidget {
       bottomNavigationBar: NavigationBar(
         selectedIndex: selectedIndex,
         onDestinationSelected: onItemTapped,
+        // Six destinations is past what fits with always-on labels at phone
+        // widths — Material's own answer for a crowded bar is to label only
+        // the selected one.
+        labelBehavior: NavigationDestinationLabelBehavior.onlyShowSelected,
         destinations: navItems
             .map(
               (item) => NavigationDestination(
@@ -256,6 +269,22 @@ class _TabletLayout extends StatelessWidget {
                   selectedIndex: selectedIndex,
                   onDestinationSelected: onItemTapped,
                   labelType: NavigationRailLabelType.all,
+                  // The rail's counterpart to the desktop sidebar's account
+                  // block: at this width there's no room for the name, but
+                  // Settings still needs a way in (see _AccountBlock).
+                  trailing: Expanded(
+                    child: Align(
+                      alignment: Alignment.bottomCenter,
+                      child: Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: IconButton(
+                          icon: const Icon(Icons.settings_outlined),
+                          tooltip: AppLocalizations.of(context).settings,
+                          onPressed: () => context.go(AppRoutes.settings),
+                        ),
+                      ),
+                    ),
+                  ),
                   destinations: navItems
                       .map(
                         (item) => NavigationRailDestination(
@@ -283,14 +312,14 @@ class _TabletLayout extends StatelessWidget {
 
 class _DesktopLayout extends StatelessWidget {
   const _DesktopLayout({
-    required this.navItems,
+    required this.navGroups,
     required this.selectedIndex,
     required this.onItemTapped,
     required this.child,
     required this.bottomBar,
   });
 
-  final List<_NavItem> navItems;
+  final List<_NavGroup> navGroups;
   final int selectedIndex;
   final ValueChanged<int> onItemTapped;
   final Widget child;
@@ -307,7 +336,7 @@ class _DesktopLayout extends StatelessWidget {
                 SizedBox(
                   width: 220,
                   child: _DesktopSidebar(
-                    navItems: navItems,
+                    navGroups: navGroups,
                     selectedIndex: selectedIndex,
                     onItemTapped: onItemTapped,
                   ),
@@ -324,20 +353,49 @@ class _DesktopLayout extends StatelessWidget {
   }
 }
 
-class _DesktopSidebar extends StatelessWidget {
+class _DesktopSidebar extends ConsumerWidget {
   const _DesktopSidebar({
-    required this.navItems,
+    required this.navGroups,
     required this.selectedIndex,
     required this.onItemTapped,
   });
 
-  final List<_NavItem> navItems;
+  final List<_NavGroup> navGroups;
+
+  /// Index into the *flattened* item list, matching the order [navGroups]
+  /// are laid out in.
   final int selectedIndex;
   final ValueChanged<int> onItemTapped;
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
+  Widget build(BuildContext context, WidgetRef ref) {
+    // Flat index that keeps walking across group boundaries, so the sidebar's
+    // notion of "item 4" stays the same as the bottom bar's and the rail's.
+    var flatIndex = 0;
+    final rows = <Widget>[];
+    for (final group in navGroups) {
+      rows.add(_SectionHeader(label: group.header));
+      for (final item in group.items) {
+        // Snapshot per row: the callback would otherwise close over the loop
+        // counter itself and every tile would report the final index.
+        final index = flatIndex;
+        rows.add(
+          _SidebarTile(
+            item: item,
+            isSelected: index == selectedIndex,
+            onTap: () => onItemTapped(index),
+          ),
+        );
+        flatIndex++;
+      }
+      rows.add(const SizedBox(height: 8));
+    }
+
+    // Material, not a plain coloured Container: ListTile paints its selected
+    // tile colour and ink splashes onto the nearest Material ancestor, so a
+    // ColoredBox in between swallows both — which is why the sidebar's
+    // selected-row highlight never actually showed.
+    return Material(
       color: context.skinColors.surface,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -348,54 +406,147 @@ class _DesktopSidebar extends StatelessWidget {
               children: [
                 const InoriMark(size: 22),
                 const SizedBox(width: 8),
-                Text(
-                  'Inori Music',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    color: context.skinColors.onSurface,
-                    fontWeight: FontWeight.w700,
+                // Expanded, because the wordmark at titleMedium/w700 already
+                // exceeds the 220px sidebar's content width in some text
+                // scales/themes — unbounded it overflows the Row.
+                Expanded(
+                  child: Text(
+                    'Inori Music',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      color: context.skinColors.onSurface,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
             ),
           ),
+          const _AccountBlock(),
           const Divider(),
-          Expanded(
-            child: ListView.builder(
-              itemCount: navItems.length,
-              itemBuilder: (context, i) {
-                final item = navItems[i];
-                final isSelected = i == selectedIndex;
-                return ListTile(
-                  leading: Icon(
-                    item.icon,
-                    color: isSelected
-                        ? context.skinColors.sakuraPinkLight
-                        : context.skinColors.onSurfaceVariant,
-                  ),
-                  title: Text(
-                    item.label,
-                    style: TextStyle(
-                      color: isSelected
-                          ? context.skinColors.onSurface
-                          : context.skinColors.onSurfaceVariant,
-                      fontWeight: isSelected
-                          ? FontWeight.w600
-                          : FontWeight.w400,
-                    ),
-                  ),
-                  selected: isSelected,
-                  selectedTileColor: context.skinColors.sakuraPinkDark
-                      .withValues(alpha: 0.3),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  onTap: () => onItemTapped(i),
-                );
-              },
+          Expanded(child: ListView(children: rows)),
+        ],
+      ),
+    );
+  }
+}
+
+/// Signed-in identity plus the app's only entry point to Settings outside
+/// guest mode — before this the `/settings` route existed but was reachable
+/// only from the guest-mode local library screen, so an account holder had no
+/// way in at all. EchoMusic's equivalent block also carries membership
+/// level/VIP badges; those have no counterpart in this project's user model,
+/// so only the name and the settings affordance are kept.
+class _AccountBlock extends ConsumerWidget {
+  const _AccountBlock();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final auth = ref.watch(authProvider).valueOrNull;
+    final username = auth?.username ?? '';
+    final initial = username.isEmpty ? '?' : username[0].toUpperCase();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 8, 8),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 14,
+            backgroundColor: context.skinColors.sakuraPinkDark,
+            child: Text(
+              initial,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: context.skinColors.onSurface,
+              ),
             ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              username,
+              style: TextStyle(
+                fontSize: 13,
+                color: context.skinColors.onSurfaceVariant,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          IconButton(
+            icon: Icon(
+              Icons.settings_outlined,
+              size: 18,
+              color: context.skinColors.onSurfaceVariant,
+            ),
+            tooltip: AppLocalizations.of(context).settings,
+            onPressed: () => context.go(AppRoutes.settings),
           ),
         ],
       ),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.label});
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Text(
+        label.toUpperCase(),
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          letterSpacing: 0.8,
+          color: context.skinColors.outline,
+        ),
+      ),
+    );
+  }
+}
+
+class _SidebarTile extends StatelessWidget {
+  const _SidebarTile({
+    required this.item,
+    required this.isSelected,
+    required this.onTap,
+  });
+
+  final _NavItem item;
+  final bool isSelected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      dense: true,
+      leading: Icon(
+        item.icon,
+        color: isSelected
+            ? context.skinColors.sakuraPinkLight
+            : context.skinColors.onSurfaceVariant,
+      ),
+      title: Text(
+        item.label,
+        style: TextStyle(
+          color: isSelected
+              ? context.skinColors.onSurface
+              : context.skinColors.onSurfaceVariant,
+          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+        ),
+      ),
+      selected: isSelected,
+      selectedTileColor: context.skinColors.sakuraPinkDark.withValues(
+        alpha: 0.3,
+      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+      onTap: onTap,
     );
   }
 }
@@ -412,3 +563,5 @@ class _NavItem {
   final IconData icon;
   final String route;
 }
+
+typedef _NavGroup = ({String header, List<_NavItem> items});

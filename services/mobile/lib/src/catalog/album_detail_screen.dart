@@ -8,6 +8,7 @@ import 'package:inori_music/src/catalog/catalog_repository.dart';
 import 'package:inori_music/src/favorites/track_favorite_notifier.dart';
 import 'package:inori_music/src/shared/theme/skin_provider.dart';
 import 'package:inori_music/src/shared/widgets/desktop_app_bar.dart';
+import 'package:inori_music/src/shared/widgets/play_actions_row.dart';
 import 'package:inori_music/src/shared/widgets/track_list_tile.dart';
 
 final _albumDetailProvider = FutureProvider.family<CatalogAlbum, String>((
@@ -72,6 +73,8 @@ class AlbumDetailScreen extends ConsumerWidget {
                         '${album.releaseYear}',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
+                    const SizedBox(height: 8),
+                    PlayActionsRow(tracksState: tracksState),
                   ],
                 ),
               ),

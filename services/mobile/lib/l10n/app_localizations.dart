@@ -178,6 +178,12 @@ abstract class AppLocalizations {
   /// **'Library'**
   String get library;
 
+  /// Sidebar nav group holding the server-catalog browse destinations
+  ///
+  /// In en, this message translates to:
+  /// **'Discover'**
+  String get discover;
+
   /// No description provided for @favorites.
   ///
   /// In en, this message translates to:

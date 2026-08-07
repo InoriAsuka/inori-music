@@ -1,5 +1,6 @@
 // ignore_for_file: implementation_imports
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -11,7 +12,7 @@ import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/theme/skin_provider.dart';
 import 'package:inori_music/src/user_playlist/user_playlist_notifier.dart';
 
-class TrackListTile extends ConsumerWidget {
+class TrackListTile extends ConsumerStatefulWidget {
   const TrackListTile({
     super.key,
     required this.track,
@@ -30,6 +31,15 @@ class TrackListTile extends ConsumerWidget {
   /// the track number / music-note icon.
   final String? artworkUrl;
 
+  @override
+  ConsumerState<TrackListTile> createState() => _TrackListTileState();
+}
+
+class _TrackListTileState extends ConsumerState<TrackListTile> {
+  /// Pointer-driven only — MouseRegion never fires for touch input, so this
+  /// stays false on phones and the tile renders exactly as it did before.
+  bool _hovering = false;
+
   static String _formatDurationMs(int? ms) {
     if (ms == null) return '';
     final totalSec = ms ~/ 1000;
@@ -39,7 +49,13 @@ class TrackListTile extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
+    final track = widget.track;
+    final artworkUrl = widget.artworkUrl;
+    final isFavorite = widget.isFavorite;
+    final onFavoriteTap = widget.onFavoriteTap;
+    final onTap = widget.onTap;
+
     final durationStr = _formatDurationMs(track.durationMs);
 
     // Prefer the explicit artworkUrl; fall back to artworkUrlProvider when albumId
@@ -84,7 +100,33 @@ class TrackListTile extends ConsumerWidget {
       );
     }
 
-    return ListTile(
+    // Hovering the row scrims the thumbnail and reveals a play glyph over it,
+    // matching Spotube's TrackTile. Purely an affordance — the tap target is
+    // still the whole row, which already starts playback.
+    leading = SizedBox(
+      width: 40,
+      height: 40,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          leading,
+          if (_hovering)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: Container(
+                color: Colors.black.withValues(alpha: 0.45),
+                child: const Icon(
+                  Icons.play_arrow_rounded,
+                  size: 22,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+
+    final tile = ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
       leading: leading,
       title: Text(
@@ -150,9 +192,27 @@ class TrackListTile extends ConsumerWidget {
           },
       onLongPress: () => _showTrackMenu(context, ref),
     );
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovering = true),
+      onExit: (_) => setState(() => _hovering = false),
+      child: Listener(
+        // Right-click opens the same menu long-press does — a desktop user has
+        // no long-press gesture, so without this the "add to playlist" /
+        // "download" actions were mouse-unreachable entirely.
+        onPointerDown: (event) {
+          if (event.kind == PointerDeviceKind.mouse &&
+              event.buttons == kSecondaryMouseButton) {
+            _showTrackMenu(context, ref);
+          }
+        },
+        child: tile,
+      ),
+    );
   }
 
   void _showTrackMenu(BuildContext context, WidgetRef ref) {
+    final track = widget.track;
     final isDownloaded =
         ref.read(downloadProvider)[track.id] is DownloadDone;
     showModalBottomSheet<void>(

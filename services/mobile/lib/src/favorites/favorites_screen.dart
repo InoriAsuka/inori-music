@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:inori_api/src/model/catalog_track.dart';
 
+import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/catalog/catalog_repository.dart';
 import 'package:inori_music/src/favorites/track_favorite_notifier.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
@@ -69,7 +70,19 @@ class FavoritesScreen extends ConsumerWidget {
     final playlistsState = ref.watch(userPlaylistProvider);
 
     return Scaffold(
-      appBar: DesktopAppBar(title: const Text('Library')),
+      appBar: DesktopAppBar(
+        title: const Text('Library'),
+        // Mobile's only route into Settings: the phone layout has neither the
+        // desktop sidebar's account block nor the tablet rail's trailing slot,
+        // and this Library screen is where the account's own content lives.
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.settings_outlined),
+            tooltip: AppLocalizations.of(context).settings,
+            onPressed: () => context.push(AppRoutes.settings),
+          ),
+        ],
+      ),
       body: CustomScrollView(
         slivers: [
           // ---- My Playlists section ----
