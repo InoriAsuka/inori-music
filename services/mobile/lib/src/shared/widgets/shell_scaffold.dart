@@ -41,11 +41,31 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
   ];
 
   List<_NavItem> _navItems(AppLocalizations t) => [
-    _NavItem(label: t.artists, icon: _navRoutes[0].icon, route: _navRoutes[0].route),
-    _NavItem(label: t.albums, icon: _navRoutes[1].icon, route: _navRoutes[1].route),
-    _NavItem(label: t.search, icon: _navRoutes[2].icon, route: _navRoutes[2].route),
-    _NavItem(label: t.favorites, icon: _navRoutes[3].icon, route: _navRoutes[3].route),
-    _NavItem(label: t.history, icon: _navRoutes[4].icon, route: _navRoutes[4].route),
+    _NavItem(
+      label: t.artists,
+      icon: _navRoutes[0].icon,
+      route: _navRoutes[0].route,
+    ),
+    _NavItem(
+      label: t.albums,
+      icon: _navRoutes[1].icon,
+      route: _navRoutes[1].route,
+    ),
+    _NavItem(
+      label: t.search,
+      icon: _navRoutes[2].icon,
+      route: _navRoutes[2].route,
+    ),
+    _NavItem(
+      label: t.favorites,
+      icon: _navRoutes[3].icon,
+      route: _navRoutes[3].route,
+    ),
+    _NavItem(
+      label: t.history,
+      icon: _navRoutes[4].icon,
+      route: _navRoutes[4].route,
+    ),
   ];
 
   late final HardwareKeyboard _keyboard;
@@ -97,6 +117,18 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
 
   @override
   Widget build(BuildContext context) {
+    // Surfaces PlayerNotifier.playTrack failures here rather than at each of
+    // its several call sites (local library, track list tiles, search,
+    // queue navigation) — this is the one widget guaranteed to wrap all of
+    // them, in both guest and logged-in layouts, with a Scaffold/
+    // ScaffoldMessenger already available.
+    ref.listen(playerProvider.select((s) => s.playbackError), (previous, next) {
+      if (next == null) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(next.message)));
+    });
+
     const bottomBar = MiniPlayerBar();
 
     // Guest mode is a local-files-only player — the whole server-catalog nav
@@ -181,10 +213,12 @@ class _MobileLayout extends StatelessWidget {
         selectedIndex: selectedIndex,
         onDestinationSelected: onItemTapped,
         destinations: navItems
-            .map((item) => NavigationDestination(
-                  icon: Icon(item.icon),
-                  label: item.label,
-                ))
+            .map(
+              (item) => NavigationDestination(
+                icon: Icon(item.icon),
+                label: item.label,
+              ),
+            )
             .toList(),
       ),
     );
@@ -223,10 +257,12 @@ class _TabletLayout extends StatelessWidget {
                   onDestinationSelected: onItemTapped,
                   labelType: NavigationRailLabelType.all,
                   destinations: navItems
-                      .map((item) => NavigationRailDestination(
-                            icon: Icon(item.icon),
-                            label: Text(item.label),
-                          ))
+                      .map(
+                        (item) => NavigationRailDestination(
+                          icon: Icon(item.icon),
+                          label: Text(item.label),
+                        ),
+                      )
                       .toList(),
                 ),
                 const VerticalDivider(thickness: 0.5, width: 0.5),
@@ -315,9 +351,9 @@ class _DesktopSidebar extends StatelessWidget {
                 Text(
                   'Inori Music',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: context.skinColors.onSurface,
-                        fontWeight: FontWeight.w700,
-                      ),
+                    color: context.skinColors.onSurface,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ],
             ),
@@ -332,18 +368,27 @@ class _DesktopSidebar extends StatelessWidget {
                 return ListTile(
                   leading: Icon(
                     item.icon,
-                    color: isSelected ? context.skinColors.sakuraPinkLight : context.skinColors.onSurfaceVariant,
+                    color: isSelected
+                        ? context.skinColors.sakuraPinkLight
+                        : context.skinColors.onSurfaceVariant,
                   ),
                   title: Text(
                     item.label,
                     style: TextStyle(
-                      color: isSelected ? context.skinColors.onSurface : context.skinColors.onSurfaceVariant,
-                      fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+                      color: isSelected
+                          ? context.skinColors.onSurface
+                          : context.skinColors.onSurfaceVariant,
+                      fontWeight: isSelected
+                          ? FontWeight.w600
+                          : FontWeight.w400,
                     ),
                   ),
                   selected: isSelected,
-                  selectedTileColor: context.skinColors.sakuraPinkDark.withValues(alpha: 0.3),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  selectedTileColor: context.skinColors.sakuraPinkDark
+                      .withValues(alpha: 0.3),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                   onTap: () => onItemTapped(i),
                 );
               },
@@ -358,7 +403,11 @@ class _DesktopSidebar extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _NavItem {
-  const _NavItem({required this.label, required this.icon, required this.route});
+  const _NavItem({
+    required this.label,
+    required this.icon,
+    required this.route,
+  });
   final String label;
   final IconData icon;
   final String route;

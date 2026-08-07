@@ -6,6 +6,16 @@ import 'package:audio_service/audio_service.dart';
 
 enum RepeatMode { none, all, one }
 
+/// A single playback failure occurrence, surfaced once (e.g. as a SnackBar)
+/// by whichever screen is listening. Deliberately does not override `==` —
+/// every instance is its own identity, so two failures with identical
+/// [message] text (e.g. retrying the same broken file) still compare unequal
+/// and a `ref.listen`/`.select` re-fires instead of being deduped away.
+class PlaybackFailure {
+  PlaybackFailure(this.message);
+  final String message;
+}
+
 // ---------------------------------------------------------------------------
 // Player state
 // ---------------------------------------------------------------------------
@@ -21,6 +31,7 @@ class PlayerState {
     this.volume = 1.0,
     this.shuffle = false,
     this.repeat = RepeatMode.none,
+    this.playbackError,
   }) : playbackState = playbackState ?? PlaybackState();
 
   /// Ordered playback queue.
@@ -47,6 +58,12 @@ class PlayerState {
   final bool shuffle;
   final RepeatMode repeat;
 
+  /// Most recent playback failure, if any — set by [PlayerNotifier.playTrack]
+  /// when the audio source can't be resolved/loaded, so a UI shell can show
+  /// it instead of the tap silently doing nothing. See [PlaybackFailure] for
+  /// why this isn't just a `String?`.
+  final PlaybackFailure? playbackError;
+
   // Convenience
   bool get isPlaying => playbackState.playing;
   bool get isBuffering =>
@@ -64,7 +81,9 @@ class PlayerState {
     double? volume,
     bool? shuffle,
     RepeatMode? repeat,
+    PlaybackFailure? playbackError,
     bool clearMediaItem = false,
+    bool clearPlaybackError = false,
   }) {
     return PlayerState(
       queue: queue ?? this.queue,
@@ -76,6 +95,9 @@ class PlayerState {
       volume: volume ?? this.volume,
       shuffle: shuffle ?? this.shuffle,
       repeat: repeat ?? this.repeat,
+      playbackError: clearPlaybackError
+          ? null
+          : (playbackError ?? this.playbackError),
     );
   }
 }

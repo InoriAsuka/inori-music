@@ -4,7 +4,8 @@ import 'dart:math' show pow;
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:inori_music/src/local_library/local_library_notifier.dart' show localTrackIdPrefix;
+import 'package:inori_music/src/local_library/local_library_notifier.dart'
+    show localTrackIdPrefix;
 import 'package:inori_music/src/player/player_state.dart' as pstate;
 
 // ---------------------------------------------------------------------------
@@ -72,6 +73,35 @@ void main() {
       final s2 = s.copyWith(clearMediaItem: true);
       expect(s2.mediaItem, isNull);
     });
+
+    test('playbackError is set and clearPlaybackError removes it', () {
+      final s = pstate.PlayerState().copyWith(
+        playbackError: pstate.PlaybackFailure('boom'),
+      );
+      expect(s.playbackError?.message, 'boom');
+      final s2 = s.copyWith(clearPlaybackError: true);
+      expect(s2.playbackError, isNull);
+    });
+
+    test('an unrelated copyWith call carries playbackError forward', () {
+      final s = pstate.PlayerState().copyWith(
+        playbackError: pstate.PlaybackFailure('boom'),
+      );
+      final s2 = s.copyWith(volume: 0.5);
+      expect(s2.playbackError?.message, 'boom');
+    });
+  });
+
+  group('PlaybackFailure identity (drives ref.listen re-firing)', () {
+    test('two failures with identical text are not ==', () {
+      // ShellScaffold's ref.listen(playerProvider.select((s) => s.playbackError))
+      // relies on this: without it, retrying the same broken track twice in a
+      // row would only show a SnackBar the first time (Riverpod's `select`
+      // treats an "unchanged" value as nothing to notify about).
+      final a = pstate.PlaybackFailure('same message');
+      final b = pstate.PlaybackFailure('same message');
+      expect(a == b, isFalse);
+    });
   });
 
   group('Queue state arithmetic', () {
@@ -86,8 +116,12 @@ void main() {
       if (newIndex > oldIndex) newIndex--;
       final item = queue.removeAt(oldIndex);
       queue.insert(newIndex, item);
-      expect(queue.map((e) => e.id).toList(),
-          ['track-1', 'track-0', 'track-2', 'track-3']);
+      expect(queue.map((e) => e.id).toList(), [
+        'track-1',
+        'track-0',
+        'track-2',
+        'track-3',
+      ]);
     });
 
     test('reorderQueue: move last item to first', () {
@@ -96,10 +130,12 @@ void main() {
       final int newIndex = 0;
       final item = queue.removeAt(oldIndex);
       queue.insert(newIndex, item);
-      expect(queue.map((e) => e.id).toList(),
-          ['track-2', 'track-0', 'track-1']);
+      expect(queue.map((e) => e.id).toList(), [
+        'track-2',
+        'track-0',
+        'track-1',
+      ]);
     });
-
   });
 
   // ---------------------------------------------------------------------
@@ -132,12 +168,15 @@ void main() {
       expect(decide(pstate.RepeatMode.all, 2, 3), 'playAtIndex(0)');
     });
 
-    test('T3: RepeatMode.one -> always restarts current track, never advances', () {
-      // Even on the last track, or mid-queue, RepeatMode.one short-circuits
-      // before the "last track" check, so it never returns playAtIndex/noop.
-      expect(decide(pstate.RepeatMode.one, 2, 3), 'seekZeroAndPlay');
-      expect(decide(pstate.RepeatMode.one, 0, 3), 'seekZeroAndPlay');
-    });
+    test(
+      'T3: RepeatMode.one -> always restarts current track, never advances',
+      () {
+        // Even on the last track, or mid-queue, RepeatMode.one short-circuits
+        // before the "last track" check, so it never returns playAtIndex/noop.
+        expect(decide(pstate.RepeatMode.one, 2, 3), 'seekZeroAndPlay');
+        expect(decide(pstate.RepeatMode.one, 0, 3), 'seekZeroAndPlay');
+      },
+    );
 
     test('mid-queue + RepeatMode.none advances via seekToNext', () {
       expect(decide(pstate.RepeatMode.none, 0, 3), 'seekToNext');
@@ -153,7 +192,11 @@ void main() {
   // plumbing, which requires the live provider graph to exercise.
   // ---------------------------------------------------------------------
   group('ReplayGain gain formula (mirrors _applyVolumeWithGain)', () {
-    double effectiveVolume(double userVol, double? replayGainDb, {required bool enabled}) {
+    double effectiveVolume(
+      double userVol,
+      double? replayGainDb, {
+      required bool enabled,
+    }) {
       var gain = 1.0;
       if (enabled && replayGainDb != null) {
         gain = pow(10, replayGainDb / 20).toDouble().clamp(0.1, 2.0);
@@ -166,27 +209,39 @@ void main() {
       expect(result, closeTo(0.9975, 0.0005));
     });
 
-    test('T5: replayGainDb null -> gain is 1.0, volume passes through unchanged', () {
-      final result = effectiveVolume(0.5, null, enabled: true);
-      expect(result, 0.5);
-    });
+    test(
+      'T5: replayGainDb null -> gain is 1.0, volume passes through unchanged',
+      () {
+        final result = effectiveVolume(0.5, null, enabled: true);
+        expect(result, 0.5);
+      },
+    );
 
     test('disabled toggle ignores replayGainDb entirely', () {
       final result = effectiveVolume(0.5, 6.0, enabled: false);
       expect(result, 0.5);
     });
 
-    test('gain is clamped to 2.0 ceiling for very quiet tracks (very positive dB)', () {
-      // +40dB track would compute gain = 10^(40/20) = 100.0, clamped to 2.0.
-      final result = effectiveVolume(1.0, 40.0, enabled: true);
-      expect(result, 1.0); // 1.0 * 2.0 clamped back down to 1.0 (volume ceiling)
-    });
+    test(
+      'gain is clamped to 2.0 ceiling for very quiet tracks (very positive dB)',
+      () {
+        // +40dB track would compute gain = 10^(40/20) = 100.0, clamped to 2.0.
+        final result = effectiveVolume(1.0, 40.0, enabled: true);
+        expect(
+          result,
+          1.0,
+        ); // 1.0 * 2.0 clamped back down to 1.0 (volume ceiling)
+      },
+    );
 
-    test('gain is clamped to 0.1 floor for very loud tracks (very negative dB)', () {
-      // -40dB track would compute gain = 10^(-40/20) = 0.01, clamped to 0.1.
-      final result = effectiveVolume(1.0, -40.0, enabled: true);
-      expect(result, 0.1);
-    });
+    test(
+      'gain is clamped to 0.1 floor for very loud tracks (very negative dB)',
+      () {
+        // -40dB track would compute gain = 10^(-40/20) = 0.01, clamped to 0.1.
+        final result = effectiveVolume(1.0, -40.0, enabled: true);
+        expect(result, 0.1);
+      },
+    );
   });
 
   group('PlayerState.isIdle', () {
@@ -220,51 +275,66 @@ void main() {
   // must skip the whole cross-device sync PUT while a local track is the
   // one currently playing (a local file has no meaning on another device).
   // ---------------------------------------------------------------------
-  group('Guest-mode local: track id branching (mirrors player_notifier.dart guards)', () {
-    bool shouldPostHistory(String trackId) =>
-        trackId.isNotEmpty && !trackId.startsWith(localTrackIdPrefix);
+  group(
+    'Guest-mode local: track id branching (mirrors player_notifier.dart guards)',
+    () {
+      bool shouldPostHistory(String trackId) =>
+          trackId.isNotEmpty && !trackId.startsWith(localTrackIdPrefix);
 
-    test('history is posted for a normal server trackId', () {
-      expect(shouldPostHistory('track-123'), isTrue);
-    });
+      test('history is posted for a normal server trackId', () {
+        expect(shouldPostHistory('track-123'), isTrue);
+      });
 
-    test('history is skipped for a local: trackId', () {
-      expect(shouldPostHistory('${localTrackIdPrefix}abc-uuid'), isFalse);
-    });
+      test('history is skipped for a local: trackId', () {
+        expect(shouldPostHistory('${localTrackIdPrefix}abc-uuid'), isFalse);
+      });
 
-    test('history is skipped for an empty trackId', () {
-      expect(shouldPostHistory(''), isFalse);
-    });
+      test('history is skipped for an empty trackId', () {
+        expect(shouldPostHistory(''), isFalse);
+      });
 
-    bool shouldReportPlayerState(List<MediaItem> queue, int currentIndex) {
-      if (queue.isEmpty || currentIndex < 0) return false;
-      if (currentIndex < queue.length && queue[currentIndex].id.startsWith(localTrackIdPrefix)) {
-        return false;
+      bool shouldReportPlayerState(List<MediaItem> queue, int currentIndex) {
+        if (queue.isEmpty || currentIndex < 0) return false;
+        if (currentIndex < queue.length &&
+            queue[currentIndex].id.startsWith(localTrackIdPrefix)) {
+          return false;
+        }
+        return true;
       }
-      return true;
-    }
 
-    test('reports when current track is a server track', () {
-      final queue = [MediaItem(id: 'track-1', title: 'T')];
-      expect(shouldReportPlayerState(queue, 0), isTrue);
-    });
+      test('reports when current track is a server track', () {
+        final queue = [MediaItem(id: 'track-1', title: 'T')];
+        expect(shouldReportPlayerState(queue, 0), isTrue);
+      });
 
-    test('skips reporting when current track is local', () {
-      final queue = [MediaItem(id: '${localTrackIdPrefix}abc', title: 'T')];
-      expect(shouldReportPlayerState(queue, 0), isFalse);
-    });
+      test('skips reporting when current track is local', () {
+        final queue = [MediaItem(id: '${localTrackIdPrefix}abc', title: 'T')];
+        expect(shouldReportPlayerState(queue, 0), isFalse);
+      });
 
-    test('skips reporting when queue is empty', () {
-      expect(shouldReportPlayerState([], -1), isFalse);
-    });
+      test('skips reporting when queue is empty', () {
+        expect(shouldReportPlayerState([], -1), isFalse);
+      });
 
-    test('a mixed queue only blocks reporting while the CURRENT index is local', () {
-      final queue = [
-        MediaItem(id: 'track-1', title: 'Server'),
-        MediaItem(id: '${localTrackIdPrefix}abc', title: 'Local'),
-      ];
-      expect(shouldReportPlayerState(queue, 0), isTrue, reason: 'current is the server track');
-      expect(shouldReportPlayerState(queue, 1), isFalse, reason: 'current is the local track');
-    });
-  });
+      test(
+        'a mixed queue only blocks reporting while the CURRENT index is local',
+        () {
+          final queue = [
+            MediaItem(id: 'track-1', title: 'Server'),
+            MediaItem(id: '${localTrackIdPrefix}abc', title: 'Local'),
+          ];
+          expect(
+            shouldReportPlayerState(queue, 0),
+            isTrue,
+            reason: 'current is the server track',
+          );
+          expect(
+            shouldReportPlayerState(queue, 1),
+            isFalse,
+            reason: 'current is the local track',
+          );
+        },
+      );
+    },
+  );
 }

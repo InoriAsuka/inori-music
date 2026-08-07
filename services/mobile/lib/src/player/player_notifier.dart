@@ -7,7 +7,8 @@ import 'package:audio_service/audio_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:inori_music/src/local_library/local_library_db.dart';
-import 'package:inori_music/src/local_library/local_library_notifier.dart' show localTrackIdPrefix;
+import 'package:inori_music/src/local_library/local_library_notifier.dart'
+    show localTrackIdPrefix;
 import 'package:inori_music/src/offline/offline_db.dart';
 import 'package:inori_api/src/api/catalog_api.dart';
 import 'package:inori_api/src/api/history_api.dart';
@@ -85,7 +86,10 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
       }
     });
     // Recompute effective volume immediately when the ReplayGain toggle flips.
-    ref.listen(replayGainEnabledProvider, (_, _) => _applyVolumeWithGain(state.volume));
+    ref.listen(
+      replayGainEnabledProvider,
+      (_, _) => _applyVolumeWithGain(state.volume),
+    );
     return pstate.PlayerState();
   }
 
@@ -97,7 +101,19 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
     // Guest-mode local file — never touches the server or OfflineDb.
     if (trackId.startsWith(localTrackIdPrefix)) {
       final local = await LocalLibraryDb.instance.query(trackId);
-      return local != null ? 'file://${local.localPath}' : null;
+      if (local == null) return null;
+      // Mirrors the OfflineDb existsSync() check just below — without it, a
+      // missing file (moved/deleted outside the app, or a container reset)
+      // would still return a file:// URL, leaving just_audio to fail on
+      // whatever it does with a nonexistent path rather than failing here
+      // with a clear reason.
+      if (!File(local.localPath).existsSync()) {
+        debugPrint(
+          'PlayerNotifier: local file missing for $trackId at ${local.localPath}',
+        );
+        return null;
+      }
+      return 'file://${local.localPath}';
     }
     // Check local offline cache first.
     final offline = await OfflineDb.instance.query(trackId);
@@ -109,7 +125,8 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
       final descriptor = resp.data;
       if (descriptor == null) return null;
 
-      if (descriptor.presignedUrl != null && descriptor.presignedUrl!.isNotEmpty) {
+      if (descriptor.presignedUrl != null &&
+          descriptor.presignedUrl!.isNotEmpty) {
         return descriptor.presignedUrl;
       }
       if (descriptor.streamUrl != null && descriptor.streamUrl!.isNotEmpty) {
@@ -120,55 +137,86 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
       final base = await ref.read(baseUrlProvider.future);
       return '$base/api/v1/catalog/tracks/$trackId/stream';
     } catch (e) {
-      debugPrint('PlayerNotifier: failed to resolve playback URL for $trackId: $e');
+      debugPrint(
+        'PlayerNotifier: failed to resolve playback URL for $trackId: $e',
+      );
       return null;
     }
   }
 
   /// Play a single track by ID, optionally building the full queue.
-  Future<void> playTrack(String trackId, {List<String>? queueIds, int index = 0}) async {
-    final url = await resolvePlaybackUrl(trackId);
-    if (url == null) return;
+  ///
+  /// Everything from URL resolution through `play()` is wrapped in a single
+  /// try/catch that surfaces failures via [PlayerState.playbackError] —
+  /// previously an exception anywhere in this chain (e.g. just_audio
+  /// rejecting a local file) was an unhandled Future error: invisible in a
+  /// release build, so a broken track looked exactly like "nothing happens."
+  Future<void> playTrack(
+    String trackId, {
+    List<String>? queueIds,
+    int index = 0,
+  }) async {
+    state = state.copyWith(clearPlaybackError: true);
+    try {
+      final url = await resolvePlaybackUrl(trackId);
+      if (url == null) {
+        state = state.copyWith(
+          playbackError: pstate.PlaybackFailure(
+            'Could not resolve a playback source for this track ($trackId)',
+          ),
+        );
+        return;
+      }
 
-    // Build queue with stub items immediately so the UI has something to render,
-    // then update the current item with real metadata once resolved.
-    if (queueIds != null && queueIds.isNotEmpty) {
-      final clampedIndex = index < 0 ? 0 : (index > queueIds.length - 1 ? queueIds.length - 1 : index);
+      // Build queue with stub items immediately so the UI has something to render,
+      // then update the current item with real metadata once resolved.
+      if (queueIds != null && queueIds.isNotEmpty) {
+        final clampedIndex = index < 0
+            ? 0
+            : (index > queueIds.length - 1 ? queueIds.length - 1 : index);
+        state = state.copyWith(
+          queue: queueIds.map((id) => _stubMediaItem(id)).toList(),
+          currentIndex: clampedIndex,
+        );
+        // Resolve all URLs for gapless playback via ConcatenatingAudioSource.
+        // Must be awaited — this is what actually calls _audioPlayer.setAudioSource
+        // for the queued-playback path (the single-track branch below only runs
+        // when there's no queue). This used to be fire-and-forget, racing against
+        // play() below: server tracks had enough other network latency in this
+        // function to usually mask the race, but local files resolve near-
+        // instantly (plain SQLite lookups, no network), so play() routinely won
+        // the race and fired with no audio source set at all — correct metadata/
+        // artwork (from _resolveTrack/_makeMediaItem below, unrelated to this),
+        // but silent playback stuck at 0:00. _buildConcatQueue resolves the
+        // queue's URLs in parallel so this await doesn't reintroduce a
+        // perceptible delay for long server playlists.
+        await _buildConcatQueue(queueIds, clampedIndex, url, trackId);
+      }
+
+      // Resolve real track metadata (title, artist, album, duration) from catalog.
+      final track = await _resolveTrack(trackId);
+      final mediaItem = _makeMediaItem(trackId, track);
+
+      // If no queue was supplied, fall back to single ProgressiveAudioSource.
+      if (queueIds == null || queueIds.isEmpty) {
+        final source = ProgressiveAudioSource(Uri.parse(url), tag: trackId);
+        await _audioPlayer.setAudioSource(source);
+      }
+      // Push to AudioHandler so the OS notification shows the current track.
+      audioHandler.mediaItem.add(mediaItem);
       state = state.copyWith(
-        queue: queueIds.map((id) => _stubMediaItem(id)).toList(),
-        currentIndex: clampedIndex,
+        mediaItem: mediaItem,
+        currentIndex: state.queue.isNotEmpty
+            ? (state.currentIndex >= 0 ? state.currentIndex : index)
+            : 0,
       );
-      // Resolve all URLs for gapless playback via ConcatenatingAudioSource.
-      // Must be awaited — this is what actually calls _audioPlayer.setAudioSource
-      // for the queued-playback path (the single-track branch below only runs
-      // when there's no queue). This used to be fire-and-forget, racing against
-      // play() below: server tracks had enough other network latency in this
-      // function to usually mask the race, but local files resolve near-
-      // instantly (plain SQLite lookups, no network), so play() routinely won
-      // the race and fired with no audio source set at all — correct metadata/
-      // artwork (from _resolveTrack/_makeMediaItem below, unrelated to this),
-      // but silent playback stuck at 0:00. _buildConcatQueue resolves the
-      // queue's URLs in parallel so this await doesn't reintroduce a
-      // perceptible delay for long server playlists.
-      await _buildConcatQueue(queueIds, clampedIndex, url, trackId);
+      await _audioPlayer.play();
+    } catch (e, st) {
+      debugPrint('PlayerNotifier: playback failed for $trackId: $e\n$st');
+      state = state.copyWith(
+        playbackError: pstate.PlaybackFailure('Playback failed: $e'),
+      );
     }
-
-    // Resolve real track metadata (title, artist, album, duration) from catalog.
-    final track = await _resolveTrack(trackId);
-    final mediaItem = _makeMediaItem(trackId, track);
-
-    // If no queue was supplied, fall back to single ProgressiveAudioSource.
-    if (queueIds == null || queueIds.isEmpty) {
-      final source = ProgressiveAudioSource(Uri.parse(url), tag: trackId);
-      await _audioPlayer.setAudioSource(source);
-    }
-    // Push to AudioHandler so the OS notification shows the current track.
-    audioHandler.mediaItem.add(mediaItem);
-    state = state.copyWith(
-      mediaItem: mediaItem,
-      currentIndex: state.queue.isNotEmpty ? (state.currentIndex >= 0 ? state.currentIndex : index) : 0,
-    );
-    await _audioPlayer.play();
   }
 
   /// Pre-resolves all queue URLs (in parallel — this is awaited by [playTrack]
@@ -181,17 +229,21 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
     String resolvedUrl,
     String resolvedTrackId,
   ) async {
-    final urls = await Future.wait(queueIds.map((id) async {
-      if (id == resolvedTrackId) return resolvedUrl;
-      return await resolvePlaybackUrl(id) ?? '';
-    }));
+    final urls = await Future.wait(
+      queueIds.map((id) async {
+        if (id == resolvedTrackId) return resolvedUrl;
+        return await resolvePlaybackUrl(id) ?? '';
+      }),
+    );
     // Filter out empty URLs but rebuild index accordingly.
     final validPairs = <MapEntry<int, String>>[];
     for (var i = 0; i < urls.length; i++) {
       if (urls[i].isNotEmpty) validPairs.add(MapEntry(i, urls[i]));
     }
     if (validPairs.isEmpty) return;
-    await audioHandler.updateConcatQueue(validPairs.map((e) => e.value).toList());
+    await audioHandler.updateConcatQueue(
+      validPairs.map((e) => e.value).toList(),
+    );
     // Seek to the correct position in the ConcatenatingAudioSource.
     final concatIndex = validPairs.indexWhere((e) => e.key == startIndex);
     if (concatIndex > 0) {
@@ -202,8 +254,14 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
   /// Play a list of track IDs starting at [initialIndex].
   Future<void> playQueue(List<String> trackIds, {int initialIndex = 0}) async {
     if (trackIds.isEmpty) return;
-    final idx = initialIndex < 0 ? 0 : (initialIndex > trackIds.length - 1 ? trackIds.length - 1 : initialIndex);
-    state = state.copyWith(queue: trackIds.map((id) => _stubMediaItem(id)).toList());
+    final idx = initialIndex < 0
+        ? 0
+        : (initialIndex > trackIds.length - 1
+              ? trackIds.length - 1
+              : initialIndex);
+    state = state.copyWith(
+      queue: trackIds.map((id) => _stubMediaItem(id)).toList(),
+    );
     await playTrack(trackIds[idx], queueIds: trackIds, index: idx);
   }
 
@@ -255,7 +313,9 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
 
   Future<void> seekRelative(Duration delta) async {
     final raw = state.position + delta;
-    final newPos = raw < Duration.zero ? Duration.zero : (raw > state.duration ? state.duration : raw);
+    final newPos = raw < Duration.zero
+        ? Duration.zero
+        : (raw > state.duration ? state.duration : raw);
     await seekTo(newPos);
   }
 
@@ -315,11 +375,17 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
         return;
       }
       final newCurrent = index < queue.length ? index : queue.length - 1;
-      state = state.copyWith(queue: queue, currentIndex: newCurrent, clearMediaItem: true);
+      state = state.copyWith(
+        queue: queue,
+        currentIndex: newCurrent,
+        clearMediaItem: true,
+      );
       await audioHandler.removeSourceAt(index);
       await _playAtIndex(newCurrent);
     } else {
-      final newCurrent = state.currentIndex > index ? state.currentIndex - 1 : state.currentIndex;
+      final newCurrent = state.currentIndex > index
+          ? state.currentIndex - 1
+          : state.currentIndex;
       state = state.copyWith(queue: queue, currentIndex: newCurrent);
       await audioHandler.removeSourceAt(index);
     }
@@ -333,7 +399,8 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
   Future<void> _applyVolumeWithGain(double userVol) async {
     var gain = 1.0;
     if (ref.read(replayGainEnabledProvider)) {
-      final id = state.currentIndex >= 0 && state.currentIndex < state.queue.length
+      final id =
+          state.currentIndex >= 0 && state.currentIndex < state.queue.length
           ? state.queue[state.currentIndex].id
           : null;
       final db = id != null ? _trackCache[id]?.replayGainDb : null;
@@ -377,7 +444,8 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
   void _handleCustomEvent(dynamic payload) {
     if (payload is Map<String, dynamic> && payload['action'] == 'next') {
       next();
-    } else if (payload is Map<String, dynamic> && payload['action'] == 'previous') {
+    } else if (payload is Map<String, dynamic> &&
+        payload['action'] == 'previous') {
       previous();
     }
   }
@@ -407,10 +475,7 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
       id: trackId,
       title: _trackCache[trackId]?.title ?? trackId,
       artist: _artistNameCache[_trackCache[trackId]?.artistId ?? ''] ?? '',
-      extras: {
-        'trackId': trackId,
-        'albumId': _trackCache[trackId]?.albumId,
-      },
+      extras: {'trackId': trackId, 'albumId': _trackCache[trackId]?.albumId},
     );
   }
 
@@ -431,8 +496,12 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
       title: cached.title,
       artist: cached.artistName,
       album: cached.albumTitle,
-      duration: cached.durationMs != null ? Duration(milliseconds: cached.durationMs!) : Duration.zero,
-      artUri: cached.coverArtPath != null ? Uri.file(cached.coverArtPath!) : null,
+      duration: cached.durationMs != null
+          ? Duration(milliseconds: cached.durationMs!)
+          : Duration.zero,
+      artUri: cached.coverArtPath != null
+          ? Uri.file(cached.coverArtPath!)
+          : null,
       extras: {'trackId': trackId},
     );
   }
@@ -457,8 +526,12 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
     if (trackId.startsWith(localTrackIdPrefix)) return _localMediaItem(trackId);
     final artistId = track?.artistId ?? '';
     final albumId = track?.albumId ?? '';
-    final artistName = artistId.isNotEmpty ? (_artistNameCache[artistId] ?? artistId) : '';
-    final albumTitle = albumId.isNotEmpty ? (_albumTitleCache[albumId] ?? '') : '';
+    final artistName = artistId.isNotEmpty
+        ? (_artistNameCache[artistId] ?? artistId)
+        : '';
+    final albumTitle = albumId.isNotEmpty
+        ? (_albumTitleCache[albumId] ?? '')
+        : '';
 
     // Trigger background lookups when names aren't cached yet.
     if (artistId.isNotEmpty && !_artistNameCache.containsKey(artistId)) {
@@ -528,79 +601,92 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
     final subs = <StreamSubscription>[];
 
     // Position
-    subs.add(_audioPlayer.positionStream.listen((pos) {
-      state = state.copyWith(position: pos);
-    }));
+    subs.add(
+      _audioPlayer.positionStream.listen((pos) {
+        state = state.copyWith(position: pos);
+      }),
+    );
 
     // Duration
-    subs.add(_audioPlayer.durationStream.listen((dur) {
-      if (dur != null) state = state.copyWith(duration: dur);
-    }));
+    subs.add(
+      _audioPlayer.durationStream.listen((dur) {
+        if (dur != null) state = state.copyWith(duration: dur);
+      }),
+    );
 
     // Concat source index — gapless auto-advance and manual seekToNext/Previous
     // both surface here. Keeps state.currentIndex, notification metadata, and
     // per-track history in sync with what just_audio is actually playing.
-    subs.add((() {
-      int? lastIndex;
-      return _audioPlayer.currentIndexStream.listen((idx) async {
-        if (idx == null || idx < 0 || idx >= state.queue.length) return;
-        if (idx == state.currentIndex) {
+    subs.add(
+      (() {
+        int? lastIndex;
+        return _audioPlayer.currentIndexStream.listen((idx) async {
+          if (idx == null || idx < 0 || idx >= state.queue.length) return;
+          if (idx == state.currentIndex) {
+            lastIndex = idx;
+            return;
+          }
+          // 上报"刚离开"的曲目（gapless 自动前进时逐曲触发）
+          if (lastIndex != null &&
+              lastIndex! >= 0 &&
+              lastIndex! < state.queue.length) {
+            await _postHistoryFor(state.queue[lastIndex!].id);
+          }
           lastIndex = idx;
-          return;
-        }
-        // 上报"刚离开"的曲目（gapless 自动前进时逐曲触发）
-        if (lastIndex != null && lastIndex! >= 0 && lastIndex! < state.queue.length) {
-          await _postHistoryFor(state.queue[lastIndex!].id);
-        }
-        lastIndex = idx;
-        final trackId = state.queue[idx].id;
-        final track = await _resolveTrack(trackId);
-        final resolved = _makeMediaItem(trackId, track);
-        state = state.copyWith(currentIndex: idx, mediaItem: resolved);
-        audioHandler.mediaItem.add(resolved);
-        await _applyVolumeWithGain(state.volume);
-        // Cross-device sync: report the new track immediately (v5.4.0).
-        _reporter.reportNow();
-      });
-    })());
+          final trackId = state.queue[idx].id;
+          final track = await _resolveTrack(trackId);
+          final resolved = _makeMediaItem(trackId, track);
+          state = state.copyWith(currentIndex: idx, mediaItem: resolved);
+          audioHandler.mediaItem.add(resolved);
+          await _applyVolumeWithGain(state.volume);
+          // Cross-device sync: report the new track immediately (v5.4.0).
+          _reporter.reportNow();
+        });
+      })(),
+    );
 
     // Processing state — fires only when the whole concat queue has finished
     // playing (native LoopMode already handles one/all looping internally
     // without ever reaching `completed`).
-    subs.add(_audioPlayer.processingStateStream.listen((ps) {
-      if (ps == ProcessingState.completed) {
-        if (state.currentIndex >= 0 && state.currentIndex < state.queue.length) {
-          _postHistoryFor(state.queue[state.currentIndex].id);
+    subs.add(
+      _audioPlayer.processingStateStream.listen((ps) {
+        if (ps == ProcessingState.completed) {
+          if (state.currentIndex >= 0 &&
+              state.currentIndex < state.queue.length) {
+            _postHistoryFor(state.queue[state.currentIndex].id);
+          }
+          if (state.repeat == pstate.RepeatMode.one) {
+            _audioPlayer.seek(Duration.zero);
+            _audioPlayer.play();
+          }
+          // RepeatMode.all/none: native loopMode already handled wrap/stop.
         }
-        if (state.repeat == pstate.RepeatMode.one) {
-          _audioPlayer.seek(Duration.zero);
-          _audioPlayer.play();
-        }
-        // RepeatMode.all/none: native loopMode already handled wrap/stop.
-      }
-    }));
+      }),
+    );
 
     // Player state — playing/paused/buffering
-    subs.add(_audioPlayer.playerStateStream.listen((ps) {
-      state = state.copyWith(
-        playbackState: PlaybackState(
-          playing: ps.playing,
-          processingState: _toAudioProcessingState(ps.processingState),
-          controls: [
-            MediaControl.skipToPrevious,
-            if (ps.playing) MediaControl.pause else MediaControl.play,
-            MediaControl.skipToNext,
-          ],
-        ),
-      );
-      // Cross-device sync: gate the 30s throttle on playback, and PUT
-      // immediately on a play↔pause transition (v5.4.0).
-      _reporter.setPlaying(ps.playing);
-      if (ps.playing != _lastReportedPlaying) {
-        _lastReportedPlaying = ps.playing;
-        _reporter.reportNow();
-      }
-    }));
+    subs.add(
+      _audioPlayer.playerStateStream.listen((ps) {
+        state = state.copyWith(
+          playbackState: PlaybackState(
+            playing: ps.playing,
+            processingState: _toAudioProcessingState(ps.processingState),
+            controls: [
+              MediaControl.skipToPrevious,
+              if (ps.playing) MediaControl.pause else MediaControl.play,
+              MediaControl.skipToNext,
+            ],
+          ),
+        );
+        // Cross-device sync: gate the 30s throttle on playback, and PUT
+        // immediately on a play↔pause transition (v5.4.0).
+        _reporter.setPlaying(ps.playing);
+        if (ps.playing != _lastReportedPlaying) {
+          _lastReportedPlaying = ps.playing;
+          _reporter.reportNow();
+        }
+      }),
+    );
 
     // OS media button events (lock screen, notification, Bluetooth)
     subs.add(audioHandler.customEvent.listen(_handleCustomEvent));
@@ -671,7 +757,9 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
       shuffle: state.shuffle,
       volume: state.volume,
       speed: _audioPlayer.speed,
-      status: state.isPlaying ? 'playing' : (state.isIdle ? 'stopped' : 'paused'),
+      status: state.isPlaying
+          ? 'playing'
+          : (state.isIdle ? 'stopped' : 'paused'),
     );
   }
 
@@ -716,12 +804,14 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
     final idx = remote.currentIndex < 0
         ? 0
         : (remote.currentIndex >= remote.queue.length
-            ? remote.queue.length - 1
-            : remote.currentIndex);
+              ? remote.queue.length - 1
+              : remote.currentIndex);
     await setRepeat(_repeatFromWire(remote.repeat));
     await setShuffle(remote.shuffle);
     await playQueue(remote.queue, initialIndex: idx);
     await pause();
-    await seekTo(Duration(milliseconds: (remote.positionSeconds * 1000).round()));
+    await seekTo(
+      Duration(milliseconds: (remote.positionSeconds * 1000).round()),
+    );
   }
 }
