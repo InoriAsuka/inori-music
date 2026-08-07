@@ -7,13 +7,20 @@ import 'package:inori_api/src/model/catalog_track.dart';
 import 'package:inori_music/src/catalog/catalog_repository.dart';
 import 'package:inori_music/src/favorites/track_favorite_notifier.dart';
 import 'package:inori_music/src/shared/theme/skin_provider.dart';
+import 'package:inori_music/src/shared/widgets/desktop_app_bar.dart';
 import 'package:inori_music/src/shared/widgets/track_list_tile.dart';
 
-final _albumDetailProvider = FutureProvider.family<CatalogAlbum, String>((ref, id) {
+final _albumDetailProvider = FutureProvider.family<CatalogAlbum, String>((
+  ref,
+  id,
+) {
   return ref.watch(catalogRepositoryProvider).getAlbum(id);
 });
 
-final _albumTracksProvider = FutureProvider.family<List<CatalogTrack>, String>((ref, id) {
+final _albumTracksProvider = FutureProvider.family<List<CatalogTrack>, String>((
+  ref,
+  id,
+) {
   return ref.watch(catalogRepositoryProvider).tracksByAlbum(id);
 });
 
@@ -31,14 +38,15 @@ class AlbumDetailScreen extends ConsumerWidget {
     return Scaffold(
       body: CustomScrollView(
         slivers: [
-          SliverAppBar(
+          DesktopSliverAppBar(
+            title: Text(albumTitle),
             expandedHeight: 200,
-            pinned: true,
-            flexibleSpace: FlexibleSpaceBar(
-              title: Text(albumTitle),
-              background: Container(
-                color: context.skinColors.surfaceContainer,
-                child: Icon(Icons.album, size: 80, color: context.skinColors.outlineVariant),
+            background: Container(
+              color: context.skinColors.surfaceContainer,
+              child: Icon(
+                Icons.album,
+                size: 80,
+                color: context.skinColors.outlineVariant,
               ),
             ),
           ),
@@ -47,7 +55,10 @@ class AlbumDetailScreen extends ConsumerWidget {
             error: (e, _) => SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: Text('$e', style: TextStyle(color: context.skinColors.error)),
+                child: Text(
+                  '$e',
+                  style: TextStyle(color: context.skinColors.error),
+                ),
               ),
             ),
             data: (album) => SliverToBoxAdapter(
@@ -68,12 +79,18 @@ class AlbumDetailScreen extends ConsumerWidget {
           ),
           tracksState.when(
             loading: () => const SliverToBoxAdapter(
-              child: SizedBox(height: 80, child: Center(child: CircularProgressIndicator())),
+              child: SizedBox(
+                height: 80,
+                child: Center(child: CircularProgressIndicator()),
+              ),
             ),
             error: (e, _) => SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: Text('Error: $e', style: TextStyle(color: context.skinColors.error)),
+                child: Text(
+                  'Error: $e',
+                  style: TextStyle(color: context.skinColors.error),
+                ),
               ),
             ),
             data: (tracks) => SliverList(

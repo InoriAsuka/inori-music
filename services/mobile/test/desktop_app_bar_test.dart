@@ -117,6 +117,101 @@ void main() {
       debugDefaultTargetPlatformOverride = null;
     },
   );
+
+  // -------------------------------------------------------------------------
+  // DesktopSliverAppBar — same drag/window-button chrome as DesktopAppBar,
+  // but as a SliverAppBar for collapsing-header screens (album/playlist/
+  // artist detail). Critically, DragToMoveArea must wrap only `background`
+  // (a box widget slot inside FlexibleSpaceBar), not the SliverAppBar itself
+  // — GestureDetector (what DragToMoveArea builds) can't wrap a sliver and
+  // still work as a CustomScrollView.slivers entry.
+  // -------------------------------------------------------------------------
+
+  Widget sliverHarness({List<Override> overrides = const []}) => ProviderScope(
+    overrides: overrides,
+    child: MaterialApp(
+      home: Scaffold(
+        body: CustomScrollView(
+          slivers: [
+            DesktopSliverAppBar(
+              title: const Text('Album'),
+              background: Container(color: Colors.blue),
+            ),
+            const SliverToBoxAdapter(child: SizedBox(height: 400)),
+          ],
+        ),
+      ),
+    ),
+  );
+
+  testWidgets(
+    'DesktopSliverAppBar mobile: plain SliverAppBar, no window buttons',
+    (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.android;
+
+      await tester.pumpWidget(sliverHarness());
+      await tester.pump();
+
+      expect(find.text('Album'), findsOneWidget);
+      expect(find.byType(WindowCaptionButton), findsNothing);
+      expect(find.byType(DragToMoveArea), findsNothing);
+
+      debugDefaultTargetPlatformOverride = null;
+    },
+  );
+
+  testWidgets(
+    'DesktopSliverAppBar desktop (Windows): drag area on background + three window buttons',
+    (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+
+      await tester.pumpWidget(sliverHarness());
+      await tester.pump();
+
+      expect(find.text('Album'), findsOneWidget);
+      expect(find.byType(DragToMoveArea), findsOneWidget);
+      expect(find.byType(WindowCaptionButton), findsNWidgets(3));
+
+      debugDefaultTargetPlatformOverride = null;
+    },
+  );
+
+  testWidgets(
+    'DesktopSliverAppBar desktop (macOS): drag area, no self-drawn buttons',
+    (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+
+      await tester.pumpWidget(sliverHarness());
+      await tester.pump();
+
+      expect(find.byType(DragToMoveArea), findsOneWidget);
+      expect(find.byType(WindowCaptionButton), findsNothing);
+
+      debugDefaultTargetPlatformOverride = null;
+    },
+  );
+
+  testWidgets(
+    'DesktopSliverAppBar with systemTitleBarProvider enabled: falls back to a plain SliverAppBar',
+    (tester) async {
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+
+      await tester.pumpWidget(
+        sliverHarness(
+          overrides: [
+            systemTitleBarProvider.overrideWith(_AlwaysTrueSystemTitleBar.new),
+          ],
+        ),
+      );
+      await tester.pump();
+
+      expect(find.text('Album'), findsOneWidget);
+      expect(find.byType(WindowCaptionButton), findsNothing);
+      expect(find.byType(DragToMoveArea), findsNothing);
+
+      debugDefaultTargetPlatformOverride = null;
+    },
+  );
 }
 
 class _AlwaysTrueSystemTitleBar extends SystemTitleBarNotifier {

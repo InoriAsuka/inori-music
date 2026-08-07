@@ -7,30 +7,35 @@ import 'package:inori_api/src/model/catalog_track.dart';
 import 'package:inori_music/src/catalog/catalog_repository.dart';
 import 'package:inori_music/src/favorites/track_favorite_notifier.dart';
 import 'package:inori_music/src/shared/theme/skin_provider.dart';
+import 'package:inori_music/src/shared/widgets/desktop_app_bar.dart';
 import 'package:inori_music/src/shared/widgets/track_list_tile.dart';
 
-final _playlistDetailProvider = FutureProvider.family<Playlist, String>((ref, id) {
+final _playlistDetailProvider = FutureProvider.family<Playlist, String>((
+  ref,
+  id,
+) {
   return ref.watch(catalogRepositoryProvider).getPlaylist(id);
 });
 
 // Loads each track by ID from the playlist's trackIds list.
 // Tracks that fail to load (e.g. deleted tracks still in the playlist) are
 // silently skipped rather than crashing the whole screen.
-final _playlistTracksProvider = FutureProvider.family<List<CatalogTrack>, String>((ref, id) async {
-  final repo = ref.watch(catalogRepositoryProvider);
-  final playlist = await repo.getPlaylist(id);
-  final tracks = <CatalogTrack>[];
-  await Future.wait(
-    playlist.trackIds.map((tid) async {
-      try {
-        tracks.add(await repo.getTrack(tid));
-      } catch (_) {
-        // Skip tracks that can no longer be resolved
-      }
-    }),
-  );
-  return tracks;
-});
+final _playlistTracksProvider =
+    FutureProvider.family<List<CatalogTrack>, String>((ref, id) async {
+      final repo = ref.watch(catalogRepositoryProvider);
+      final playlist = await repo.getPlaylist(id);
+      final tracks = <CatalogTrack>[];
+      await Future.wait(
+        playlist.trackIds.map((tid) async {
+          try {
+            tracks.add(await repo.getTrack(tid));
+          } catch (_) {
+            // Skip tracks that can no longer be resolved
+          }
+        }),
+      );
+      return tracks;
+    });
 
 class PlaylistDetailScreen extends ConsumerWidget {
   const PlaylistDetailScreen({super.key, required this.id});
@@ -46,14 +51,15 @@ class PlaylistDetailScreen extends ConsumerWidget {
     return Scaffold(
       body: CustomScrollView(
         slivers: [
-          SliverAppBar(
-            pinned: true,
+          DesktopSliverAppBar(
+            title: Text(playlistName),
             expandedHeight: 180,
-            flexibleSpace: FlexibleSpaceBar(
-              title: Text(playlistName),
-              background: Container(
-                color: context.skinColors.surfaceContainer,
-                child: Icon(Icons.playlist_play, size: 80, color: context.skinColors.sakuraPink),
+            background: Container(
+              color: context.skinColors.surfaceContainer,
+              child: Icon(
+                Icons.playlist_play,
+                size: 80,
+                color: context.skinColors.sakuraPink,
               ),
             ),
           ),
@@ -62,7 +68,10 @@ class PlaylistDetailScreen extends ConsumerWidget {
             error: (e, _) => SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: Text('$e', style: TextStyle(color: context.skinColors.error)),
+                child: Text(
+                  '$e',
+                  style: TextStyle(color: context.skinColors.error),
+                ),
               ),
             ),
             data: (playlist) => SliverToBoxAdapter(
@@ -77,18 +86,24 @@ class PlaylistDetailScreen extends ConsumerWidget {
           ),
           tracksState.when(
             loading: () => const SliverToBoxAdapter(
-              child: SizedBox(height: 80, child: Center(child: CircularProgressIndicator())),
+              child: SizedBox(
+                height: 80,
+                child: Center(child: CircularProgressIndicator()),
+              ),
             ),
             error: (e, _) => SliverToBoxAdapter(
               child: Padding(
                 padding: const EdgeInsets.all(16),
-                child: Text('Error loading tracks: $e',
-                    style: TextStyle(color: context.skinColors.error)),
+                child: Text(
+                  'Error loading tracks: $e',
+                  style: TextStyle(color: context.skinColors.error),
+                ),
               ),
             ),
             data: (tracks) => SliverList(
               delegate: SliverChildBuilderDelegate(
-                (context, i) => _TrackTile(key: ValueKey(tracks[i].id), track: tracks[i]),
+                (context, i) =>
+                    _TrackTile(key: ValueKey(tracks[i].id), track: tracks[i]),
                 childCount: tracks.length,
               ),
             ),
