@@ -69,6 +69,29 @@ class _LocalLibraryScreenState extends ConsumerState<LocalLibraryScreen> {
     });
   }
 
+  /// Runs an import and always says what happened. Every outcome used to look
+  /// the same on screen — nothing — so a failing picker, an unreadable file
+  /// and a plain cancel were indistinguishable.
+  Future<void> _runImport(Future<ImportOutcome> Function() action) async {
+    final outcome = await action();
+    if (!mounted || outcome.cancelled) return;
+    final String message;
+    if (outcome.imported == 0 && outcome.hasError) {
+      message = '导入失败：${outcome.firstError}';
+    } else if (outcome.failed > 0) {
+      message =
+          '已导入 ${outcome.imported} 首，${outcome.failed} 首失败'
+          '（${outcome.firstError}）';
+    } else if (outcome.imported == 0) {
+      message = '没有找到可导入的音频文件';
+    } else {
+      message = '已导入 ${outcome.imported} 首';
+    }
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
   void _play(List<LocalLibraryTrack> tracks, {required bool shuffle}) {
     if (tracks.isEmpty) return;
     final ids = tracks.map((t) => t.id).toList();
@@ -89,7 +112,13 @@ class _LocalLibraryScreenState extends ConsumerState<LocalLibraryScreen> {
           child: Text('$e', style: TextStyle(color: context.skinColors.error)),
         ),
         data: (tracks) {
-          if (tracks.isEmpty) return const _EmptyLocalLibrary();
+          if (tracks.isEmpty) {
+            final notifier = ref.read(localLibraryProvider.notifier);
+            return _EmptyLocalLibrary(
+              onImportFiles: () => _runImport(notifier.importFiles),
+              onImportFolder: () => _runImport(notifier.importFolder),
+            );
+          }
           final visible = _filter(tracks);
           return Column(
             children: [
@@ -162,9 +191,9 @@ class _LocalLibraryScreenState extends ConsumerState<LocalLibraryScreen> {
           final notifier = ref.read(localLibraryProvider.notifier);
           switch (action) {
             case _ImportAction.files:
-              notifier.importFiles();
+              _runImport(notifier.importFiles);
             case _ImportAction.folder:
-              notifier.importFolder();
+              _runImport(notifier.importFolder);
           }
         },
         itemBuilder: (context) => const [
@@ -380,12 +409,21 @@ class _Toolbar extends StatelessWidget {
   }
 }
 
-class _EmptyLocalLibrary extends ConsumerWidget {
-  const _EmptyLocalLibrary();
+class _EmptyLocalLibrary extends StatelessWidget {
+  const _EmptyLocalLibrary({
+    required this.onImportFiles,
+    required this.onImportFolder,
+  });
+
+  // Handed down rather than calling the notifier directly, so these go
+  // through the screen's _runImport and report their outcome. This screen is
+  // exactly where a broken import is invisible: an empty library that stays
+  // empty looks the same whether the picker failed or the user cancelled.
+  final VoidCallback onImportFiles;
+  final VoidCallback onImportFolder;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final notifier = ref.read(localLibraryProvider.notifier);
+  Widget build(BuildContext context) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -418,13 +456,13 @@ class _EmptyLocalLibrary extends ConsumerWidget {
             FilledButton.icon(
               icon: const Icon(Icons.audio_file_outlined),
               label: const Text('导入文件'),
-              onPressed: notifier.importFiles,
+              onPressed: onImportFiles,
             ),
             const SizedBox(height: 8),
             OutlinedButton.icon(
               icon: const Icon(Icons.folder_outlined),
               label: const Text('导入文件夹'),
-              onPressed: notifier.importFolder,
+              onPressed: onImportFolder,
             ),
           ],
         ),

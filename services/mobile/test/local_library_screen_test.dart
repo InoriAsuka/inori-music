@@ -19,8 +19,11 @@ import 'package:inori_music/src/player/player_state.dart' as pstate;
 // Stubs — no sqflite, no file system, no audio stack.
 // ---------------------------------------------------------------------------
 class _StubLocalLibraryNotifier extends LocalLibraryNotifier {
-  _StubLocalLibraryNotifier(this._tracks);
+  _StubLocalLibraryNotifier(this._tracks, {this.importOutcome});
   final List<LocalLibraryTrack> _tracks;
+
+  /// What [importFiles]/[importFolder] should report back.
+  final ImportOutcome? importOutcome;
 
   List<String>? lastRemovedBatch;
   final removedSingles = <String>[];
@@ -34,6 +37,14 @@ class _StubLocalLibraryNotifier extends LocalLibraryNotifier {
   @override
   Future<void> removeAll(Iterable<String> ids) async =>
       lastRemovedBatch = ids.toList();
+
+  @override
+  Future<ImportOutcome> importFiles() async =>
+      importOutcome ?? const ImportOutcome.cancelled();
+
+  @override
+  Future<ImportOutcome> importFolder() async =>
+      importOutcome ?? const ImportOutcome.cancelled();
 }
 
 class _StubPlayerNotifier extends PlayerNotifier {
@@ -72,6 +83,12 @@ Widget _buildApp(
   ],
   child: const MaterialApp(home: LocalLibraryScreen()),
 );
+
+/// Taps the empty-state "导入文件" button and settles the SnackBar.
+Future<void> _tapEmptyStateImport(WidgetTester tester) async {
+  await tester.tap(find.widgetWithText(FilledButton, '导入文件'));
+  await tester.pumpAndSettle();
+}
 
 void main() {
   final tracks = [
@@ -247,6 +264,103 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('已选择 1 项'), findsOneWidget);
+  });
+
+  // -------------------------------------------------------------------------
+  // v5.25.1 — an import must never fail silently
+  // -------------------------------------------------------------------------
+
+  group('import outcome reporting', () {
+    testWidgets('a failed import says why', (tester) async {
+      // The Windows case: the picker (or the copy, or the DB write) throws and
+      // the library stays empty. Before this, that looked identical to the
+      // user simply cancelling — which is how a completely broken Windows
+      // import went unnoticed through several releases.
+      final library = _StubLocalLibraryNotifier(
+        const [],
+        importOutcome: ImportOutcome.failed(
+          Exception('MissingPluginException'),
+        ),
+      );
+      await tester.pumpWidget(_buildApp(library, _StubPlayerNotifier()));
+      await tester.pumpAndSettle();
+
+      await _tapEmptyStateImport(tester);
+
+      expect(find.byType(SnackBar), findsOneWidget);
+      expect(
+        find.textContaining('导入失败'),
+        findsOneWidget,
+        reason: 'The failure, not silence',
+      );
+      expect(find.textContaining('MissingPluginException'), findsOneWidget);
+    });
+
+    testWidgets('cancelling the picker stays quiet', (tester) async {
+      final library = _StubLocalLibraryNotifier(
+        const [],
+        importOutcome: const ImportOutcome.cancelled(),
+      );
+      await tester.pumpWidget(_buildApp(library, _StubPlayerNotifier()));
+      await tester.pumpAndSettle();
+
+      await _tapEmptyStateImport(tester);
+
+      expect(
+        find.byType(SnackBar),
+        findsNothing,
+        reason: 'Backing out of the picker is not an error',
+      );
+    });
+
+    testWidgets('a successful import reports the count', (tester) async {
+      final library = _StubLocalLibraryNotifier(
+        const [],
+        importOutcome: const ImportOutcome(imported: 3, failed: 0),
+      );
+      await tester.pumpWidget(_buildApp(library, _StubPlayerNotifier()));
+      await tester.pumpAndSettle();
+
+      await _tapEmptyStateImport(tester);
+
+      expect(find.text('已导入 3 首'), findsOneWidget);
+    });
+
+    testWidgets('a partial import reports both counts and the first error', (
+      tester,
+    ) async {
+      final library = _StubLocalLibraryNotifier(
+        const [],
+        importOutcome: ImportOutcome(
+          imported: 2,
+          failed: 1,
+          firstError: Exception('corrupt tag'),
+        ),
+      );
+      await tester.pumpWidget(_buildApp(library, _StubPlayerNotifier()));
+      await tester.pumpAndSettle();
+
+      await _tapEmptyStateImport(tester);
+
+      expect(find.textContaining('已导入 2 首'), findsOneWidget);
+      expect(find.textContaining('1 首失败'), findsOneWidget);
+      expect(find.textContaining('corrupt tag'), findsOneWidget);
+    });
+
+    testWidgets('picking nothing usable is distinguished from failing', (
+      tester,
+    ) async {
+      final library = _StubLocalLibraryNotifier(
+        const [],
+        importOutcome: const ImportOutcome(imported: 0, failed: 0),
+      );
+      await tester.pumpWidget(_buildApp(library, _StubPlayerNotifier()));
+      await tester.pumpAndSettle();
+
+      await _tapEmptyStateImport(tester);
+
+      expect(find.text('没有找到可导入的音频文件'), findsOneWidget);
+    });
   });
 
   testWidgets('a filter matching nothing reports it instead of a blank list', (

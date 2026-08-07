@@ -70,6 +70,42 @@ final localLibraryProvider =
       LocalLibraryNotifier.new,
     );
 
+/// Result of an import attempt, so the UI can tell the three outcomes apart:
+/// the user backed out of the picker, some files landed, or the whole thing
+/// blew up. Previously every one of these looked identical on screen —
+/// nothing happened — which is how a completely broken Windows import went
+/// unnoticed.
+class ImportOutcome {
+  const ImportOutcome({
+    required this.imported,
+    required this.failed,
+    this.firstError,
+  }) : cancelled = false;
+
+  const ImportOutcome.cancelled()
+    : imported = 0,
+      failed = 0,
+      firstError = null,
+      cancelled = true;
+
+  ImportOutcome.failed(Object error)
+    : imported = 0,
+      failed = 0,
+      firstError = error,
+      cancelled = false;
+
+  final int imported;
+  final int failed;
+
+  /// First per-file error, or the fatal one when the whole attempt failed.
+  final Object? firstError;
+
+  /// The user dismissed the picker — not an error, and not worth reporting.
+  final bool cancelled;
+
+  bool get hasError => firstError != null;
+}
+
 /// Owns the "guest local library": importing files/folders, extracting
 /// embedded metadata, and persisting to [LocalLibraryDb]. Pure client-side,
 /// no server/account involvement — this is what makes guest mode usable.
@@ -83,48 +119,79 @@ class LocalLibraryNotifier extends AsyncNotifier<List<LocalLibraryTrack>> {
   }
 
   /// Opens a multi-file picker filtered to supported audio extensions.
-  Future<void> importFiles() async {
-    final result = await FilePicker.platform.pickFiles(
-      type: FileType.custom,
-      allowedExtensions: supportedLocalAudioExtensions,
-      allowMultiple: true,
-    );
+  Future<ImportOutcome> importFiles() async {
+    final FilePickerResult? result;
+    try {
+      result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: supportedLocalAudioExtensions,
+        allowMultiple: true,
+      );
+    } catch (e) {
+      return ImportOutcome.failed(e);
+    }
     final paths = result?.files.map((f) => f.path).whereType<String>().toList();
-    if (paths == null || paths.isEmpty) return;
-    await _importPaths(paths);
+    if (paths == null || paths.isEmpty) return const ImportOutcome.cancelled();
+    return _importPaths(paths);
   }
 
   /// Opens a directory picker and recursively imports every supported audio
   /// file found underneath it.
-  Future<void> importFolder() async {
-    final dirPath = await FilePicker.platform.getDirectoryPath();
-    if (dirPath == null) return;
+  Future<ImportOutcome> importFolder() async {
     final paths = <String>[];
-    await for (final entity in Directory(
-      dirPath,
-    ).list(recursive: true, followLinks: false)) {
-      if (entity is! File) continue;
-      final ext = p.extension(entity.path).replaceFirst('.', '').toLowerCase();
-      if (supportedLocalAudioExtensions.contains(ext)) paths.add(entity.path);
+    try {
+      final dirPath = await FilePicker.platform.getDirectoryPath();
+      if (dirPath == null) return const ImportOutcome.cancelled();
+      await for (final entity in Directory(
+        dirPath,
+      ).list(recursive: true, followLinks: false)) {
+        if (entity is! File) continue;
+        final ext = p
+            .extension(entity.path)
+            .replaceFirst('.', '')
+            .toLowerCase();
+        if (supportedLocalAudioExtensions.contains(ext)) paths.add(entity.path);
+      }
+    } catch (e) {
+      return ImportOutcome.failed(e);
     }
-    await _importPaths(paths);
+    return _importPaths(paths);
   }
 
-  Future<void> _importPaths(List<String> paths) async {
-    final audioDir = await _localLibraryDir('local_library_audio');
-    final coverDir = await _localLibraryDir('local_library_covers');
+  Future<ImportOutcome> _importPaths(List<String> paths) async {
+    final Directory audioDir;
+    final Directory coverDir;
+    try {
+      audioDir = await _localLibraryDir('local_library_audio');
+      coverDir = await _localLibraryDir('local_library_covers');
+    } catch (e) {
+      return ImportOutcome.failed(e);
+    }
+
+    var imported = 0;
+    Object? firstError;
     for (final path in paths) {
       try {
         await _importOne(path, audioDir, coverDir);
+        imported++;
       } catch (e) {
-        // One unreadable/corrupt file must not abort the rest of the batch.
+        // One unreadable/corrupt file must not abort the rest of the batch —
+        // but the first failure is kept so the caller can say *why* nothing
+        // showed up, instead of the import appearing to do nothing at all.
         debugPrint('LocalLibrary: failed to import $path: $e');
+        firstError ??= e;
       }
     }
-    state = AsyncData(
-      await LocalLibraryDb.instance.queryAll(
-        sort: ref.read(localLibrarySortProvider),
-      ),
+
+    try {
+      await _refresh();
+    } catch (e) {
+      return ImportOutcome.failed(e);
+    }
+    return ImportOutcome(
+      imported: imported,
+      failed: paths.length - imported,
+      firstError: firstError,
     );
   }
 

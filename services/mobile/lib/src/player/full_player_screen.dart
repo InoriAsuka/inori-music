@@ -55,16 +55,6 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
     final isBuffering = state.isBuffering;
     final trackId = state.mediaItem?.id ?? '';
     final position = ref.watch(playerProvider.select((s) => s.position));
-    final isLocalTrack = trackId.startsWith(localTrackIdPrefix);
-    // Only local tracks can lack lyrics entirely and still have a track —
-    // server tracks always get the Karaoke button enabled regardless (a
-    // missing-lyrics response is handled inside KaraokeScreen itself, same
-    // as it always was). Watching this only when relevant avoids a needless
-    // DB read on every server-track playback.
-    final hasLocalLyrics = isLocalTrack
-        ? (ref.watch(localLyricsProvider(trackId)).valueOrNull ?? const [])
-              .isNotEmpty
-        : false;
 
     return Scaffold(
       backgroundColor: context.skinColors.background,
@@ -110,8 +100,15 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                       color: context.skinColors.onSurfaceVariant,
                     ),
                     tooltip: 'Karaoke',
-                    onPressed:
-                        (trackId.isEmpty || (isLocalTrack && !hasLocalLyrics))
+                    // Only gated on "is anything playing at all". It used to
+                    // also require a local track to carry an embedded lyrics
+                    // tag, which silently disabled the button for every
+                    // instrumental / untagged local file — a dead control with
+                    // no explanation, and the only way into the lyrics screen.
+                    // KaraokeScreen already renders "No lyrics available" over
+                    // the artwork backdrop, which is exactly what a server
+                    // track with no lyrics has always done.
+                    onPressed: trackId.isEmpty
                         ? null
                         : () => Navigator.of(context).push(
                             MaterialPageRoute<void>(
