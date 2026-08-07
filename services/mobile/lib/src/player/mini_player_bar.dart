@@ -10,6 +10,7 @@ import 'package:inori_music/src/catalog/artwork_provider.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/theme/skin_provider.dart';
+import 'package:inori_music/src/shared/widgets/spring_interaction.dart';
 
 /// Persistent mini-player bar displayed at the bottom of the shell scaffold.
 ///
@@ -91,39 +92,49 @@ class MiniPlayerBar extends ConsumerWidget {
                         ),
                       ),
 
-                      // Previous
-                      IconButton(
-                        icon: const Icon(Icons.skip_previous, size: 24),
-                        color: context.skinColors.onSurfaceVariant,
-                        onPressed: () =>
-                            ref.read(playerProvider.notifier).previous(),
-                        tooltip: 'Previous',
+                      // Previous. The transport trio is the highest-traffic
+                      // control surface in the app, so it's where the spring
+                      // hover/press motion earns its keep — SpringInteraction
+                      // only observes pointer events, leaving each button's
+                      // own tap handling untouched.
+                      SpringInteraction(
+                        child: IconButton(
+                          icon: const Icon(Icons.skip_previous, size: 24),
+                          color: context.skinColors.onSurfaceVariant,
+                          onPressed: () =>
+                              ref.read(playerProvider.notifier).previous(),
+                          tooltip: 'Previous',
+                        ),
                       ),
 
                       // Play / Pause
-                      IconButton(
-                        icon: Icon(
-                          isPlaying
-                              ? Icons.pause_rounded
-                              : Icons.play_arrow_rounded,
-                          size: 28,
-                          color: context.skinColors.onBackground,
+                      SpringInteraction(
+                        child: IconButton(
+                          icon: Icon(
+                            isPlaying
+                                ? Icons.pause_rounded
+                                : Icons.play_arrow_rounded,
+                            size: 28,
+                            color: context.skinColors.onBackground,
+                          ),
+                          tooltip: isPlaying ? 'Pause' : 'Play',
+                          onPressed: isBuffering
+                              ? null
+                              : () => ref
+                                    .read(playerProvider.notifier)
+                                    .togglePlayPause(),
                         ),
-                        tooltip: isPlaying ? 'Pause' : 'Play',
-                        onPressed: isBuffering
-                            ? null
-                            : () => ref
-                                  .read(playerProvider.notifier)
-                                  .togglePlayPause(),
                       ),
 
                       // Next
-                      IconButton(
-                        icon: const Icon(Icons.skip_next, size: 24),
-                        color: context.skinColors.onSurfaceVariant,
-                        onPressed: () =>
-                            ref.read(playerProvider.notifier).next(),
-                        tooltip: 'Next',
+                      SpringInteraction(
+                        child: IconButton(
+                          icon: const Icon(Icons.skip_next, size: 24),
+                          color: context.skinColors.onSurfaceVariant,
+                          onPressed: () =>
+                              ref.read(playerProvider.notifier).next(),
+                          tooltip: 'Next',
+                        ),
                       ),
 
                       // Sleep timer

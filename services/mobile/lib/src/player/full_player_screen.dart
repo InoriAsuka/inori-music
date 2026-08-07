@@ -9,6 +9,7 @@ import 'package:inori_music/src/audio/sleep_timer_notifier.dart';
 import 'package:inori_music/src/audio/speed_notifier.dart';
 import 'package:inori_music/src/catalog/artwork_provider.dart';
 import 'package:inori_music/src/favorites/track_favorite_notifier.dart';
+import 'package:inori_music/src/local_library/audio_quality.dart';
 import 'package:inori_music/src/local_library/local_library_db.dart';
 import 'package:inori_music/src/local_library/local_library_notifier.dart'
     show localTrackIdPrefix;
@@ -21,6 +22,7 @@ import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/player/karaoke_screen.dart';
 import 'package:inori_music/src/player/player_state.dart' as ps;
 import 'package:inori_music/src/shared/theme/skin_provider.dart';
+import 'package:inori_music/src/shared/widgets/spring_interaction.dart';
 
 /// Full-screen player overlay with progress bar, controls, and queue sheet.
 class FullPlayerScreen extends ConsumerStatefulWidget {
@@ -361,45 +363,55 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                       );
                     },
                   ),
-                  IconButton(
-                    icon: Icon(
-                      Icons.skip_previous,
-                      size: 36,
-                      color: context.skinColors.onSurface,
-                    ),
-                    onPressed: () =>
-                        ref.read(playerProvider.notifier).previous(),
-                  ),
-                  // Play / Pause button
-                  Container(
-                    decoration: BoxDecoration(
-                      color: context.skinColors.sakuraPink,
-                      shape: BoxShape.circle,
-                    ),
+                  // The transport trio carries the spring hover/press motion
+                  // (see SpringInteraction); the surrounding secondary
+                  // controls are deliberately left plain so the primary
+                  // actions stay the ones that respond.
+                  SpringInteraction(
                     child: IconButton(
                       icon: Icon(
-                        isBuffering
-                            ? Icons.play_arrow_rounded
-                            : (isPlaying
-                                  ? Icons.pause_rounded
-                                  : Icons.play_arrow_rounded),
+                        Icons.skip_previous,
                         size: 36,
-                        color: Colors.white,
+                        color: context.skinColors.onSurface,
                       ),
-                      onPressed: isBuffering
-                          ? null
-                          : () => ref
-                                .read(playerProvider.notifier)
-                                .togglePlayPause(),
+                      onPressed: () =>
+                          ref.read(playerProvider.notifier).previous(),
                     ),
                   ),
-                  IconButton(
-                    icon: Icon(
-                      Icons.skip_next,
-                      size: 36,
-                      color: context.skinColors.onSurface,
+                  // Play / Pause button
+                  SpringInteraction(
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: context.skinColors.sakuraPink,
+                        shape: BoxShape.circle,
+                      ),
+                      child: IconButton(
+                        icon: Icon(
+                          isBuffering
+                              ? Icons.play_arrow_rounded
+                              : (isPlaying
+                                    ? Icons.pause_rounded
+                                    : Icons.play_arrow_rounded),
+                          size: 36,
+                          color: Colors.white,
+                        ),
+                        onPressed: isBuffering
+                            ? null
+                            : () => ref
+                                  .read(playerProvider.notifier)
+                                  .togglePlayPause(),
+                      ),
                     ),
-                    onPressed: () => ref.read(playerProvider.notifier).next(),
+                  ),
+                  SpringInteraction(
+                    child: IconButton(
+                      icon: Icon(
+                        Icons.skip_next,
+                        size: 36,
+                        color: context.skinColors.onSurface,
+                      ),
+                      onPressed: () => ref.read(playerProvider.notifier).next(),
+                    ),
                   ),
                   // Speed control button
                   Consumer(
@@ -589,7 +601,19 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
           children: [
             Padding(
               padding: const EdgeInsets.all(16),
-              child: Text('曲目详情', style: Theme.of(ctx).textTheme.headlineSmall),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text('曲目详情', style: Theme.of(ctx).textTheme.headlineSmall),
+                  if (isHiResAudio(
+                    sampleRate: track?.sampleRate,
+                    bitrate: track?.bitrate,
+                  )) ...[
+                    const SizedBox(width: 10),
+                    const _HiResBadge(),
+                  ],
+                ],
+              ),
             ),
             const Divider(height: 1),
             for (final (label, value) in rows)
@@ -1019,6 +1043,33 @@ class _LyricsListState extends State<_LyricsList> {
         fontSize: isCurrent ? 18 : 15,
         fontWeight: isCurrent ? FontWeight.w600 : FontWeight.normal,
         color: isCurrent ? activeColor : dimColor,
+      ),
+    );
+  }
+}
+
+/// "HQ" chip beside the track-detail heading, shown only for files whose
+/// sample rate and bitrate together indicate Hi-Res audio — see
+/// [isHiResAudio] for why bitrate stands in for bit depth.
+class _HiResBadge extends StatelessWidget {
+  const _HiResBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: context.skinColors.sakuraPink,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: const Text(
+        'HQ',
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.5,
+          color: Colors.white,
+        ),
       ),
     );
   }

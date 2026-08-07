@@ -1,3 +1,5 @@
+import 'dart:ui' show ImageFilter;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -148,37 +150,59 @@ class _KaraokeScreenState extends ConsumerState<KaraokeScreen> {
                     _scrollToActive(activeIndex);
                     final viewportPad =
                         MediaQuery.of(context).size.height * 0.35;
-                    return ListView.builder(
-                      controller: _scrollController,
-                      padding: EdgeInsets.symmetric(
-                        horizontal: 24,
-                        vertical: viewportPad,
-                      ),
-                      itemCount: lines.length,
-                      itemBuilder: (ctx, i) {
-                        final key = _lineKeys.putIfAbsent(i, GlobalKey.new);
-                        final active = i == activeIndex;
-                        return Padding(
-                          key: key,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          child: AnimatedOpacity(
-                            duration: const Duration(milliseconds: 250),
-                            opacity: active ? 1 : 0.4,
-                            child: AnimatedScale(
+                    // Fades lines out as they approach the top and bottom
+                    // edges instead of letting them clip against a hard
+                    // boundary — the one piece of OriginalSound's lyrics
+                    // treatment that translates directly, since its own
+                    // implementation is the same gradient-into-dstIn trick.
+                    return ShaderMask(
+                      shaderCallback: (bounds) => const LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          Colors.transparent,
+                          Colors.black,
+                          Colors.black,
+                          Colors.transparent,
+                        ],
+                        stops: [0.0, 0.16, 0.84, 1.0],
+                      ).createShader(bounds),
+                      blendMode: BlendMode.dstIn,
+                      child: ListView.builder(
+                        controller: _scrollController,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: 24,
+                          vertical: viewportPad,
+                        ),
+                        itemCount: lines.length,
+                        itemBuilder: (ctx, i) {
+                          final key = _lineKeys.putIfAbsent(i, GlobalKey.new);
+                          final active = i == activeIndex;
+                          return Padding(
+                            key: key,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            child: AnimatedOpacity(
                               duration: const Duration(milliseconds: 250),
-                              scale: active ? 1 : 0.95,
-                              child: _KaraokeLine(
-                                line: lines[i],
-                                active: active,
-                                position: position,
-                                nextLineStart: i + 1 < lines.length
-                                    ? lines[i + 1].timestamp
-                                    : null,
+                              opacity: active ? 1 : 0.4,
+                              child: AnimatedScale(
+                                duration: const Duration(milliseconds: 250),
+                                scale: active ? 1 : 0.95,
+                                child: _DepthBlur(
+                                  distance: (i - activeIndex).abs(),
+                                  child: _KaraokeLine(
+                                    line: lines[i],
+                                    active: active,
+                                    position: position,
+                                    nextLineStart: i + 1 < lines.length
+                                        ? lines[i + 1].timestamp
+                                        : null,
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
-                        );
-                      },
+                          );
+                        },
+                      ),
                     );
                   },
                 ),
@@ -187,6 +211,34 @@ class _KaraokeScreenState extends ConsumerState<KaraokeScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Softens a lyric line in proportion to how far it sits from the one being
+/// sung, so the sung line reads as the focal plane.
+///
+/// A real gaussian blur, not a fake — but a deliberately shallow one, and
+/// capped: every blurred line costs a `saveLayer`, and there are as many of
+/// those as there are lines on screen. The blur is skipped outright for the
+/// active line so the text the user is actually reading is never resampled.
+class _DepthBlur extends StatelessWidget {
+  const _DepthBlur({required this.distance, required this.child});
+
+  /// Line distance from the active line, in rows.
+  final int distance;
+  final Widget child;
+
+  static const _maxSigma = 2.0;
+  static const _sigmaPerLine = 0.6;
+
+  @override
+  Widget build(BuildContext context) {
+    if (distance == 0) return child;
+    final sigma = (distance * _sigmaPerLine).clamp(0.0, _maxSigma);
+    return ImageFiltered(
+      imageFilter: ImageFilter.blur(sigmaX: sigma, sigmaY: sigma),
+      child: child,
     );
   }
 }
