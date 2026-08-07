@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`5.20.1`
+`5.20.2`
 
 ## Product Goal
 
@@ -39,6 +39,15 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Media object administration must support metadata-only bulk lifecycle updates scoped by exactly one safe selection filter.
 - Bulk lifecycle updates must support dry-run previews that do not persist metadata changes.
 - Committed lifecycle updates must record latest transition metadata for audit preparation.
+
+### v5.20.2 - 2026-08-07
+
+- **fix: 找到播放彻底无法工作的真正根因——`MissingPluginException`（v5.20.1 的错误可见化修复第一次真正派上用场）** — v5.20.1 上线后用户反馈实机看到了具体报错 `MissingPluginException`，这正是"让静默失败变可见"这个修复要等的输入。拿着这个异常类型直接读 `just_audio` 0.9.46 包源码定位到了确切位置，不是猜测。
+- **根因**：`InoriAudioHandler.create()`（`audio_handler.dart`）此前无条件构造 `AndroidEqualizer()` 并通过 `AudioPipeline(androidAudioEffects: [equalizer])` 接入 `AudioPlayer`，在所有平台上都这样做，从未按 `Platform.isAndroid` 区分过。读 `just_audio` 源码确认：`AudioPlayer.setPlatform()` 在玩家进入 active 状态时（`setAudioSource`/`play()` 触发，也就是**每一次播放尝试**）会对 `_audioPipeline._audioEffects` 里的每一个效果无条件调用 `_activate(platform)`——这一步不像同一函数里 INIT 请求的 `androidAudioEffects` 字段那样有 `_isAndroid()` 门控。`AndroidEqualizer._activate()` 内部无条件调用平台方法 `androidEqualizerGetParameters`，这个方法只有 Android 原生插件实现——macOS/Windows/Linux/iOS 上调用它必然抛出 `MissingPluginException`。这意味着自从 v4.1.1 引入 EQ 功能以来，**所有非 Android 平台上的每一次播放尝试**（不只是本地曲库，服务端曲目同样会中招）理论上都会在这一步抛出异常；此前从未被发现，是因为这条链路上一直没有任何错误处理/展示（直到 v5.20.1 才补上），异常只是被 Flutter 的 zone 默认错误处理器悄悄吞掉。
+- **修复**：`InoriAudioHandler._equalizer` 与 `androidEqualizer` getter 改为可空（`AndroidEqualizer?`），`create()` 里只在 `Platform.isAndroid` 为真时才构造 equalizer 与 `AudioPipeline`，否则 `AudioPlayer` 不带任何 pipeline 参数创建。`eq_notifier.dart` 三处调用点相应改为 null-safe 访问。顺带修了一个同类的小疏漏：`setEnabled()` 原先的守卫是 `if (enabled && !Platform.isAndroid) return`，只挡住了"开启"路径——"关闭"调用在非 Android 平台会照样往下执行到 `androidEqualizer.setEnabled()`；改为无条件 `if (!Platform.isAndroid) return`，两个方向都挡住。
+- **不是新一轮假设，是读源码确认**：核实过程直接读 `just_audio-0.9.46` 包在本机 `.pub-cache` 里的 `AudioPlayer.setPlatform()`（约 1412-1523 行）与 `AndroidEqualizer._activate()`（约 3996-4007 行）源码，确认了平台通道调用的确切位置与无条件触发条件，不是基于异常类名的臆测。
+- **范围澄清**：这个 bug 影响的不只是"本地曲库播放"——从 v5.12.0 到 v5.20.1 这一整条排查线索里默认"服务端曲目播放在桌面端没问题、只有本地文件有问题"的假设可能从未真正成立，服务端曲目播放在桌面端很可能同样会命中这同一个异常。本次修复对两条路径（本地/服务端）都生效，因为改动在 `AudioHandler` 初始化层面，不区分具体播放的曲目来源。
+- The phase output is version-tracked and verified locally（`flutter analyze --no-fatal-infos` 0 issues；`flutter test --no-pub` 168/168 通过，含新增 2 例：`setEnabled` 在非 Android 测试宿主上开启/关闭均为 no-op，后者是专门锁定"关闭路径此前会漏放行"这个回归点的用例）。**这次有信心认为是真正修复**（而非又一轮诊断可见化），但仍需用户下次实机确认播放是否恢复正常，包括本地曲库与服务端曲目两条路径都要看。
 
 ### v5.20.1 - 2026-08-07
 
