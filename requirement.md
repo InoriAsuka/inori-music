@@ -40,6 +40,17 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Bulk lifecycle updates must support dry-run previews that do not persist metadata changes.
 - Committed lifecycle updates must record latest transition metadata for audit preparation.
 
+### v5.26.0 - 2026-08-08
+
+- **feat: 封面驱动的配色（EchoMusic 流体背景 + 毛玻璃）** — 用户对 v5.21–v5.25 的实机反馈是「样式和色调都太丑了」，四个界面区域全部勾选，并明确给出方向：参考 EchoMusic 的封面渐变背景，有封面就从封面取色，播放器页用封面颜色做动态变化并加毛玻璃，**而不是深色冷色**。同时选择「先只改配色，看完再说」，所以本版本不动布局结构。
+- **关键调研发现：EchoMusic 那个"渐变背景"根本不是渐变。** 读 `LyricFluidBackground.vue` 确认，它是把封面切成 4 个象限各画进一个 100×100 canvas（`ctx.filter='blur(5px)'`），摆在中心 ±35%（以自身边长为单位）的位置，每个各自旋转（60s 一圈，-5s/-10s/-15s 错开延迟），整个容器**反向**旋转（150s，scale 1.2），叠 `saturate(1.3) brightness(1.5)` 与 SVG 湍流扭曲，最后盖 `rgba(0,0,0,.24)` + `backdrop-filter: blur(64px)`。所以它是**封面自身的颜色分布在缓慢重组**，而不是两个提取色之间插值——这也是为什么它永远和封面一致，而两点渐变只能是近似。这个区别不读源码是看不出来的。
+- **新增 `CoverFluidBackground`**：上述技术的 Flutter 移植。象限用 `OverflowBox(alignment) + ClipRect` 取——把 2 倍尺寸的图钉在某个角再裁掉就等于取那个象限，不需要解码成 `dart:ui.Image` 再手动 `drawImageRect`；饱和/亮度提升合并成一个 5×4 `ColorFilter.matrix`。**刻意没做** `feTurbulence` 扭曲：Flutter 没有等价物、除非写 fragment shader，而反向旋转 + 64px 模糊已经承担了主要效果。
+- **新增 `artworkOverlaySkin`，这是本次改动里最关键的架构选择**：播放器和歌词页原本是按"浅色皮肤上的深色墨水"写的，直接放到饱和的运动色场上完全读不了。**没有去改那 ~30 处调用点**，而是派生一个皮肤、由屏幕用 `SkinScope` 包住内容——里面所有 `context.skinColors.x` 自动解析成覆盖层的值，调用点零改动。这正是 v5.14.0 那次把 ~250 处硬编码主题色迁移到 token 换来的能力，第一次真正兑现。前景转白、表面转半透明白（卡片读作毛玻璃而非遮住封面的实心块）；**强调色跟随封面**（`accentOverArtwork`：vibrant → muted → dominant，与背景色 `backdropFor` 刻意取相反的偏好，因为它落在控件上、要的就是从背景里跳出来），进度条/播放键/选中态全部跟着当前封面走。取色未就绪时保持皮肤原强调色，不会闪过一帧无色状态；派生皮肤的 `id` 里带上强调色，否则 `SkinScope.updateShouldNotify` 按 id 比较会导致切歌不传播。
+- **新增 `GlassPanel`**：模糊 + 半透明填充 + 高光细边，三者缺一就塌成"半透明方块"。颜色走皮肤 token，所以在封面背景上自动拿到覆盖皮肤的半透明白、在普通页面上退化成普通表面卡片，调用点不需要分支。
+- **接线**：`LyricsBackground` 重写为"有封面 → 流体背景 + 覆盖皮肤；无封面 → 纯皮肤色，用户真实皮肤原样保留"；`FullPlayerScreen` **整页**放到这个背景上（此前只有 PageView 里的歌词 tab 有），并移除歌词 tab 内嵌的那层 `LyricsBackground`——否则会跑两套旋转贴片和两次 64px 模糊；进度条与传输控制合并进同一个 `GlassPanel`，读作一整块浮在色场上的控制面而不是散落的控件。
+- **实现中发现并修复的一个真 bug（新写的单测抓的）**：两个 `AnimationController` 是 `late final` 惰性初始化、只有 build 的"有封面"分支会碰它们，无封面时它们从未创建，然后 `dispose()` 访问反而**在销毁过程中创建** Ticker，抛 `Looking up a deactivated widget's ancestor is unsafe`。改为 `initState` 显式创建并按有无封面 `repeat()`/`stop()`——顺带解决了"没画背景却还占着 vsync 回调"。
+- The phase output is version-tracked and verified locally（`flutter analyze --no-fatal-infos` 0 error/warning，仅 1 条存量 info 属未触碰文件；`flutter test` 230/230 通过，223 存量 + 4 新增 + 3 重写：`cover_fluid_background_test.dart` 4 例覆盖无封面时是纯色且不动（`pumpAndSettle` 不超时本身就是断言的一部分）、有封面时 4 个象限贴片 + 1 层模糊、四个贴片偏移与旋转角互不相同、切走封面后干净拆除；`cover_palette_test.dart` 新增 `accentOverArtwork` 组并断言它与 `backdropFor` 不会收敛到同一个色板，`LyricsBackground` 组按新行为重写为 4 例）。**注意事项已写进测试**：任何包含流体背景的 widget 测试都不能用 `pumpAndSettle`，两个 `repeat()` 控制器永远不会 settle。实际观感待用户实机确认。
+
 ### v5.25.1 - 2026-08-08
 
 - **fix: 歌词页入口与导入失败的两处静默失败** — 用户实机反馈触发。两个问题是同一类：功能失效时界面上什么都不显示，跟 v5.20.1 之前播放失败的表现完全一样。这已经是这个项目第三次栽在"静默失败"上（前两次是播放、是 Windows sqflite），所以这次两处都补了明确反馈而不是只修逻辑。
