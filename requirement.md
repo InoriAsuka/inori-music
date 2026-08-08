@@ -40,6 +40,17 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Bulk lifecycle updates must support dry-run previews that do not persist metadata changes.
 - Committed lifecycle updates must record latest transition metadata for audit preparation.
 
+### v5.27.0 - 2026-08-08
+
+- **refactor: UI 与播放解耦，引入 `PlaybackEngine` 接缝** — 用户要求"把这套解耦合做了，让 UI 和播放分离"。改造前的实际耦合比预期更深：`main.dart` 顶层有个 `late final InoriAudioHandler audioHandler` 全局，**四个不相干的 notifier**（crossfade / speed / sleepTimer / eq）用 `import 'package:inori_music/main.dart' show audioHandler` **反向抓它**——这意味着它们每一个都传递依赖 `just_audio`，且不启动真实音频栈就无法测试；`InoriAudioHandler` 同时是 OS 媒体会话桥、`AudioPlayer` 持有者、gapless 队列、淡入淡出包络和 Android 均衡器五种东西；`PlayerNotifier` 直接持有 `AudioPlayer` 调用 17 个 just_audio 成员。
+- **新的分层**：`UI/notifiers → PlaybackEngine（抽象） → JustAudioEngine`，OS 媒体会话由瘦身后的 `InoriAudioHandler` 单独承担。`lib/src/playback/just_audio_engine.dart` 是**全仓库唯一 import `just_audio` 的文件**；播放器、gapless 队列、淡入淡出包络、Android EQ 全部收进它——这几样操作的是同一个播放器，分散在两个类里正是 `setVolume` 与淡入淡出互相打架的原因（旧代码靠 handler 上一个共享可变字段 `targetVolume` 勉强同步）。
+- **`PlaybackCapabilities` 是这次最有价值的部分**：`equalizer`/`speedControl`/`gapless`/`crossfade`/`outputDeviceSelection`/`exclusiveOutput`/`outputFormatControl`。这是那份跨平台输出清单反复强调的规则的落点——**引擎做不到的控件就不该显示**。设置页的均衡器开关随之从 `Platform.isAndroid` 改成问 `capabilities.equalizer`：平台从来只是"当前引擎是否接了 EQ 效果"的代理，换引擎的那天它就是错的。`JustAudioEngine` 把输出链三项诚实地报 false。
+- **`EngineEqualizer` 把 band 数定义为查询而不是常量**：UI 固定十段、设备通常五段，写死就是把增益映射到错误的频率上。
+- **`playbackEngineProvider`/`mediaSessionProvider` 由 `main()` override 注入，全局变量删除**。两个 provider 故意不提供默认实现——缺 override 是接线 bug，应该在启动时大声失败，而不是悄悄再起一个没人监听的播放器。
+- **顺带修掉两处**：(1) `_buildConcatQueue` 原本是"设置队列 → seek 到目标 index"，而 `if (concatIndex > 0)` 意味着**目标恰好是第一个有效 URL 时 seek 被整个跳过**，改为 `setQueue(urls, initialIndex:)` 一步到位；(2) `PlayerNotifier` 原本同时订阅 `processingStateStream` 和 `playerStateStream`，引擎把 just_audio 的 `processingState × playing` 矩阵收敛成五个状态后一条流就够。
+- **明确没做的**：Decoder/AudioSink 的真正二分。`just_audio` 和 libmpv 都是解码+输出一体的，中间没有可挂的缝——真做需要自己端到端拥有引擎（Rust + Symphonia + miniaudio）。这次拿到的是 foobar2000 那套三段接缝里粗的一半，但它已经足够让换引擎变成受控改动。
+- The phase output is version-tracked and verified locally（`flutter analyze --no-fatal-infos` 0 error/warning，仅 1 条存量 info 属未触碰文件；`flutter test` 244/244 通过，235 存量 + 9 新增含 2 例重写）。其中三处值得单独说：**`test/playback_boundary_test.dart` 是架构测试**——断言 `just_audio` 只能被引擎实现文件 import、且任何文件都不得 `import main.dart`；接缝的价值全在于守得住，这两条守不住的那天换引擎就不再是受控改动。**`eq_notifier_test.dart` 新增"引擎有均衡器"整组**——这条路径以前只能在真实 Android 设备上跑，本地测试实际断言的是"测试机不是 Android"；现在覆盖开启推增益、关闭全部归零、增益按设备范围钳位（刻意用 5 段设备对 10 段 UI，逼出映射逻辑而不是 1:1 传递）。`test/support/fake_playback_engine.dart` 是可复用的测试假引擎。
+
 ### v5.26.1 - 2026-08-08
 
 - **fix: Windows 导入失败——我们自己写出了非法文件名** — v5.25.1 补上的导入错误上报第一次派上用场：用户在 Windows 上点导入，看到了确切报错「OSERR: 文件名，卷名语法不正确」，也就是 Windows 错误码 123 `ERROR_INVALID_NAME`。有了这句话，定位是直接的而不是猜的——这正好复现了 v5.20.1→v5.20.2 那次的模式（先让失败可见，下一轮就能一次命中）。
