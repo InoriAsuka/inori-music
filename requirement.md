@@ -40,6 +40,13 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Bulk lifecycle updates must support dry-run previews that do not persist metadata changes.
 - Committed lifecycle updates must record latest transition metadata for audit preparation.
 
+### v5.26.1 - 2026-08-08
+
+- **fix: Windows 导入失败——我们自己写出了非法文件名** — v5.25.1 补上的导入错误上报第一次派上用场：用户在 Windows 上点导入，看到了确切报错「OSERR: 文件名，卷名语法不正确」，也就是 Windows 错误码 123 `ERROR_INVALID_NAME`。有了这句话，定位是直接的而不是猜的——这正好复现了 v5.20.1→v5.20.2 那次的模式（先让失败可见，下一轮就能一次命中）。
+- **根因**：`_importOne()` 直接拿 track id 当文件名——`final id = '$localTrackIdPrefix${const Uuid().v4()}'` 得到 `local:550e8400-...`，然后 `p.join(audioDir.path, '$id${p.extension(path)}')` 写成 `...\local_library_audio\local:550e8400-....m4a`；封面文件同理。而 **`:` 在 Windows 文件名里是非法字符**（盘符分隔符 / NTFS 备用数据流分隔符）。POSIX 只保留 `/` 和 NUL，macOS 与 Linux 都接受 `:`，所以这个 bug 只在 Windows 显形——**游客模式在 Windows 上从来就没能导入过任何文件**，而这正是用户"连文件都没能导进来"的全部原因（跟 Windows 没有播放后端是两个独立问题）。
+- **修复**：新增 `lib/src/shared/safe_file_name.dart`，`safeFileName(id)` 把 `< > : " / \ | ? *` 与控制字符替换为 `_`。**只清洗磁盘上的名字，id 本身保留 `local:` 前缀**——`PlayerNotifier` 靠它区分本地曲目与服务端曲目；DB 里存的是完整路径，所以旧构建写下的文件继续可用，不需要迁移。顺带用在 `download_notifier.dart` 的离线文件名上：服务端 id 是裸 UUID、清洗后不变（不会孤立已有下载），但"拿 id 当文件名"正是刚炸过的模式，把这个约束在一处写清楚比分散在两处更安全。
+- The phase output is version-tracked and verified locally（`flutter analyze --no-fatal-infos` 0 error/warning，仅 1 条存量 info 属未触碰文件；`flutter test` 235/235 通过，230 存量 + 5 新增，见 `test/safe_file_name_test.dart`：本地 id 去掉冒号、裸 UUID 原样不动（否则会孤立已有下载）、Windows 保留字符全替换、控制字符替换、普通标点保留）。
+
 ### v5.26.0 - 2026-08-08
 
 - **feat: 封面驱动的配色（EchoMusic 流体背景 + 毛玻璃）** — 用户对 v5.21–v5.25 的实机反馈是「样式和色调都太丑了」，四个界面区域全部勾选，并明确给出方向：参考 EchoMusic 的封面渐变背景，有封面就从封面取色，播放器页用封面颜色做动态变化并加毛玻璃，**而不是深色冷色**。同时选择「先只改配色，看完再说」，所以本版本不动布局结构。
