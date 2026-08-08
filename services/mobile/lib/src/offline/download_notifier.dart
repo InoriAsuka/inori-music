@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 
 import 'package:inori_music/src/catalog/catalog_repository.dart';
 import 'package:inori_music/src/offline/offline_db.dart';
+import 'package:inori_music/src/shared/safe_file_name.dart';
 
 // DownloadStatus sealed hierarchy
 sealed class DownloadStatus {
@@ -75,14 +76,19 @@ class DownloadNotifier extends Notifier<Map<String, DownloadStatus>> {
       // 1. Resolve playback URL via catalog repository.
       final catalog = ref.read(catalogRepositoryProvider);
       final descriptor = await catalog.getPlaybackDescriptor(trackId);
-      final url = (descriptor.presignedUrl != null && descriptor.presignedUrl!.isNotEmpty)
+      final url =
+          (descriptor.presignedUrl != null &&
+              descriptor.presignedUrl!.isNotEmpty)
           ? descriptor.presignedUrl!
           : descriptor.streamUrl;
-      if (url == null || url.isEmpty) throw Exception('no playback url for $trackId');
+      if (url == null || url.isEmpty)
+        throw Exception('no playback url for $trackId');
 
       // 2. Determine local file path.
       final dir = await getApplicationDocumentsDirectory();
-      localPath = p.join(dir.path, 'offline', '$trackId.audio');
+      // Server ids are bare UUIDs so this is a no-op today, but naming a
+      // file after an id is exactly what broke local imports on Windows.
+      localPath = p.join(dir.path, 'offline', '${safeFileName(trackId)}.audio');
       await Directory(p.dirname(localPath)).create(recursive: true);
 
       // 3. Stream download with progress.
@@ -90,10 +96,12 @@ class DownloadNotifier extends Notifier<Map<String, DownloadStatus>> {
       // S3/MinIO URLs are not contaminated with an Authorization header.
       // Sending both query-string credentials and an Authorization header
       // causes SignatureDoesNotMatch (403) on every presigned request.
-      final bareDio = Dio(BaseOptions(
-        connectTimeout: const Duration(seconds: 15),
-        receiveTimeout: const Duration(minutes: 30),
-      ));
+      final bareDio = Dio(
+        BaseOptions(
+          connectTimeout: const Duration(seconds: 15),
+          receiveTimeout: const Duration(minutes: 30),
+        ),
+      );
       await bareDio.download(
         url,
         localPath,
@@ -113,7 +121,9 @@ class DownloadNotifier extends Notifier<Map<String, DownloadStatus>> {
       try {
         final artist = await catalog.getArtist(track.artistId);
         artistName = artist.name;
-      } catch (_) {/* keep UUID fallback */}
+      } catch (_) {
+        /* keep UUID fallback */
+      }
 
       // Resolve album title; fall back to albumId on error.
       String albumTitle = track.albumId ?? '';
@@ -121,20 +131,24 @@ class DownloadNotifier extends Notifier<Map<String, DownloadStatus>> {
         try {
           final album = await catalog.getAlbum(track.albumId!);
           albumTitle = album.title;
-        } catch (_) {/* keep UUID fallback */}
+        } catch (_) {
+          /* keep UUID fallback */
+        }
       }
 
       // 5. Persist to OfflineDb.
-      await OfflineDb.instance.insert(OfflineTrack(
-        trackId: trackId,
-        title: track.title,
-        artistName: artistName,
-        albumTitle: albumTitle,
-        albumId: track.albumId,
-        localPath: localPath,
-        sizeBytes: sizeBytes,
-        downloadedAt: DateTime.now(),
-      ));
+      await OfflineDb.instance.insert(
+        OfflineTrack(
+          trackId: trackId,
+          title: track.title,
+          artistName: artistName,
+          albumTitle: albumTitle,
+          albumId: track.albumId,
+          localPath: localPath,
+          sizeBytes: sizeBytes,
+          downloadedAt: DateTime.now(),
+        ),
+      );
 
       state = {...state, trackId: const DownloadDone()};
     } catch (e) {
@@ -143,7 +157,9 @@ class DownloadNotifier extends Notifier<Map<String, DownloadStatus>> {
         try {
           final partial = File(localPath);
           if (await partial.exists()) await partial.delete();
-        } catch (_) {/* ignore cleanup failure */}
+        } catch (_) {
+          /* ignore cleanup failure */
+        }
       }
       state = {...state, trackId: DownloadError(e.toString())};
     }
@@ -176,5 +192,5 @@ class DownloadNotifier extends Notifier<Map<String, DownloadStatus>> {
 
 final downloadProvider =
     NotifierProvider<DownloadNotifier, Map<String, DownloadStatus>>(
-  DownloadNotifier.new,
-);
+      DownloadNotifier.new,
+    );

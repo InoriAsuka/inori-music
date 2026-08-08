@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import 'package:inori_music/src/local_library/local_library_db.dart';
+import 'package:inori_music/src/shared/safe_file_name.dart';
 
 const _kLocalLibrarySortKey = 'localLibrary.sortOrder';
 
@@ -207,6 +208,9 @@ class LocalLibraryNotifier extends AsyncNotifier<List<LocalLibraryTrack>> {
     // copy step below for why playback can't rely on the original path).
     final meta = readMetadata(sourceFile, getImage: true);
     final id = '$localTrackIdPrefix${const Uuid().v4()}';
+    // The id itself keeps its `local:` prefix (PlayerNotifier branches on it),
+    // but the colon can't go into a file name — see [safeFileName].
+    final stem = safeFileName(id);
 
     // Copy into the app's own storage rather than keeping the picked path.
     // On macOS, file_picker's NSOpenPanel grants sandbox read access that
@@ -215,14 +219,14 @@ class LocalLibraryNotifier extends AsyncNotifier<List<LocalLibraryTrack>> {
     // reads fine here, but the track never actually plays). Owning a copy
     // also survives the user later moving/renaming/deleting the source file.
     final copiedFile = await sourceFile.copy(
-      p.join(audioDir.path, '$id${p.extension(path)}'),
+      p.join(audioDir.path, '$stem${p.extension(path)}'),
     );
 
     String? coverPath;
     if (meta.pictures.isNotEmpty) {
       final pic = meta.pictures.first;
       final ext = pic.mimetype.split('/').last;
-      final coverFile = File(p.join(coverDir.path, '$id.$ext'));
+      final coverFile = File(p.join(coverDir.path, '$stem.$ext'));
       await coverFile.writeAsBytes(pic.bytes);
       coverPath = coverFile.path;
     }
