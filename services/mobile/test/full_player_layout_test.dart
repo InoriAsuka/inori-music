@@ -1,8 +1,12 @@
 // full_player_layout_test.dart
 //
-// Covers the v5.28.0 player-page layout: the macOS traffic-light gutter, the
+// Covers the v5.28.0 player-page layout (the macOS traffic-light gutter, the
 // grouped transport row, and the centred/split behaviour that replaces the
-// artwork-vs-lyrics PageView on wide windows.
+// artwork-vs-lyrics PageView on wide windows) plus the v5.29.0 follow-up:
+// the player block's width is now derived from the cover instead of
+// stretched across the region, the side panel is a proportional half
+// instead of a fixed 380px, and the compact-controls switch is judged
+// against the control block's own width rather than the whole window.
 //
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
@@ -16,6 +20,7 @@ import 'package:inori_music/src/player/player_state.dart' as pstate;
 import 'package:inori_music/src/lyrics/lyric_line.dart';
 import 'package:inori_music/src/lyrics/lyrics_provider.dart';
 import 'package:inori_music/src/playback/playback_engine_provider.dart';
+import 'package:inori_music/src/shared/widgets/glass_panel.dart';
 
 import 'support/fake_playback_engine.dart';
 
@@ -208,8 +213,144 @@ void main() {
     );
     expect(
       splitX,
-      closeTo((1400 - 380) / 2, 40),
+      // The side panel is a proportional half (flex 1:1) since v5.29.0, not
+      // a fixed 380px sidebar, so the player's half is 1400/2 and it centres
+      // at a quarter of the full window width — expressed as a ratio rather
+      // than a hardcoded pixel figure so this doesn't go stale the next time
+      // the split ratio changes.
+      closeTo(1400 / 4, 40),
       reason: 'And it should centre in the width that is left, not just move',
     );
+  });
+
+  group('playerArtworkSize', () {
+    test('a comfortably large region clamps to the 420 ceiling', () {
+      expect(playerArtworkSize(regionWidth: 2000, regionHeight: 1400), 420.0);
+    });
+
+    test('a cramped region clamps to the 160 floor', () {
+      expect(playerArtworkSize(regionWidth: 200, regionHeight: 200), 160.0);
+    });
+
+    test('otherwise scales with the tighter of width and height', () {
+      // width*0.42 = 210, height*0.40 = 280 — width is the tighter bound.
+      expect(playerArtworkSize(regionWidth: 500, regionHeight: 700), 210.0);
+    });
+  });
+
+  group('playerControlWidth', () {
+    test('sits within the 1.4-1.5x cover-width band Apple Music used', () {
+      const artworkSize = 300.0;
+      final width = playerControlWidth(
+        artworkSize: artworkSize,
+        regionWidth: 2000,
+      );
+      expect(width / artworkSize, inInclusiveRange(1.4, 1.5));
+    });
+
+    test('never throws RangeError when the region is narrower than the '
+        'floor plus its margin', () {
+      // regionWidth - 48 is far below the usability floor here, which would
+      // invert a plain clamp(floor, regionWidth - 48) — the v5.29.0 fix is
+      // the math.max floor on the ceiling itself.
+      expect(
+        () => playerControlWidth(artworkSize: 160, regionWidth: 200),
+        returnsNormally,
+      );
+      // Clamped up to the floor (400, not the original plan's estimated
+      // 280 — see playerControlWidth's doc comment for why 280 measured
+      // short of what the compact transport bar actually needs).
+      expect(playerControlWidth(artworkSize: 160, regionWidth: 200), 400.0);
+    });
+  });
+
+  testWidgets(
+    'a spacious unsplit window clamps the cover and scales the control panel '
+    'off it, not the full window width',
+    (tester) async {
+      // Both dimensions are large enough to hit the 420 ceiling regardless of
+      // the exact top-bar height, so the expectation doesn't depend on
+      // predicting that height precisely.
+      _sizeWindow(tester, const Size(1400, 1400));
+      await tester.pumpWidget(_app());
+      await _settle(tester);
+
+      expect(find.byType(GlassPanel), findsOneWidget);
+      expect(
+        tester.getSize(find.byType(GlassPanel)).width,
+        closeTo(420 * 1.45, 2),
+      );
+    },
+  );
+
+  testWidgets('a narrow window keeps the pre-v5.29.0 fixed 280 cover size', (
+    tester,
+  ) async {
+    _sizeWindow(tester, const Size(420, 900));
+    await tester.pumpWidget(_app());
+    await _settle(tester);
+
+    expect(tester.getSize(find.byType(PageView)), const Size(280, 280));
+  });
+
+  testWidgets(
+    'a mid-width window does not overflow the transport row once a panel '
+    'is docked',
+    (tester) async {
+      // This is the case that made the pre-v5.29.0 compactControls switch
+      // (judged off the whole window) stale: 950 clears the old 600px
+      // window-width threshold comfortably, but splitting the window in
+      // half for the queue panel leaves the control block under 300px wide
+      // — this test is what _compactControlsBreakpoint is calibrated
+      // against, not a number picked by inspection.
+      _sizeWindow(tester, const Size(950, 700));
+      await tester.pumpWidget(_app());
+      await _settle(tester);
+
+      await tester.tap(find.byIcon(Icons.queue_music));
+      await _settle(tester);
+
+      expect(find.text('播放队列'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets(
+    'a wide unsplit window is not misjudged as needing compact controls',
+    (tester) async {
+      // The other half of the D.1 calibration: raising the threshold to fix
+      // the mid-width overflow above must not accidentally push a genuinely
+      // spacious layout into compact mode too. controlWidth here is ~609,
+      // comfortably past _compactControlsBreakpoint (480), so buttons should
+      // render at their ambient (non-themed) size rather than
+      // _ControlDensity's compact footprint (26-36px, asserted above).
+      _sizeWindow(tester, const Size(1400, 1400));
+      await tester.pumpWidget(_app());
+      await _settle(tester);
+
+      final prevButton = find.ancestor(
+        of: find.byIcon(Icons.skip_previous),
+        matching: find.byType(IconButton),
+      );
+      expect(tester.getSize(prevButton).width, greaterThan(44));
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  testWidgets('an ultra-wide split panel is capped rather than growing '
+      'unbounded', (tester) async {
+    _sizeWindow(tester, const Size(2200, 1000));
+    await tester.pumpWidget(_app());
+    await _settle(tester);
+
+    await tester.tap(find.byIcon(Icons.queue_music));
+    await _settle(tester);
+
+    final panelGlass = find.ancestor(
+      of: find.text('播放队列'),
+      matching: find.byType(GlassPanel),
+    );
+    expect(panelGlass, findsOneWidget);
+    expect(tester.getSize(panelGlass).width, lessThanOrEqualTo(562));
   });
 }

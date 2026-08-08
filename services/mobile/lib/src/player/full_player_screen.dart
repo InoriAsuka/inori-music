@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart'
@@ -40,6 +41,64 @@ class FullPlayerScreen extends ConsumerStatefulWidget {
 /// Which panel, if any, is docked beside the player.
 enum _SidePanel { none, lyrics, queue }
 
+/// Cover edge length for the wide (Apple Music-aligned) player layout, scaled
+/// to the available region instead of fixed. The ratios below are measured
+/// off four differently-sized Apple Music screenshots (requirement.md
+/// v5.29.0): the cover consistently spans about 42% of the region's width or
+/// 40% of its height, whichever is tighter, clamped to a sane on-screen size
+/// at either end.
+///
+/// Only used above [_FullPlayerScreenState._splitBreakpoint] — the narrow
+/// layout keeps its own fixed [_FullPlayerScreenState._narrowArtworkSize]
+/// instead, since every reference screenshot behind this formula was a wide
+/// desktop window and the same ratio would shrink a phone-width cover below
+/// its pre-v5.29.0 size.
+double playerArtworkSize({
+  required double regionWidth,
+  required double regionHeight,
+}) => math.min(regionWidth * 0.42, regionHeight * 0.40).clamp(160.0, 420.0);
+
+/// Width of the title/artist block, progress bar and transport controls,
+/// derived from the cover rather than stretched across the whole region. The
+/// same reference screenshots put this ratio at 1.38-1.52x the cover's
+/// width; 1.45 is their midpoint.
+///
+/// Clamped to a [_controlWidthFloor] usability floor and, via `math.max`, a
+/// ceiling of `regionWidth - 48` that itself can never drop below that floor
+/// — a plain `.clamp(floor, regionWidth - 48)` would invert (throw
+/// `RangeError`) once `regionWidth` falls under `floor + 48`, which the left
+/// half of a split layout reaches on anything narrower than an ultra-wide
+/// monitor.
+double playerControlWidth({
+  required double artworkSize,
+  required double regionWidth,
+}) => (artworkSize * 1.45).clamp(
+  _controlWidthFloor,
+  math.max(_controlWidthFloor, regionWidth - 48),
+);
+
+/// Usability floor for [playerControlWidth].
+///
+/// Not the 280 the shape of this formula might suggest — that was this
+/// value's first estimate, and measuring the actual compact-mode transport
+/// bar (`_ControlDensity`) showed it does not fit in 280. The bar is three
+/// unequal groups — secondaries left, the transport trio centre, secondaries
+/// right — laid out as two `Expanded` siblings around a fixed-size middle so
+/// the trio stays centred regardless of how many secondaries sit on each
+/// side (see the transport `Row` in [_FullPlayerScreenState._playerBlock]).
+/// That symmetry means the *narrower* side's spare space is not available to
+/// the wider one: at 280 the middle trio alone (3 x 36px) leaves 2 x 86px for
+/// the sides, but the right group (speed text button + sleep + favourite)
+/// measured 116.4px even in compact mode — the left group's unused slack
+/// cannot cover that, so the right side overflowed by 40px. 400 leaves each
+/// side roughly 132px, comfortably above that measurement. Raising this
+/// floor is preferred over reworking the trio-centring split: that symmetry
+/// is what keeps the transport trio centred in every other window size (see
+/// test/full_player_layout_test.dart's grouping and centring cases), and is
+/// out of scope for a floor that only ever binds at the narrowest split
+/// windows.
+const _controlWidthFloor = 400.0;
+
 class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
   late final PageController _pageController;
   int _pageIndex = 0;
@@ -51,8 +110,24 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
   /// a pushed route and a bottom sheet.
   static const _splitBreakpoint = 900.0;
 
-  /// Below this, eight transport controls cannot sit on one row at full size.
-  static const _compactControlsBreakpoint = 600.0;
+  /// Below this control-block width, eight transport controls cannot sit on
+  /// one row at full size.
+  ///
+  /// Measured against the control block's own width, not the window's. Before
+  /// v5.29.0 the side panel was a fixed 380px, so the window width was a
+  /// reasonable proxy for how much room the controls had; now the panel takes
+  /// half the window, and a window well above this number can still hand the
+  /// control block a region narrower than it — the same kind of basis
+  /// mismatch that let v5.28.0's spaceEvenly overflow go unnoticed until it
+  /// was actually measured. Calibrated against the mid-width split-panel case
+  /// in test/full_player_layout_test.dart; adjust there first if this value
+  /// ever needs to move.
+  static const _compactControlsBreakpoint = 480.0;
+
+  /// Cover edge length for the narrow (single-column, phone-width) layout.
+  /// Predates [playerArtworkSize] and stays a fixed value rather than folding
+  /// into that formula — see its doc comment for why.
+  static const _narrowArtworkSize = 280.0;
 
   @override
   void initState() {
@@ -76,7 +151,6 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
 
     final width = MediaQuery.sizeOf(context).width;
     final canSplit = width >= _splitBreakpoint;
-    final compactControls = width < _compactControlsBreakpoint;
     final splitPanel = canSplit ? _sidePanel : _SidePanel.none;
 
     return Scaffold(
@@ -202,484 +276,56 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
               // Centred when nothing is open; split once lyrics or the queue
               // are shown, with the player itself staying centred in whatever
               // width is left. Apple Music's shape, and it means the same
-              // column serves both states instead of two layouts drifting
+              // block serves both states instead of two layouts drifting
               // apart. Only wide windows split — below the breakpoint the
               // panel would leave neither half usable, so there it stays a
-              // sheet / pushed route as before.
+              // sheet / pushed route as before. The split itself is
+              // proportional (flex 1:1) rather than a fixed-width sidebar —
+              // see [_playerBlock] and [playerControlWidth]: a fixed sidebar
+              // left the control block stretching to fill whatever width was
+              // left over, with no relationship to the cover's own size.
               Expanded(
                 child: Row(
                   children: [
                     Expanded(
-                      child: Column(
-                        children: [
-                          const Spacer(),
-
-                          // Wide windows dock lyrics in the side panel, so
-                          // the artwork/lyrics PageView — and the page-dot
-                          // indicator that came with it — only earns its keep
-                          // below the breakpoint. Above it the dots were a
-                          // stray mark under the cover with nothing to page to.
-                          if (canSplit)
-                            _artworkTile(context, state)
-                          else ...[
-                            SizedBox(
-                              width: 280,
-                              height: 280,
-                              child: PageView(
-                                controller: _pageController,
-                                onPageChanged: (i) =>
-                                    setState(() => _pageIndex = i),
-                                children: [
-                                  _artworkTile(context, state),
-                                  _LyricsPage(
-                                    trackId: trackId,
-                                    position: position,
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: List.generate(2, (i) {
-                                return Container(
-                                  margin: const EdgeInsets.symmetric(
-                                    horizontal: 3,
-                                  ),
-                                  width: _pageIndex == i ? 10 : 6,
-                                  height: 6,
-                                  decoration: BoxDecoration(
-                                    color: _pageIndex == i
-                                        ? context.skinColors.sakuraPink
-                                        : context.skinColors.onSurfaceVariant
-                                              .withValues(alpha: 0.4),
-                                    borderRadius: BorderRadius.circular(3),
-                                  ),
-                                );
-                              }),
-                            ),
-                          ],
-
-                          const Spacer(),
-
-                          // Title / artist
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 32),
-                            child: Column(
-                              children: [
-                                Text(
-                                  state.mediaItem?.title ?? 'Unknown Track',
-                                  style: TextStyle(
-                                    fontSize: 20,
-                                    fontWeight: FontWeight.w700,
-                                    color: context.skinColors.onBackground,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  textAlign: TextAlign.center,
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  state.mediaItem?.artist ?? '',
-                                  style: TextStyle(
-                                    fontSize: 15,
-                                    color: context.skinColors.onSurfaceVariant,
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  textAlign: TextAlign.center,
-                                ),
-                              ],
-                            ),
-                          ),
-
-                          const SizedBox(height: 24),
-
-                          // Seek bar and transport share one frosted pane, so they read as
-                          // a single control surface floating over the cover's colour field
-                          // instead of loose widgets scattered across it.
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 20),
-                            child: GlassPanel(
-                              padding: const EdgeInsets.fromLTRB(14, 6, 14, 2),
-                              child: _ControlDensity(
-                                compact: compactControls,
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    SliderTheme(
-                                      data: SliderTheme.of(context).copyWith(
-                                        trackHeight: 3,
-                                        thumbShape: const RoundSliderThumbShape(
-                                          enabledThumbRadius: 6,
-                                        ),
-                                        overlayShape:
-                                            const RoundSliderOverlayShape(
-                                              overlayRadius: 14,
-                                            ),
-                                      ),
-                                      child: Slider(
-                                        value: isBuffering
-                                            ? 0
-                                            : state.position.inMilliseconds
-                                                  .toDouble()
-                                                  .clamp(
-                                                    0,
-                                                    state
-                                                                .duration
-                                                                .inMilliseconds
-                                                                .toDouble() >
-                                                            0
-                                                        ? state
-                                                              .duration
-                                                              .inMilliseconds
-                                                              .toDouble()
-                                                        : 1,
-                                                  ),
-                                        max:
-                                            state.duration.inMilliseconds
-                                                    .toDouble() >
-                                                0
-                                            ? state.duration.inMilliseconds
-                                                  .toDouble()
-                                            : 1,
-                                        onChanged: isBuffering
-                                            ? null
-                                            : (v) => ref
-                                                  .read(playerProvider.notifier)
-                                                  .seekTo(
-                                                    Duration(
-                                                      milliseconds: v.toInt(),
-                                                    ),
-                                                  ),
-                                      ),
-                                    ),
-                                    Padding(
-                                      padding: const EdgeInsets.only(top: 4),
-                                      child: Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.spaceBetween,
-                                        children: [
-                                          Text(
-                                            _formatDuration(state.position),
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: context
-                                                  .skinColors
-                                                  .onSurfaceVariant,
-                                            ),
-                                          ),
-                                          Text(
-                                            _formatDuration(state.duration),
-                                            style: TextStyle(
-                                              fontSize: 12,
-                                              color: context
-                                                  .skinColors
-                                                  .onSurfaceVariant,
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                    // Three groups rather than eight equal slots.
-                                    // spaceEvenly gave play/prev/next exactly the same
-                                    // visual weight as the sleep timer, so the controls
-                                    // reached for constantly were impossible to find by
-                                    // muscle memory. Secondary controls hug the edges; the
-                                    // transport trio sits tight in the middle and stays
-                                    // centred however many secondaries each side has.
-                                    //
-                                    // Eight controls do not fit one row at phone
-                                    // widths — they overflowed under the old
-                                    // spaceEvenly too. Rather than dropping or
-                                    // clipping any, narrow windows shrink every
-                                    // button's footprint through the surrounding
-                                    // theme, which keeps the grouping identical
-                                    // at every size instead of maintaining two
-                                    // arrangements that can drift apart.
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.start,
-                                            children: [
-                                              IconButton(
-                                                icon: Icon(
-                                                  Icons.repeat,
-                                                  color:
-                                                      state.repeat !=
-                                                          ps.RepeatMode.none
-                                                      ? context
-                                                            .skinColors
-                                                            .sakuraPinkLight
-                                                      : context
-                                                            .skinColors
-                                                            .onSurfaceVariant,
-                                                ),
-                                                onPressed: () {
-                                                  final notifier = ref.read(
-                                                    playerProvider.notifier,
-                                                  );
-                                                  switch (state.repeat) {
-                                                    case ps.RepeatMode.none:
-                                                      notifier.setRepeat(
-                                                        ps.RepeatMode.all,
-                                                      );
-                                                      break;
-                                                    case ps.RepeatMode.all:
-                                                      notifier.setRepeat(
-                                                        ps.RepeatMode.one,
-                                                      );
-                                                      break;
-                                                    case ps.RepeatMode.one:
-                                                      notifier.setRepeat(
-                                                        ps.RepeatMode.none,
-                                                      );
-                                                      break;
-                                                  }
-                                                },
-                                                tooltip:
-                                                    'Repeat: ${state.repeat.name}',
-                                              ),
-                                              Consumer(
-                                                builder: (context2, ref2, child2) {
-                                                  final isShuffle = ref2
-                                                      .watch(playerProvider)
-                                                      .shuffle;
-                                                  return IconButton(
-                                                    icon: Icon(
-                                                      Icons.shuffle,
-                                                      color: isShuffle
-                                                          ? context
-                                                                .skinColors
-                                                                .sakuraPinkLight
-                                                          : context
-                                                                .skinColors
-                                                                .onSurfaceVariant,
-                                                    ),
-                                                    onPressed: () => ref2
-                                                        .read(
-                                                          playerProvider
-                                                              .notifier,
-                                                        )
-                                                        .setShuffle(!isShuffle),
-                                                    tooltip: 'Shuffle',
-                                                  );
-                                                },
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                        // The transport trio carries the spring hover/press
-                                        // motion (see SpringInteraction); the surrounding
-                                        // secondary controls are deliberately left plain so
-                                        // the primary actions stay the ones that respond.
-                                        Row(
-                                          mainAxisSize: MainAxisSize.min,
-                                          children: [
-                                            SpringInteraction(
-                                              child: IconButton(
-                                                icon: Icon(
-                                                  Icons.skip_previous,
-                                                  size: 36,
-                                                  color: context
-                                                      .skinColors
-                                                      .onSurface,
-                                                ),
-                                                onPressed: () => ref
-                                                    .read(
-                                                      playerProvider.notifier,
-                                                    )
-                                                    .previous(),
-                                              ),
-                                            ),
-                                            // Play / Pause button
-                                            SpringInteraction(
-                                              child: Container(
-                                                decoration: BoxDecoration(
-                                                  color: context
-                                                      .skinColors
-                                                      .sakuraPink,
-                                                  shape: BoxShape.circle,
-                                                ),
-                                                child: IconButton(
-                                                  icon: Icon(
-                                                    isBuffering
-                                                        ? Icons
-                                                              .play_arrow_rounded
-                                                        : (isPlaying
-                                                              ? Icons
-                                                                    .pause_rounded
-                                                              : Icons
-                                                                    .play_arrow_rounded),
-                                                    size: 36,
-                                                    color: Colors.white,
-                                                  ),
-                                                  onPressed: isBuffering
-                                                      ? null
-                                                      : () => ref
-                                                            .read(
-                                                              playerProvider
-                                                                  .notifier,
-                                                            )
-                                                            .togglePlayPause(),
-                                                ),
-                                              ),
-                                            ),
-                                            SpringInteraction(
-                                              child: IconButton(
-                                                icon: Icon(
-                                                  Icons.skip_next,
-                                                  size: 36,
-                                                  color: context
-                                                      .skinColors
-                                                      .onSurface,
-                                                ),
-                                                onPressed: () => ref
-                                                    .read(
-                                                      playerProvider.notifier,
-                                                    )
-                                                    .next(),
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                        Expanded(
-                                          child: Row(
-                                            mainAxisAlignment:
-                                                MainAxisAlignment.end,
-                                            children: [
-                                              // Speed control button
-                                              Consumer(
-                                                builder: (context, ref, _) {
-                                                  final speed = ref.watch(
-                                                    speedNotifierProvider,
-                                                  );
-                                                  return TextButton(
-                                                    onPressed: () =>
-                                                        _showSpeedSheet(
-                                                          context,
-                                                          ref,
-                                                        ),
-                                                    child: Text(
-                                                      '$speed×',
-                                                      style: const TextStyle(
-                                                        fontSize: 14,
-                                                      ),
-                                                    ),
-                                                  );
-                                                },
-                                              ),
-                                              // Sleep timer button
-                                              Consumer(
-                                                builder: (context, ref, _) {
-                                                  final timerState = ref.watch(
-                                                    sleepTimerProvider,
-                                                  );
-                                                  final active =
-                                                      timerState.active;
-                                                  return IconButton(
-                                                    icon: Icon(
-                                                      Icons.bedtime,
-                                                      color: active
-                                                          ? context
-                                                                .skinColors
-                                                                .sakuraPinkLight
-                                                          : context
-                                                                .skinColors
-                                                                .onSurfaceVariant,
-                                                    ),
-                                                    tooltip: 'Sleep timer',
-                                                    onPressed: () =>
-                                                        _showSleepTimerSheet(
-                                                          context,
-                                                          ref,
-                                                        ),
-                                                  );
-                                                },
-                                              ),
-                                              // Favorite button — wrapped in Consumer so icon and onPressed
-                                              // always use the same live trackId from the reactive ref.
-                                              Consumer(
-                                                builder: (context2, ref2, child2) {
-                                                  final trackId = ref2
-                                                      .watch(playerProvider)
-                                                      .mediaItem
-                                                      ?.id;
-                                                  // Local (guest-mode) tracks have no server-side favorite state.
-                                                  final isLocal =
-                                                      trackId?.startsWith(
-                                                        localTrackIdPrefix,
-                                                      ) ??
-                                                      false;
-                                                  final isFav =
-                                                      (trackId != null &&
-                                                          !isLocal)
-                                                      ? ref2.watch(
-                                                          trackFavoriteProvider(
-                                                            trackId,
-                                                          ),
-                                                        )
-                                                      : false;
-                                                  return IconButton(
-                                                    icon: Icon(
-                                                      isFav
-                                                          ? Icons.favorite
-                                                          : Icons
-                                                                .favorite_border,
-                                                      color: isFav
-                                                          ? context
-                                                                .skinColors
-                                                                .accentPink
-                                                          : (trackId != null &&
-                                                                    !isLocal
-                                                                ? context
-                                                                      .skinColors
-                                                                      .onSurface
-                                                                : context
-                                                                      .skinColors
-                                                                      .onSurfaceVariant),
-                                                    ),
-                                                    onPressed:
-                                                        (trackId == null ||
-                                                            isLocal)
-                                                        ? null
-                                                        : () => ref2
-                                                              .read(
-                                                                trackFavoriteProvider(
-                                                                  trackId,
-                                                                ).notifier,
-                                                              )
-                                                              .toggle(),
-                                                    tooltip: 'Favorite',
-                                                  );
-                                                },
-                                              ),
-                                            ],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                          ),
-
-                          const SizedBox(height: 32),
-                        ],
+                      flex: 1,
+                      child: LayoutBuilder(
+                        builder: (context, constraints) => _playerBlock(
+                          context,
+                          state: state,
+                          isPlaying: isPlaying,
+                          isBuffering: isBuffering,
+                          trackId: trackId,
+                          position: position,
+                          canSplit: canSplit,
+                          regionWidth: constraints.maxWidth,
+                          regionHeight: constraints.maxHeight,
+                        ),
                       ),
                     ),
                     if (splitPanel != _SidePanel.none)
-                      SizedBox(
-                        width: 380,
-                        child: _PlayerSidePanel(
-                          panel: splitPanel,
-                          trackId: trackId,
-                          position: position,
-                          onClose: () =>
-                              setState(() => _sidePanel = _SidePanel.none),
+                      Expanded(
+                        flex: 1,
+                        // The panel's Expanded still claims half the row, so
+                        // the player side keeps exactly half no matter how
+                        // wide the window gets; ConstrainedBox only stops the
+                        // panel's *content* from stretching past a readable
+                        // width once that half becomes very wide. Align is
+                        // what lets the space freed by the constraint actually
+                        // show, instead of leaving a blank gap where the
+                        // panel used to reach.
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 560),
+                            child: _PlayerSidePanel(
+                              panel: splitPanel,
+                              trackId: trackId,
+                              position: position,
+                              onClose: () =>
+                                  setState(() => _sidePanel = _SidePanel.none),
+                            ),
+                          ),
                         ),
                       ),
                   ],
@@ -689,6 +335,400 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  /// Cover, title/artist, progress bar and transport controls as one block —
+  /// its width derived from the cover, and the whole thing centred in
+  /// whatever [regionWidth]/[regionHeight] it is handed. Unsplit, that region
+  /// is the whole window; split, it is the left half. The same method serves
+  /// both states, so there is one layout to keep in sync rather than two that
+  /// can drift apart.
+  Widget _playerBlock(
+    BuildContext context, {
+    required ps.PlayerState state,
+    required bool isPlaying,
+    required bool isBuffering,
+    required String trackId,
+    required Duration position,
+    required bool canSplit,
+    required double regionWidth,
+    required double regionHeight,
+  }) {
+    final coverSize = canSplit
+        ? playerArtworkSize(
+            regionWidth: regionWidth,
+            regionHeight: regionHeight,
+          )
+        : _narrowArtworkSize;
+    final controlWidth = playerControlWidth(
+      artworkSize: coverSize,
+      regionWidth: regionWidth,
+    );
+    final compactControls = controlWidth < _compactControlsBreakpoint;
+
+    return Column(
+      children: [
+        const Spacer(),
+
+        // Wide windows dock lyrics in the side panel, so the artwork/lyrics
+        // PageView — and the page-dot indicator that came with it — only
+        // earns its keep below the breakpoint. Above it the dots were a
+        // stray mark under the cover with nothing to page to.
+        if (canSplit)
+          _artworkTile(context, state, size: coverSize)
+        else ...[
+          SizedBox(
+            width: _narrowArtworkSize,
+            height: _narrowArtworkSize,
+            child: PageView(
+              controller: _pageController,
+              onPageChanged: (i) => setState(() => _pageIndex = i),
+              children: [
+                _artworkTile(context, state, size: _narrowArtworkSize),
+                _LyricsPage(trackId: trackId, position: position),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: List.generate(2, (i) {
+              return Container(
+                margin: const EdgeInsets.symmetric(horizontal: 3),
+                width: _pageIndex == i ? 10 : 6,
+                height: 6,
+                decoration: BoxDecoration(
+                  color: _pageIndex == i
+                      ? context.skinColors.sakuraPink
+                      : context.skinColors.onSurfaceVariant.withValues(
+                          alpha: 0.4,
+                        ),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+              );
+            }),
+          ),
+        ],
+
+        const Spacer(),
+
+        // Title / artist. Width matches the control block below rather than
+        // a fixed inset from the region's edges — the whole point of this
+        // block is that title, progress bar and transport controls share one
+        // width axis instead of each being sized independently.
+        SizedBox(
+          width: controlWidth,
+          child: Column(
+            children: [
+              Text(
+                state.mediaItem?.title ?? 'Unknown Track',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: context.skinColors.onBackground,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                state.mediaItem?.artist ?? '',
+                style: TextStyle(
+                  fontSize: 15,
+                  color: context.skinColors.onSurfaceVariant,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 24),
+
+        // Seek bar and transport share one frosted pane, so they read as
+        // a single control surface floating over the cover's colour field
+        // instead of loose widgets scattered across it.
+        SizedBox(
+          width: controlWidth,
+          child: GlassPanel(
+            padding: const EdgeInsets.fromLTRB(14, 6, 14, 2),
+            child: _ControlDensity(
+              compact: compactControls,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      trackHeight: 3,
+                      thumbShape: const RoundSliderThumbShape(
+                        enabledThumbRadius: 6,
+                      ),
+                      overlayShape: const RoundSliderOverlayShape(
+                        overlayRadius: 14,
+                      ),
+                    ),
+                    child: Slider(
+                      value: isBuffering
+                          ? 0
+                          : state.position.inMilliseconds.toDouble().clamp(
+                              0,
+                              state.duration.inMilliseconds.toDouble() > 0
+                                  ? state.duration.inMilliseconds.toDouble()
+                                  : 1,
+                            ),
+                      max: state.duration.inMilliseconds.toDouble() > 0
+                          ? state.duration.inMilliseconds.toDouble()
+                          : 1,
+                      onChanged: isBuffering
+                          ? null
+                          : (v) => ref
+                                .read(playerProvider.notifier)
+                                .seekTo(Duration(milliseconds: v.toInt())),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          _formatDuration(state.position),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: context.skinColors.onSurfaceVariant,
+                          ),
+                        ),
+                        Text(
+                          _formatDuration(state.duration),
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: context.skinColors.onSurfaceVariant,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Three groups rather than eight equal slots.
+                  // spaceEvenly gave play/prev/next exactly the same
+                  // visual weight as the sleep timer, so the controls
+                  // reached for constantly were impossible to find by
+                  // muscle memory. Secondary controls hug the edges; the
+                  // transport trio sits tight in the middle and stays
+                  // centred however many secondaries each side has.
+                  //
+                  // Eight controls do not fit one row at phone
+                  // widths — they overflowed under the old
+                  // spaceEvenly too. Rather than dropping or
+                  // clipping any, narrow windows shrink every
+                  // button's footprint through the surrounding
+                  // theme, which keeps the grouping identical
+                  // at every size instead of maintaining two
+                  // arrangements that can drift apart.
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.start,
+                          children: [
+                            IconButton(
+                              icon: Icon(
+                                Icons.repeat,
+                                color: state.repeat != ps.RepeatMode.none
+                                    ? context.skinColors.sakuraPinkLight
+                                    : context.skinColors.onSurfaceVariant,
+                              ),
+                              onPressed: () {
+                                final notifier = ref.read(
+                                  playerProvider.notifier,
+                                );
+                                switch (state.repeat) {
+                                  case ps.RepeatMode.none:
+                                    notifier.setRepeat(ps.RepeatMode.all);
+                                    break;
+                                  case ps.RepeatMode.all:
+                                    notifier.setRepeat(ps.RepeatMode.one);
+                                    break;
+                                  case ps.RepeatMode.one:
+                                    notifier.setRepeat(ps.RepeatMode.none);
+                                    break;
+                                }
+                              },
+                              tooltip: 'Repeat: ${state.repeat.name}',
+                            ),
+                            Consumer(
+                              builder: (context2, ref2, child2) {
+                                final isShuffle = ref2
+                                    .watch(playerProvider)
+                                    .shuffle;
+                                return IconButton(
+                                  icon: Icon(
+                                    Icons.shuffle,
+                                    color: isShuffle
+                                        ? context.skinColors.sakuraPinkLight
+                                        : context.skinColors.onSurfaceVariant,
+                                  ),
+                                  onPressed: () => ref2
+                                      .read(playerProvider.notifier)
+                                      .setShuffle(!isShuffle),
+                                  tooltip: 'Shuffle',
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                      // The transport trio carries the spring hover/press
+                      // motion (see SpringInteraction); the surrounding
+                      // secondary controls are deliberately left plain so
+                      // the primary actions stay the ones that respond.
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SpringInteraction(
+                            child: IconButton(
+                              icon: Icon(
+                                Icons.skip_previous,
+                                size: 36,
+                                color: context.skinColors.onSurface,
+                              ),
+                              onPressed: () =>
+                                  ref.read(playerProvider.notifier).previous(),
+                            ),
+                          ),
+                          // Play / Pause button
+                          SpringInteraction(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: context.skinColors.sakuraPink,
+                                shape: BoxShape.circle,
+                              ),
+                              child: IconButton(
+                                icon: Icon(
+                                  isBuffering
+                                      ? Icons.play_arrow_rounded
+                                      : (isPlaying
+                                            ? Icons.pause_rounded
+                                            : Icons.play_arrow_rounded),
+                                  size: 36,
+                                  color: Colors.white,
+                                ),
+                                onPressed: isBuffering
+                                    ? null
+                                    : () => ref
+                                          .read(playerProvider.notifier)
+                                          .togglePlayPause(),
+                              ),
+                            ),
+                          ),
+                          SpringInteraction(
+                            child: IconButton(
+                              icon: Icon(
+                                Icons.skip_next,
+                                size: 36,
+                                color: context.skinColors.onSurface,
+                              ),
+                              onPressed: () =>
+                                  ref.read(playerProvider.notifier).next(),
+                            ),
+                          ),
+                        ],
+                      ),
+                      Expanded(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            // Speed control button
+                            Consumer(
+                              builder: (context, ref, _) {
+                                final speed = ref.watch(speedNotifierProvider);
+                                return TextButton(
+                                  onPressed: () =>
+                                      _showSpeedSheet(context, ref),
+                                  child: Text(
+                                    '$speed×',
+                                    style: const TextStyle(fontSize: 14),
+                                  ),
+                                );
+                              },
+                            ),
+                            // Sleep timer button
+                            Consumer(
+                              builder: (context, ref, _) {
+                                final timerState = ref.watch(
+                                  sleepTimerProvider,
+                                );
+                                final active = timerState.active;
+                                return IconButton(
+                                  icon: Icon(
+                                    Icons.bedtime,
+                                    color: active
+                                        ? context.skinColors.sakuraPinkLight
+                                        : context.skinColors.onSurfaceVariant,
+                                  ),
+                                  tooltip: 'Sleep timer',
+                                  onPressed: () =>
+                                      _showSleepTimerSheet(context, ref),
+                                );
+                              },
+                            ),
+                            // Favorite button — wrapped in Consumer so icon and onPressed
+                            // always use the same live trackId from the reactive ref.
+                            Consumer(
+                              builder: (context2, ref2, child2) {
+                                final trackId = ref2
+                                    .watch(playerProvider)
+                                    .mediaItem
+                                    ?.id;
+                                // Local (guest-mode) tracks have no server-side favorite state.
+                                final isLocal =
+                                    trackId?.startsWith(localTrackIdPrefix) ??
+                                    false;
+                                final isFav = (trackId != null && !isLocal)
+                                    ? ref2.watch(trackFavoriteProvider(trackId))
+                                    : false;
+                                return IconButton(
+                                  icon: Icon(
+                                    isFav
+                                        ? Icons.favorite
+                                        : Icons.favorite_border,
+                                    color: isFav
+                                        ? context.skinColors.accentPink
+                                        : (trackId != null && !isLocal
+                                              ? context.skinColors.onSurface
+                                              : context
+                                                    .skinColors
+                                                    .onSurfaceVariant),
+                                  ),
+                                  onPressed: (trackId == null || isLocal)
+                                      ? null
+                                      : () => ref2
+                                            .read(
+                                              trackFavoriteProvider(
+                                                trackId,
+                                              ).notifier,
+                                            )
+                                            .toggle(),
+                                  tooltip: 'Favorite',
+                                );
+                              },
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+
+        const SizedBox(height: 32),
+      ],
     );
   }
 
@@ -857,9 +897,13 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
 
   /// The cover tile. Shared by the wide layout (which shows it alone) and the
   /// narrow one (which pages between it and the lyrics).
-  Widget _artworkTile(BuildContext context, ps.PlayerState state) => Container(
-    width: 280,
-    height: 280,
+  Widget _artworkTile(
+    BuildContext context,
+    ps.PlayerState state, {
+    required double size,
+  }) => Container(
+    width: size,
+    height: size,
     decoration: BoxDecoration(
       color: context.skinColors.surfaceVariant,
       borderRadius: BorderRadius.circular(16),
@@ -874,6 +918,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
     child: ClipRRect(
       borderRadius: BorderRadius.circular(16),
       child: _FullPlayerArtwork(
+        size: size,
         albumId: state.mediaItem?.extras?['albumId'] as String?,
         localArtUri: state.mediaItem?.artUri,
       ),
@@ -952,8 +997,15 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
 /// Watches [artworkUrlProvider] for the album and shows CachedNetworkImage when
 /// a URL is available; falls back to a music-note icon otherwise.
 class _FullPlayerArtwork extends ConsumerWidget {
-  const _FullPlayerArtwork({this.albumId, this.localArtUri});
+  const _FullPlayerArtwork({
+    required this.size,
+    this.albumId,
+    this.localArtUri,
+  });
 
+  /// Edge length in logical pixels — driven by [playerArtworkSize] on wide
+  /// layouts, or the narrow layout's fixed size below the split breakpoint.
+  final double size;
   final String? albumId;
   // Embedded cover art extracted from a guest-mode local file (file:// URI).
   final Uri? localArtUri;
@@ -964,8 +1016,8 @@ class _FullPlayerArtwork extends ConsumerWidget {
     if (artUri != null && artUri.scheme == 'file') {
       return Image.file(
         File(artUri.toFilePath()),
-        width: 280,
-        height: 280,
+        width: size,
+        height: size,
         fit: BoxFit.cover,
         errorBuilder: (_, _, _) => const _ArtworkFallback(),
       );
@@ -979,8 +1031,8 @@ class _FullPlayerArtwork extends ConsumerWidget {
         if (url == null || url.isEmpty) return const _ArtworkFallback();
         return CachedNetworkImage(
           imageUrl: url,
-          width: 280,
-          height: 280,
+          width: size,
+          height: size,
           fit: BoxFit.cover,
           placeholder: (context, _) => const _ArtworkFallback(),
           errorWidget: (context, _, error) => const _ArtworkFallback(),
