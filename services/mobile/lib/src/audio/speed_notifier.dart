@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:inori_music/main.dart' show audioHandler;
+import 'package:inori_music/src/playback/playback_engine_provider.dart';
 
 const _kSpeedKey = 'audio.speed';
 
@@ -52,6 +52,6 @@ class SpeedNotifier extends Notifier<double> {
   }
 
   void _apply(double speed) {
-    audioHandler.audioPlayer.setSpeed(speed);
+    ref.read(playbackEngineProvider).setSpeed(speed);
   }
 }

@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:inori_music/main.dart' show audioHandler;
+import 'package:inori_music/src/playback/playback_engine_provider.dart';
 
 const _kCrossfadeKey = 'audio.crossfade';
 
@@ -23,13 +23,13 @@ class CrossfadeNotifier extends Notifier<int> {
     final saved = prefs.getInt(_kCrossfadeKey) ?? 0;
     final clamped = saved.clamp(0, 8);
     state = clamped;
-    audioHandler.crossfadeSeconds = clamped;
+    ref.read(playbackEngineProvider).crossfadeSeconds = clamped;
   }
 
   Future<void> setSeconds(int seconds) async {
     final clamped = seconds.clamp(0, 8);
     state = clamped;
-    audioHandler.crossfadeSeconds = clamped;
+    ref.read(playbackEngineProvider).crossfadeSeconds = clamped;
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_kCrossfadeKey, clamped);
   }

@@ -81,8 +81,9 @@ class DownloadNotifier extends Notifier<Map<String, DownloadStatus>> {
               descriptor.presignedUrl!.isNotEmpty)
           ? descriptor.presignedUrl!
           : descriptor.streamUrl;
-      if (url == null || url.isEmpty)
+      if (url == null || url.isEmpty) {
         throw Exception('no playback url for $trackId');
+      }
 
       // 2. Determine local file path.
       final dir = await getApplicationDocumentsDirectory();

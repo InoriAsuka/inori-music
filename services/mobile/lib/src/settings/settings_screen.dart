@@ -8,6 +8,7 @@ import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/audio/crossfade_notifier.dart';
 import 'package:inori_music/src/audio/eq_notifier.dart';
 import 'package:inori_music/src/audio/replay_gain_notifier.dart';
+import 'package:inori_music/src/playback/playback_engine_provider.dart';
 import 'package:inori_music/src/audio/sleep_timer_notifier.dart';
 import 'package:inori_music/src/audio/speed_notifier.dart';
 import 'package:inori_music/src/auth/auth_notifier.dart';
@@ -990,11 +991,14 @@ class _EqSection extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    if (!Platform.isAndroid) {
+    // Asks the engine, not the platform. `Platform.isAndroid` was only ever
+    // a stand-in for "does the current engine wire up an EQ effect", and it
+    // silently becomes the wrong answer when the engine changes.
+    if (!ref.watch(playbackCapabilitiesProvider).equalizer) {
       return const ListTile(
         leading: Icon(Icons.equalizer),
         title: Text('均衡器'),
-        subtitle: Text('当前平台暂不在支持列表'),
+        subtitle: Text('当前播放引擎不提供均衡器'),
         trailing: Icon(Icons.lock_outline),
         enabled: false,
       );

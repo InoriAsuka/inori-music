@@ -1,11 +1,11 @@
 import 'dart:convert';
-import 'dart:io' show Platform;
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import 'package:inori_music/main.dart' show audioHandler;
 import 'package:inori_music/src/audio/eq_settings.dart';
+import 'package:inori_music/src/playback/playback_engine.dart';
+import 'package:inori_music/src/playback/playback_engine_provider.dart';
 
 // ---------------------------------------------------------------------------
 // Provider
@@ -30,16 +30,21 @@ class EqNotifier extends Notifier<EqSettings> {
 
   // ---- Public API ----
 
+  /// The engine's equalizer, or null when it has none.
+  ///
+  /// Asks the engine rather than testing `Platform.isAndroid`: the platform
+  /// was only ever a proxy for "does the current engine wire up an EQ
+  /// effect", and it becomes the wrong answer the moment the engine changes.
+  EngineEqualizer? get _eq => ref.read(playbackEngineProvider).equalizer;
+
   Future<void> setEnabled(bool enabled) async {
-    if (!Platform.isAndroid) {
-      // Non-Android platforms have no wired equalizer effect at all (see
-      // audio_handler.dart's androidEqualizer doc) — nothing to enable or
-      // disable. Previously this only guarded the enable path, so a disable
-      // call still fell through to androidEqualizer.setEnabled() below.
-      return;
-    }
+    final eq = _eq;
+    // No equalizer at all — nothing to enable *or* disable. This guard used
+    // to cover only the enable path, so a disable call still reached the
+    // platform channel (fixed in v5.20.2).
+    if (eq == null) return;
     state = state.copyWith(enabled: enabled);
-    await audioHandler.androidEqualizer?.setEnabled(enabled);
+    await eq.setEnabled(enabled);
     if (enabled) {
       await _applyEqualizerBands(state.bands);
     } else {
@@ -112,28 +117,24 @@ class EqNotifier extends Notifier<EqSettings> {
   /// Map the UI's 10 fixed bands onto the device's actual band count
   /// (commonly 5 on Android) via nearest-neighbor, and push gains.
   Future<void> _applyEqualizerBands(List<double> bands) async {
-    final eq = audioHandler.androidEqualizer;
-    if (!Platform.isAndroid || eq == null) return;
-    try {
-      final params = await eq.parameters;
-      for (var i = 0; i < params.bands.length; i++) {
-        final uiIdx = (i * bands.length / params.bands.length).floor();
-        await params.bands[i].setGain(
-          bands[uiIdx].clamp(params.minDecibels, params.maxDecibels),
-        );
-      }
-    } catch (_) {}
+    final eq = _eq;
+    if (eq == null) return;
+    final count = await eq.bandCount();
+    if (count == 0) return;
+    final range = await eq.gainRange();
+    for (var i = 0; i < count; i++) {
+      final uiIdx = (i * bands.length / count).floor();
+      await eq.setBandGain(i, bands[uiIdx].clamp(range.min, range.max));
+    }
   }
 
   Future<void> _resetEqualizerBands() async {
-    final eq = audioHandler.androidEqualizer;
-    if (!Platform.isAndroid || eq == null) return;
-    try {
-      final params = await eq.parameters;
-      for (final band in params.bands) {
-        await band.setGain(0);
-      }
-    } catch (_) {}
+    final eq = _eq;
+    if (eq == null) return;
+    final count = await eq.bandCount();
+    for (var i = 0; i < count; i++) {
+      await eq.setBandGain(i, 0);
+    }
   }
 
   // ---- Persistence ----
@@ -158,7 +159,7 @@ class EqNotifier extends Notifier<EqSettings> {
                 .map((e) => (e as num).toDouble())
                 .toList(),
       };
-      final effectiveEnabled = enabled && Platform.isAndroid;
+      final effectiveEnabled = enabled && _eq != null;
       state = EqSettings(
         enabled: effectiveEnabled,
         bands: bands,
@@ -166,7 +167,7 @@ class EqNotifier extends Notifier<EqSettings> {
         customPresets: customPresets,
       );
       if (effectiveEnabled) {
-        await audioHandler.androidEqualizer?.setEnabled(true);
+        await _eq?.setEnabled(true);
         await _applyEqualizerBands(bands);
       }
     } catch (_) {

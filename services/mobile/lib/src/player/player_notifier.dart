@@ -14,9 +14,11 @@ import 'package:inori_api/src/api/catalog_api.dart';
 import 'package:inori_api/src/api/history_api.dart';
 import 'package:inori_api/src/model/catalog_track.dart';
 import 'package:inori_api/src/model/record_play_event_request.dart';
-import 'package:just_audio/just_audio.dart';
 
-import 'package:inori_music/main.dart' show audioHandler;
+import 'package:inori_music/src/audio/speed_notifier.dart';
+import 'package:inori_music/src/player/audio_handler.dart';
+import 'package:inori_music/src/playback/playback_engine.dart';
+import 'package:inori_music/src/playback/playback_engine_provider.dart';
 import 'package:inori_music/src/api/api_client.dart';
 import 'package:inori_music/src/api/me_api.dart';
 import 'package:inori_music/src/audio/replay_gain_notifier.dart';
@@ -42,7 +44,8 @@ final historyApiProvider = Provider<HistoryApi>((ref) {
 // ---------------------------------------------------------------------------
 
 class PlayerNotifier extends Notifier<pstate.PlayerState> {
-  late final AudioPlayer _audioPlayer;
+  late final PlaybackEngine _engine;
+  late final InoriAudioHandler _mediaSession;
   late final CatalogApi _catalog;
   late final HistoryApi _history;
   late final MeApi _me;
@@ -72,7 +75,8 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
   pstate.PlayerState build() {
     // Use the AudioPlayer instance owned by the AudioHandler so that
     // audio_service (notifications, MediaSession, lock screen) stays in sync.
-    _audioPlayer = audioHandler.audioPlayer;
+    _engine = ref.read(playbackEngineProvider);
+    _mediaSession = ref.read(mediaSessionProvider);
     _catalog = ref.read(catalogApiProvider);
     _history = ref.read(historyApiProvider);
     _me = ref.read(meApiProvider);
@@ -179,7 +183,7 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
           currentIndex: clampedIndex,
         );
         // Resolve all URLs for gapless playback via ConcatenatingAudioSource.
-        // Must be awaited — this is what actually calls _audioPlayer.setAudioSource
+        // Must be awaited — this is what actually calls _engine.setQueue
         // for the queued-playback path (the single-track branch below only runs
         // when there's no queue). This used to be fire-and-forget, racing against
         // play() below: server tracks had enough other network latency in this
@@ -199,18 +203,17 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
 
       // If no queue was supplied, fall back to single ProgressiveAudioSource.
       if (queueIds == null || queueIds.isEmpty) {
-        final source = ProgressiveAudioSource(Uri.parse(url), tag: trackId);
-        await _audioPlayer.setAudioSource(source);
+        await _engine.setQueue([url]);
       }
       // Push to AudioHandler so the OS notification shows the current track.
-      audioHandler.mediaItem.add(mediaItem);
+      _mediaSession.mediaItem.add(mediaItem);
       state = state.copyWith(
         mediaItem: mediaItem,
         currentIndex: state.queue.isNotEmpty
             ? (state.currentIndex >= 0 ? state.currentIndex : index)
             : 0,
       );
-      await _audioPlayer.play();
+      await _engine.play();
     } catch (e, st) {
       debugPrint('PlayerNotifier: playback failed for $trackId: $e\n$st');
       state = state.copyWith(
@@ -221,7 +224,7 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
 
   /// Pre-resolves all queue URLs (in parallel — this is awaited by [playTrack]
   /// before it calls play(), so a long queue must not turn into N sequential
-  /// round trips) and calls [audioHandler.updateConcatQueue] so
+  /// round trips) and hands them to the engine in one call so
   /// ConcatenatingAudioSource enables gapless transitions.
   Future<void> _buildConcatQueue(
     List<String> queueIds,
@@ -241,14 +244,15 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
       if (urls[i].isNotEmpty) validPairs.add(MapEntry(i, urls[i]));
     }
     if (validPairs.isEmpty) return;
-    await audioHandler.updateConcatQueue(
-      validPairs.map((e) => e.value).toList(),
-    );
-    // Seek to the correct position in the ConcatenatingAudioSource.
+    // Start the engine's queue directly at the right entry rather than
+    // setting it then seeking: a seek that lands on index 0 is a no-op, so
+    // the old two-step form silently ignored startIndex whenever the first
+    // valid URL happened to be the requested one.
     final concatIndex = validPairs.indexWhere((e) => e.key == startIndex);
-    if (concatIndex > 0) {
-      await _audioPlayer.seek(Duration.zero, index: concatIndex);
-    }
+    await _engine.setQueue(
+      validPairs.map((e) => e.value).toList(),
+      initialIndex: concatIndex < 0 ? 0 : concatIndex,
+    );
   }
 
   /// Play a list of track IDs starting at [initialIndex].
@@ -272,7 +276,7 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
     state = state.copyWith(queue: newQueue);
     for (final id in trackIds) {
       final url = await resolvePlaybackUrl(id);
-      if (url != null) await audioHandler.addSource(url);
+      if (url != null) await _engine.appendToQueue(url);
     }
   }
 
@@ -291,15 +295,15 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
     final url = await resolvePlaybackUrl(trackId);
     if (url != null) {
       if (append) {
-        await audioHandler.addSource(url);
+        await _engine.appendToQueue(url);
       } else {
-        await audioHandler.insertSource(insertAt, url);
+        await _engine.insertIntoQueue(insertAt, url);
       }
     }
   }
 
-  Future<void> play() async => _audioPlayer.play();
-  Future<void> pause() async => _audioPlayer.pause();
+  Future<void> play() async => _engine.play();
+  Future<void> pause() async => _engine.pause();
 
   Future<void> togglePlayPause() async {
     if (state.isPlaying) {
@@ -309,7 +313,7 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
     }
   }
 
-  Future<void> seekTo(Duration position) async => _audioPlayer.seek(position);
+  Future<void> seekTo(Duration position) async => _engine.seek(position);
 
   Future<void> seekRelative(Duration delta) async {
     final raw = state.position + delta;
@@ -322,8 +326,8 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
   Future<void> next() async {
     if (state.queue.isEmpty || state.currentIndex < 0) return;
     if (state.repeat == pstate.RepeatMode.one) {
-      await _audioPlayer.seek(Duration.zero);
-      await _audioPlayer.play();
+      await _engine.seek(Duration.zero);
+      await _engine.play();
       return;
     }
     final nextIdx = state.currentIndex + 1;
@@ -334,7 +338,7 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
       // RepeatMode.none 播完自然停止 — 什么也不做，concat 源会自己播完停
       return;
     }
-    await _audioPlayer.seekToNext();
+    await _engine.seekToIndex(state.currentIndex + 1);
   }
 
   Future<void> previous() async {
@@ -342,7 +346,7 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
     if (state.position.inSeconds > 3) {
       await seekTo(Duration.zero);
     } else {
-      await _audioPlayer.seekToPrevious();
+      await _engine.seekToIndex(state.currentIndex - 1);
     }
   }
 
@@ -361,7 +365,7 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
       newCurrent = oldCurrent + 1;
     }
     state = state.copyWith(queue: queue, currentIndex: newCurrent);
-    await audioHandler.moveSource(oldIndex, newIndex);
+    await _engine.moveInQueue(oldIndex, newIndex);
   }
 
   Future<void> removeFromQueue(int index) async {
@@ -370,7 +374,7 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
     queue.removeAt(index);
     if (index == state.currentIndex) {
       if (queue.isEmpty) {
-        await _audioPlayer.stop();
+        await _engine.stop();
         state = pstate.PlayerState();
         return;
       }
@@ -380,14 +384,14 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
         currentIndex: newCurrent,
         clearMediaItem: true,
       );
-      await audioHandler.removeSourceAt(index);
+      await _engine.removeFromQueue(index);
       await _playAtIndex(newCurrent);
     } else {
       final newCurrent = state.currentIndex > index
           ? state.currentIndex - 1
           : state.currentIndex;
       state = state.copyWith(queue: queue, currentIndex: newCurrent);
-      await audioHandler.removeSourceAt(index);
+      await _engine.removeFromQueue(index);
     }
   }
 
@@ -407,38 +411,38 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
       if (db != null) gain = pow(10, db / 20).toDouble().clamp(0.1, 2.0);
     }
     final effective = (userVol * gain).clamp(0.0, 1.0);
-    audioHandler.targetVolume = effective; // Step 5 的 fade 基准同步
-    await _audioPlayer.setVolume(effective);
+    // The engine remembers this as the ceiling its crossfade ramps toward.
+    await _engine.setVolume(effective);
   }
 
   Future<void> setRepeat(pstate.RepeatMode repeat) async {
     state = state.copyWith(repeat: repeat);
     switch (repeat) {
       case pstate.RepeatMode.one:
-        await _audioPlayer.setLoopMode(LoopMode.one);
+        await _engine.setRepeatMode(EngineRepeatMode.one);
         break;
       case pstate.RepeatMode.all:
-        await _audioPlayer.setLoopMode(LoopMode.all);
+        await _engine.setRepeatMode(EngineRepeatMode.all);
         break;
       case pstate.RepeatMode.none:
-        await _audioPlayer.setLoopMode(LoopMode.off);
+        await _engine.setRepeatMode(EngineRepeatMode.off);
         break;
     }
   }
 
   Future<void> setShuffle(bool shuffle) async {
     state = state.copyWith(shuffle: shuffle);
-    await _audioPlayer.setShuffleModeEnabled(shuffle);
-    if (shuffle) await _audioPlayer.shuffle();
+    await _engine.setShuffleEnabled(shuffle);
+    if (shuffle) await _engine.shuffleQueue();
   }
 
   Future<void> stop() async {
-    await _audioPlayer.stop();
+    await _engine.stop();
     state = pstate.PlayerState();
   }
 
   // ---- OS media button bridge ----
-  // audioHandler.customEvent carries skipToNext / skipToPrevious from
+  // The media session's customEvent carries skipToNext / skipToPrevious from
   // lock-screen / notification / Bluetooth controls.
 
   void _handleCustomEvent(dynamic payload) {
@@ -515,7 +519,7 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
     if (state.mediaItem?.id == trackId) {
       final updated = _localMediaItem(trackId);
       state = state.copyWith(mediaItem: updated);
-      audioHandler.mediaItem.add(updated);
+      _mediaSession.mediaItem.add(updated);
     }
   }
 
@@ -567,7 +571,7 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
       if (state.mediaItem?.id == trackId) {
         final updated = state.mediaItem!.copyWith(artist: name);
         state = state.copyWith(mediaItem: updated);
-        audioHandler.mediaItem.add(updated);
+        _mediaSession.mediaItem.add(updated);
       }
     } catch (_) {
       // Non-fatal: UUID shown as fallback.
@@ -582,7 +586,7 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
       if (state.mediaItem?.id == trackId) {
         final updated = state.mediaItem!.copyWith(album: title);
         state = state.copyWith(mediaItem: updated);
-        audioHandler.mediaItem.add(updated);
+        _mediaSession.mediaItem.add(updated);
       }
     } catch (_) {
       // Non-fatal.
@@ -602,14 +606,14 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
 
     // Position
     subs.add(
-      _audioPlayer.positionStream.listen((pos) {
+      _engine.positionStream.listen((pos) {
         state = state.copyWith(position: pos);
       }),
     );
 
     // Duration
     subs.add(
-      _audioPlayer.durationStream.listen((dur) {
+      _engine.durationStream.listen((dur) {
         if (dur != null) state = state.copyWith(duration: dur);
       }),
     );
@@ -620,7 +624,7 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
     subs.add(
       (() {
         int? lastIndex;
-        return _audioPlayer.currentIndexStream.listen((idx) async {
+        return _engine.currentIndexStream.listen((idx) async {
           if (idx == null || idx < 0 || idx >= state.queue.length) return;
           if (idx == state.currentIndex) {
             lastIndex = idx;
@@ -637,7 +641,7 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
           final track = await _resolveTrack(trackId);
           final resolved = _makeMediaItem(trackId, track);
           state = state.copyWith(currentIndex: idx, mediaItem: resolved);
-          audioHandler.mediaItem.add(resolved);
+          _mediaSession.mediaItem.add(resolved);
           await _applyVolumeWithGain(state.volume);
           // Cross-device sync: report the new track immediately (v5.4.0).
           _reporter.reportNow();
@@ -648,66 +652,63 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
     // Processing state — fires only when the whole concat queue has finished
     // playing (native LoopMode already handles one/all looping internally
     // without ever reaching `completed`).
+    // One stream now covers both what used to be processingStateStream and
+    // playerStateStream — the engine collapses just_audio's
+    // processingState x playing matrix into the five states the app actually
+    // branches on.
     subs.add(
-      _audioPlayer.processingStateStream.listen((ps) {
-        if (ps == ProcessingState.completed) {
+      _engine.stateStream.listen((engineState) {
+        if (engineState == EnginePlaybackState.completed) {
           if (state.currentIndex >= 0 &&
               state.currentIndex < state.queue.length) {
             _postHistoryFor(state.queue[state.currentIndex].id);
           }
           if (state.repeat == pstate.RepeatMode.one) {
-            _audioPlayer.seek(Duration.zero);
-            _audioPlayer.play();
+            _engine.seek(Duration.zero);
+            _engine.play();
           }
-          // RepeatMode.all/none: native loopMode already handled wrap/stop.
+          // RepeatMode.all/none: the engine's repeat mode already wrapped.
         }
-      }),
-    );
 
-    // Player state — playing/paused/buffering
-    subs.add(
-      _audioPlayer.playerStateStream.listen((ps) {
+        final playing = engineState == EnginePlaybackState.playing;
         state = state.copyWith(
           playbackState: PlaybackState(
-            playing: ps.playing,
-            processingState: _toAudioProcessingState(ps.processingState),
+            playing: playing,
+            processingState: _toAudioProcessingState(engineState),
             controls: [
               MediaControl.skipToPrevious,
-              if (ps.playing) MediaControl.pause else MediaControl.play,
+              if (playing) MediaControl.pause else MediaControl.play,
               MediaControl.skipToNext,
             ],
           ),
         );
         // Cross-device sync: gate the 30s throttle on playback, and PUT
         // immediately on a play↔pause transition (v5.4.0).
-        _reporter.setPlaying(ps.playing);
-        if (ps.playing != _lastReportedPlaying) {
-          _lastReportedPlaying = ps.playing;
+        _reporter.setPlaying(playing);
+        if (playing != _lastReportedPlaying) {
+          _lastReportedPlaying = playing;
           _reporter.reportNow();
         }
       }),
     );
 
     // OS media button events (lock screen, notification, Bluetooth)
-    subs.add(audioHandler.customEvent.listen(_handleCustomEvent));
+    subs.add(_mediaSession.customEvent.listen(_handleCustomEvent));
 
     return subs;
   }
 
-  AudioProcessingState _toAudioProcessingState(ProcessingState ps) {
-    switch (ps) {
-      case ProcessingState.idle:
-        return AudioProcessingState.idle;
-      case ProcessingState.loading:
-        return AudioProcessingState.loading;
-      case ProcessingState.buffering:
-        return AudioProcessingState.buffering;
-      case ProcessingState.ready:
-        return AudioProcessingState.ready;
-      case ProcessingState.completed:
-        return AudioProcessingState.completed;
-    }
-  }
+  AudioProcessingState _toAudioProcessingState(EnginePlaybackState s) =>
+      switch (s) {
+        EnginePlaybackState.idle => AudioProcessingState.idle,
+        EnginePlaybackState.loading => AudioProcessingState.loading,
+        EnginePlaybackState.buffering => AudioProcessingState.buffering,
+        // The engine has no single "ready" — playing and paused are both
+        // ready as far as the OS media session is concerned.
+        EnginePlaybackState.playing ||
+        EnginePlaybackState.paused => AudioProcessingState.ready,
+        EnginePlaybackState.completed => AudioProcessingState.completed,
+      };
 
   Future<void> _postHistoryFor(String trackId) async {
     // Local files have no server-side history to report against.
@@ -756,7 +757,7 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
       repeat: _repeatToWire(state.repeat),
       shuffle: state.shuffle,
       volume: state.volume,
-      speed: _audioPlayer.speed,
+      speed: ref.read(speedNotifierProvider),
       status: state.isPlaying
           ? 'playing'
           : (state.isIdle ? 'stopped' : 'paused'),

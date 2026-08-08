@@ -4,15 +4,25 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:inori_music/src/audio/eq_notifier.dart';
 import 'package:inori_music/src/audio/eq_settings.dart';
+import 'package:inori_music/src/playback/playback_engine.dart';
+import 'package:inori_music/src/playback/playback_engine_provider.dart';
+
+import 'support/fake_playback_engine.dart';
 
 // ---------------------------------------------------------------------------
-// EqNotifier custom preset tests.
+// EqNotifier tests.
 //
-// EqNotifier reads `audioHandler` (a global set in main.dart) only when
-// `state.enabled` is true. These tests keep EQ disabled throughout, so the
-// custom-preset save/select/delete/persist logic is exercised without ever
-// touching the audio_service-backed handler.
+// Since v5.27.0 EqNotifier asks the playback engine for an equalizer instead
+// of testing Platform.isAndroid, so these inject a fake engine. That is what
+// makes the "an equalizer exists" path testable at all — previously it could
+// only run on a real Android device, and every test here was really asserting
+// that the test host is not Android.
 // ---------------------------------------------------------------------------
+
+/// Container whose engine has no equalizer — the desktop/iOS shape.
+ProviderContainer _containerWithoutEq() => ProviderContainer(
+  overrides: [playbackEngineProvider.overrideWithValue(FakePlaybackEngine())],
+);
 
 void main() {
   setUp(() {
@@ -23,7 +33,7 @@ void main() {
     test(
       'saveCurrentAsPreset stores bands under the given name and selects it',
       () async {
-        final container = ProviderContainer();
+        final container = _containerWithoutEq();
         addTearDown(container.dispose);
         final notifier = container.read(eqNotifierProvider.notifier);
 
@@ -40,7 +50,7 @@ void main() {
     test(
       'saveCurrentAsPreset trims whitespace and ignores empty names',
       () async {
-        final container = ProviderContainer();
+        final container = _containerWithoutEq();
         addTearDown(container.dispose);
         final notifier = container.read(eqNotifierProvider.notifier);
 
@@ -62,7 +72,7 @@ void main() {
     test(
       'selectCustomPreset switches active bands to the saved preset',
       () async {
-        final container = ProviderContainer();
+        final container = _containerWithoutEq();
         addTearDown(container.dispose);
         final notifier = container.read(eqNotifierProvider.notifier);
 
@@ -79,7 +89,7 @@ void main() {
     );
 
     test('selectCustomPreset is a no-op for an unknown name', () async {
-      final container = ProviderContainer();
+      final container = _containerWithoutEq();
       addTearDown(container.dispose);
       final notifier = container.read(eqNotifierProvider.notifier);
 
@@ -93,7 +103,7 @@ void main() {
     test(
       'deleteCustomPreset removes the preset and falls back to flat when selected',
       () async {
-        final container = ProviderContainer();
+        final container = _containerWithoutEq();
         addTearDown(container.dispose);
         final notifier = container.read(eqNotifierProvider.notifier);
 
@@ -112,7 +122,7 @@ void main() {
     test(
       'deleteCustomPreset does not disturb selection when a different preset is active',
       () async {
-        final container = ProviderContainer();
+        final container = _containerWithoutEq();
         addTearDown(container.dispose);
         final notifier = container.read(eqNotifierProvider.notifier);
 
@@ -127,9 +137,9 @@ void main() {
     );
 
     test(
-      'setEnabled(true) is a no-op on this (non-Android) test host',
+      'setEnabled(true) is a no-op when the engine has no equalizer',
       () async {
-        final container = ProviderContainer();
+        final container = _containerWithoutEq();
         addTearDown(container.dispose);
         final notifier = container.read(eqNotifierProvider.notifier);
 
@@ -139,14 +149,13 @@ void main() {
     );
 
     test(
-      'setEnabled(false) is also a no-op off Android, not just enable',
+      'setEnabled(false) is also a no-op with no equalizer, not just enable',
       () async {
         // Regression test: the guard used to be `if (enabled && !isAndroid)
         // return`, which only blocked the *enable* path — a disable call fell
-        // through to `audioHandler.androidEqualizer.setEnabled()` regardless of
-        // platform, which is exactly the unconditional-platform-channel-call
-        // pattern that threw MissingPluginException elsewhere in this fix.
-        final container = ProviderContainer();
+        // through to the platform channel regardless, which is exactly the
+        // unconditional-call pattern that threw MissingPluginException.
+        final container = _containerWithoutEq();
         addTearDown(container.dispose);
         final notifier = container.read(eqNotifierProvider.notifier);
 
@@ -158,13 +167,13 @@ void main() {
     test(
       'persists custom presets across a fresh restore from SharedPreferences',
       () async {
-        final container1 = ProviderContainer();
+        final container1 = _containerWithoutEq();
         final notifier1 = container1.read(eqNotifierProvider.notifier);
         await notifier1.setBand(3, 4.5);
         await notifier1.saveCurrentAsPreset('Saved');
         container1.dispose();
 
-        final container2 = ProviderContainer();
+        final container2 = _containerWithoutEq();
         addTearDown(container2.dispose);
         // Reading the provider triggers build(), which calls _restore()
         // asynchronously; await a microtask turn for it to complete.
@@ -176,5 +185,70 @@ void main() {
         expect(restored.customPresets['Saved']![3], 4.5);
       },
     );
+  });
+
+  // -------------------------------------------------------------------------
+  // The path that used to be unreachable in tests
+  // -------------------------------------------------------------------------
+
+  group('EqNotifier with an equalizer present', () {
+    late FakeEngineEqualizer eq;
+    late ProviderContainer container;
+
+    setUp(() {
+      // Five device bands against the UI's ten: the real Android shape, and
+      // the reason band application is a mapping rather than a copy.
+      eq = FakeEngineEqualizer(bands: 5, min: -12, max: 12);
+      container = ProviderContainer(
+        overrides: [
+          playbackEngineProvider.overrideWithValue(
+            FakePlaybackEngine(
+              capabilities: const PlaybackCapabilities(equalizer: true),
+              equalizer: eq,
+            ),
+          ),
+        ],
+      );
+      addTearDown(container.dispose);
+    });
+
+    test('enabling turns the effect on and pushes gains', () async {
+      final notifier = container.read(eqNotifierProvider.notifier);
+      await notifier.setPreset('bassBoost');
+      await notifier.setEnabled(true);
+
+      expect(container.read(eqNotifierProvider).enabled, isTrue);
+      expect(eq.enabled, isTrue);
+      expect(
+        eq.gains.length,
+        5,
+        reason: 'One gain per device band, not per UI band',
+      );
+      expect(
+        eq.gains[0],
+        greaterThan(0),
+        reason: 'bassBoost lifts the low bands',
+      );
+    });
+
+    test('disabling flattens every band back to zero', () async {
+      final notifier = container.read(eqNotifierProvider.notifier);
+      await notifier.setPreset('bassBoost');
+      await notifier.setEnabled(true);
+      await notifier.setEnabled(false);
+
+      expect(eq.enabled, isFalse);
+      expect(eq.gains.values.every((g) => g == 0), isTrue);
+    });
+
+    test('gains are clamped to what the device accepts', () async {
+      // 'bassBoost' asks for +6; a device with a narrower range must not be
+      // handed a value outside it.
+      final notifier = container.read(eqNotifierProvider.notifier);
+      await notifier.setBand(0, 40);
+      await notifier.setEnabled(true);
+
+      expect(eq.gains.values.every((g) => g >= -12 && g <= 12), isTrue);
+    });
   });
 }

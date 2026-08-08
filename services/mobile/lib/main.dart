@@ -11,13 +11,12 @@ import 'package:inori_music/src/player/audio_handler.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/desktop_integration.dart';
 import 'package:inori_music/src/shared/locale_provider.dart';
+import 'package:inori_music/src/playback/just_audio_engine.dart';
+import 'package:inori_music/src/playback/playback_engine_provider.dart';
 import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/theme/skin_definition.dart';
 import 'package:inori_music/src/shared/theme/skin_provider.dart';
 import 'package:inori_music/src/shared/titlebar_material_provider.dart';
-
-/// Global [InoriAudioHandler] instance shared between main.dart and PlayerNotifier.
-late final InoriAudioHandler audioHandler;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -36,11 +35,23 @@ void main() async {
   if (Platform.isWindows) {
     await Window.initialize();
   }
-  // Initialize audio_service so background audio, lock-screen controls, and
-  // OS media sessions are available before any widget is created.
-  audioHandler = await InoriAudioHandler.create();
-  audioHandler.initCrossfade();
-  runApp(const ProviderScope(child: InoriMusicApp()));
+  // Build the playback engine and the OS media session before runApp: both
+  // have to exist before any widget reads them, and audio_service's init is
+  // async. They are injected as provider overrides rather than parked in a
+  // global — a global is what previously let four unrelated notifiers reach
+  // into main.dart for the audio player, which made every one of them
+  // untestable without booting the real audio stack.
+  final engine = JustAudioEngine.create();
+  final mediaSession = await InoriAudioHandler.create(engine);
+  runApp(
+    ProviderScope(
+      overrides: [
+        playbackEngineProvider.overrideWithValue(engine),
+        mediaSessionProvider.overrideWithValue(mediaSession),
+      ],
+      child: const InoriMusicApp(),
+    ),
+  );
 }
 
 class InoriMusicApp extends ConsumerStatefulWidget {

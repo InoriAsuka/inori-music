@@ -1,9 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:just_audio/just_audio.dart';
 
-import 'package:inori_music/main.dart' show audioHandler;
+import 'package:inori_music/src/playback/playback_engine.dart';
+import 'package:inori_music/src/playback/playback_engine_provider.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 
 // ---------------------------------------------------------------------------
@@ -41,8 +41,8 @@ class SleepTimerState {
 
 final sleepTimerProvider =
     NotifierProvider<SleepTimerNotifier, SleepTimerState>(
-  SleepTimerNotifier.new,
-);
+      SleepTimerNotifier.new,
+    );
 
 // ---------------------------------------------------------------------------
 // Notifier
@@ -50,7 +50,7 @@ final sleepTimerProvider =
 
 class SleepTimerNotifier extends Notifier<SleepTimerState> {
   Timer? _timer;
-  StreamSubscription<ProcessingState>? _trackSub;
+  StreamSubscription<EnginePlaybackState>? _trackSub;
 
   @override
   SleepTimerState build() {
@@ -80,9 +80,8 @@ class SleepTimerNotifier extends Notifier<SleepTimerState> {
   void startAfterTrack() {
     _cleanup();
     state = const SleepTimerState(stopAfterTrack: true, active: true);
-    _trackSub =
-        audioHandler.audioPlayer.processingStateStream.listen((ps) {
-      if (ps == ProcessingState.completed) {
+    _trackSub = ref.read(playbackEngineProvider).stateStream.listen((ps) {
+      if (ps == EnginePlaybackState.completed) {
         ref.read(playerProvider.notifier).pause();
         _cleanup();
         state = const SleepTimerState();
