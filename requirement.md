@@ -40,6 +40,16 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Bulk lifecycle updates must support dry-run previews that do not persist metadata changes.
 - Committed lifecycle updates must record latest transition metadata for audit preparation.
 
+### v5.28.0 - 2026-08-08
+
+- **feat: 播放页布局重做——居中/分栏 + 控件分组（对标 Apple Music）** — 用户带截图反馈「整体方向对了，但是有些布局不太好」，指出三个具体问题并给了 Apple Music 作为交互参照。
+- **修 1：关闭按钮压在 macOS 红绿灯上**。播放页是全屏路由、不经过 `DesktopAppBar`，因此没有 `DesktopAppBar` 早就在做的红绿灯让位。新增 `_needsMacTrafficLightGutter()`，仅在「桌面 + macOS + 未启用系统标题栏」三条同时成立时留 70px——启用系统标题栏时红绿灯在真实标题栏里，留白反而是错的。
+- **修 2：控制条按钮排布**。原本 `mainAxisAlignment: spaceEvenly` 把 8 个控件均匀撒开，**播放/上一首/下一首获得了和睡眠定时器完全相同的视觉权重**，最常用的控件反而没法靠肌肉记忆定位。改成三组：次要控件贴两端，传输三件套在中间抱紧，且无论两侧各有几个次要控件都保持居中（两侧用 `Expanded` 等分，中间 `MainAxisSize.min`）。
+- **修 3：封面下方的小圆点**。那是 `PageView` 的页码指示器。宽屏歌词已进侧栏、没有可翻的页，所以 `PageView` 连同指示器只在窄屏保留——宽屏那个点是个无处可去的孤立标记。
+- **居中/分栏（用户给的模型：不显示歌词和播放列表就居中，展开就左右分栏）**：顶栏保持通栏，其下 `Expanded(Row([Expanded(播放器列), 侧栏]))`。**播放器列本身一行没改**——它只是拿到多少宽度就在多少宽度里居中，所以同一列同时服务两种状态，不存在两套布局各自漂移的风险。侧栏 380px，内容是歌词或播放队列，用 `GlassPanel` 保持毛玻璃让封面色场在整窗连续（不透明面板会把 v5.26.0 的背景切成两半）。顶栏的队列/歌词按钮变成开关，再按一次即关。**只有 ≥900px 才分栏**：窄窗分栏会让两边都不可用，那里歌词仍是压入路由、队列仍是底部 sheet。队列列表提取为 `_QueueList` 供 sheet 与侧栏共用，避免两处实现漂移。
+- **实现中发现并修复两个真问题，都是新写的单测抓的**：(1) **`GlassPanel` 用 `DecoratedBox` 带背景色，里面 `ListTile` 的墨水与高亮被整个吃掉**——跟 v5.22.0 侧栏那次是同一个缺陷（`ListTile` 画在最近的 `Material` 祖先上），面板里全是列表行所以立刻显形，改用 `Material` + `shape`；(2) **窄屏控制条溢出 78px**，查下来**改造前用 spaceEvenly 时同样会溢出**，只是从没测过。解法不是重排成两行（那要维护两套排布、迟早漂移），而是 `_ControlDensity` 在窄屏通过 `IconButtonTheme`/`TextButtonTheme` 压缩每个按钮的占位，**分组结构在任何宽度下逐字节相同**。
+- The phase output is version-tracked and verified locally（`flutter analyze --no-fatal-infos` 0 error/warning，仅 1 条存量 info 属未触碰文件；`flutter test` 251/251 通过，244 存量 + 7 新增，见 `test/full_player_layout_test.dart`：传输三件套确实抱紧且居中（跨度小于整条一半、且中心与整条中心相差 <24px）、宽屏无 `PageView`、窄屏保留 `PageView`、队列按钮在宽屏停靠面板而非盖住播放器、同一按钮再按即关、开歌词会替换队列而不是叠加、**分栏后播放器在剩余宽度里居中**（断言 `(1400-380)/2` 而不只是"往左移了"））。实际观感待用户实机确认。
+
 ### v5.27.0 - 2026-08-08
 
 - **refactor: UI 与播放解耦，引入 `PlaybackEngine` 接缝** — 用户要求"把这套解耦合做了，让 UI 和播放分离"。改造前的实际耦合比预期更深：`main.dart` 顶层有个 `late final InoriAudioHandler audioHandler` 全局，**四个不相干的 notifier**（crossfade / speed / sleepTimer / eq）用 `import 'package:inori_music/main.dart' show audioHandler` **反向抓它**——这意味着它们每一个都传递依赖 `just_audio`，且不启动真实音频栈就无法测试；`InoriAudioHandler` 同时是 OS 媒体会话桥、`AudioPlayer` 持有者、gapless 队列、淡入淡出包络和 Android 均衡器五种东西；`PlayerNotifier` 直接持有 `AudioPlayer` 调用 17 个 just_audio 成员。
