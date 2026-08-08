@@ -1,6 +1,8 @@
 import 'dart:io';
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -21,6 +23,8 @@ import 'package:inori_music/src/lyrics/lyrics_provider.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/player/karaoke_screen.dart';
 import 'package:inori_music/src/player/player_state.dart' as ps;
+import 'package:inori_music/src/shared/desktop_integration.dart';
+import 'package:inori_music/src/shared/system_titlebar_provider.dart';
 import 'package:inori_music/src/shared/theme/skin_provider.dart';
 import 'package:inori_music/src/shared/widgets/glass_panel.dart';
 import 'package:inori_music/src/shared/widgets/spring_interaction.dart';
@@ -33,9 +37,22 @@ class FullPlayerScreen extends ConsumerStatefulWidget {
   ConsumerState<FullPlayerScreen> createState() => _FullPlayerScreenState();
 }
 
+/// Which panel, if any, is docked beside the player.
+enum _SidePanel { none, lyrics, queue }
+
 class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
   late final PageController _pageController;
   int _pageIndex = 0;
+
+  _SidePanel _sidePanel = _SidePanel.none;
+
+  /// Below this the window cannot give both the player and a panel a usable
+  /// width, so lyrics and the queue keep their pre-v5.28.0 presentation —
+  /// a pushed route and a bottom sheet.
+  static const _splitBreakpoint = 900.0;
+
+  /// Below this, eight transport controls cannot sit on one row at full size.
+  static const _compactControlsBreakpoint = 600.0;
 
   @override
   void initState() {
@@ -57,6 +74,11 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
     final trackId = state.mediaItem?.id ?? '';
     final position = ref.watch(playerProvider.select((s) => s.position));
 
+    final width = MediaQuery.sizeOf(context).width;
+    final canSplit = width >= _splitBreakpoint;
+    final compactControls = width < _compactControlsBreakpoint;
+    final splitPanel = canSplit ? _sidePanel : _SidePanel.none;
+
     return Scaffold(
       backgroundColor: context.skinColors.background,
       // The whole player now sits on the cover-derived colour field, not just
@@ -77,6 +99,13 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                 ),
                 child: Row(
                   children: [
+                    // macOS draws its traffic lights over whatever Flutter
+                    // renders, at a fixed offset from the window's top-left.
+                    // This screen is a full-bleed route with no DesktopAppBar,
+                    // so without a gutter the close button sits underneath
+                    // them — the same reservation DesktopAppBar already makes.
+                    if (_needsMacTrafficLightGutter(ref))
+                      const SizedBox(width: 70),
                     IconButton(
                       icon: Icon(
                         Icons.keyboard_arrow_down,
@@ -103,7 +132,9 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                         color: context.skinColors.onSurfaceVariant,
                       ),
                       tooltip: 'Queue',
-                      onPressed: () => _showQueueSheet(context, ref),
+                      onPressed: () => canSplit
+                          ? _togglePanel(_SidePanel.queue)
+                          : _showQueueSheet(context, ref),
                     ),
                     IconButton(
                       icon: Icon(
@@ -121,12 +152,14 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                       // track with no lyrics has always done.
                       onPressed: trackId.isEmpty
                           ? null
-                          : () => Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => const KaraokeScreen(),
-                                fullscreenDialog: true,
-                              ),
-                            ),
+                          : () => canSplit
+                                ? _togglePanel(_SidePanel.lyrics)
+                                : Navigator.of(context).push(
+                                    MaterialPageRoute<void>(
+                                      builder: (_) => const KaraokeScreen(),
+                                      fullscreenDialog: true,
+                                    ),
+                                  ),
                     ),
                     // Technical detail (sample rate/bitrate/format) — only
                     // meaningful for local files; the server catalog has no
@@ -166,343 +199,492 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                 ),
               ),
 
-              const Spacer(),
-
-              // Artwork / Lyrics PageView
-              SizedBox(
-                width: 280,
-                height: 280,
-                child: PageView(
-                  controller: _pageController,
-                  onPageChanged: (i) => setState(() => _pageIndex = i),
+              // Centred when nothing is open; split once lyrics or the queue
+              // are shown, with the player itself staying centred in whatever
+              // width is left. Apple Music's shape, and it means the same
+              // column serves both states instead of two layouts drifting
+              // apart. Only wide windows split — below the breakpoint the
+              // panel would leave neither half usable, so there it stays a
+              // sheet / pushed route as before.
+              Expanded(
+                child: Row(
                   children: [
-                    // Page 0: Artwork
-                    Container(
-                      width: 280,
-                      height: 280,
-                      decoration: BoxDecoration(
-                        color: context.skinColors.surfaceVariant,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: context.skinColors.sakuraPink.withValues(
-                              alpha: 0.15,
-                            ),
-                            blurRadius: 32,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(16),
-                        child: _FullPlayerArtwork(
-                          albumId:
-                              state.mediaItem?.extras?['albumId'] as String?,
-                          localArtUri: state.mediaItem?.artUri,
-                        ),
-                      ),
-                    ),
-                    // Page 1: Lyrics
-                    _LyricsPage(trackId: trackId, position: position),
-                  ],
-                ),
-              ),
+                    Expanded(
+                      child: Column(
+                        children: [
+                          const Spacer(),
 
-              // Page indicator
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: List.generate(2, (i) {
-                  return Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 3),
-                    width: _pageIndex == i ? 10 : 6,
-                    height: 6,
-                    decoration: BoxDecoration(
-                      color: _pageIndex == i
-                          ? context.skinColors.sakuraPink
-                          : context.skinColors.onSurfaceVariant.withValues(
-                              alpha: 0.4,
-                            ),
-                      borderRadius: BorderRadius.circular(3),
-                    ),
-                  );
-                }),
-              ),
-
-              const Spacer(),
-
-              // Title / artist
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 32),
-                child: Column(
-                  children: [
-                    Text(
-                      state.mediaItem?.title ?? 'Unknown Track',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.w700,
-                        color: context.skinColors.onBackground,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      state.mediaItem?.artist ?? '',
-                      style: TextStyle(
-                        fontSize: 15,
-                        color: context.skinColors.onSurfaceVariant,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 24),
-
-              // Seek bar and transport share one frosted pane, so they read as
-              // a single control surface floating over the cover's colour field
-              // instead of loose widgets scattered across it.
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: GlassPanel(
-                  padding: const EdgeInsets.fromLTRB(14, 6, 14, 2),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SliderTheme(
-                        data: SliderTheme.of(context).copyWith(
-                          trackHeight: 3,
-                          thumbShape: const RoundSliderThumbShape(
-                            enabledThumbRadius: 6,
-                          ),
-                          overlayShape: const RoundSliderOverlayShape(
-                            overlayRadius: 14,
-                          ),
-                        ),
-                        child: Slider(
-                          value: isBuffering
-                              ? 0
-                              : state.position.inMilliseconds.toDouble().clamp(
-                                  0,
-                                  state.duration.inMilliseconds.toDouble() > 0
-                                      ? state.duration.inMilliseconds.toDouble()
-                                      : 1,
-                                ),
-                          max: state.duration.inMilliseconds.toDouble() > 0
-                              ? state.duration.inMilliseconds.toDouble()
-                              : 1,
-                          onChanged: isBuffering
-                              ? null
-                              : (v) => ref
-                                    .read(playerProvider.notifier)
-                                    .seekTo(Duration(milliseconds: v.toInt())),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              _formatDuration(state.position),
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: context.skinColors.onSurfaceVariant,
+                          // Wide windows dock lyrics in the side panel, so
+                          // the artwork/lyrics PageView — and the page-dot
+                          // indicator that came with it — only earns its keep
+                          // below the breakpoint. Above it the dots were a
+                          // stray mark under the cover with nothing to page to.
+                          if (canSplit)
+                            _artworkTile(context, state)
+                          else ...[
+                            SizedBox(
+                              width: 280,
+                              height: 280,
+                              child: PageView(
+                                controller: _pageController,
+                                onPageChanged: (i) =>
+                                    setState(() => _pageIndex = i),
+                                children: [
+                                  _artworkTile(context, state),
+                                  _LyricsPage(
+                                    trackId: trackId,
+                                    position: position,
+                                  ),
+                                ],
                               ),
                             ),
-                            Text(
-                              _formatDuration(state.duration),
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: context.skinColors.onSurfaceVariant,
-                              ),
+                            const SizedBox(height: 8),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: List.generate(2, (i) {
+                                return Container(
+                                  margin: const EdgeInsets.symmetric(
+                                    horizontal: 3,
+                                  ),
+                                  width: _pageIndex == i ? 10 : 6,
+                                  height: 6,
+                                  decoration: BoxDecoration(
+                                    color: _pageIndex == i
+                                        ? context.skinColors.sakuraPink
+                                        : context.skinColors.onSurfaceVariant
+                                              .withValues(alpha: 0.4),
+                                    borderRadius: BorderRadius.circular(3),
+                                  ),
+                                );
+                              }),
                             ),
                           ],
-                        ),
-                      ),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          IconButton(
-                            icon: Icon(
-                              Icons.repeat,
-                              color: state.repeat != ps.RepeatMode.none
-                                  ? context.skinColors.sakuraPinkLight
-                                  : context.skinColors.onSurfaceVariant,
-                            ),
-                            onPressed: () {
-                              final notifier = ref.read(
-                                playerProvider.notifier,
-                              );
-                              switch (state.repeat) {
-                                case ps.RepeatMode.none:
-                                  notifier.setRepeat(ps.RepeatMode.all);
-                                  break;
-                                case ps.RepeatMode.all:
-                                  notifier.setRepeat(ps.RepeatMode.one);
-                                  break;
-                                case ps.RepeatMode.one:
-                                  notifier.setRepeat(ps.RepeatMode.none);
-                                  break;
-                              }
-                            },
-                            tooltip: 'Repeat: ${state.repeat.name}',
-                          ),
-                          Consumer(
-                            builder: (context2, ref2, child2) {
-                              final isShuffle = ref2
-                                  .watch(playerProvider)
-                                  .shuffle;
-                              return IconButton(
-                                icon: Icon(
-                                  Icons.shuffle,
-                                  color: isShuffle
-                                      ? context.skinColors.sakuraPinkLight
-                                      : context.skinColors.onSurfaceVariant,
+
+                          const Spacer(),
+
+                          // Title / artist
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 32),
+                            child: Column(
+                              children: [
+                                Text(
+                                  state.mediaItem?.title ?? 'Unknown Track',
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.w700,
+                                    color: context.skinColors.onBackground,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.center,
                                 ),
-                                onPressed: () => ref2
-                                    .read(playerProvider.notifier)
-                                    .setShuffle(!isShuffle),
-                                tooltip: 'Shuffle',
-                              );
-                            },
-                          ),
-                          // The transport trio carries the spring hover/press motion
-                          // (see SpringInteraction); the surrounding secondary
-                          // controls are deliberately left plain so the primary
-                          // actions stay the ones that respond.
-                          SpringInteraction(
-                            child: IconButton(
-                              icon: Icon(
-                                Icons.skip_previous,
-                                size: 36,
-                                color: context.skinColors.onSurface,
-                              ),
-                              onPressed: () =>
-                                  ref.read(playerProvider.notifier).previous(),
+                                const SizedBox(height: 4),
+                                Text(
+                                  state.mediaItem?.artist ?? '',
+                                  style: TextStyle(
+                                    fontSize: 15,
+                                    color: context.skinColors.onSurfaceVariant,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  textAlign: TextAlign.center,
+                                ),
+                              ],
                             ),
                           ),
-                          // Play / Pause button
-                          SpringInteraction(
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: context.skinColors.sakuraPink,
-                                shape: BoxShape.circle,
-                              ),
-                              child: IconButton(
-                                icon: Icon(
-                                  isBuffering
-                                      ? Icons.play_arrow_rounded
-                                      : (isPlaying
-                                            ? Icons.pause_rounded
-                                            : Icons.play_arrow_rounded),
-                                  size: 36,
-                                  color: Colors.white,
-                                ),
-                                onPressed: isBuffering
-                                    ? null
-                                    : () => ref
-                                          .read(playerProvider.notifier)
-                                          .togglePlayPause(),
-                              ),
-                            ),
-                          ),
-                          SpringInteraction(
-                            child: IconButton(
-                              icon: Icon(
-                                Icons.skip_next,
-                                size: 36,
-                                color: context.skinColors.onSurface,
-                              ),
-                              onPressed: () =>
-                                  ref.read(playerProvider.notifier).next(),
-                            ),
-                          ),
-                          // Speed control button
-                          Consumer(
-                            builder: (context, ref, _) {
-                              final speed = ref.watch(speedNotifierProvider);
-                              return TextButton(
-                                onPressed: () => _showSpeedSheet(context, ref),
-                                child: Text(
-                                  '$speed×',
-                                  style: const TextStyle(fontSize: 14),
-                                ),
-                              );
-                            },
-                          ),
-                          // Sleep timer button
-                          Consumer(
-                            builder: (context, ref, _) {
-                              final timerState = ref.watch(sleepTimerProvider);
-                              final active = timerState.active;
-                              return IconButton(
-                                icon: Icon(
-                                  Icons.bedtime,
-                                  color: active
-                                      ? context.skinColors.sakuraPinkLight
-                                      : context.skinColors.onSurfaceVariant,
-                                ),
-                                tooltip: 'Sleep timer',
-                                onPressed: () =>
-                                    _showSleepTimerSheet(context, ref),
-                              );
-                            },
-                          ),
-                          // Favorite button — wrapped in Consumer so icon and onPressed
-                          // always use the same live trackId from the reactive ref.
-                          Consumer(
-                            builder: (context2, ref2, child2) {
-                              final trackId = ref2
-                                  .watch(playerProvider)
-                                  .mediaItem
-                                  ?.id;
-                              // Local (guest-mode) tracks have no server-side favorite state.
-                              final isLocal =
-                                  trackId?.startsWith(localTrackIdPrefix) ??
-                                  false;
-                              final isFav = (trackId != null && !isLocal)
-                                  ? ref2.watch(trackFavoriteProvider(trackId))
-                                  : false;
-                              return IconButton(
-                                icon: Icon(
-                                  isFav
-                                      ? Icons.favorite
-                                      : Icons.favorite_border,
-                                  color: isFav
-                                      ? context.skinColors.accentPink
-                                      : (trackId != null && !isLocal
-                                            ? context.skinColors.onSurface
-                                            : context
+
+                          const SizedBox(height: 24),
+
+                          // Seek bar and transport share one frosted pane, so they read as
+                          // a single control surface floating over the cover's colour field
+                          // instead of loose widgets scattered across it.
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 20),
+                            child: GlassPanel(
+                              padding: const EdgeInsets.fromLTRB(14, 6, 14, 2),
+                              child: _ControlDensity(
+                                compact: compactControls,
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    SliderTheme(
+                                      data: SliderTheme.of(context).copyWith(
+                                        trackHeight: 3,
+                                        thumbShape: const RoundSliderThumbShape(
+                                          enabledThumbRadius: 6,
+                                        ),
+                                        overlayShape:
+                                            const RoundSliderOverlayShape(
+                                              overlayRadius: 14,
+                                            ),
+                                      ),
+                                      child: Slider(
+                                        value: isBuffering
+                                            ? 0
+                                            : state.position.inMilliseconds
+                                                  .toDouble()
+                                                  .clamp(
+                                                    0,
+                                                    state
+                                                                .duration
+                                                                .inMilliseconds
+                                                                .toDouble() >
+                                                            0
+                                                        ? state
+                                                              .duration
+                                                              .inMilliseconds
+                                                              .toDouble()
+                                                        : 1,
+                                                  ),
+                                        max:
+                                            state.duration.inMilliseconds
+                                                    .toDouble() >
+                                                0
+                                            ? state.duration.inMilliseconds
+                                                  .toDouble()
+                                            : 1,
+                                        onChanged: isBuffering
+                                            ? null
+                                            : (v) => ref
+                                                  .read(playerProvider.notifier)
+                                                  .seekTo(
+                                                    Duration(
+                                                      milliseconds: v.toInt(),
+                                                    ),
+                                                  ),
+                                      ),
+                                    ),
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 4),
+                                      child: Row(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.spaceBetween,
+                                        children: [
+                                          Text(
+                                            _formatDuration(state.position),
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: context
                                                   .skinColors
-                                                  .onSurfaceVariant),
+                                                  .onSurfaceVariant,
+                                            ),
+                                          ),
+                                          Text(
+                                            _formatDuration(state.duration),
+                                            style: TextStyle(
+                                              fontSize: 12,
+                                              color: context
+                                                  .skinColors
+                                                  .onSurfaceVariant,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    // Three groups rather than eight equal slots.
+                                    // spaceEvenly gave play/prev/next exactly the same
+                                    // visual weight as the sleep timer, so the controls
+                                    // reached for constantly were impossible to find by
+                                    // muscle memory. Secondary controls hug the edges; the
+                                    // transport trio sits tight in the middle and stays
+                                    // centred however many secondaries each side has.
+                                    //
+                                    // Eight controls do not fit one row at phone
+                                    // widths — they overflowed under the old
+                                    // spaceEvenly too. Rather than dropping or
+                                    // clipping any, narrow windows shrink every
+                                    // button's footprint through the surrounding
+                                    // theme, which keeps the grouping identical
+                                    // at every size instead of maintaining two
+                                    // arrangements that can drift apart.
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.start,
+                                            children: [
+                                              IconButton(
+                                                icon: Icon(
+                                                  Icons.repeat,
+                                                  color:
+                                                      state.repeat !=
+                                                          ps.RepeatMode.none
+                                                      ? context
+                                                            .skinColors
+                                                            .sakuraPinkLight
+                                                      : context
+                                                            .skinColors
+                                                            .onSurfaceVariant,
+                                                ),
+                                                onPressed: () {
+                                                  final notifier = ref.read(
+                                                    playerProvider.notifier,
+                                                  );
+                                                  switch (state.repeat) {
+                                                    case ps.RepeatMode.none:
+                                                      notifier.setRepeat(
+                                                        ps.RepeatMode.all,
+                                                      );
+                                                      break;
+                                                    case ps.RepeatMode.all:
+                                                      notifier.setRepeat(
+                                                        ps.RepeatMode.one,
+                                                      );
+                                                      break;
+                                                    case ps.RepeatMode.one:
+                                                      notifier.setRepeat(
+                                                        ps.RepeatMode.none,
+                                                      );
+                                                      break;
+                                                  }
+                                                },
+                                                tooltip:
+                                                    'Repeat: ${state.repeat.name}',
+                                              ),
+                                              Consumer(
+                                                builder: (context2, ref2, child2) {
+                                                  final isShuffle = ref2
+                                                      .watch(playerProvider)
+                                                      .shuffle;
+                                                  return IconButton(
+                                                    icon: Icon(
+                                                      Icons.shuffle,
+                                                      color: isShuffle
+                                                          ? context
+                                                                .skinColors
+                                                                .sakuraPinkLight
+                                                          : context
+                                                                .skinColors
+                                                                .onSurfaceVariant,
+                                                    ),
+                                                    onPressed: () => ref2
+                                                        .read(
+                                                          playerProvider
+                                                              .notifier,
+                                                        )
+                                                        .setShuffle(!isShuffle),
+                                                    tooltip: 'Shuffle',
+                                                  );
+                                                },
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        // The transport trio carries the spring hover/press
+                                        // motion (see SpringInteraction); the surrounding
+                                        // secondary controls are deliberately left plain so
+                                        // the primary actions stay the ones that respond.
+                                        Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            SpringInteraction(
+                                              child: IconButton(
+                                                icon: Icon(
+                                                  Icons.skip_previous,
+                                                  size: 36,
+                                                  color: context
+                                                      .skinColors
+                                                      .onSurface,
+                                                ),
+                                                onPressed: () => ref
+                                                    .read(
+                                                      playerProvider.notifier,
+                                                    )
+                                                    .previous(),
+                                              ),
+                                            ),
+                                            // Play / Pause button
+                                            SpringInteraction(
+                                              child: Container(
+                                                decoration: BoxDecoration(
+                                                  color: context
+                                                      .skinColors
+                                                      .sakuraPink,
+                                                  shape: BoxShape.circle,
+                                                ),
+                                                child: IconButton(
+                                                  icon: Icon(
+                                                    isBuffering
+                                                        ? Icons
+                                                              .play_arrow_rounded
+                                                        : (isPlaying
+                                                              ? Icons
+                                                                    .pause_rounded
+                                                              : Icons
+                                                                    .play_arrow_rounded),
+                                                    size: 36,
+                                                    color: Colors.white,
+                                                  ),
+                                                  onPressed: isBuffering
+                                                      ? null
+                                                      : () => ref
+                                                            .read(
+                                                              playerProvider
+                                                                  .notifier,
+                                                            )
+                                                            .togglePlayPause(),
+                                                ),
+                                              ),
+                                            ),
+                                            SpringInteraction(
+                                              child: IconButton(
+                                                icon: Icon(
+                                                  Icons.skip_next,
+                                                  size: 36,
+                                                  color: context
+                                                      .skinColors
+                                                      .onSurface,
+                                                ),
+                                                onPressed: () => ref
+                                                    .read(
+                                                      playerProvider.notifier,
+                                                    )
+                                                    .next(),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                        Expanded(
+                                          child: Row(
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.end,
+                                            children: [
+                                              // Speed control button
+                                              Consumer(
+                                                builder: (context, ref, _) {
+                                                  final speed = ref.watch(
+                                                    speedNotifierProvider,
+                                                  );
+                                                  return TextButton(
+                                                    onPressed: () =>
+                                                        _showSpeedSheet(
+                                                          context,
+                                                          ref,
+                                                        ),
+                                                    child: Text(
+                                                      '$speed×',
+                                                      style: const TextStyle(
+                                                        fontSize: 14,
+                                                      ),
+                                                    ),
+                                                  );
+                                                },
+                                              ),
+                                              // Sleep timer button
+                                              Consumer(
+                                                builder: (context, ref, _) {
+                                                  final timerState = ref.watch(
+                                                    sleepTimerProvider,
+                                                  );
+                                                  final active =
+                                                      timerState.active;
+                                                  return IconButton(
+                                                    icon: Icon(
+                                                      Icons.bedtime,
+                                                      color: active
+                                                          ? context
+                                                                .skinColors
+                                                                .sakuraPinkLight
+                                                          : context
+                                                                .skinColors
+                                                                .onSurfaceVariant,
+                                                    ),
+                                                    tooltip: 'Sleep timer',
+                                                    onPressed: () =>
+                                                        _showSleepTimerSheet(
+                                                          context,
+                                                          ref,
+                                                        ),
+                                                  );
+                                                },
+                                              ),
+                                              // Favorite button — wrapped in Consumer so icon and onPressed
+                                              // always use the same live trackId from the reactive ref.
+                                              Consumer(
+                                                builder: (context2, ref2, child2) {
+                                                  final trackId = ref2
+                                                      .watch(playerProvider)
+                                                      .mediaItem
+                                                      ?.id;
+                                                  // Local (guest-mode) tracks have no server-side favorite state.
+                                                  final isLocal =
+                                                      trackId?.startsWith(
+                                                        localTrackIdPrefix,
+                                                      ) ??
+                                                      false;
+                                                  final isFav =
+                                                      (trackId != null &&
+                                                          !isLocal)
+                                                      ? ref2.watch(
+                                                          trackFavoriteProvider(
+                                                            trackId,
+                                                          ),
+                                                        )
+                                                      : false;
+                                                  return IconButton(
+                                                    icon: Icon(
+                                                      isFav
+                                                          ? Icons.favorite
+                                                          : Icons
+                                                                .favorite_border,
+                                                      color: isFav
+                                                          ? context
+                                                                .skinColors
+                                                                .accentPink
+                                                          : (trackId != null &&
+                                                                    !isLocal
+                                                                ? context
+                                                                      .skinColors
+                                                                      .onSurface
+                                                                : context
+                                                                      .skinColors
+                                                                      .onSurfaceVariant),
+                                                    ),
+                                                    onPressed:
+                                                        (trackId == null ||
+                                                            isLocal)
+                                                        ? null
+                                                        : () => ref2
+                                                              .read(
+                                                                trackFavoriteProvider(
+                                                                  trackId,
+                                                                ).notifier,
+                                                              )
+                                                              .toggle(),
+                                                    tooltip: 'Favorite',
+                                                  );
+                                                },
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
                                 ),
-                                onPressed: (trackId == null || isLocal)
-                                    ? null
-                                    : () => ref2
-                                          .read(
-                                            trackFavoriteProvider(
-                                              trackId,
-                                            ).notifier,
-                                          )
-                                          .toggle(),
-                                tooltip: 'Favorite',
-                              );
-                            },
+                              ),
+                            ),
                           ),
+
+                          const SizedBox(height: 32),
                         ],
                       ),
-                    ],
-                  ),
+                    ),
+                    if (splitPanel != _SidePanel.none)
+                      SizedBox(
+                        width: 380,
+                        child: _PlayerSidePanel(
+                          panel: splitPanel,
+                          trackId: trackId,
+                          position: position,
+                          onClose: () =>
+                              setState(() => _sidePanel = _SidePanel.none),
+                        ),
+                      ),
+                  ],
                 ),
               ),
-
-              const SizedBox(height: 32),
             ],
           ),
         ),
@@ -673,6 +855,48 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
     );
   }
 
+  /// The cover tile. Shared by the wide layout (which shows it alone) and the
+  /// narrow one (which pages between it and the lyrics).
+  Widget _artworkTile(BuildContext context, ps.PlayerState state) => Container(
+    width: 280,
+    height: 280,
+    decoration: BoxDecoration(
+      color: context.skinColors.surfaceVariant,
+      borderRadius: BorderRadius.circular(16),
+      boxShadow: [
+        BoxShadow(
+          color: context.skinColors.sakuraPink.withValues(alpha: 0.15),
+          blurRadius: 32,
+          offset: const Offset(0, 8),
+        ),
+      ],
+    ),
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: _FullPlayerArtwork(
+        albumId: state.mediaItem?.extras?['albumId'] as String?,
+        localArtUri: state.mediaItem?.artUri,
+      ),
+    ),
+  );
+
+  /// Opens [panel], or closes it if it is already the one showing — the
+  /// button doubles as the way out, so the panel never needs its own
+  /// dismiss affordance to be reachable.
+  void _togglePanel(_SidePanel panel) => setState(
+    () => _sidePanel = _sidePanel == panel ? _SidePanel.none : panel,
+  );
+
+  /// Whether macOS will paint its traffic lights over this screen's top-left
+  /// corner. False on every other platform, and false when the user has opted
+  /// into the OS title bar — then the lights live in a real title bar above
+  /// the content instead of on top of it.
+  static bool _needsMacTrafficLightGutter(WidgetRef ref) {
+    if (!DesktopIntegration.isDesktop) return false;
+    if (defaultTargetPlatform != TargetPlatform.macOS) return false;
+    return !ref.watch(systemTitleBarProvider);
+  }
+
   void _showQueueSheet(BuildContext context, WidgetRef ref) {
     showModalBottomSheet(
       context: context,
@@ -709,78 +933,7 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                   ),
                 ),
               ),
-              Expanded(
-                child: Consumer(
-                  builder: (context2, ref2, child2) {
-                    final playerState = ref2.watch(playerProvider);
-                    final queue = playerState.queue;
-                    final currentIndex = playerState.currentIndex;
-                    return ReorderableListView.builder(
-                      scrollController: controller,
-                      itemCount: queue.length,
-                      onReorderItem: (oldIdx, newIdx) {
-                        ref2
-                            .read(playerProvider.notifier)
-                            .reorderQueue(oldIdx, newIdx);
-                      },
-                      itemBuilder: (_, i) {
-                        final item = queue[i];
-                        final isCurrent = i == currentIndex;
-                        return ListTile(
-                          key: ValueKey(item.id),
-                          leading: Icon(
-                            Icons.music_note,
-                            color: isCurrent
-                                ? context.skinColors.sakuraPinkLight
-                                : context.skinColors.onSurfaceVariant,
-                          ),
-                          title: Text(
-                            item.title,
-                            style: TextStyle(
-                              color: isCurrent
-                                  ? context.skinColors.sakuraPinkLight
-                                  : context.skinColors.onSurface,
-                              fontWeight: isCurrent
-                                  ? FontWeight.w600
-                                  : FontWeight.normal,
-                            ),
-                          ),
-                          subtitle: Text(
-                            item.artist ?? '',
-                            style: TextStyle(
-                              color: context.skinColors.onSurfaceVariant,
-                            ),
-                          ),
-                          trailing: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (isCurrent && playerState.isPlaying)
-                                Icon(
-                                  Icons.equalizer,
-                                  color: context.skinColors.sakuraPinkLight,
-                                  size: 20,
-                                ),
-                              Icon(
-                                Icons.drag_handle,
-                                color: context.skinColors.onSurfaceVariant,
-                                size: 20,
-                              ),
-                            ],
-                          ),
-                          onTap: () {
-                            ref2
-                                .read(playerProvider.notifier)
-                                .playQueue(
-                                  queue.map((m) => m.id).toList(),
-                                  initialIndex: i,
-                                );
-                          },
-                        );
-                      },
-                    );
-                  },
-                ),
-              ),
+              Expanded(child: _QueueList(scrollController: controller)),
             ],
           ),
         ),
@@ -1088,6 +1241,191 @@ class _HiResBadge extends StatelessWidget {
           letterSpacing: 0.5,
           color: Colors.white,
         ),
+      ),
+    );
+  }
+}
+
+/// Lyrics or the queue, docked beside the player on wide windows.
+///
+/// Frosted rather than opaque so the cover's colour field still reads
+/// continuously across the whole window — an opaque panel would cut the
+/// backdrop in half and undo v5.26.0.
+class _PlayerSidePanel extends StatelessWidget {
+  const _PlayerSidePanel({
+    required this.panel,
+    required this.trackId,
+    required this.position,
+    required this.onClose,
+  });
+
+  final _SidePanel panel;
+  final String trackId;
+  final Duration position;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(0, 8, 16, 16),
+      child: GlassPanel(
+        padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                const SizedBox(width: 8),
+                Text(
+                  panel == _SidePanel.lyrics ? '歌词' : '播放队列',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: context.skinColors.onSurface,
+                  ),
+                ),
+                const Spacer(),
+                IconButton(
+                  icon: Icon(
+                    Icons.close,
+                    size: 18,
+                    color: context.skinColors.onSurfaceVariant,
+                  ),
+                  tooltip: '关闭',
+                  onPressed: onClose,
+                ),
+              ],
+            ),
+            Expanded(
+              child: switch (panel) {
+                _SidePanel.lyrics => _LyricsBody(
+                  trackId: trackId,
+                  position: position,
+                ),
+                _SidePanel.queue => const _QueueList(),
+                _SidePanel.none => const SizedBox.shrink(),
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Reorderable play queue, shared by the bottom sheet (narrow windows) and
+/// the docked side panel (wide ones) so the two can't drift apart.
+class _QueueList extends ConsumerWidget {
+  const _QueueList({this.scrollController});
+
+  /// Supplied by the DraggableScrollableSheet so dragging the sheet and
+  /// scrolling the list stay one gesture; null when docked.
+  final ScrollController? scrollController;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final playerState = ref.watch(playerProvider);
+    final queue = playerState.queue;
+    final currentIndex = playerState.currentIndex;
+
+    return ReorderableListView.builder(
+      scrollController: scrollController,
+      itemCount: queue.length,
+      onReorderItem: (oldIdx, newIdx) {
+        ref.read(playerProvider.notifier).reorderQueue(oldIdx, newIdx);
+      },
+      itemBuilder: (_, i) {
+        final item = queue[i];
+        final isCurrent = i == currentIndex;
+        return ListTile(
+          key: ValueKey(item.id),
+          leading: Icon(
+            Icons.music_note,
+            color: isCurrent
+                ? context.skinColors.sakuraPinkLight
+                : context.skinColors.onSurfaceVariant,
+          ),
+          title: Text(
+            item.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: isCurrent
+                  ? context.skinColors.sakuraPinkLight
+                  : context.skinColors.onSurface,
+              fontWeight: isCurrent ? FontWeight.w600 : FontWeight.normal,
+            ),
+          ),
+          subtitle: Text(
+            item.artist ?? '',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(color: context.skinColors.onSurfaceVariant),
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (isCurrent && playerState.isPlaying)
+                Icon(
+                  Icons.equalizer,
+                  color: context.skinColors.sakuraPinkLight,
+                  size: 20,
+                ),
+              Icon(
+                Icons.drag_handle,
+                color: context.skinColors.onSurfaceVariant,
+                size: 20,
+              ),
+            ],
+          ),
+          onTap: () => ref
+              .read(playerProvider.notifier)
+              .playQueue(queue.map((m) => m.id).toList(), initialIndex: i),
+        );
+      },
+    );
+  }
+}
+
+/// Shrinks every button inside the transport panel when the window is too
+/// narrow for them at full size.
+///
+/// A theme rather than a second arrangement of the same controls: the
+/// grouping then stays byte-identical at every width, and there is no
+/// alternate layout to keep in sync when a control is added or removed.
+class _ControlDensity extends StatelessWidget {
+  const _ControlDensity({required this.compact, required this.child});
+
+  final bool compact;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!compact) return child;
+    const dense = BoxConstraints(minWidth: 34, minHeight: 34);
+    return IconButtonTheme(
+      data: IconButtonThemeData(
+        style:
+            IconButton.styleFrom(
+              padding: EdgeInsets.zero,
+              minimumSize: const Size(34, 34),
+              visualDensity: VisualDensity.compact,
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ).copyWith(
+              // styleFrom has no constraints slot, and without it IconButton keeps
+              // its 48dp floor no matter what minimumSize says.
+              fixedSize: WidgetStatePropertyAll(dense.biggest),
+            ),
+      ),
+      child: TextButtonTheme(
+        data: TextButtonThemeData(
+          style: TextButton.styleFrom(
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            minimumSize: const Size(34, 34),
+            visualDensity: VisualDensity.compact,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+        ),
+        child: child,
       ),
     );
   }

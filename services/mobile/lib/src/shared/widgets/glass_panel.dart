@@ -39,11 +39,15 @@ class GlassPanel extends StatelessWidget {
       borderRadius: radius,
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: blurSigma, sigmaY: blurSigma),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: context.skinColors.surface,
+        // Material, not a DecoratedBox: ListTile and friends paint their
+        // background and ink onto the nearest Material ancestor, so a
+        // coloured box in between swallows both. Exactly the defect the
+        // sidebar had in v5.22.0, and panels are full of list rows.
+        child: Material(
+          color: context.skinColors.surface,
+          shape: RoundedRectangleBorder(
             borderRadius: radius,
-            border: Border.all(
+            side: BorderSide(
               color: context.skinColors.outlineVariant,
               width: 0.8,
             ),
