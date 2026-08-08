@@ -1,17 +1,21 @@
 // cover_palette_test.dart
 //
-// Covers v5.24.0's cover-art colour extraction: the swatch fallback order,
-// the provider's null paths (no artwork / unreadable file), and the fact
-// that LyricsBackground degrades to its skin colour rather than rendering an
-// unscrimmed image whenever extraction yields nothing.
+// Covers cover-art colour extraction (v5.24.0) and what v5.26.0 does with it:
+// the two opposite swatch preferences (backdrop vs accent), the provider's
+// null paths, and the fact that LyricsBackground only takes over the skin
+// when there is actually a cover to derive it from.
 //
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:inori_music/src/catalog/artwork_provider.dart';
 import 'package:inori_music/src/catalog/cover_palette_provider.dart';
 import 'package:inori_music/src/lyrics/lyrics_background.dart';
+import 'package:inori_music/src/shared/theme/artwork_overlay_skin.dart';
 import 'package:inori_music/src/shared/theme/skin_definition.dart';
+import 'package:inori_music/src/shared/theme/skin_provider.dart';
+import 'package:inori_music/src/shared/widgets/cover_fluid_background.dart';
 
 void main() {
   group('CoverPalette.backdropFor', () {
@@ -104,88 +108,161 @@ void main() {
     );
   });
 
-  group('LyricsBackground scrim', () {
-    LinearGradient gradientOf(WidgetTester tester) {
-      final container = tester.widget<AnimatedContainer>(
-        find.byType(AnimatedContainer),
+  group('CoverPalette.accentOverArtwork', () {
+    const dominant = Color(0xFF102030);
+    const lightMuted = Color(0xFFE0D0E0);
+    const darkVibrant = Color(0xFF400020);
+    const lightVibrant = Color(0xFFFF80C0);
+
+    test('prefers a vibrant swatch, unlike the backdrop colour', () {
+      // The mirror image of backdropFor: this colour lands on controls, where
+      // popping off the artwork is the whole point.
+      const palette = CoverPalette(
+        dominant: dominant,
+        lightMuted: lightMuted,
+        darkVibrant: darkVibrant,
+        lightVibrant: lightVibrant,
       );
-      return (container.decoration! as BoxDecoration).gradient!
-          as LinearGradient;
-    }
 
-    Widget buildApp({CoverPalette? palette}) => ProviderScope(
-      overrides: [
-        coverPaletteProvider.overrideWith((ref, source) async => palette),
-      ],
-      child: const MaterialApp(
-        home: LyricsBackground(
-          albumId: 'album-1',
-          localArtUri: null,
-          child: SizedBox.shrink(),
-        ),
-      ),
-    );
-
-    testWidgets('uses the extracted colour once a palette resolves', (
-      tester,
-    ) async {
-      const extracted = Color(0xFF3A1F2B);
-      await tester.pumpWidget(
-        buildApp(palette: const CoverPalette(dominant: extracted)),
+      expect(palette.accentOverArtwork, lightVibrant);
+      expect(
+        palette.backdropFor(Brightness.dark),
+        isNot(palette.accentOverArtwork),
+        reason: 'Backdrop and accent must not converge on the same swatch',
       );
-      await tester.pumpAndSettle();
-
-      expect(gradientOf(tester).colors, [
-        extracted.withValues(alpha: 0.55),
-        extracted.withValues(alpha: 0.82),
-      ]);
     });
 
-    testWidgets('falls back to the skin background when extraction yields '
-        'nothing', (tester) async {
-      await tester.pumpWidget(buildApp(palette: null));
-      await tester.pumpAndSettle();
-
-      final skinBackground = SkinDefinition.sakuraDusk.colors.background;
-      expect(gradientOf(tester).colors, [
-        skinBackground.withValues(alpha: 0.55),
-        skinBackground.withValues(alpha: 0.82),
-      ]);
+    test('degrades vibrant -> muted -> dominant', () {
+      expect(
+        const CoverPalette(
+          dominant: dominant,
+          darkVibrant: darkVibrant,
+        ).accentOverArtwork,
+        darkVibrant,
+      );
+      expect(
+        const CoverPalette(
+          dominant: dominant,
+          lightMuted: lightMuted,
+        ).accentOverArtwork,
+        lightMuted,
+      );
+      expect(
+        const CoverPalette(dominant: dominant).accentOverArtwork,
+        dominant,
+      );
     });
+  });
 
-    testWidgets('scrims while the palette is still resolving', (tester) async {
-      // The first frame must already be scrimmed — otherwise lyrics would sit
-      // on raw artwork until extraction lands.
-      await tester.pumpWidget(
+  group('LyricsBackground', () {
+    // pump() rather than pumpAndSettle() throughout: once a cover resolves,
+    // CoverFluidBackground runs two repeat() controllers that never settle,
+    // so pumpAndSettle would simply time out.
+    Widget buildApp({String? artworkUrl, CoverPalette? palette}) =>
         ProviderScope(
           overrides: [
-            coverPaletteProvider.overrideWith((ref, source) {
-              return Future<CoverPalette?>.delayed(
-                const Duration(seconds: 1),
-                () => const CoverPalette(dominant: Color(0xFF3A1F2B)),
-              );
-            }),
+            artworkUrlProvider.overrideWith(
+              () => _StubArtworkNotifier(artworkUrl),
+            ),
+            coverPaletteProvider.overrideWith((ref, source) async => palette),
           ],
           child: const MaterialApp(
             home: LyricsBackground(
               albumId: 'album-1',
               localArtUri: null,
-              child: SizedBox.shrink(),
+              child: _SkinProbe(),
             ),
+          ),
+        );
+
+    testWidgets('renders no artwork backdrop when there is no cover', (
+      tester,
+    ) async {
+      await tester.pumpWidget(buildApp(artworkUrl: null));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(CoverFluidBackground), findsNothing);
+      expect(
+        _SkinProbe.captured!.onSurface,
+        SkinDefinition.sakuraDusk.colors.onSurface,
+        reason: "With no artwork the user's real skin must be left alone",
+      );
+    });
+
+    testWidgets('a cover switches content to the overlay skin', (tester) async {
+      await tester.pumpWidget(buildApp(artworkUrl: 'https://example/a.jpg'));
+      await tester.pump();
+      await tester.pump();
+
+      expect(find.byType(CoverFluidBackground), findsOneWidget);
+      expect(
+        _SkinProbe.captured!.onSurface,
+        Colors.white,
+        reason: 'Dark ink over a saturated moving field is unreadable',
+      );
+      expect(
+        _SkinProbe.captured!.background,
+        Colors.transparent,
+        reason: 'An opaque background would hide the backdrop underneath',
+      );
+    });
+
+    testWidgets('the accent follows the extracted palette', (tester) async {
+      const vibrant = Color(0xFFFF80C0);
+      await tester.pumpWidget(
+        buildApp(
+          artworkUrl: 'https://example/a.jpg',
+          palette: const CoverPalette(
+            dominant: Color(0xFF102030),
+            lightVibrant: vibrant,
           ),
         ),
       );
       await tester.pump();
+      await tester.pump();
 
-      final skinBackground = SkinDefinition.sakuraDusk.colors.background;
-      expect(
-        gradientOf(tester).colors.first,
-        skinBackground.withValues(alpha: 0.55),
+      expect(_SkinProbe.captured!.sakuraPink, vibrant);
+    });
+
+    testWidgets('the accent holds at the skin colour until a palette lands', (
+      tester,
+    ) async {
+      // Nothing may flash through an uncoloured frame while extraction runs.
+      await tester.pumpWidget(
+        buildApp(artworkUrl: 'https://example/a.jpg', palette: null),
       );
+      await tester.pump();
+      await tester.pump();
 
-      // Let the delayed future complete so the test doesn't leave a pending timer.
-      await tester.pump(const Duration(seconds: 1));
-      await tester.pumpAndSettle();
+      expect(
+        _SkinProbe.captured!.sakuraPink,
+        SkinDefinition.sakuraDusk.colors.sakuraPink,
+      );
     });
   });
+}
+
+/// Stubs the artwork URL lookup so tests can drive the "has a cover" branch
+/// without a network round trip.
+class _StubArtworkNotifier extends ArtworkUrlNotifier {
+  _StubArtworkNotifier(this._url);
+  final String? _url;
+
+  @override
+  Future<String?> build(String albumId) async => _url;
+}
+
+/// Captures whatever SkinColors its position in the tree resolves to, so a
+/// test can assert on the skin LyricsBackground handed down rather than on
+/// rendered pixels.
+class _SkinProbe extends StatelessWidget {
+  const _SkinProbe();
+
+  static SkinColors? captured;
+
+  @override
+  Widget build(BuildContext context) {
+    captured = context.skinColors;
+    return const SizedBox.shrink();
+  }
 }

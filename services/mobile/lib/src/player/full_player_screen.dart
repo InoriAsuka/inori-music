@@ -22,6 +22,7 @@ import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/player/karaoke_screen.dart';
 import 'package:inori_music/src/player/player_state.dart' as ps;
 import 'package:inori_music/src/shared/theme/skin_provider.dart';
+import 'package:inori_music/src/shared/widgets/glass_panel.dart';
 import 'package:inori_music/src/shared/widgets/spring_interaction.dart';
 
 /// Full-screen player overlay with progress bar, controls, and queue sheet.
@@ -58,423 +59,452 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
 
     return Scaffold(
       backgroundColor: context.skinColors.background,
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Top bar
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                children: [
-                  IconButton(
-                    icon: Icon(
-                      Icons.keyboard_arrow_down,
-                      size: 32,
-                      color: context.skinColors.onBackground,
-                    ),
-                    tooltip: 'Close player',
-                    onPressed: () => Navigator.of(context).maybePop(),
-                  ),
-                  Expanded(
-                    child: Text(
-                      'Now Playing',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: context.skinColors.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                  IconButton(
-                    icon: Icon(
-                      Icons.queue_music,
-                      color: context.skinColors.onSurfaceVariant,
-                    ),
-                    tooltip: 'Queue',
-                    onPressed: () => _showQueueSheet(context, ref),
-                  ),
-                  IconButton(
-                    icon: Icon(
-                      Icons.mic_external_on,
-                      color: context.skinColors.onSurfaceVariant,
-                    ),
-                    tooltip: 'Karaoke',
-                    // Only gated on "is anything playing at all". It used to
-                    // also require a local track to carry an embedded lyrics
-                    // tag, which silently disabled the button for every
-                    // instrumental / untagged local file — a dead control with
-                    // no explanation, and the only way into the lyrics screen.
-                    // KaraokeScreen already renders "No lyrics available" over
-                    // the artwork backdrop, which is exactly what a server
-                    // track with no lyrics has always done.
-                    onPressed: trackId.isEmpty
-                        ? null
-                        : () => Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => const KaraokeScreen(),
-                              fullscreenDialog: true,
-                            ),
-                          ),
-                  ),
-                  // Technical detail (sample rate/bitrate/format) — only
-                  // meaningful for local files; the server catalog has no
-                  // equivalent metadata to show (out of scope, see
-                  // requirement.md v5.19.0).
-                  if (trackId.startsWith(localTrackIdPrefix))
+      // The whole player now sits on the cover-derived colour field, not just
+      // the lyrics tab inside it — the artwork drives the page's colour and
+      // the controls read as frosted panes over it. With no artwork this is a
+      // plain skin-coloured background and nothing below changes.
+      body: LyricsBackground(
+        albumId: state.mediaItem?.extras?['albumId'] as String?,
+        localArtUri: state.mediaItem?.artUri,
+        child: SafeArea(
+          child: Column(
+            children: [
+              // Top bar
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                child: Row(
+                  children: [
                     IconButton(
                       icon: Icon(
-                        Icons.info_outline,
+                        Icons.keyboard_arrow_down,
+                        size: 32,
+                        color: context.skinColors.onBackground,
+                      ),
+                      tooltip: 'Close player',
+                      onPressed: () => Navigator.of(context).maybePop(),
+                    ),
+                    Expanded(
+                      child: Text(
+                        'Now Playing',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: context.skinColors.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      icon: Icon(
+                        Icons.queue_music,
                         color: context.skinColors.onSurfaceVariant,
                       ),
-                      tooltip: '详情',
-                      onPressed: () => _showLocalTrackDetails(context, trackId),
+                      tooltip: 'Queue',
+                      onPressed: () => _showQueueSheet(context, ref),
                     ),
-                  // EQ icon button
-                  Consumer(
-                    builder: (ctx, ref2, _) {
-                      final eqEnabled = ref2.watch(eqNotifierProvider).enabled;
-                      return IconButton(
-                        icon: Icon(
-                          Icons.equalizer,
-                          color: eqEnabled
-                              ? context.skinColors.sakuraPinkLight
-                              : context.skinColors.onSurfaceVariant,
-                        ),
-                        tooltip: 'Equalizer',
-                        onPressed: () => ref2
-                            .read(eqNotifierProvider.notifier)
-                            .setEnabled(!eqEnabled),
-                      );
-                    },
-                  ),
-                ],
-              ),
-            ),
-
-            const Spacer(),
-
-            // Artwork / Lyrics PageView
-            SizedBox(
-              width: 280,
-              height: 280,
-              child: PageView(
-                controller: _pageController,
-                onPageChanged: (i) => setState(() => _pageIndex = i),
-                children: [
-                  // Page 0: Artwork
-                  Container(
-                    width: 280,
-                    height: 280,
-                    decoration: BoxDecoration(
-                      color: context.skinColors.surfaceVariant,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: context.skinColors.sakuraPink.withValues(
-                            alpha: 0.15,
-                          ),
-                          blurRadius: 32,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(16),
-                      child: _FullPlayerArtwork(
-                        albumId: state.mediaItem?.extras?['albumId'] as String?,
-                        localArtUri: state.mediaItem?.artUri,
+                    IconButton(
+                      icon: Icon(
+                        Icons.mic_external_on,
+                        color: context.skinColors.onSurfaceVariant,
                       ),
-                    ),
-                  ),
-                  // Page 1: Lyrics
-                  _LyricsPage(
-                    trackId: trackId,
-                    position: position,
-                    albumId: state.mediaItem?.extras?['albumId'] as String?,
-                    localArtUri: state.mediaItem?.artUri,
-                  ),
-                ],
-              ),
-            ),
-
-            // Page indicator
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(2, (i) {
-                return Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 3),
-                  width: _pageIndex == i ? 10 : 6,
-                  height: 6,
-                  decoration: BoxDecoration(
-                    color: _pageIndex == i
-                        ? context.skinColors.sakuraPink
-                        : context.skinColors.onSurfaceVariant.withValues(
-                            alpha: 0.4,
-                          ),
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                );
-              }),
-            ),
-
-            const Spacer(),
-
-            // Title / artist
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: Column(
-                children: [
-                  Text(
-                    state.mediaItem?.title ?? 'Unknown Track',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w700,
-                      color: context.skinColors.onBackground,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    state.mediaItem?.artist ?? '',
-                    style: TextStyle(
-                      fontSize: 15,
-                      color: context.skinColors.onSurfaceVariant,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 24),
-
-            // Seek bar
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: Column(
-                children: [
-                  SliderTheme(
-                    data: SliderTheme.of(context).copyWith(
-                      trackHeight: 3,
-                      thumbShape: const RoundSliderThumbShape(
-                        enabledThumbRadius: 6,
-                      ),
-                      overlayShape: const RoundSliderOverlayShape(
-                        overlayRadius: 14,
-                      ),
-                    ),
-                    child: Slider(
-                      value: isBuffering
-                          ? 0
-                          : state.position.inMilliseconds.toDouble().clamp(
-                              0,
-                              state.duration.inMilliseconds.toDouble() > 0
-                                  ? state.duration.inMilliseconds.toDouble()
-                                  : 1,
-                            ),
-                      max: state.duration.inMilliseconds.toDouble() > 0
-                          ? state.duration.inMilliseconds.toDouble()
-                          : 1,
-                      onChanged: isBuffering
+                      tooltip: 'Karaoke',
+                      // Only gated on "is anything playing at all". It used to
+                      // also require a local track to carry an embedded lyrics
+                      // tag, which silently disabled the button for every
+                      // instrumental / untagged local file — a dead control with
+                      // no explanation, and the only way into the lyrics screen.
+                      // KaraokeScreen already renders "No lyrics available" over
+                      // the artwork backdrop, which is exactly what a server
+                      // track with no lyrics has always done.
+                      onPressed: trackId.isEmpty
                           ? null
-                          : (v) => ref
-                                .read(playerProvider.notifier)
-                                .seekTo(Duration(milliseconds: v.toInt())),
+                          : () => Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => const KaraokeScreen(),
+                                fullscreenDialog: true,
+                              ),
+                            ),
                     ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          _formatDuration(state.position),
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: context.skinColors.onSurfaceVariant,
-                          ),
-                        ),
-                        Text(
-                          _formatDuration(state.duration),
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: context.skinColors.onSurfaceVariant,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Controls row
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  IconButton(
-                    icon: Icon(
-                      Icons.repeat,
-                      color: state.repeat != ps.RepeatMode.none
-                          ? context.skinColors.sakuraPinkLight
-                          : context.skinColors.onSurfaceVariant,
-                    ),
-                    onPressed: () {
-                      final notifier = ref.read(playerProvider.notifier);
-                      switch (state.repeat) {
-                        case ps.RepeatMode.none:
-                          notifier.setRepeat(ps.RepeatMode.all);
-                          break;
-                        case ps.RepeatMode.all:
-                          notifier.setRepeat(ps.RepeatMode.one);
-                          break;
-                        case ps.RepeatMode.one:
-                          notifier.setRepeat(ps.RepeatMode.none);
-                          break;
-                      }
-                    },
-                    tooltip: 'Repeat: ${state.repeat.name}',
-                  ),
-                  Consumer(
-                    builder: (context2, ref2, child2) {
-                      final isShuffle = ref2.watch(playerProvider).shuffle;
-                      return IconButton(
+                    // Technical detail (sample rate/bitrate/format) — only
+                    // meaningful for local files; the server catalog has no
+                    // equivalent metadata to show (out of scope, see
+                    // requirement.md v5.19.0).
+                    if (trackId.startsWith(localTrackIdPrefix))
+                      IconButton(
                         icon: Icon(
-                          Icons.shuffle,
-                          color: isShuffle
-                              ? context.skinColors.sakuraPinkLight
-                              : context.skinColors.onSurfaceVariant,
+                          Icons.info_outline,
+                          color: context.skinColors.onSurfaceVariant,
                         ),
-                        onPressed: () => ref2
-                            .read(playerProvider.notifier)
-                            .setShuffle(!isShuffle),
-                        tooltip: 'Shuffle',
-                      );
-                    },
-                  ),
-                  // The transport trio carries the spring hover/press motion
-                  // (see SpringInteraction); the surrounding secondary
-                  // controls are deliberately left plain so the primary
-                  // actions stay the ones that respond.
-                  SpringInteraction(
-                    child: IconButton(
-                      icon: Icon(
-                        Icons.skip_previous,
-                        size: 36,
-                        color: context.skinColors.onSurface,
+                        tooltip: '详情',
+                        onPressed: () =>
+                            _showLocalTrackDetails(context, trackId),
                       ),
-                      onPressed: () =>
-                          ref.read(playerProvider.notifier).previous(),
+                    // EQ icon button
+                    Consumer(
+                      builder: (ctx, ref2, _) {
+                        final eqEnabled = ref2
+                            .watch(eqNotifierProvider)
+                            .enabled;
+                        return IconButton(
+                          icon: Icon(
+                            Icons.equalizer,
+                            color: eqEnabled
+                                ? context.skinColors.sakuraPinkLight
+                                : context.skinColors.onSurfaceVariant,
+                          ),
+                          tooltip: 'Equalizer',
+                          onPressed: () => ref2
+                              .read(eqNotifierProvider.notifier)
+                              .setEnabled(!eqEnabled),
+                        );
+                      },
                     ),
-                  ),
-                  // Play / Pause button
-                  SpringInteraction(
-                    child: Container(
+                  ],
+                ),
+              ),
+
+              const Spacer(),
+
+              // Artwork / Lyrics PageView
+              SizedBox(
+                width: 280,
+                height: 280,
+                child: PageView(
+                  controller: _pageController,
+                  onPageChanged: (i) => setState(() => _pageIndex = i),
+                  children: [
+                    // Page 0: Artwork
+                    Container(
+                      width: 280,
+                      height: 280,
                       decoration: BoxDecoration(
-                        color: context.skinColors.sakuraPink,
-                        shape: BoxShape.circle,
+                        color: context.skinColors.surfaceVariant,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: context.skinColors.sakuraPink.withValues(
+                              alpha: 0.15,
+                            ),
+                            blurRadius: 32,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
                       ),
-                      child: IconButton(
-                        icon: Icon(
-                          isBuffering
-                              ? Icons.play_arrow_rounded
-                              : (isPlaying
-                                    ? Icons.pause_rounded
-                                    : Icons.play_arrow_rounded),
-                          size: 36,
-                          color: Colors.white,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: _FullPlayerArtwork(
+                          albumId:
+                              state.mediaItem?.extras?['albumId'] as String?,
+                          localArtUri: state.mediaItem?.artUri,
                         ),
-                        onPressed: isBuffering
-                            ? null
-                            : () => ref
-                                  .read(playerProvider.notifier)
-                                  .togglePlayPause(),
                       ),
                     ),
-                  ),
-                  SpringInteraction(
-                    child: IconButton(
-                      icon: Icon(
-                        Icons.skip_next,
-                        size: 36,
-                        color: context.skinColors.onSurface,
-                      ),
-                      onPressed: () => ref.read(playerProvider.notifier).next(),
-                    ),
-                  ),
-                  // Speed control button
-                  Consumer(
-                    builder: (context, ref, _) {
-                      final speed = ref.watch(speedNotifierProvider);
-                      return TextButton(
-                        onPressed: () => _showSpeedSheet(context, ref),
-                        child: Text(
-                          '$speed×',
-                          style: const TextStyle(fontSize: 14),
-                        ),
-                      );
-                    },
-                  ),
-                  // Sleep timer button
-                  Consumer(
-                    builder: (context, ref, _) {
-                      final timerState = ref.watch(sleepTimerProvider);
-                      final active = timerState.active;
-                      return IconButton(
-                        icon: Icon(
-                          Icons.bedtime,
-                          color: active
-                              ? context.skinColors.sakuraPinkLight
-                              : context.skinColors.onSurfaceVariant,
-                        ),
-                        tooltip: 'Sleep timer',
-                        onPressed: () => _showSleepTimerSheet(context, ref),
-                      );
-                    },
-                  ),
-                  // Favorite button — wrapped in Consumer so icon and onPressed
-                  // always use the same live trackId from the reactive ref.
-                  Consumer(
-                    builder: (context2, ref2, child2) {
-                      final trackId = ref2.watch(playerProvider).mediaItem?.id;
-                      // Local (guest-mode) tracks have no server-side favorite state.
-                      final isLocal =
-                          trackId?.startsWith(localTrackIdPrefix) ?? false;
-                      final isFav = (trackId != null && !isLocal)
-                          ? ref2.watch(trackFavoriteProvider(trackId))
-                          : false;
-                      return IconButton(
-                        icon: Icon(
-                          isFav ? Icons.favorite : Icons.favorite_border,
-                          color: isFav
-                              ? context.skinColors.accentPink
-                              : (trackId != null && !isLocal
-                                    ? context.skinColors.onSurface
-                                    : context.skinColors.onSurfaceVariant),
-                        ),
-                        onPressed: (trackId == null || isLocal)
-                            ? null
-                            : () => ref2
-                                  .read(trackFavoriteProvider(trackId).notifier)
-                                  .toggle(),
-                        tooltip: 'Favorite',
-                      );
-                    },
-                  ),
-                ],
+                    // Page 1: Lyrics
+                    _LyricsPage(trackId: trackId, position: position),
+                  ],
+                ),
               ),
-            ),
 
-            const SizedBox(height: 32),
-          ],
+              // Page indicator
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: List.generate(2, (i) {
+                  return Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 3),
+                    width: _pageIndex == i ? 10 : 6,
+                    height: 6,
+                    decoration: BoxDecoration(
+                      color: _pageIndex == i
+                          ? context.skinColors.sakuraPink
+                          : context.skinColors.onSurfaceVariant.withValues(
+                              alpha: 0.4,
+                            ),
+                      borderRadius: BorderRadius.circular(3),
+                    ),
+                  );
+                }),
+              ),
+
+              const Spacer(),
+
+              // Title / artist
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 32),
+                child: Column(
+                  children: [
+                    Text(
+                      state.mediaItem?.title ?? 'Unknown Track',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.w700,
+                        color: context.skinColors.onBackground,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      state.mediaItem?.artist ?? '',
+                      style: TextStyle(
+                        fontSize: 15,
+                        color: context.skinColors.onSurfaceVariant,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 24),
+
+              // Seek bar and transport share one frosted pane, so they read as
+              // a single control surface floating over the cover's colour field
+              // instead of loose widgets scattered across it.
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: GlassPanel(
+                  padding: const EdgeInsets.fromLTRB(14, 6, 14, 2),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SliderTheme(
+                        data: SliderTheme.of(context).copyWith(
+                          trackHeight: 3,
+                          thumbShape: const RoundSliderThumbShape(
+                            enabledThumbRadius: 6,
+                          ),
+                          overlayShape: const RoundSliderOverlayShape(
+                            overlayRadius: 14,
+                          ),
+                        ),
+                        child: Slider(
+                          value: isBuffering
+                              ? 0
+                              : state.position.inMilliseconds.toDouble().clamp(
+                                  0,
+                                  state.duration.inMilliseconds.toDouble() > 0
+                                      ? state.duration.inMilliseconds.toDouble()
+                                      : 1,
+                                ),
+                          max: state.duration.inMilliseconds.toDouble() > 0
+                              ? state.duration.inMilliseconds.toDouble()
+                              : 1,
+                          onChanged: isBuffering
+                              ? null
+                              : (v) => ref
+                                    .read(playerProvider.notifier)
+                                    .seekTo(Duration(milliseconds: v.toInt())),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              _formatDuration(state.position),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: context.skinColors.onSurfaceVariant,
+                              ),
+                            ),
+                            Text(
+                              _formatDuration(state.duration),
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: context.skinColors.onSurfaceVariant,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                        children: [
+                          IconButton(
+                            icon: Icon(
+                              Icons.repeat,
+                              color: state.repeat != ps.RepeatMode.none
+                                  ? context.skinColors.sakuraPinkLight
+                                  : context.skinColors.onSurfaceVariant,
+                            ),
+                            onPressed: () {
+                              final notifier = ref.read(
+                                playerProvider.notifier,
+                              );
+                              switch (state.repeat) {
+                                case ps.RepeatMode.none:
+                                  notifier.setRepeat(ps.RepeatMode.all);
+                                  break;
+                                case ps.RepeatMode.all:
+                                  notifier.setRepeat(ps.RepeatMode.one);
+                                  break;
+                                case ps.RepeatMode.one:
+                                  notifier.setRepeat(ps.RepeatMode.none);
+                                  break;
+                              }
+                            },
+                            tooltip: 'Repeat: ${state.repeat.name}',
+                          ),
+                          Consumer(
+                            builder: (context2, ref2, child2) {
+                              final isShuffle = ref2
+                                  .watch(playerProvider)
+                                  .shuffle;
+                              return IconButton(
+                                icon: Icon(
+                                  Icons.shuffle,
+                                  color: isShuffle
+                                      ? context.skinColors.sakuraPinkLight
+                                      : context.skinColors.onSurfaceVariant,
+                                ),
+                                onPressed: () => ref2
+                                    .read(playerProvider.notifier)
+                                    .setShuffle(!isShuffle),
+                                tooltip: 'Shuffle',
+                              );
+                            },
+                          ),
+                          // The transport trio carries the spring hover/press motion
+                          // (see SpringInteraction); the surrounding secondary
+                          // controls are deliberately left plain so the primary
+                          // actions stay the ones that respond.
+                          SpringInteraction(
+                            child: IconButton(
+                              icon: Icon(
+                                Icons.skip_previous,
+                                size: 36,
+                                color: context.skinColors.onSurface,
+                              ),
+                              onPressed: () =>
+                                  ref.read(playerProvider.notifier).previous(),
+                            ),
+                          ),
+                          // Play / Pause button
+                          SpringInteraction(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: context.skinColors.sakuraPink,
+                                shape: BoxShape.circle,
+                              ),
+                              child: IconButton(
+                                icon: Icon(
+                                  isBuffering
+                                      ? Icons.play_arrow_rounded
+                                      : (isPlaying
+                                            ? Icons.pause_rounded
+                                            : Icons.play_arrow_rounded),
+                                  size: 36,
+                                  color: Colors.white,
+                                ),
+                                onPressed: isBuffering
+                                    ? null
+                                    : () => ref
+                                          .read(playerProvider.notifier)
+                                          .togglePlayPause(),
+                              ),
+                            ),
+                          ),
+                          SpringInteraction(
+                            child: IconButton(
+                              icon: Icon(
+                                Icons.skip_next,
+                                size: 36,
+                                color: context.skinColors.onSurface,
+                              ),
+                              onPressed: () =>
+                                  ref.read(playerProvider.notifier).next(),
+                            ),
+                          ),
+                          // Speed control button
+                          Consumer(
+                            builder: (context, ref, _) {
+                              final speed = ref.watch(speedNotifierProvider);
+                              return TextButton(
+                                onPressed: () => _showSpeedSheet(context, ref),
+                                child: Text(
+                                  '$speed×',
+                                  style: const TextStyle(fontSize: 14),
+                                ),
+                              );
+                            },
+                          ),
+                          // Sleep timer button
+                          Consumer(
+                            builder: (context, ref, _) {
+                              final timerState = ref.watch(sleepTimerProvider);
+                              final active = timerState.active;
+                              return IconButton(
+                                icon: Icon(
+                                  Icons.bedtime,
+                                  color: active
+                                      ? context.skinColors.sakuraPinkLight
+                                      : context.skinColors.onSurfaceVariant,
+                                ),
+                                tooltip: 'Sleep timer',
+                                onPressed: () =>
+                                    _showSleepTimerSheet(context, ref),
+                              );
+                            },
+                          ),
+                          // Favorite button — wrapped in Consumer so icon and onPressed
+                          // always use the same live trackId from the reactive ref.
+                          Consumer(
+                            builder: (context2, ref2, child2) {
+                              final trackId = ref2
+                                  .watch(playerProvider)
+                                  .mediaItem
+                                  ?.id;
+                              // Local (guest-mode) tracks have no server-side favorite state.
+                              final isLocal =
+                                  trackId?.startsWith(localTrackIdPrefix) ??
+                                  false;
+                              final isFav = (trackId != null && !isLocal)
+                                  ? ref2.watch(trackFavoriteProvider(trackId))
+                                  : false;
+                              return IconButton(
+                                icon: Icon(
+                                  isFav
+                                      ? Icons.favorite
+                                      : Icons.favorite_border,
+                                  color: isFav
+                                      ? context.skinColors.accentPink
+                                      : (trackId != null && !isLocal
+                                            ? context.skinColors.onSurface
+                                            : context
+                                                  .skinColors
+                                                  .onSurfaceVariant),
+                                ),
+                                onPressed: (trackId == null || isLocal)
+                                    ? null
+                                    : () => ref2
+                                          .read(
+                                            trackFavoriteProvider(
+                                              trackId,
+                                            ).notifier,
+                                          )
+                                          .toggle(),
+                                tooltip: 'Favorite',
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 32),
+            ],
+          ),
         ),
       ),
     );
@@ -825,31 +855,22 @@ class _ArtworkFallback extends StatelessWidget {
 }
 
 /// Lyrics page widget shown in the second page of the FullPlayerScreen
-/// PageView. The blurred-artwork [LyricsBackground] wraps every state
-/// (loading/empty/loaded) rather than just the successful-lines case, so the
-/// backdrop doesn't pop in/out as lyrics resolve.
+/// PageView.
+///
+/// No longer carries its own [LyricsBackground]: since v5.26.0 the whole
+/// screen sits on one, and nesting a second would run a second set of
+/// rotating tiles and a second 64px backdrop blur for no visual gain.
 class _LyricsPage extends StatelessWidget {
-  const _LyricsPage({
-    required this.trackId,
-    required this.position,
-    required this.albumId,
-    required this.localArtUri,
-  });
+  const _LyricsPage({required this.trackId, required this.position});
 
   final String trackId;
   final Duration position;
-  final String? albumId;
-  final Uri? localArtUri;
 
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
       borderRadius: BorderRadius.circular(16),
-      child: LyricsBackground(
-        albumId: albumId,
-        localArtUri: localArtUri,
-        child: _LyricsBody(trackId: trackId, position: position),
-      ),
+      child: _LyricsBody(trackId: trackId, position: position),
     );
   }
 }
