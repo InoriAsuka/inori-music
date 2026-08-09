@@ -18,6 +18,7 @@ import 'package:audio_service/audio_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/catalog/artwork_provider.dart';
@@ -30,6 +31,7 @@ import 'package:inori_music/src/player/player_state.dart' as pstate;
 import 'package:inori_music/src/lyrics/lyric_line.dart';
 import 'package:inori_music/src/lyrics/lyrics_provider.dart';
 import 'package:inori_music/src/playback/playback_engine_provider.dart';
+import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/widgets/glass_panel.dart';
 
 import 'support/fake_playback_engine.dart';
@@ -142,6 +144,77 @@ Widget _appWithArtwork({
 class _AlwaysOn extends CoverFlowModeNotifier {
   @override
   bool build() => true;
+}
+
+/// A [PlayerState] carrying both albumId and artistId, so the title/artist
+/// v5.30.7 link tests can drive the "has an id, should navigate" branch for
+/// both at once. Distinct from [_playingWithArtwork] (which only ever sets
+/// albumId — the Cover Flow/artwork tests it serves have no use for a
+/// linkable artist) rather than widening that helper's own contract.
+pstate.PlayerState _playingWithLinkableIds() {
+  const item = MediaItem(
+    id: 'track-1',
+    title: 'Emmanuel',
+    artist: 'Chris Botti',
+    extras: {'albumId': 'album-x', 'artistId': 'artist-y'},
+  );
+  return pstate.PlayerState(
+    queue: [item],
+    currentIndex: 0,
+    mediaItem: item,
+    playbackState: PlaybackState(playing: true),
+    duration: const Duration(minutes: 5, seconds: 55),
+  );
+}
+
+/// Like [_app] but with a real [GoRouter] instead of a bare [MaterialApp] —
+/// needed only by the title/artist link tests below, which actually invoke
+/// `context.push(AppRoutes.albumDetailPath(...))` /
+/// `context.push(AppRoutes.artistDetailPath(...))` and need somewhere for
+/// that to land. Every other test in this file has no reason to navigate
+/// anywhere, so it stays on the simpler bare-MaterialApp `_app()` rather than
+/// paying for a router it would never exercise.
+Widget _appWithRouter(pstate.PlayerState state) {
+  final router = GoRouter(
+    initialLocation: AppRoutes.player,
+    routes: [
+      GoRoute(
+        path: AppRoutes.player,
+        builder: (_, _) => const FullPlayerScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.albumDetail,
+        builder: (_, state) =>
+            Scaffold(body: Text('album:${state.pathParameters['id']}')),
+      ),
+      GoRoute(
+        path: AppRoutes.artistDetail,
+        builder: (_, state) =>
+            Scaffold(body: Text('artist:${state.pathParameters['id']}')),
+      ),
+    ],
+  );
+  return ProviderScope(
+    overrides: [
+      playerProvider.overrideWith(() => _StubPlayerNotifier(state)),
+      playbackEngineProvider.overrideWithValue(FakePlaybackEngine()),
+      lyricsProvider.overrideWith(_StubLyricsNotifier.new),
+      // The state's albumId makes LyricsBackground try to resolve cover art
+      // (see resolveCoverImage) and then derive an accent palette from it —
+      // without stubbing both, the real network/PaletteGenerator machinery
+      // fires and leaves a pending timer that fails the test on teardown,
+      // same as _appWithArtwork above already has to guard against.
+      artworkUrlProvider.overrideWith(
+        () => _StubArtworkNotifier('https://example/a.jpg'),
+      ),
+      coverPaletteProvider.overrideWith((ref, source) async => null),
+    ],
+    child: MaterialApp.router(
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      supportedLocales: AppLocalizations.supportedLocales,
+      routerConfig: router,
+    ),
+  );
 }
 
 void _sizeWindow(WidgetTester tester, Size size) {
@@ -614,6 +687,76 @@ void main() {
           findsNothing,
           reason: 'It must toggle back off again, not only ever turn on',
         );
+      },
+    );
+  });
+
+  // ---------------------------------------------------------------------
+  // v5.30.7 — title/artist link to their detail pages
+  // ---------------------------------------------------------------------
+
+  group('title/artist links', () {
+    testWidgets('tapping the title navigates to the album; tapping the artist '
+        'navigates to the artist', (tester) async {
+      _sizeWindow(tester, const Size(1400, 1000));
+      await tester.pumpWidget(_appWithRouter(_playingWithLinkableIds()));
+      await _settle(tester);
+
+      await tester.tap(find.text('Emmanuel'));
+      await _settle(tester);
+      expect(find.text('album:album-x'), findsOneWidget);
+    });
+
+    testWidgets('tapping the artist navigates to the artist detail page', (
+      tester,
+    ) async {
+      _sizeWindow(tester, const Size(1400, 1000));
+      await tester.pumpWidget(_appWithRouter(_playingWithLinkableIds()));
+      await _settle(tester);
+
+      await tester.tap(find.text('Chris Botti'));
+      await _settle(tester);
+      expect(find.text('artist:artist-y'), findsOneWidget);
+    });
+
+    testWidgets(
+      'a local track with no ids renders plain text and does not navigate '
+      'when tapped',
+      (tester) async {
+        // _playing()'s MediaItem carries no extras at all — the shape of a
+        // guest-mode local track (see player_notifier.dart's
+        // _localMediaItem). Deliberately using the router-free _app() here:
+        // if this regressed and HoverLinkText tried to push a route anyway,
+        // the missing GoRouter ancestor would throw and fail the test just
+        // as loudly as a wrong-destination assertion would.
+        _sizeWindow(tester, const Size(1400, 1000));
+        await tester.pumpWidget(_app());
+        await _settle(tester);
+
+        await tester.tap(find.text('Emmanuel'));
+        await tester.tap(find.text('Chris Botti'));
+        await _settle(tester);
+
+        expect(tester.takeException(), isNull);
+        // Still on the player — nothing navigated away.
+        expect(find.text('Emmanuel'), findsWidgets);
+      },
+    );
+
+    testWidgets(
+      'the seek bar\'s gradient/glow slider theming renders without error',
+      (tester) async {
+        // Narrow smoke test for the v5.30.7 GradientSliderTrackShape /
+        // GlowingSliderThumbShape wiring — a custom SliderTrackShape/
+        // SliderComponentShape is exactly the kind of thing that only
+        // surfaces a mistake (e.g. a null theme colour, an infinite radius)
+        // once it actually paints.
+        _sizeWindow(tester, const Size(1400, 1000));
+        await tester.pumpWidget(_app());
+        await _settle(tester);
+
+        expect(find.byType(Slider), findsOneWidget);
+        expect(tester.takeException(), isNull);
       },
     );
   });

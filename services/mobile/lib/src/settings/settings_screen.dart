@@ -63,23 +63,18 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       appBar: DesktopAppBar(title: Text(t.settings)),
       body: ListView(
         children: [
-          // Account section
-          const _SectionHeader(title: 'Account'),
-          if (isGuest)
-            ListTile(
-              leading: CircleAvatar(
-                backgroundColor: context.skinColors.sakuraPinkDark,
-                child: const Icon(Icons.person_outline, color: Colors.white),
-              ),
-              title: const Text('以游客身份使用'),
-              subtitle: const Text('登录后可使用云端曲库、收藏与跨设备续播'),
-              trailing: FilledButton.tonal(
-                onPressed: () =>
-                    ref.read(authProvider.notifier).exitGuestMode(),
-                child: const Text('登录'),
-              ),
-            )
-          else ...[
+          // Account section — guest-only entirely, not just its login
+          // button: the desktop sidebar's own account block
+          // (`_GuestSignInPrompt` in shell_scaffold.dart) already has a
+          // "tap to sign in" row, so a second one here was pure duplication
+          // (v5.30.7 field report). Guarding the header too, not just the
+          // row that used to sit under it — an unconditional `_SectionHeader`
+          // with nothing left under it in guest mode would be an orphaned
+          // "Account" caption floating above "Sessions" (itself also
+          // guest-hidden), which reads as more broken than just omitting the
+          // whole section.
+          if (!isGuest) ...[
+            const _SectionHeader(title: 'Account'),
             ListTile(
               leading: CircleAvatar(
                 backgroundColor: context.skinColors.sakuraPinkDark,
@@ -93,8 +88,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               title: Text(t.changePassword),
               onTap: () => _showChangePasswordDialog(context, ref, t),
             ),
+            const Divider(),
           ],
-          const Divider(),
 
           // Sessions section — not applicable to a guest (no server session).
           if (!isGuest) ...[
@@ -294,8 +289,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           const Divider(),
 
-          // Sign out — a guest was never logged in; their exit path is the
-          // "登录" button in the Account section above instead.
+          // Sign out — a guest was never logged in, so there is nothing to
+          // sign out of here. Their way back to a real account is the
+          // desktop sidebar's own account block (`_GuestSignInPrompt` in
+          // shell_scaffold.dart) rather than a control on this screen —
+          // v5.30.7 removed Settings' own guest-facing login button (it sat
+          // in the Account section above) once that sidebar entry point made
+          // it a duplicate.
           if (!isGuest) ...[
             const _SectionHeader(title: 'Account Actions'),
             ListTile(

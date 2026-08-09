@@ -479,7 +479,16 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
       id: trackId,
       title: _trackCache[trackId]?.title ?? trackId,
       artist: _artistNameCache[_trackCache[trackId]?.artistId ?? ''] ?? '',
-      extras: {'trackId': trackId, 'albumId': _trackCache[trackId]?.albumId},
+      extras: {
+        'trackId': trackId,
+        'albumId': _trackCache[trackId]?.albumId,
+        // Threaded through so the player bar/full player screen can link the
+        // artist name to its detail page (v5.30.7) the same way they already
+        // do for albumId — see _makeMediaItem's own extras map below for why
+        // this is server-track-only (a guest's local files have no server
+        // artist id at all).
+        'artistId': _trackCache[trackId]?.artistId,
+      },
     );
   }
 
@@ -558,6 +567,13 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
         'trackId': trackId,
         'mediaObjectId': track?.mediaObjectId,
         'albumId': albumId.isNotEmpty ? albumId : null,
+        // v5.30.7: lets the player bar/full player screen turn the title and
+        // artist into links to their detail pages. Deliberately absent for
+        // local (guest-mode) tracks — _localMediaItem's own extras map below
+        // has no equivalent key, since a local file has no server-side
+        // artist at all to link to; the UI treats a missing id as "render
+        // plain text", not as a broken link.
+        'artistId': artistId.isNotEmpty ? artistId : null,
       },
     );
   }

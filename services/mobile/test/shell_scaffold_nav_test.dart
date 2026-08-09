@@ -22,6 +22,7 @@
 // see mini_player_bar_desktop_test.dart for the bar's own wide-shape
 // coverage.
 //
+import 'package:audio_service/audio_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -50,8 +51,17 @@ class _StubAuthNotifier extends AuthNotifier {
 }
 
 class _StubPlayerNotifier extends PlayerNotifier {
+  // Optional rather than required: the existing `_StubPlayerNotifier.new`
+  // tear-off (a zero-arg `PlayerNotifier Function()`) stays valid against a
+  // constructor with only optional parameters, so every pre-v5.30.7 call
+  // site here keeps its exact prior behaviour (an empty PlayerState) with no
+  // changes of its own.
+  _StubPlayerNotifier([pstate.PlayerState? state])
+    : _state = state ?? pstate.PlayerState();
+  final pstate.PlayerState _state;
+
   @override
-  pstate.PlayerState build() => pstate.PlayerState();
+  pstate.PlayerState build() => _state;
 }
 
 /// The routes the shell navigates between. Bodies are placeholders — this
@@ -89,6 +99,24 @@ GoRouter _router({String initialLocation = AppRoutes.artists}) => GoRouter(
             builder: (_, _) =>
                 Scaffold(body: Center(child: Text('body:$path'))),
           ),
+        // v5.30.7 — the mini player bar's title/artist now link here (see
+        // MiniPlayerBar's own doc comment). Real router.dart nests these
+        // under /albums and /artists as ShellRoute children; registered as
+        // siblings here instead purely so this test file's route list stays
+        // a flat, scannable array like every other entry above it — go_router
+        // resolves `push()` against the whole tree regardless of nesting
+        // shape, so this is not a meaningfully different route graph for
+        // what these tests actually exercise.
+        GoRoute(
+          path: AppRoutes.albumDetail,
+          builder: (_, state) =>
+              Scaffold(body: Text('album:${state.pathParameters['id']}')),
+        ),
+        GoRoute(
+          path: AppRoutes.artistDetail,
+          builder: (_, state) =>
+              Scaffold(body: Text('artist:${state.pathParameters['id']}')),
+        ),
       ],
     ),
   ],
@@ -101,18 +129,21 @@ const _signedIn = AuthState(
 );
 const _guest = AuthState(status: AuthStatus.guest);
 
-Widget _buildApp(GoRouter router, {AuthState auth = _signedIn}) =>
-    ProviderScope(
-      overrides: [
-        authProvider.overrideWith(() => _StubAuthNotifier(auth)),
-        playerProvider.overrideWith(_StubPlayerNotifier.new),
-      ],
-      child: MaterialApp.router(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        routerConfig: router,
-      ),
-    );
+Widget _buildApp(
+  GoRouter router, {
+  AuthState auth = _signedIn,
+  pstate.PlayerState? playerState,
+}) => ProviderScope(
+  overrides: [
+    authProvider.overrideWith(() => _StubAuthNotifier(auth)),
+    playerProvider.overrideWith(() => _StubPlayerNotifier(playerState)),
+  ],
+  child: MaterialApp.router(
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
+    routerConfig: router,
+  ),
+);
 
 /// Drives the shell into the layout branch that renders `_DesktopSidebar`
 /// (>= 1200 logical px wide).
@@ -413,24 +444,158 @@ void main() {
     },
   );
 
+  testWidgets('tapping the desktop player bar\'s cover opens the full player', (
+    tester,
+  ) async {
+    _useDesktopWindow(tester);
+    await tester.pumpWidget(_buildApp(_router()));
+    await tester.pumpAndSettle();
+
+    // v5.30.7: the cover carries its own dedicated GestureDetector now
+    // (see _nowPlayingInfo in mini_player_bar.dart) rather than the whole
+    // content row sharing one outer InkWell — the field report was
+    // explicit that only the cover should do this, since the title/artist
+    // became links to their own detail pages (see the "does not open the
+    // player" case right below) and the old shared InkWell would have
+    // fought with that.
+    await tester.tap(find.byType(MiniPlayerArtwork));
+    await tester.pumpAndSettle();
+
+    expect(find.text('body:${AppRoutes.player}'), findsOneWidget);
+  });
+
   testWidgets(
-    'tapping the desktop player bar\'s own now-playing section opens the '
-    'full player',
+    'tapping the desktop player bar\'s title/artist text does not open the '
+    'full player — only the cover does',
     (tester) async {
+      // Regression guard for the v5.30.7 field report ("只通过点击封面展开"):
+      // before this phase the entire content row (including the title text)
+      // shared one InkWell that opened the player, which would have fought
+      // with the same tap turning into an album/artist navigation instead.
+      _useDesktopWindow(tester);
+      final mediaItem = MediaItem(
+        id: 'track-1',
+        title: 'Idol',
+        artist: 'Yoasobi',
+        // Deliberately no albumId/artistId — this proves the *player*
+        // navigation stays off regardless of whether the text is itself
+        // linkable, rather than conflating the two behaviours.
+      );
+      await tester.pumpWidget(
+        _buildApp(
+          _router(),
+          playerState: pstate.PlayerState(
+            queue: [mediaItem],
+            currentIndex: 0,
+            mediaItem: mediaItem,
+            playbackState: PlaybackState(playing: false),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Idol'));
+      await tester.pumpAndSettle();
+      expect(find.text('body:${AppRoutes.player}'), findsNothing);
+
+      await tester.tap(find.text('Yoasobi'));
+      await tester.pumpAndSettle();
+      expect(find.text('body:${AppRoutes.player}'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'the desktop player bar\'s title links to the album and the artist '
+    'links to the artist, when the current track carries those ids',
+    (tester) async {
+      _useDesktopWindow(tester);
+      final mediaItem = MediaItem(
+        id: 'track-1',
+        title: 'Idol',
+        artist: 'Yoasobi',
+        extras: {'albumId': 'album-1', 'artistId': 'artist-1'},
+      );
+      await tester.pumpWidget(
+        _buildApp(
+          _router(),
+          playerState: pstate.PlayerState(
+            queue: [mediaItem],
+            currentIndex: 0,
+            mediaItem: mediaItem,
+            playbackState: PlaybackState(playing: false),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Idol'));
+      await tester.pumpAndSettle();
+      expect(find.text('album:album-1'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'a local (guest-mode) track with no ids renders plain, unlinked title '
+    'text in the desktop player bar',
+    (tester) async {
+      _useDesktopWindow(tester);
+      final mediaItem = MediaItem(
+        id: 'local:track-1',
+        title: 'Local Track',
+        artist: 'Unknown Artist',
+      );
+      await tester.pumpWidget(
+        _buildApp(
+          _router(),
+          playerState: pstate.PlayerState(
+            queue: [mediaItem],
+            currentIndex: 0,
+            mediaItem: mediaItem,
+            playbackState: PlaybackState(playing: false),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Local Track'));
+      await tester.pumpAndSettle();
+
+      // No crash, and definitely no navigation to a route this track has no
+      // id for.
+      expect(tester.takeException(), isNull);
+      expect(find.text('Local Track'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'the sidebar\'s selected pill sits inset from the panel edge rather '
+    'than spanning it edge-to-edge',
+    (tester) async {
+      // v5.30.7 field report: the selected pill's rounded background used
+      // to run flush against GlassPanel's own hairline border, reading as
+      // if it were spilling out of the panel.
       _useDesktopWindow(tester);
       await tester.pumpWidget(_buildApp(_router()));
       await tester.pumpAndSettle();
 
-      // MiniPlayerBar wraps its whole content row in one InkWell; the cover
-      // and title/artist text have no tap handlers of their own (unlike the
-      // transport/action buttons elsewhere in the row), so tapping the
-      // artwork reaches that outer InkWell — the same behaviour
-      // SidebarNowPlaying's own tile used to provide before v5.30.6 moved
-      // the cover+title block back into the bar.
-      await tester.tap(find.byType(MiniPlayerArtwork));
-      await tester.pumpAndSettle();
+      final panelLeft = tester.getTopLeft(find.byType(GlassPanel)).dx;
+      final panelWidth = tester.getSize(find.byType(GlassPanel)).width;
+      final selectedTile = find
+          .byWidgetPredicate((w) => w is ListTile && w.selected)
+          .first;
+      final tileRect = tester.getRect(selectedTile);
 
-      expect(find.text('body:${AppRoutes.player}'), findsOneWidget);
+      expect(
+        tileRect.left,
+        greaterThan(panelLeft),
+        reason: 'The pill must not start flush at the panel\'s own left edge',
+      );
+      expect(
+        tileRect.right,
+        lessThan(panelLeft + panelWidth),
+        reason:
+            'The pill must not extend all the way to the panel\'s right edge',
+      );
     },
   );
 
@@ -528,28 +693,74 @@ void main() {
 
       await tester.pumpWidget(_buildApp(_router()));
       await tester.pumpAndSettle();
-      final defaultPanelTop = tester.getTopLeft(find.byType(GlassPanel)).dy;
+      final defaultPanelTopLeft = tester.getTopLeft(find.byType(GlassPanel));
       final defaultMarkTop = tester.getTopLeft(find.byType(InoriMark)).dy;
       expect(
-        defaultMarkTop - defaultPanelTop,
+        defaultMarkTop - defaultPanelTopLeft.dy,
         closeTo(24, 2),
         reason: 'Non-macOS keeps the pre-v5.30.5 24px title-row inset',
+      );
+      expect(
+        defaultPanelTopLeft,
+        const Offset(8, 8),
+        reason: 'Non-macOS keeps floating 8px in from every edge',
       );
 
       debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
       await tester.pumpWidget(_buildApp(_router()));
       await tester.pumpAndSettle();
-      final macPanelTop = tester.getTopLeft(find.byType(GlassPanel)).dy;
+      final macPanelTopLeft = tester.getTopLeft(find.byType(GlassPanel));
       final macMarkTop = tester.getTopLeft(find.byType(InoriMark)).dy;
+      final macPanel = tester.widget<GlassPanel>(find.byType(GlassPanel));
       debugDefaultTargetPlatformOverride = null;
 
+      // v5.30.7 field report: the lights sat *outside* the panel's rounded
+      // top-left corner, not merely close to it — the fix is the panel
+      // sitting flush against that corner (see _DesktopLayout's own doc
+      // comment on why more margin can never fix a fixed-position overlay),
+      // not a bigger inset within the old floating shape.
       expect(
-        macMarkTop - macPanelTop,
-        closeTo(30, 2),
+        macPanelTopLeft,
+        Offset.zero,
+        reason:
+            'The panel must sit flush against the window\'s top-left corner '
+            'so the traffic lights land inside it, not on the margin gap '
+            'around it',
+      );
+      expect(
+        macMarkTop - macPanelTopLeft.dy,
+        closeTo(38, 2),
         reason:
             'macOS needs the enlarged inset to clear the traffic lights '
-            '(see _DesktopSidebar._macTitleRowTopInset)',
+            '(see _DesktopSidebar._macTitleRowTopInset — re-derived for the '
+            'flush-corner panel origin above, no longer the old 30 that '
+            'assumed an 8px-inset panel)',
       );
+      expect(
+        macPanel.borderRadiusOverride,
+        const BorderRadius.only(
+          topLeft: Radius.circular(12),
+          topRight: Radius.circular(16),
+          bottomLeft: Radius.circular(16),
+          bottomRight: Radius.circular(16),
+        ),
+        reason:
+            'The flush corner should match the macOS window\'s own radius '
+            '(12) rather than the panel\'s usual rounding (16), so it reads '
+            'as part of the window frame instead of a second competing curve',
+      );
+    },
+  );
+
+  testWidgets(
+    'non-macOS keeps the panel\'s uniform corner radius (no override)',
+    (tester) async {
+      _useDesktopWindow(tester);
+      await tester.pumpWidget(_buildApp(_router()));
+      await tester.pumpAndSettle();
+
+      final panel = tester.widget<GlassPanel>(find.byType(GlassPanel));
+      expect(panel.borderRadiusOverride, isNull);
     },
   );
 }

@@ -347,7 +347,22 @@ class _TabletLayout extends StatelessWidget {
 // Desktop layout
 // ---------------------------------------------------------------------------
 
-class _DesktopLayout extends StatelessWidget {
+/// Whether macOS's native traffic-light buttons need dedicated layout
+/// treatment from this shell's own chrome, rather than sitting inside a real
+/// OS title bar. Shared by [_DesktopLayout] (which corner the sidebar panel
+/// floats flush against) and [_DesktopSidebar] (title row inset, panel
+/// corner radius) so the two can never independently drift out of sync —
+/// before v5.30.7 folded this into one place, that was exactly how the
+/// v5.30.0 gutter bug happened (see [ShellChrome]'s doc comment). The same
+/// three-part gate `FullPlayerScreen._needsMacTrafficLightGutter` uses for
+/// its own, unrelated call site (that screen has no sidebar ancestor to
+/// share this with — see that function's own doc comment).
+bool _macTrafficLightGutterNeeded(WidgetRef ref) =>
+    DesktopIntegration.isDesktop &&
+    defaultTargetPlatform == TargetPlatform.macOS &&
+    !ref.watch(systemTitleBarProvider);
+
+class _DesktopLayout extends ConsumerWidget {
   const _DesktopLayout({
     required this.navGroups,
     required this.selectedIndex,
@@ -363,7 +378,7 @@ class _DesktopLayout extends StatelessWidget {
   final Widget bottomBar;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     // Four regions laid out side by side rather than nested, matching the
     // v5.30.0 field report's red-boxed reference layout: the sidebar spans
     // the window's *full* height — including the "now playing" tile docked
@@ -374,19 +389,30 @@ class _DesktopLayout extends StatelessWidget {
     // — which made the sidebar end wherever the bar's height left off,
     // exactly the "sidebar shorter than the window, bar spanning underneath
     // it too" shape the field report's photo ruled out.
+    //
+    // macOS's native traffic lights are painted by the OS at a fixed window
+    // coordinate, independent of anything Flutter draws — they do not move
+    // just because this panel has a margin. Floating the panel 8px in on
+    // every side (the v5.30.0-v5.30.6 shape) put the panel's own top-left
+    // corner seam directly under the lights, so they sat *outside* the
+    // panel, straddling its rounded edge (the v5.30.7 field report's
+    // screenshot). The fix is not to add more margin — that just moves the
+    // seam, it can never get *under* a fixed-position overlay — it's to
+    // remove the margin on the two sides the lights are actually next to, so
+    // the panel's own corner is no longer there to straddle: the lights end
+    // up sitting inside the panel with the window's own native inset around
+    // them, exactly like Apple Music's own sidebar. Right and bottom keep
+    // their float — nothing sits at the window's top-right or bottom-left
+    // corners that needs the same treatment.
+    final flushTopLeft = _macTrafficLightGutterNeeded(ref);
     return Scaffold(
       body: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Floating, not flush: Apple Music's desktop sidebar sits in
-          // its own inset rounded panel rather than a Material sheet
-          // butted up against a divider — the margin plus GlassPanel's
-          // own hairline border does the job the VerticalDivider used
-          // to do, so the divider is gone rather than duplicating it.
-          // The 8px margin now runs the full window height rather than
-          // just the row above the player bar.
           Padding(
-            padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+            padding: flushTopLeft
+                ? const EdgeInsets.fromLTRB(0, 0, 8, 8)
+                : const EdgeInsets.fromLTRB(8, 8, 8, 8),
             child: SizedBox(
               width: 220,
               child: _DesktopSidebar(
@@ -441,15 +467,22 @@ class _DesktopSidebar extends ConsumerWidget {
   /// spacing, vertical centre ~20pt down from the window's top edge. That
   /// puts their lowest point at window-coordinate y = 20 + 12/2 = 26.
   ///
-  /// This panel floats 8px in from the window edge (see _DesktopLayout's
-  /// outer Padding), so window-coordinate y=26 sits only 26 - 8 = 18px into
-  /// the panel's own local coordinate space — tight enough that the
-  /// wordmark's cap-height would land right against the bottom of the lights
-  /// instead of clearly under them, which is what actually reads as
-  /// "crushed" in a screenshot even without the two technically overlapping.
-  /// Rounding up past that 18px minimum leaves the wordmark row roughly a
-  /// button-radius of daylight under the cluster.
-  static const _macTitleRowTopInset = 30.0;
+  /// Through v5.30.6 this panel floated 8px in from the window edge (see
+  /// _DesktopLayout's old unconditional outer Padding), so window-coordinate
+  /// y=26 sat only 26 - 8 = 18px into the panel's own local coordinate
+  /// space, and this inset was 30 (18 rounded up past the minimum, leaving
+  /// roughly a button-diameter of daylight under the cluster). v5.30.7
+  /// floats the panel flush against the top-left corner instead (see
+  /// _DesktopLayout's doc comment on why — the lights sat *outside* the
+  /// panel's rounded corner, not just close to it), which moves the panel's
+  /// local origin from window-y=8 to window-y=0. Re-deriving from that same
+  /// window-coordinate fact: 26 - 0 = 26px is the new bare minimum, plus the
+  /// same ~12px buffer the old value used (30 - 18 = 12) = 38. That also
+  /// matches the simpler cross-check of just preserving the wordmark row's
+  /// prior *absolute* on-screen position, which was already visually tuned:
+  /// old panel margin (8) + old inset (30) = 38 from the true window top.
+  /// Both derivations agree, hence 38 rather than a fresh guess.
+  static const _macTitleRowTopInset = 38.0;
 
   /// The pre-v5.30.5 inset, kept everywhere the traffic lights aren't a
   /// concern: non-macOS (the caption-button trio there is ordinary Flutter
@@ -457,6 +490,19 @@ class _DesktopSidebar extends ConsumerWidget {
   /// bar, where the lights live inside actual native chrome above this panel
   /// rather than over it.
   static const _defaultTitleRowTopInset = 24.0;
+
+  /// macOS's own window corner radius (Big Sur onward settled on roughly
+  /// 10-12pt at standard scale — Apple has never published an exact value,
+  /// this is the commonly-measured figure other custom-chrome Mac apps use).
+  /// Matching it on the panel's flush top-left corner (see
+  /// [_macTrafficLightGutterNeeded]) is what makes that corner read as part
+  /// of the window's own frame instead of a second, competing curve sitting
+  /// right at the edge.
+  static const _macWindowCornerRadius = 12.0;
+
+  /// This panel's usual uniform rounding everywhere the flush-corner
+  /// treatment above doesn't apply.
+  static const _panelCornerRadius = 16.0;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -483,14 +529,7 @@ class _DesktopSidebar extends ConsumerWidget {
       rows.add(const SizedBox(height: 8));
     }
 
-    // Same three-part gate FullPlayerScreen's own
-    // _needsMacTrafficLightGutter uses: real desktop build, actually macOS,
-    // and not deferring to a real OS title bar (which would put the lights
-    // in native chrome above this panel rather than over it).
-    final needsTrafficLightGutter =
-        DesktopIntegration.isDesktop &&
-        defaultTargetPlatform == TargetPlatform.macOS &&
-        !ref.watch(systemTitleBarProvider);
+    final needsTrafficLightGutter = _macTrafficLightGutterNeeded(ref);
 
     final titleRow = Padding(
       padding: EdgeInsets.fromLTRB(
@@ -532,7 +571,21 @@ class _DesktopSidebar extends ConsumerWidget {
     // of them rather than just framing the floating panel's edge.
     return GlassPanel(
       padding: EdgeInsets.zero,
-      borderRadius: 16,
+      borderRadius: _panelCornerRadius,
+      // Only the flush corner needs to differ — see _DesktopLayout's doc
+      // comment on why that corner alone loses its margin, and
+      // _macWindowCornerRadius's on why it borrows the window's own radius
+      // rather than the panel's usual one. The other three corners are
+      // untouched by any of this, so they keep _panelCornerRadius exactly as
+      // every other platform/setting combination already does.
+      borderRadiusOverride: needsTrafficLightGutter
+          ? const BorderRadius.only(
+              topLeft: Radius.circular(_macWindowCornerRadius),
+              topRight: Radius.circular(_panelCornerRadius),
+              bottomLeft: Radius.circular(_panelCornerRadius),
+              bottomRight: Radius.circular(_panelCornerRadius),
+            )
+          : null,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -717,31 +770,60 @@ class _SidebarTile extends StatelessWidget {
   final bool isSelected;
   final VoidCallback onTap;
 
+  /// Horizontal gap between the panel's own edge and the tile's selected
+  /// pill. Without this the pill (painted across the ListTile's *own*
+  /// bounds, which used to run edge-to-edge inside the panel) shared exactly
+  /// the same x-coordinates as GlassPanel's hairline border, so a selected
+  /// row read as spilling out of the panel rather than floating inside it
+  /// (v5.30.7 field report).
+  static const _horizontalInset = 8.0;
+
+  /// [ListTileThemeData.contentPadding] (skin_definition.dart) already
+  /// spends 16px of horizontal inset on every ListTile in the app. Applying
+  /// that on top of [_horizontalInset] would put this tile's icon/label 24px
+  /// from the panel edge while _SectionHeader/_AccountBlock's own text sits
+  /// at a flat 16px — a column of sidebar content whose left edge zigzags
+  /// between two indents. Overriding it down to 16 - _horizontalInset here
+  /// keeps the *total* (outer inset + this) at exactly 16px, so the icon
+  /// lines up with every header above it; only the pill's own outer edge
+  /// (drawn at the ListTile's full bounds, unaffected by contentPadding)
+  /// picks up the new breathing room.
+  static const _contentPadding = EdgeInsets.symmetric(
+    horizontal: 16 - _horizontalInset,
+  );
+
   @override
   Widget build(BuildContext context) {
-    return ListTile(
-      dense: true,
-      leading: Icon(
-        item.icon,
-        color: isSelected
-            ? context.skinColors.sakuraPinkLight
-            : context.skinColors.onSurfaceVariant,
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: _horizontalInset,
+        vertical: 2,
       ),
-      title: Text(
-        item.label,
-        style: TextStyle(
+      child: ListTile(
+        dense: true,
+        contentPadding: _contentPadding,
+        leading: Icon(
+          item.icon,
           color: isSelected
-              ? context.skinColors.onSurface
+              ? context.skinColors.sakuraPinkLight
               : context.skinColors.onSurfaceVariant,
-          fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
         ),
+        title: Text(
+          item.label,
+          style: TextStyle(
+            color: isSelected
+                ? context.skinColors.onSurface
+                : context.skinColors.onSurfaceVariant,
+            fontWeight: isSelected ? FontWeight.w600 : FontWeight.w400,
+          ),
+        ),
+        selected: isSelected,
+        selectedTileColor: context.skinColors.sakuraPinkDark.withValues(
+          alpha: 0.3,
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        onTap: onTap,
       ),
-      selected: isSelected,
-      selectedTileColor: context.skinColors.sakuraPinkDark.withValues(
-        alpha: 0.3,
-      ),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      onTap: onTap,
     );
   }
 }

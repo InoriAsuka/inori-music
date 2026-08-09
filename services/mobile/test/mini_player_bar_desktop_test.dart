@@ -20,6 +20,8 @@
 // The isolated-width tests here exist so a future regression in this
 // specific narrow/wide switch points straight at MiniPlayerBar instead of
 // requiring a trip through the whole shell to localise it.
+import 'package:audio_service/audio_service.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -30,24 +32,33 @@ import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/player/player_state.dart' as pstate;
 
 class _StubPlayerNotifier extends PlayerNotifier {
+  // Optional so the existing `_StubPlayerNotifier.new` tear-off (a zero-arg
+  // `PlayerNotifier Function()`) below stays valid unchanged.
+  _StubPlayerNotifier([pstate.PlayerState? state])
+    : _state = state ?? pstate.PlayerState();
+  final pstate.PlayerState _state;
+
   @override
-  pstate.PlayerState build() => pstate.PlayerState();
+  pstate.PlayerState build() => _state;
 }
 
 /// Pumps the bar constrained to exactly [width] logical pixels — the same
 /// technique as giving it a fixed-width parent inside the real shell's
 /// content column, without needing the whole shell (sidebar, router, auth)
 /// just to control one number.
-Widget _appAtWidth(double width) => ProviderScope(
-  overrides: [playerProvider.overrideWith(_StubPlayerNotifier.new)],
-  child: MaterialApp(
-    localizationsDelegates: AppLocalizations.localizationsDelegates,
-    supportedLocales: AppLocalizations.supportedLocales,
-    home: Scaffold(
-      body: SizedBox(width: width, child: const MiniPlayerBar()),
-    ),
-  ),
-);
+Widget _appAtWidth(double width, {pstate.PlayerState? playerState}) =>
+    ProviderScope(
+      overrides: [
+        playerProvider.overrideWith(() => _StubPlayerNotifier(playerState)),
+      ],
+      child: MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: Scaffold(
+          body: SizedBox(width: width, child: const MiniPlayerBar()),
+        ),
+      ),
+    );
 
 void main() {
   testWidgets(
@@ -141,4 +152,79 @@ void main() {
       reason: 'A 375dp phone is well below _wideBreakpoint',
     );
   });
+
+  // ---------------------------------------------------------------------
+  // v5.30.7 — seek row time-label spacing and effects
+  // ---------------------------------------------------------------------
+
+  testWidgets(
+    'the wide seek row leaves breathing room between each time label and '
+    'the track, instead of sitting flush against it',
+    (tester) async {
+      // Distinct position/duration text (rather than the default 0:00/0:00)
+      // so both labels are independently findable.
+      final mediaItem = MediaItem(id: 'track-1', title: 'Idol');
+      await tester.pumpWidget(
+        _appAtWidth(
+          900,
+          playerState: pstate.PlayerState(
+            queue: [mediaItem],
+            currentIndex: 0,
+            mediaItem: mediaItem,
+            playbackState: PlaybackState(playing: true),
+            position: Duration.zero,
+            duration: const Duration(minutes: 3),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final seekSlider = find.byType(Slider).first;
+      final sliderLeft = tester.getTopLeft(seekSlider).dx;
+      final sliderRight = tester.getTopRight(seekSlider).dx;
+      final positionLabelRight = tester.getTopRight(find.text('0:00')).dx;
+      final durationLabelLeft = tester.getTopLeft(find.text('3:00')).dx;
+
+      expect(
+        sliderLeft - positionLabelRight,
+        greaterThanOrEqualTo(9),
+        reason: 'v5.30.7 field report: "进度条前后的时间贴的太紧了"',
+      );
+      expect(durationLabelLeft - sliderRight, greaterThanOrEqualTo(9));
+    },
+  );
+
+  testWidgets(
+    'the seek row\'s gradient/glow slider theming renders without error '
+    'while playing',
+    (tester) async {
+      final mediaItem = MediaItem(id: 'track-1', title: 'Idol');
+      await tester.pumpWidget(
+        _appAtWidth(
+          900,
+          playerState: pstate.PlayerState(
+            queue: [mediaItem],
+            currentIndex: 0,
+            mediaItem: mediaItem,
+            playbackState: PlaybackState(playing: true),
+            position: const Duration(seconds: 30),
+            duration: const Duration(minutes: 3),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      // Hover reveals the thumb (and therefore the glow, gated on
+      // hover/drag activity — see GlowingSliderThumbShape's `glowing`
+      // wiring in mini_player_bar.dart) — without it the thumb radius is 0
+      // and there is nothing to glow around.
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: Offset.zero);
+      addTearDown(mouse.removePointer);
+      await mouse.moveTo(tester.getCenter(find.byType(Slider).first));
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

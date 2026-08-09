@@ -13,6 +13,7 @@ import 'package:inori_api/src/model/catalog_track.dart';
 
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/player/player_state.dart' as pstate;
+import 'package:inori_music/src/shared/theme/skin_definition.dart';
 import 'package:inori_music/src/shared/widgets/play_actions_row.dart';
 
 // ---------------------------------------------------------------------------
@@ -49,6 +50,22 @@ Widget _buildApp(
   return ProviderScope(
     overrides: [playerProvider.overrideWith(() => stub)],
     child: MaterialApp(
+      // The real skin theme, not Flutter's own MaterialApp default — this
+      // widget's FilledButton is a plain Row sibling with no Expanded
+      // around it (see the Row in play_actions_row.dart), which is exactly
+      // the shape v5.30.7 found actually crashes under the app's
+      // then-global `FilledButtonTheme.minimumSize: Size(double.infinity,
+      // 48)` (Flutter hands a non-flex Row child unbounded main-axis
+      // constraints, so "infinite minWidth" there trips a hard layout
+      // assertion rather than merely being clamped). Every test below ran
+      // green through v5.30.6 despite that, purely because Flutter's own
+      // default theme was never wide enough to expose it — this file was
+      // accidentally never actually exercising the button under production
+      // styling. Using the real theme here closes that gap: any future
+      // regression of the fix (skin_definition_test.dart's own dedicated
+      // guard) would now also fail every test in this file, not silently
+      // pass them.
+      theme: buildThemeFromSkin(SkinDefinition.sakuraDusk),
       home: Scaffold(body: PlayActionsRow(tracksState: tracksState)),
     ),
   );

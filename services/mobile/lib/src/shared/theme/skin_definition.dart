@@ -253,7 +253,29 @@ ThemeData buildThemeFromSkin(SkinDefinition skin) {
         backgroundColor: c.sakuraPink,
         foregroundColor: Colors.white,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-        minimumSize: const Size(double.infinity, 48),
+        // Height only — NOT `Size(double.infinity, 48)`. That forced every
+        // FilledButton in the app to demand infinite minWidth, which Flutter
+        // clamps down to whatever the *tightest* available width happens to
+        // be at that particular call site. Inside a loose vertical slot
+        // (Column, a dialog's OverflowBar) that clamp lands on the slot's own
+        // width, which looks like an intentional full-width button — so most
+        // call sites never showed a problem. Two shapes do not survive it:
+        // a `ListTile.trailing` slot (the v5.30.7 field report — the
+        // trailing widget consumed the tile's *entire* width, leaving
+        // title/subtitle a sliver too narrow to hold even one CJK character
+        // per line) and a plain `Row` sibling with no `Expanded`/`Flexible`
+        // around it (confirmed live in `play_actions_row.dart`'s "Play"
+        // button and `local_library_screen.dart`'s "播放全部" button — a Row
+        // hands non-flex children an *unbounded* main-axis constraint, so
+        // "infinite minWidth" isn't merely clamped there, it trips Flutter's
+        // own "BoxConstraints forces an infinite width" layout assertion).
+        // A button that genuinely wants full width now says so explicitly at
+        // its own call site (`SizedBox(width: double.infinity, child: ...)`
+        // or a local `crossAxisAlignment: CrossAxisAlignment.stretch`
+        // ancestor, e.g. login_screen.dart's submit button) instead of
+        // leaning on a theme default that silently breaks the one layout
+        // shape it can't survive.
+        minimumSize: const Size(0, 48),
       ),
     ),
     sliderTheme: SliderThemeData(
@@ -263,24 +285,57 @@ ThemeData buildThemeFromSkin(SkinDefinition skin) {
       overlayColor: c.sakuraPinkDark.withValues(alpha: 0.16),
       trackHeight: 3,
     ),
-    dividerTheme: DividerThemeData(
-      color: c.outlineVariant,
-      thickness: 0.5,
-    ),
+    dividerTheme: DividerThemeData(color: c.outlineVariant, thickness: 0.5),
     iconTheme: IconThemeData(color: c.onSurfaceVariant),
     textTheme: TextTheme(
-      displayLarge: TextStyle(color: c.onBackground, fontFamily: 'Inter', fontWeight: FontWeight.w700),
-      displayMedium: TextStyle(color: c.onBackground, fontFamily: 'Inter', fontWeight: FontWeight.w700),
-      headlineLarge: TextStyle(color: c.onBackground, fontFamily: 'Inter', fontWeight: FontWeight.w700),
-      headlineMedium: TextStyle(color: c.onBackground, fontFamily: 'Inter', fontWeight: FontWeight.w600),
-      headlineSmall: TextStyle(color: c.onBackground, fontFamily: 'Inter', fontWeight: FontWeight.w600),
-      titleLarge: TextStyle(color: c.onSurface, fontFamily: 'Inter', fontWeight: FontWeight.w600),
-      titleMedium: TextStyle(color: c.onSurface, fontFamily: 'Inter', fontWeight: FontWeight.w500),
-      titleSmall: TextStyle(color: c.onSurfaceVariant, fontFamily: 'Inter', fontWeight: FontWeight.w500),
+      displayLarge: TextStyle(
+        color: c.onBackground,
+        fontFamily: 'Inter',
+        fontWeight: FontWeight.w700,
+      ),
+      displayMedium: TextStyle(
+        color: c.onBackground,
+        fontFamily: 'Inter',
+        fontWeight: FontWeight.w700,
+      ),
+      headlineLarge: TextStyle(
+        color: c.onBackground,
+        fontFamily: 'Inter',
+        fontWeight: FontWeight.w700,
+      ),
+      headlineMedium: TextStyle(
+        color: c.onBackground,
+        fontFamily: 'Inter',
+        fontWeight: FontWeight.w600,
+      ),
+      headlineSmall: TextStyle(
+        color: c.onBackground,
+        fontFamily: 'Inter',
+        fontWeight: FontWeight.w600,
+      ),
+      titleLarge: TextStyle(
+        color: c.onSurface,
+        fontFamily: 'Inter',
+        fontWeight: FontWeight.w600,
+      ),
+      titleMedium: TextStyle(
+        color: c.onSurface,
+        fontFamily: 'Inter',
+        fontWeight: FontWeight.w500,
+      ),
+      titleSmall: TextStyle(
+        color: c.onSurfaceVariant,
+        fontFamily: 'Inter',
+        fontWeight: FontWeight.w500,
+      ),
       bodyLarge: TextStyle(color: c.onSurface, fontFamily: 'Inter'),
       bodyMedium: TextStyle(color: c.onSurface, fontFamily: 'Inter'),
       bodySmall: TextStyle(color: c.onSurfaceVariant, fontFamily: 'Inter'),
-      labelLarge: TextStyle(color: c.onSurface, fontFamily: 'Inter', fontWeight: FontWeight.w500),
+      labelLarge: TextStyle(
+        color: c.onSurface,
+        fontFamily: 'Inter',
+        fontWeight: FontWeight.w500,
+      ),
       labelMedium: TextStyle(color: c.onSurfaceVariant, fontFamily: 'Inter'),
       labelSmall: TextStyle(color: c.onSurfaceVariant, fontFamily: 'Inter'),
     ),
@@ -292,10 +347,14 @@ ThemeData buildThemeFromSkin(SkinDefinition skin) {
 double contrastRatio(Color a, Color b) {
   double relativeLuminance(Color color) {
     double linearize(double channel) {
-      return channel <= 0.03928 ? channel / 12.92 : math.pow((channel + 0.055) / 1.055, 2.4).toDouble();
+      return channel <= 0.03928
+          ? channel / 12.92
+          : math.pow((channel + 0.055) / 1.055, 2.4).toDouble();
     }
 
-    return 0.2126 * linearize(color.r) + 0.7152 * linearize(color.g) + 0.0722 * linearize(color.b);
+    return 0.2126 * linearize(color.r) +
+        0.7152 * linearize(color.g) +
+        0.0722 * linearize(color.b);
   }
 
   final lumA = relativeLuminance(a);
@@ -357,7 +416,10 @@ const _requiredColorKeys = [
 ///   "colors": { "primary": "#RRGGBB", ... (all keys in _requiredColorKeys) }
 /// }
 /// ```
-SkinImportResult parseSkinJson(String source, {Set<String> existingIds = const {}}) {
+SkinImportResult parseSkinJson(
+  String source, {
+  Set<String> existingIds = const {},
+}) {
   final Object? raw;
   try {
     raw = jsonDecode(source);
@@ -397,7 +459,9 @@ SkinImportResult parseSkinJson(String source, {Set<String> existingIds = const {
     if (hex.startsWith('#')) hex = hex.substring(1);
     if (hex.length == 6) hex = 'FF$hex';
     if (hex.length != 8) {
-      throw SkinParseException('颜色字段 "$key" 格式错误："$value"（应为 #RRGGBB 或 #AARRGGBB）');
+      throw SkinParseException(
+        '颜色字段 "$key" 格式错误："$value"（应为 #RRGGBB 或 #AARRGGBB）',
+      );
     }
     final parsed = int.tryParse(hex, radix: 16);
     if (parsed == null) {
@@ -446,7 +510,9 @@ SkinImportResult parseSkinJson(String source, {Set<String> existingIds = const {
   void checkPair(String label, Color fg, Color bg) {
     final ratio = contrastRatio(fg, bg);
     if (ratio < 4.5) {
-      warnings.add('$label 对比度仅 ${ratio.toStringAsFixed(2)}:1（建议 ≥ 4.5:1），文字可能难以辨认');
+      warnings.add(
+        '$label 对比度仅 ${ratio.toStringAsFixed(2)}:1（建议 ≥ 4.5:1），文字可能难以辨认',
+      );
     }
   }
 

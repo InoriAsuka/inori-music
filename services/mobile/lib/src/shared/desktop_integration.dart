@@ -49,7 +49,38 @@ class DesktopIntegration with TrayListener {
 
   Future<void> _initWindow() async {
     await windowManager.ensureInitialized();
-    final isPastGate = _ref.read(authProvider).valueOrNull?.isPastGate ?? false;
+    // Await the *resolved* auth state rather than `_ref.read(authProvider)
+    // .valueOrNull` (a plain synchronous read of whatever's there yet) —
+    // AuthNotifier.build() awaits secure-storage reads before it resolves,
+    // which on a cold start reliably outlasts ensureInitialized()'s local
+    // plugin handshake above. A synchronous read here would almost always
+    // still see AsyncLoading and silently default to "not past the gate",
+    // so a *returning* guest/logged-in user would get the small
+    // login-sized, non-resizable window on launch regardless of their actual
+    // session — main.dart's `ref.listen(authProvider, ...)` corrects the
+    // window's size/resizability once auth finishes resolving, but only
+    // after a visible flash, and this is the most likely explanation this
+    // phase found for "the zoom button reads disabled right after reaching
+    // the shell" (v5.30.7 field report): the window can briefly be showing
+    // the real (correctly-sized) shell content while still carrying the
+    // gate window's `setResizable(false)` from this function, if the
+    // transition listener's own chain of awaited platform calls hasn't
+    // finished yet. Bounded with a short timeout rather than awaited
+    // unconditionally — a stored token additionally makes a network call to
+    // validate it (`_fetchMe`), and blocking the window from appearing at
+    // all until a slow/offline server responds would trade one narrow
+    // cosmetic race for a much worse "app looks hung at launch" regression.
+    // On timeout this just falls back to the old racy default, exactly as
+    // before this fix, and the listener-based correction still applies.
+    AuthState authState;
+    try {
+      authState = await _ref
+          .read(authProvider.future)
+          .timeout(const Duration(milliseconds: 300));
+    } catch (_) {
+      authState = const AuthState(status: AuthStatus.unauthenticated);
+    }
+    final isPastGate = authState.isPastGate;
     // Read the persisted preference directly via SharedPreferences rather
     // than `_ref.read(systemTitleBarProvider)` — that provider's own async
     // restore hasn't resolved yet this early in startup, so going through it

@@ -12,6 +12,8 @@ import 'package:inori_music/src/player/volume_control.dart';
 import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/theme/skin_provider.dart';
 import 'package:inori_music/src/shared/widgets/floating_shadow.dart';
+import 'package:inori_music/src/shared/widgets/hover_link_text.dart';
+import 'package:inori_music/src/shared/widgets/seek_bar_effects.dart';
 import 'package:inori_music/src/shared/widgets/spring_interaction.dart';
 
 /// Persistent mini-player bar displayed at the bottom of the shell scaffold.
@@ -130,6 +132,12 @@ class MiniPlayerBar extends ConsumerWidget {
     final title = mediaItem?.title ?? t.nothingPlaying;
     final artist = mediaItem?.artist ?? '';
     final albumId = mediaItem?.extras?['albumId'] as String?;
+    // Null for a guest-mode local track (no server-side artist id at all) —
+    // see player_notifier.dart's _makeMediaItem doc comment. HoverLinkText
+    // renders plain, inert text for a null id rather than a dead-looking
+    // link, so that case needs no special handling here beyond passing it
+    // through.
+    final artistId = mediaItem?.extras?['artistId'] as String?;
     // Embedded cover art extracted from a guest-mode local file — see
     // TrackArtwork's doc comment for why this and albumId are mutually
     // exclusive rather than both being checked against the same track.
@@ -170,31 +178,38 @@ class MiniPlayerBar extends ConsumerWidget {
                       top: false,
                       child: Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: InkWell(
-                          onTap: () => context.push(AppRoutes.player),
-                          borderRadius: BorderRadius.circular(8),
-                          child: isWide
-                              ? _wideContent(
-                                  context,
-                                  ref,
-                                  title: title,
-                                  artist: artist,
-                                  albumId: albumId,
-                                  localArtUri: localArtUri,
-                                  isPlaying: isPlaying,
-                                  isBuffering: isBuffering,
-                                )
-                              : _narrowContent(
-                                  context,
-                                  ref,
-                                  title: title,
-                                  artist: artist,
-                                  albumId: albumId,
-                                  localArtUri: localArtUri,
-                                  isPlaying: isPlaying,
-                                  isBuffering: isBuffering,
-                                ),
-                        ),
+                        // No outer InkWell here since v5.30.7 — the whole
+                        // content row used to open the full player on tap,
+                        // which meant tapping the title/artist (reasonable
+                        // muscle memory once they became links to their own
+                        // detail pages, see _nowPlayingInfo) fought with
+                        // opening the player instead of navigating there.
+                        // The field report was explicit that only the cover
+                        // should open the player now; _nowPlayingInfo wires
+                        // that gesture onto just the artwork instead.
+                        child: isWide
+                            ? _wideContent(
+                                context,
+                                ref,
+                                title: title,
+                                artist: artist,
+                                albumId: albumId,
+                                artistId: artistId,
+                                localArtUri: localArtUri,
+                                isPlaying: isPlaying,
+                                isBuffering: isBuffering,
+                              )
+                            : _narrowContent(
+                                context,
+                                ref,
+                                title: title,
+                                artist: artist,
+                                albumId: albumId,
+                                artistId: artistId,
+                                localArtUri: localArtUri,
+                                isPlaying: isPlaying,
+                                isBuffering: isBuffering,
+                              ),
                       ),
                     ),
                   ),
@@ -227,6 +242,7 @@ Widget _narrowContent(
   required String title,
   required String artist,
   required String? albumId,
+  required String? artistId,
   required Uri? localArtUri,
   required bool isPlaying,
   required bool isBuffering,
@@ -242,6 +258,7 @@ Widget _narrowContent(
           title: title,
           artist: artist,
           albumId: albumId,
+          artistId: artistId,
           localArtUri: localArtUri,
         ),
       ),
@@ -298,6 +315,7 @@ Widget _wideContent(
   required String title,
   required String artist,
   required String? albumId,
+  required String? artistId,
   required Uri? localArtUri,
   required bool isPlaying,
   required bool isBuffering,
@@ -310,6 +328,7 @@ Widget _wideContent(
           title: title,
           artist: artist,
           albumId: albumId,
+          artistId: artistId,
           localArtUri: localArtUri,
         ),
       ),
@@ -367,19 +386,34 @@ Widget _wideContent(
 /// [_wideContent]. Pulled out once rather than kept as two copies now that
 /// both shapes render it identically; only [_wideContent]'s surrounding
 /// sections actually differ from [_narrowContent]'s.
+///
+/// v5.30.7 gives the cover and the title/artist text three independent
+/// gestures instead of one shared one: the cover alone opens the full
+/// player (the field report's explicit ask — previously the *entire* content
+/// row did this via an outer InkWell in [MiniPlayerBar.build], which fought
+/// with turning the title/artist into links), while title and artist each
+/// link to their own detail page via [HoverLinkText] when the current track
+/// carries the id for it.
 Widget _nowPlayingInfo(
   BuildContext context, {
   required String title,
   required String artist,
   required String? albumId,
+  required String? artistId,
   required Uri? localArtUri,
 }) {
   return Row(
     children: [
-      MiniPlayerArtwork(
-        albumId: albumId,
-        localArtUri: localArtUri,
-        size: MiniPlayerBar._artworkSize,
+      MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: () => context.push(AppRoutes.player),
+          child: MiniPlayerArtwork(
+            albumId: albumId,
+            localArtUri: localArtUri,
+            size: MiniPlayerBar._artworkSize,
+          ),
+        ),
       ),
       const SizedBox(width: 12),
       Expanded(
@@ -387,8 +421,8 @@ Widget _nowPlayingInfo(
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              title,
+            HoverLinkText(
+              text: title,
               style: TextStyle(
                 color: context.skinColors.onSurface,
                 fontSize: 13,
@@ -396,16 +430,22 @@ Widget _nowPlayingInfo(
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
+              onTap: albumId == null
+                  ? null
+                  : () => context.push(AppRoutes.albumDetailPath(albumId)),
             ),
             if (artist.isNotEmpty)
-              Text(
-                artist,
+              HoverLinkText(
+                text: artist,
                 style: TextStyle(
                   color: context.skinColors.onSurfaceVariant,
                   fontSize: 11,
                 ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
+                onTap: artistId == null
+                    ? null
+                    : () => context.push(AppRoutes.artistDetailPath(artistId)),
               ),
           ],
         ),
@@ -624,35 +664,50 @@ class _MiniPlayerProgressBarState
       0.0,
       maxMs,
     );
-    final value = (_dragValue ?? positionMs).clamp(0.0, maxMs);
 
     return SizedBox(
       height: 14,
-      child: SliderTheme(
-        data: SliderTheme.of(context).copyWith(
-          trackHeight: 2,
-          activeTrackColor: context.skinColors.sakuraPink,
-          inactiveTrackColor: context.skinColors.outline,
-          thumbColor: context.skinColors.sakuraPinkLight,
-          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4),
-          overlayShape: const RoundSliderOverlayShape(overlayRadius: 10),
-        ),
-        child: Slider(
-          value: value,
-          max: maxMs,
-          onChangeStart: disabled
-              ? null
-              : (v) => setState(() => _dragValue = v),
-          onChanged: disabled ? null : (v) => setState(() => _dragValue = v),
-          onChangeEnd: disabled
-              ? null
-              : (v) {
-                  ref
-                      .read(playerProvider.notifier)
-                      .seekTo(Duration(milliseconds: v.toInt()));
-                  setState(() => _dragValue = null);
-                },
-        ),
+      // v5.30.7: glides between positionStream ticks instead of snapping —
+      // see seek_bar_effects.dart's positionTweenDuration doc comment for
+      // why a TweenAnimationBuilder rather than a manual controller, and why
+      // 260ms. Dragging bypasses it entirely (the builder's own value is
+      // ignored below whenever _dragValue is set), so a drag still tracks
+      // the pointer 1:1 with no animation lag.
+      child: TweenAnimationBuilder<double>(
+        tween: Tween<double>(begin: positionMs, end: positionMs),
+        duration: positionTweenDuration,
+        curve: Curves.linear,
+        builder: (context, animatedPositionMs, _) {
+          final value = (_dragValue ?? animatedPositionMs).clamp(0.0, maxMs);
+          return SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              trackHeight: 2,
+              activeTrackColor: context.skinColors.sakuraPink,
+              inactiveTrackColor: context.skinColors.outline,
+              thumbColor: context.skinColors.sakuraPinkLight,
+              thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 4),
+              overlayShape: const RoundSliderOverlayShape(overlayRadius: 10),
+            ),
+            child: Slider(
+              value: value,
+              max: maxMs,
+              onChangeStart: disabled
+                  ? null
+                  : (v) => setState(() => _dragValue = v),
+              onChanged: disabled
+                  ? null
+                  : (v) => setState(() => _dragValue = v),
+              onChangeEnd: disabled
+                  ? null
+                  : (v) {
+                      ref
+                          .read(playerProvider.notifier)
+                          .seekTo(Duration(milliseconds: v.toInt()));
+                      setState(() => _dragValue = null);
+                    },
+            ),
+          );
+        },
       ),
     );
   }
@@ -683,10 +738,17 @@ class _MiniPlayerSeekRowState extends ConsumerState<_MiniPlayerSeekRow> {
   double? _dragValue;
   bool _hovering = false;
 
+  /// Horizontal breathing room between each time label and the track next to
+  /// it. Through v5.30.6 there was none at all — the labels sat flush
+  /// against the slider's own bounding box — which the v5.30.7 field report
+  /// called out directly ("进度条前后的时间贴的太紧了").
+  static const _timeLabelGap = 10.0;
+
   @override
   Widget build(BuildContext context) {
     final playerState = ref.watch(playerProvider);
     final disabled = playerState.isBuffering || playerState.isIdle;
+    final isPlaying = playerState.isPlaying;
     final maxMs = playerState.duration.inMilliseconds.toDouble() > 0
         ? playerState.duration.inMilliseconds.toDouble()
         : 1.0;
@@ -694,7 +756,6 @@ class _MiniPlayerSeekRowState extends ConsumerState<_MiniPlayerSeekRow> {
       0.0,
       maxMs,
     );
-    final value = (_dragValue ?? positionMs).clamp(0.0, maxMs);
     // Thumb/overlay only appear once there's a reason to look at them —
     // hovering (mouse) or actively dragging (any input). At rest the track
     // reads as a plain line, matching both reference screenshots.
@@ -711,66 +772,95 @@ class _MiniPlayerSeekRowState extends ConsumerState<_MiniPlayerSeekRow> {
     return MouseRegion(
       onEnter: (_) => setState(() => _hovering = true),
       onExit: (_) => setState(() => _hovering = false),
-      child: Row(
-        children: [
-          Text(
-            _formatSeekTime(Duration(milliseconds: value.toInt())),
-            style: timeStyle,
-          ),
-          Expanded(
-            child: SliderTheme(
-              data: SliderTheme.of(context).copyWith(
-                trackHeight: 4,
-                // A muted foreground rather than `outline` — outline reads
-                // as a border colour, not a "the rest of this control"
-                // colour, and was one of the two things the field report's
-                // "太丑了" was actually pointing at (the other being the old
-                // hairline's position, fixed by moving this row at all).
-                inactiveTrackColor: context.skinColors.onSurfaceVariant
-                    .withValues(alpha: 0.24),
-                // Slightly desaturated relative to the sakuraPink used for
-                // icons/buttons elsewhere on this bar — both reference
-                // screenshots use a softer fill for the *track* specifically,
-                // saving full saturation for the one-button accent
-                // (play/pause) instead of spreading it across every pink
-                // element on the bar.
-                activeTrackColor: _desaturate(
-                  context.skinColors.sakuraPink,
-                  0.18,
-                ),
-                thumbColor: context.skinColors.sakuraPinkLight,
-                overlayColor: context.skinColors.sakuraPink.withValues(
-                  alpha: 0.12,
-                ),
-                thumbShape: RoundSliderThumbShape(
-                  enabledThumbRadius: active ? 7 : 0,
-                ),
-                overlayShape: RoundSliderOverlayShape(
-                  overlayRadius: active ? 16 : 0,
+      // v5.30.7: glides between positionStream ticks instead of snapping —
+      // see seek_bar_effects.dart's positionTweenDuration doc comment for
+      // why a TweenAnimationBuilder rather than a manual controller.
+      // Dragging bypasses it (the animated value is ignored below whenever
+      // _dragValue is set), so a drag still tracks the pointer 1:1.
+      child: TweenAnimationBuilder<double>(
+        tween: Tween<double>(begin: positionMs, end: positionMs),
+        duration: positionTweenDuration,
+        curve: Curves.linear,
+        builder: (context, animatedPositionMs, _) {
+          final value = (_dragValue ?? animatedPositionMs).clamp(0.0, maxMs);
+          return Row(
+            children: [
+              Text(
+                _formatSeekTime(Duration(milliseconds: value.toInt())),
+                style: timeStyle,
+              ),
+              const SizedBox(width: _timeLabelGap),
+              Expanded(
+                child: SliderTheme(
+                  data: SliderTheme.of(context).copyWith(
+                    trackHeight: 4,
+                    // A muted foreground rather than `outline` — outline
+                    // reads as a border colour, not a "the rest of this
+                    // control" colour, and was one of the two things the
+                    // field report's "太丑了" was actually pointing at (the
+                    // other being the old hairline's position, fixed by
+                    // moving this row at all).
+                    inactiveTrackColor: context.skinColors.onSurfaceVariant
+                        .withValues(alpha: 0.24),
+                    // Slightly desaturated relative to the sakuraPink used
+                    // for icons/buttons elsewhere on this bar — both
+                    // reference screenshots use a softer fill for the
+                    // *track* specifically, saving full saturation for the
+                    // one-button accent (play/pause) instead of spreading it
+                    // across every pink element on the bar. The gradient
+                    // (v5.30.7) lightens *toward* the thumb from this same
+                    // muted base rather than introducing a second, brighter
+                    // hue — "more layered", not "more saturated".
+                    activeTrackColor: _desaturate(
+                      context.skinColors.sakuraPink,
+                      0.18,
+                    ),
+                    trackShape: const GradientSliderTrackShape(),
+                    thumbColor: context.skinColors.sakuraPinkLight,
+                    overlayColor: context.skinColors.sakuraPink.withValues(
+                      alpha: 0.12,
+                    ),
+                    thumbShape: GlowingSliderThumbShape(
+                      enabledThumbRadius: active ? 7 : 0,
+                      // Only while the thumb itself is actually visible
+                      // (active) — this row's whole design is "near
+                      // invisible at rest, revealed on interact"; an ambient
+                      // glow with no visible thumb to anchor it would fight
+                      // that rather than extend it.
+                      glowing: isPlaying && active,
+                      glowColor: context.skinColors.sakuraPink.withValues(
+                        alpha: 0.28,
+                      ),
+                    ),
+                    overlayShape: RoundSliderOverlayShape(
+                      overlayRadius: active ? 16 : 0,
+                    ),
+                  ),
+                  child: Slider(
+                    value: value,
+                    max: maxMs,
+                    onChangeStart: disabled
+                        ? null
+                        : (v) => setState(() => _dragValue = v),
+                    onChanged: disabled
+                        ? null
+                        : (v) => setState(() => _dragValue = v),
+                    onChangeEnd: disabled
+                        ? null
+                        : (v) {
+                            ref
+                                .read(playerProvider.notifier)
+                                .seekTo(Duration(milliseconds: v.toInt()));
+                            setState(() => _dragValue = null);
+                          },
+                  ),
                 ),
               ),
-              child: Slider(
-                value: value,
-                max: maxMs,
-                onChangeStart: disabled
-                    ? null
-                    : (v) => setState(() => _dragValue = v),
-                onChanged: disabled
-                    ? null
-                    : (v) => setState(() => _dragValue = v),
-                onChangeEnd: disabled
-                    ? null
-                    : (v) {
-                        ref
-                            .read(playerProvider.notifier)
-                            .seekTo(Duration(milliseconds: v.toInt()));
-                        setState(() => _dragValue = null);
-                      },
-              ),
-            ),
-          ),
-          Text(_formatSeekTime(playerState.duration), style: timeStyle),
-        ],
+              const SizedBox(width: _timeLabelGap),
+              Text(_formatSeekTime(playerState.duration), style: timeStyle),
+            ],
+          );
+        },
       ),
     );
   }

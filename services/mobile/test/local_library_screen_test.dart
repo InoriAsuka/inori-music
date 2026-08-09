@@ -14,6 +14,7 @@ import 'package:inori_music/src/local_library/local_library_notifier.dart';
 import 'package:inori_music/src/local_library/local_library_screen.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/player/player_state.dart' as pstate;
+import 'package:inori_music/src/shared/theme/skin_definition.dart';
 
 // ---------------------------------------------------------------------------
 // Stubs — no sqflite, no file system, no audio stack.
@@ -81,7 +82,17 @@ Widget _buildApp(
     localLibraryProvider.overrideWith(() => library),
     playerProvider.overrideWith(() => player),
   ],
-  child: const MaterialApp(home: LocalLibraryScreen()),
+  child: MaterialApp(
+    // Real skin theme rather than Flutter's own MaterialApp default — see
+    // play_actions_row_test.dart's own _buildApp for why this matters: the
+    // toolbar's "播放全部" FilledButton.icon below is a plain Row sibling
+    // with an Expanded(TextField) next to it, which is exactly the shape
+    // that trips a hard layout assertion under the app's real (pre-v5.30.7)
+    // FilledButtonTheme. Every test in this file ran green through v5.30.6
+    // only because it was never actually exercising that theme.
+    theme: buildThemeFromSkin(SkinDefinition.sakuraDusk),
+    home: const LocalLibraryScreen(),
+  ),
 );
 
 /// Taps the empty-state "导入文件" button and settles the SnackBar.

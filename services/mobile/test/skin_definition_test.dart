@@ -35,7 +35,9 @@ String _validSkinJson({
   for (final key in omitColorKeys) {
     colors.remove(key);
   }
-  final colorsJson = colors.entries.map((e) => '"${e.key}": "${e.value}"').join(',');
+  final colorsJson = colors.entries
+      .map((e) => '"${e.key}": "${e.value}"')
+      .join(',');
   final authorJson = author == null ? '' : '"author": "$author", ';
   return '{"id": "$id", "displayName": "Test Skin", $authorJson"brightness": "$brightness", "colors": {$colorsJson}}';
 }
@@ -69,15 +71,24 @@ void main() {
     test('dark skin produces a dark ColorScheme with mapped tokens', () {
       final theme = buildThemeFromSkin(SkinDefinition.moonlitIndigo);
       expect(theme.colorScheme.brightness, Brightness.dark);
-      expect(theme.scaffoldBackgroundColor, SkinColors.moonlitIndigo.background);
+      expect(
+        theme.scaffoldBackgroundColor,
+        SkinColors.moonlitIndigo.background,
+      );
       expect(theme.colorScheme.surface, SkinColors.moonlitIndigo.surface);
     });
 
     test('built-in dark skin clears WCAG 4.5:1 on core text/surface pairs', () {
       const c = SkinColors.moonlitIndigo;
-      expect(contrastRatio(c.onBackground, c.background), greaterThanOrEqualTo(4.5));
+      expect(
+        contrastRatio(c.onBackground, c.background),
+        greaterThanOrEqualTo(4.5),
+      );
       expect(contrastRatio(c.onSurface, c.surface), greaterThanOrEqualTo(4.5));
-      expect(contrastRatio(c.onSurfaceVariant, c.surface), greaterThanOrEqualTo(4.5));
+      expect(
+        contrastRatio(c.onSurfaceVariant, c.surface),
+        greaterThanOrEqualTo(4.5),
+      );
       expect(contrastRatio(c.onError, c.error), greaterThanOrEqualTo(4.5));
     });
   });
@@ -95,12 +106,16 @@ void main() {
     });
 
     test('accepts 6-digit hex (no alpha) and defaults to opaque', () {
-      final result = parseSkinJson(_validSkinJson(colorOverrides: {'background': '#123456'}));
+      final result = parseSkinJson(
+        _validSkinJson(colorOverrides: {'background': '#123456'}),
+      );
       expect(result.skin.colors.background, const Color(0xFF123456));
     });
 
     test('accepts 8-digit ARGB hex', () {
-      final result = parseSkinJson(_validSkinJson(colorOverrides: {'shadow': '#8000FF00'}));
+      final result = parseSkinJson(
+        _validSkinJson(colorOverrides: {'shadow': '#8000FF00'}),
+      );
       expect(result.skin.colors.miniPlayerShadow, const Color(0x8000FF00));
     });
 
@@ -117,21 +132,31 @@ void main() {
 
   group('parseSkinJson — structural errors', () {
     test('throws on invalid JSON', () {
-      expect(() => parseSkinJson('not json'), throwsA(isA<SkinParseException>()));
+      expect(
+        () => parseSkinJson('not json'),
+        throwsA(isA<SkinParseException>()),
+      );
     });
 
     test('throws when root is not an object', () {
-      expect(() => parseSkinJson('[1, 2, 3]'), throwsA(isA<SkinParseException>()));
+      expect(
+        () => parseSkinJson('[1, 2, 3]'),
+        throwsA(isA<SkinParseException>()),
+      );
     });
 
     test('throws when id is missing', () {
-      const json = '{"displayName": "Test", "brightness": "light", "colors": {}}';
+      const json =
+          '{"displayName": "Test", "brightness": "light", "colors": {}}';
       expect(() => parseSkinJson(json), throwsA(isA<SkinParseException>()));
     });
 
     test('throws when id collides with an existing skin', () {
       expect(
-        () => parseSkinJson(_validSkinJson(id: 'sakura-dusk'), existingIds: {'sakura-dusk'}),
+        () => parseSkinJson(
+          _validSkinJson(id: 'sakura-dusk'),
+          existingIds: {'sakura-dusk'},
+        ),
         throwsA(isA<SkinParseException>()),
       );
     });
@@ -147,7 +172,9 @@ void main() {
     });
 
     test('throws on an unparseable hex value', () {
-      final json = _validSkinJson(colorOverrides: {'background': 'not-a-color'});
+      final json = _validSkinJson(
+        colorOverrides: {'background': 'not-a-color'},
+      );
       expect(() => parseSkinJson(json), throwsA(isA<SkinParseException>()));
     });
 
@@ -158,15 +185,19 @@ void main() {
   });
 
   group('parseSkinJson — WCAG contrast warnings', () {
-    test('low-contrast onSurface/surface produces a warning but still imports', () {
-      final result = parseSkinJson(_validSkinJson(colorOverrides: {
-        'surface': '#202020',
-        'onSurface': '#303030',
-      }));
-      expect(result.skin.colors.onSurface, const Color(0xFF303030));
-      expect(result.warnings, isNotEmpty);
-      expect(result.warnings.any((w) => w.contains('卡片')), isTrue);
-    });
+    test(
+      'low-contrast onSurface/surface produces a warning but still imports',
+      () {
+        final result = parseSkinJson(
+          _validSkinJson(
+            colorOverrides: {'surface': '#202020', 'onSurface': '#303030'},
+          ),
+        );
+        expect(result.skin.colors.onSurface, const Color(0xFF303030));
+        expect(result.warnings, isNotEmpty);
+        expect(result.warnings.any((w) => w.contains('卡片')), isTrue);
+      },
+    );
 
     test('a fully legible manifest produces no warnings', () {
       final result = parseSkinJson(_validSkinJson());
@@ -176,33 +207,135 @@ void main() {
 
   group('SkinState.active', () {
     test('resolves the selected id among installed skins', () {
-      const state = SkinState(installed: builtInSkins, selectedId: 'moonlit-indigo');
+      const state = SkinState(
+        installed: builtInSkins,
+        selectedId: 'moonlit-indigo',
+      );
       expect(state.active.id, 'moonlit-indigo');
     });
 
-    test('falls back to Sakura Dusk when selectedId matches nothing installed', () {
-      const state = SkinState(installed: builtInSkins, selectedId: 'does-not-exist');
-      expect(state.active.id, SkinDefinition.sakuraDusk.id);
+    test(
+      'falls back to Sakura Dusk when selectedId matches nothing installed',
+      () {
+        const state = SkinState(
+          installed: builtInSkins,
+          selectedId: 'does-not-exist',
+        );
+        expect(state.active.id, SkinDefinition.sakuraDusk.id);
+      },
+    );
+  });
+
+  // ---------------------------------------------------------------------
+  // v5.30.7 — the global FilledButtonTheme must never demand infinite width
+  // again. Field report: a FilledButton dropped into `ListTile.trailing`
+  // (Settings' guest-mode Account block, since deleted for other reasons —
+  // see requirement.md v5.30.7) had its `Size(double.infinity, 48)`
+  // minimumSize clamped down to *consume the entire tile*, squeezing
+  // title/subtitle to a sliver too narrow for even one CJK character per
+  // line. A plain `Row` sibling with no `Expanded` around it fares worse —
+  // Flutter hands a non-flex Row child unbounded main-axis constraints, so
+  // "infinite minWidth" there isn't merely clamped, it trips Flutter's own
+  // "BoxConstraints forces an infinite width" layout assertion outright
+  // (confirmed live against `play_actions_row.dart`'s "Play" button and
+  // `local_library_screen.dart`'s "播放全部" button while investigating this
+  // fix). Both cases below guard the theme itself, independent of any one
+  // call site — call sites can still regress individually, but the shared
+  // root cause cannot.
+  // ---------------------------------------------------------------------
+  group('FilledButtonTheme minimumSize (v5.30.7 regression guards)', () {
+    test('the resolved style no longer demands infinite width', () {
+      final theme = buildThemeFromSkin(SkinDefinition.sakuraDusk);
+      final minimumSize = theme.filledButtonTheme.style?.minimumSize?.resolve(
+        {},
+      );
+      expect(minimumSize, isNotNull);
+      expect(
+        minimumSize!.width.isFinite,
+        isTrue,
+        reason:
+            'Height (48) is intentional and untouched; width must never '
+            'be double.infinity again',
+      );
+    });
+
+    testWidgets(
+      'a FilledButton in ListTile.trailing no longer starves the title of '
+      'width',
+      (tester) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            theme: buildThemeFromSkin(SkinDefinition.sakuraDusk),
+            home: Scaffold(
+              body: ListTile(
+                title: const Text('以游客身份使用'),
+                subtitle: const Text('登录后可使用云端曲库、收藏与跨设备续播'),
+                trailing: FilledButton(
+                  onPressed: () {},
+                  child: const Text('登录'),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        expect(tester.takeException(), isNull);
+        final titleWidth = tester.getSize(find.text('以游客身份使用')).width;
+        expect(
+          titleWidth,
+          greaterThan(100),
+          reason:
+              'A starved title wraps to one CJK character per line — this '
+              'is the exact shape of the field report\'s screenshot',
+        );
+      },
+    );
+
+    testWidgets('a FilledButton as a plain Row sibling (no Expanded around it) '
+        'renders without the infinite-width layout assertion', (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: buildThemeFromSkin(SkinDefinition.sakuraDusk),
+          home: Scaffold(
+            body: Row(
+              children: [
+                FilledButton(onPressed: () {}, child: const Text('Play')),
+                const SizedBox(width: 8),
+                const Expanded(child: TextField()),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
     });
   });
 
   group('SkinScope.of', () {
-    testWidgets('falls back to the default skin colors with no ancestor SkinScope', (tester) async {
-      late SkinColors resolved;
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Builder(
-            builder: (context) {
-              resolved = context.skinColors;
-              return const SizedBox();
-            },
+    testWidgets(
+      'falls back to the default skin colors with no ancestor SkinScope',
+      (tester) async {
+        late SkinColors resolved;
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Builder(
+              builder: (context) {
+                resolved = context.skinColors;
+                return const SizedBox();
+              },
+            ),
           ),
-        ),
-      );
-      expect(resolved.sakuraPink, SkinColors.sakuraDusk.sakuraPink);
-    });
+        );
+        expect(resolved.sakuraPink, SkinColors.sakuraDusk.sakuraPink);
+      },
+    );
 
-    testWidgets('resolves the provided skin when wrapped in SkinScope', (tester) async {
+    testWidgets('resolves the provided skin when wrapped in SkinScope', (
+      tester,
+    ) async {
       late SkinColors resolved;
       await tester.pumpWidget(
         MaterialApp(

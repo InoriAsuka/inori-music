@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/audio/eq_notifier.dart';
@@ -28,9 +29,12 @@ import 'package:inori_music/src/player/player_state.dart' as ps;
 import 'package:inori_music/src/player/track_artwork.dart';
 import 'package:inori_music/src/player/volume_control.dart';
 import 'package:inori_music/src/shared/desktop_integration.dart';
+import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/system_titlebar_provider.dart';
 import 'package:inori_music/src/shared/theme/skin_provider.dart';
 import 'package:inori_music/src/shared/widgets/glass_panel.dart';
+import 'package:inori_music/src/shared/widgets/hover_link_text.dart';
+import 'package:inori_music/src/shared/widgets/seek_bar_effects.dart';
 import 'package:inori_music/src/shared/widgets/spring_interaction.dart';
 
 /// Full-screen player overlay with progress bar, controls, and queue sheet.
@@ -419,6 +423,19 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
       regionWidth: regionWidth,
     );
     final compactControls = controlWidth < _compactControlsBreakpoint;
+    // v5.30.7: lets the title/artist below link to their detail pages. Both
+    // null for a guest-mode local track (see player_notifier.dart's
+    // _localMediaItem, which carries neither key at all) — HoverLinkText
+    // renders plain, inert text for a null id rather than a dead-looking
+    // link.
+    final albumId = state.mediaItem?.extras?['albumId'] as String?;
+    final artistId = state.mediaItem?.extras?['artistId'] as String?;
+    final durationMs = state.duration.inMilliseconds.toDouble();
+    final maxMs = durationMs > 0 ? durationMs : 1.0;
+    final positionMs = state.position.inMilliseconds.toDouble().clamp(
+      0.0,
+      maxMs,
+    );
     // Cover Flow only replaces the wide-layout artwork tile (see
     // cover_flow_artwork.dart's doc comment): the narrow layout's PageView
     // already owns horizontal swipe gestures for paging to lyrics, and a
@@ -504,8 +521,8 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
           width: controlWidth,
           child: Column(
             children: [
-              Text(
-                state.mediaItem?.title ?? 'Unknown Track',
+              HoverLinkText(
+                text: state.mediaItem?.title ?? 'Unknown Track',
                 style: TextStyle(
                   fontSize: 20,
                   fontWeight: FontWeight.w700,
@@ -514,10 +531,13 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
+                onTap: albumId == null
+                    ? null
+                    : () => context.push(AppRoutes.albumDetailPath(albumId)),
               ),
               const SizedBox(height: 4),
-              Text(
-                state.mediaItem?.artist ?? '',
+              HoverLinkText(
+                text: state.mediaItem?.artist ?? '',
                 style: TextStyle(
                   fontSize: 15,
                   color: context.skinColors.onSurfaceVariant,
@@ -525,6 +545,9 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 textAlign: TextAlign.center,
+                onTap: artistId == null
+                    ? null
+                    : () => context.push(AppRoutes.artistDetailPath(artistId)),
               ),
             ],
           ),
@@ -544,37 +567,52 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  SliderTheme(
-                    data: SliderTheme.of(context).copyWith(
-                      trackHeight: 3,
-                      thumbShape: const RoundSliderThumbShape(
-                        enabledThumbRadius: 6,
+                  // v5.30.7: glides between positionStream ticks instead of
+                  // snapping — see seek_bar_effects.dart's
+                  // positionTweenDuration doc comment for why a
+                  // TweenAnimationBuilder rather than a manual controller.
+                  // Unlike the mini bar's seek rows this slider has no local
+                  // drag-value buffer to bypass while dragging — it never
+                  // needed one (onChanged seeks immediately, relying on
+                  // Slider's own internal drag tracking for 1:1 feedback
+                  // while a gesture is actually active, unchanged from
+                  // before this phase) — so nothing here special-cases it.
+                  TweenAnimationBuilder<double>(
+                    tween: Tween<double>(begin: positionMs, end: positionMs),
+                    duration: positionTweenDuration,
+                    curve: Curves.linear,
+                    builder: (context, animatedPositionMs, _) => SliderTheme(
+                      data: SliderTheme.of(context).copyWith(
+                        trackHeight: 3,
+                        trackShape: const GradientSliderTrackShape(),
+                        thumbShape: GlowingSliderThumbShape(
+                          enabledThumbRadius: 6,
+                          glowing: isPlaying,
+                          glowColor: context.skinColors.sakuraPink.withValues(
+                            alpha: 0.3,
+                          ),
+                        ),
+                        overlayShape: const RoundSliderOverlayShape(
+                          overlayRadius: 14,
+                        ),
                       ),
-                      overlayShape: const RoundSliderOverlayShape(
-                        overlayRadius: 14,
+                      child: Slider(
+                        value: isBuffering ? 0 : animatedPositionMs,
+                        max: maxMs,
+                        onChanged: isBuffering
+                            ? null
+                            : (v) => ref
+                                  .read(playerProvider.notifier)
+                                  .seekTo(Duration(milliseconds: v.toInt())),
                       ),
-                    ),
-                    child: Slider(
-                      value: isBuffering
-                          ? 0
-                          : state.position.inMilliseconds.toDouble().clamp(
-                              0,
-                              state.duration.inMilliseconds.toDouble() > 0
-                                  ? state.duration.inMilliseconds.toDouble()
-                                  : 1,
-                            ),
-                      max: state.duration.inMilliseconds.toDouble() > 0
-                          ? state.duration.inMilliseconds.toDouble()
-                          : 1,
-                      onChanged: isBuffering
-                          ? null
-                          : (v) => ref
-                                .read(playerProvider.notifier)
-                                .seekTo(Duration(milliseconds: v.toInt())),
                     ),
                   ),
                   Padding(
-                    padding: const EdgeInsets.only(top: 4),
+                    // Horizontal inset added in v5.30.7 alongside the mini
+                    // bar's own time-label gap fix — these labels sit right
+                    // at the GlassPanel's inner edge otherwise, tighter than
+                    // the slider's own track above them.
+                    padding: const EdgeInsets.only(top: 4, left: 4, right: 4),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
