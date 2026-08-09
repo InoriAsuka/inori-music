@@ -26,7 +26,9 @@ import 'package:inori_music/src/player/cover_flow_artwork.dart';
 import 'package:inori_music/src/player/cover_flow_mode_provider.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/player/karaoke_screen.dart';
+import 'package:inori_music/src/player/playback_mode_buttons.dart';
 import 'package:inori_music/src/player/player_state.dart' as ps;
+import 'package:inori_music/src/player/volume_control.dart';
 import 'package:inori_music/src/shared/desktop_integration.dart';
 import 'package:inori_music/src/shared/system_titlebar_provider.dart';
 import 'package:inori_music/src/shared/theme/skin_provider.dart';
@@ -256,6 +258,35 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                                           fullscreenDialog: true,
                                         ),
                                       ),
+                        ),
+                        // Cover Flow toggle — added v5.30.5. The display mode
+                        // itself (and its gating: canSplit + queue.length > 1,
+                        // see [_playerBlock]) shipped in v5.30.0 already wired
+                        // to coverFlowModeProvider, but the *only* way to turn
+                        // it on was Settings -> Appearance, three navigations
+                        // away from the screen it affects. This reads/writes
+                        // the same provider Settings does — Settings stays the
+                        // persistence source of truth, this is just a second,
+                        // more discoverable entry point next to the other
+                        // artwork/panel toggles it sits beside.
+                        Consumer(
+                          builder: (ctx, ref2, _) {
+                            final coverFlowOn = ref2.watch(
+                              coverFlowModeProvider,
+                            );
+                            return IconButton(
+                              icon: Icon(
+                                Icons.view_carousel_outlined,
+                                color: coverFlowOn
+                                    ? context.skinColors.sakuraPinkLight
+                                    : context.skinColors.onSurfaceVariant,
+                              ),
+                              tooltip: 'Cover Flow',
+                              onPressed: () => ref2
+                                  .read(coverFlowModeProvider.notifier)
+                                  .setEnabled(!coverFlowOn),
+                            );
+                          },
                         ),
                         // Technical detail (sample rate/bitrate/format) — only
                         // meaningful for local files; the server catalog has no
@@ -588,50 +619,22 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.start,
                           children: [
-                            IconButton(
-                              icon: Icon(
-                                Icons.repeat,
-                                color: state.repeat != ps.RepeatMode.none
-                                    ? context.skinColors.sakuraPinkLight
-                                    : context.skinColors.onSurfaceVariant,
-                              ),
-                              onPressed: () {
-                                final notifier = ref.read(
-                                  playerProvider.notifier,
-                                );
-                                switch (state.repeat) {
-                                  case ps.RepeatMode.none:
-                                    notifier.setRepeat(ps.RepeatMode.all);
-                                    break;
-                                  case ps.RepeatMode.all:
-                                    notifier.setRepeat(ps.RepeatMode.one);
-                                    break;
-                                  case ps.RepeatMode.one:
-                                    notifier.setRepeat(ps.RepeatMode.none);
-                                    break;
-                                }
-                              },
-                              tooltip: 'Repeat: ${state.repeat.name}',
-                            ),
-                            Consumer(
-                              builder: (context2, ref2, child2) {
-                                final isShuffle = ref2
-                                    .watch(playerProvider)
-                                    .shuffle;
-                                return IconButton(
-                                  icon: Icon(
-                                    Icons.shuffle,
-                                    color: isShuffle
-                                        ? context.skinColors.sakuraPinkLight
-                                        : context.skinColors.onSurfaceVariant,
-                                  ),
-                                  onPressed: () => ref2
-                                      .read(playerProvider.notifier)
-                                      .setShuffle(!isShuffle),
-                                  tooltip: 'Shuffle',
-                                );
-                              },
-                            ),
+                            // Shared with the desktop mini player bar (see
+                            // playback_mode_buttons.dart) since v5.30.5 —
+                            // before that this row and the mini bar risked
+                            // growing two different repeat/shuffle
+                            // implementations; now there's exactly one.
+                            const RepeatModeButton(),
+                            const ShuffleButton(),
+                            // Always compact here (icon + popover, never an
+                            // inline slider): this row's width is the
+                            // carefully calibrated playerControlWidth, and a
+                            // fixed-width slider is exactly the kind of
+                            // addition that has overflowed it before — see
+                            // _controlWidthFloor's doc comment. The mini bar
+                            // can afford the inline slider because it has a
+                            // whole vacated now-playing section to spend.
+                            const VolumeControl(compact: true),
                           ],
                         ),
                       ),

@@ -1,17 +1,23 @@
 // ignore_for_file: unnecessary_non_null_assertion
+import 'package:flutter/foundation.dart'
+    show defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:window_manager/window_manager.dart' show DragToMoveArea;
 
 import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/auth/auth_notifier.dart';
 import 'package:inori_music/src/player/mini_player_bar.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
+import 'package:inori_music/src/shared/desktop_integration.dart';
 import 'package:inori_music/src/shared/router.dart';
+import 'package:inori_music/src/shared/system_titlebar_provider.dart';
 import 'package:inori_music/src/shared/theme/skin_provider.dart';
 import 'package:inori_music/src/shared/widgets/glass_panel.dart';
 import 'package:inori_music/src/shared/widgets/inori_mark.dart';
+import 'package:inori_music/src/shared/widgets/shell_chrome.dart';
 
 /// Adaptive shell scaffold:
 /// - Mobile (<600dp): BottomNavigationBar + MiniPlayerBar
@@ -156,7 +162,13 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
       ).showSnackBar(SnackBar(content: Text(next.message)));
     });
 
-    const bottomBar = MiniPlayerBar();
+    // Tablet/mobile keep the original bar — cover + title/artist is the only
+    // place either lives at those widths. Desktop docks that block at the
+    // sidebar's own foot instead (see SidebarNowPlaying in
+    // mini_player_bar.dart), so its bar renders transport controls only —
+    // see MiniPlayerBar.showNowPlaying's doc comment for the full split.
+    const compactBottomBar = MiniPlayerBar();
+    const desktopBottomBar = MiniPlayerBar(showNowPlaying: false);
 
     // Guest mode drops the whole server-catalog nav (Artists/Albums/Search/
     // Favorites/History) — meaningless without an account — but keeps the
@@ -180,7 +192,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
               ],
         selectedIndex: selectedIndex,
         onItemTapped: (i) => _onItemTapped(context, items, i),
-        bottomBar: bottomBar,
+        bottomBar: desktopBottomBar,
         child: widget.child,
       );
     } else if (width >= 600) {
@@ -188,7 +200,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
         navItems: items,
         selectedIndex: selectedIndex,
         onItemTapped: (i) => _onItemTapped(context, items, i),
-        bottomBar: bottomBar,
+        bottomBar: compactBottomBar,
         child: widget.child,
       );
     } else {
@@ -196,7 +208,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
         navItems: items,
         selectedIndex: selectedIndex,
         onItemTapped: (i) => _onItemTapped(context, items, i),
-        bottomBar: bottomBar,
+        bottomBar: compactBottomBar,
         child: widget.child,
       );
     }
@@ -346,33 +358,56 @@ class _DesktopLayout extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Four regions laid out side by side rather than nested, matching the
+    // v5.30.0 field report's red-boxed reference layout: the sidebar spans
+    // the window's *full* height — including the "now playing" tile docked
+    // at its own foot, see _DesktopSidebar — and the player bar is scoped to
+    // the content column on the right instead of running full-width beneath
+    // both. Before v5.30.5 the sidebar and the (then full-width) bar were
+    // both nested inside one outer Column — sidebar-height above, bar below
+    // — which made the sidebar end wherever the bar's height left off,
+    // exactly the "sidebar shorter than the window, bar spanning underneath
+    // it too" shape the field report's photo ruled out.
     return Scaffold(
-      body: Column(
+      body: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: Row(
-              children: [
-                // Floating, not flush: Apple Music's desktop sidebar sits in
-                // its own inset rounded panel rather than a Material sheet
-                // butted up against a divider — the margin plus GlassPanel's
-                // own hairline border does the job the VerticalDivider used
-                // to do, so the divider is gone rather than duplicating it.
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
-                  child: SizedBox(
-                    width: 220,
-                    child: _DesktopSidebar(
-                      navGroups: navGroups,
-                      selectedIndex: selectedIndex,
-                      onItemTapped: onItemTapped,
-                    ),
-                  ),
-                ),
-                Expanded(child: child),
-              ],
+          // Floating, not flush: Apple Music's desktop sidebar sits in
+          // its own inset rounded panel rather than a Material sheet
+          // butted up against a divider — the margin plus GlassPanel's
+          // own hairline border does the job the VerticalDivider used
+          // to do, so the divider is gone rather than duplicating it.
+          // The 8px margin now runs the full window height rather than
+          // just the row above the player bar.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+            child: SizedBox(
+              width: 220,
+              child: _DesktopSidebar(
+                navGroups: navGroups,
+                selectedIndex: selectedIndex,
+                onItemTapped: onItemTapped,
+              ),
             ),
           ),
-          bottomBar,
+          Expanded(
+            child: ShellChrome(
+              // The sidebar above already reserves room for macOS's native
+              // traffic lights at the window's top-left corner (see
+              // _DesktopSidebar's _macTitleRowTopInset) — every DesktopAppBar
+              // rendered by a screen in this content column would otherwise
+              // double-reserve it, which is exactly the coordinate bug the
+              // field report traced: the gutter lived on the AppBar, which by
+              // then only ever rendered at x >= 236, nowhere near the lights.
+              reservesTrafficLightGutter: true,
+              child: Column(
+                children: [
+                  Expanded(child: child),
+                  bottomBar,
+                ],
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -392,6 +427,30 @@ class _DesktopSidebar extends ConsumerWidget {
   /// are laid out in.
   final int selectedIndex;
   final ValueChanged<int> onItemTapped;
+
+  /// macOS positions its native traffic-light buttons at a fixed offset from
+  /// the window's top-left corner, independent of whatever Flutter renders
+  /// underneath (a system constant, not something this app controls): 20pt
+  /// in from the left edge, 12pt button diameter, 20pt centre-to-centre
+  /// spacing, vertical centre ~20pt down from the window's top edge. That
+  /// puts their lowest point at window-coordinate y = 20 + 12/2 = 26.
+  ///
+  /// This panel floats 8px in from the window edge (see _DesktopLayout's
+  /// outer Padding), so window-coordinate y=26 sits only 26 - 8 = 18px into
+  /// the panel's own local coordinate space — tight enough that the
+  /// wordmark's cap-height would land right against the bottom of the lights
+  /// instead of clearly under them, which is what actually reads as
+  /// "crushed" in a screenshot even without the two technically overlapping.
+  /// Rounding up past that 18px minimum leaves the wordmark row roughly a
+  /// button-radius of daylight under the cluster.
+  static const _macTitleRowTopInset = 30.0;
+
+  /// The pre-v5.30.5 inset, kept everywhere the traffic lights aren't a
+  /// concern: non-macOS (the caption-button trio there is ordinary Flutter
+  /// content, not a native overlay) or the user opted into the real OS title
+  /// bar, where the lights live inside actual native chrome above this panel
+  /// rather than over it.
+  static const _defaultTitleRowTopInset = 24.0;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -418,6 +477,46 @@ class _DesktopSidebar extends ConsumerWidget {
       rows.add(const SizedBox(height: 8));
     }
 
+    // Same three-part gate FullPlayerScreen's own
+    // _needsMacTrafficLightGutter uses: real desktop build, actually macOS,
+    // and not deferring to a real OS title bar (which would put the lights
+    // in native chrome above this panel rather than over it).
+    final needsTrafficLightGutter =
+        DesktopIntegration.isDesktop &&
+        defaultTargetPlatform == TargetPlatform.macOS &&
+        !ref.watch(systemTitleBarProvider);
+
+    final titleRow = Padding(
+      padding: EdgeInsets.fromLTRB(
+        16,
+        needsTrafficLightGutter
+            ? _macTitleRowTopInset
+            : _defaultTitleRowTopInset,
+        16,
+        12,
+      ),
+      child: Row(
+        children: [
+          const InoriMark(size: 22),
+          const SizedBox(width: 8),
+          // Expanded, because the wordmark at titleMedium/w700 already
+          // exceeds the 220px sidebar's content width in some text
+          // scales/themes — unbounded it overflows the Row.
+          Expanded(
+            child: Text(
+              'Inori Music',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: context.skinColors.onSurface,
+                fontWeight: FontWeight.w700,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+
     // GlassPanel (Material inside, not a plain coloured Container): ListTile
     // paints its selected tile colour and ink splashes onto the nearest
     // Material ancestor, so a ColoredBox in between swallows both — the same
@@ -431,32 +530,20 @@ class _DesktopSidebar extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
-            child: Row(
-              children: [
-                const InoriMark(size: 22),
-                const SizedBox(width: 8),
-                // Expanded, because the wordmark at titleMedium/w700 already
-                // exceeds the 220px sidebar's content width in some text
-                // scales/themes — unbounded it overflows the Row.
-                Expanded(
-                  child: Text(
-                    'Inori Music',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: context.skinColors.onSurface,
-                      fontWeight: FontWeight.w700,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              ],
-            ),
-          ),
+          // Draggable so the blank space the traffic lights sit over still
+          // lets the user move the window, matching Apple Music's own
+          // sidebar header — before this fix nothing in the sidebar was a
+          // drag region at all, since DragToMoveArea only ever wrapped
+          // DesktopAppBar's row in the content column to the right.
+          // Mac-only: Windows/Linux keep the plain, non-draggable title row
+          // they've always had, since their own drag region and window
+          // buttons already live in that content-column bar.
+          needsTrafficLightGutter ? DragToMoveArea(child: titleRow) : titleRow,
           const _AccountBlock(),
           const Divider(),
           Expanded(child: ListView(children: rows)),
+          const Divider(),
+          const SidebarNowPlaying(),
         ],
       ),
     );

@@ -509,6 +509,23 @@ void main() {
   });
 
   // ---------------------------------------------------------------------
+  // v5.30.5 — volume control parity with the desktop mini player bar. The
+  // bar's own volume/mute behaviour is covered directly in
+  // volume_control_test.dart against the shared VolumeControl widget; this
+  // just proves the full player screen actually mounts one, always in its
+  // compact (icon + popover) shape — see full_player_screen.dart's inline
+  // comment for why an inline slider isn't safe in this row.
+  // ---------------------------------------------------------------------
+
+  testWidgets('the transport row carries a volume control', (tester) async {
+    _sizeWindow(tester, const Size(1400, 1000));
+    await tester.pumpWidget(_app());
+    await _settle(tester);
+
+    expect(find.byIcon(Icons.volume_up), findsOneWidget);
+  });
+
+  // ---------------------------------------------------------------------
   // v5.30.0 — Cover Flow artwork display mode
   // ---------------------------------------------------------------------
 
@@ -553,5 +570,51 @@ void main() {
 
       expect(find.byType(CoverFlowArtwork), findsNothing);
     });
+
+    // -----------------------------------------------------------------
+    // v5.30.5 — the gate above (canSplit && coverFlowModeProvider &&
+    // queue.length > 1) was already correct per the three tests above; the
+    // field report's "Cover Flow doesn't show up" turned out to be that
+    // Settings -> Appearance was the *only* way to flip the provider, three
+    // navigations from the screen it affects. This is that second, more
+    // discoverable entry point living in the top bar itself.
+    // -----------------------------------------------------------------
+
+    testWidgets(
+      'the top bar\'s Cover Flow toggle flips the same provider the Settings '
+      'switch does',
+      (tester) async {
+        _sizeWindow(tester, const Size(1400, 1000));
+        // Deliberately not passing coverFlow: true — this exercises the real
+        // CoverFlowModeNotifier (off by default), not the always-on test
+        // double the other three cases above use.
+        await tester.pumpWidget(
+          _appWithArtwork(albumId: 'album-x', queueLength: 4),
+        );
+        await _settle(tester);
+
+        expect(find.byType(CoverFlowArtwork), findsNothing);
+
+        await tester.tap(find.byIcon(Icons.view_carousel_outlined));
+        await _settle(tester);
+
+        expect(
+          find.byType(CoverFlowArtwork),
+          findsOneWidget,
+          reason:
+              'The button must actually toggle coverFlowModeProvider, not '
+              'just sit there',
+        );
+
+        await tester.tap(find.byIcon(Icons.view_carousel_outlined));
+        await _settle(tester);
+
+        expect(
+          find.byType(CoverFlowArtwork),
+          findsNothing,
+          reason: 'It must toggle back off again, not only ever turn on',
+        );
+      },
+    );
   });
 }

@@ -5,6 +5,14 @@
 // the previously entry-less catalog Playlists route — is reachable at each
 // breakpoint.
 //
+// v5.30.5 adds: the four-region desktop layout (full-height sidebar, player
+// bar scoped to the content column), the sidebar's own SidebarNowPlaying
+// foot block versus the desktop player bar's now-controls-only shape, the
+// mobile/tablet regression guard for the bar keeping its now-playing info,
+// and the macOS traffic-light gutter handoff from DesktopAppBar to the
+// sidebar itself.
+//
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -12,10 +20,12 @@ import 'package:go_router/go_router.dart';
 
 import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/auth/auth_notifier.dart';
+import 'package:inori_music/src/player/mini_player_bar.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/player/player_state.dart' as pstate;
 import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/widgets/glass_panel.dart';
+import 'package:inori_music/src/shared/widgets/inori_mark.dart';
 import 'package:inori_music/src/shared/widgets/shell_scaffold.dart';
 
 // ---------------------------------------------------------------------------
@@ -36,9 +46,21 @@ class _StubPlayerNotifier extends PlayerNotifier {
 
 /// The routes the shell navigates between. Bodies are placeholders — this
 /// exercises the shell chrome, not the screens.
+///
+/// `/player` is registered as a top-level sibling of the `ShellRoute`, not
+/// nested inside it — matching production's actual router.dart, where
+/// FullPlayerScreen is a full-bleed route with no shell chrome behind it.
+/// It needs to exist here at all only because v5.30.5 gave both
+/// SidebarNowPlaying and the desktop player bar's queue button a real
+/// `context.push(AppRoutes.player)` call to land somewhere.
 GoRouter _router({String initialLocation = AppRoutes.artists}) => GoRouter(
   initialLocation: initialLocation,
   routes: [
+    GoRoute(
+      path: AppRoutes.player,
+      builder: (_, _) =>
+          Scaffold(body: Center(child: Text('body:${AppRoutes.player}'))),
+    ),
     ShellRoute(
       builder: (context, state, child) => ShellScaffold(child: child),
       routes: [
@@ -286,4 +308,222 @@ void main() {
       reason: 'A flush sidebar would start at y=0',
     );
   });
+
+  // -------------------------------------------------------------------------
+  // v5.30.5 — four-region desktop layout (field-report follow-up: the
+  // sidebar and the player bar were fighting over the same strip of window
+  // beneath the sidebar's old, shorter-than-full-height shape).
+  // -------------------------------------------------------------------------
+
+  testWidgets(
+    'the desktop sidebar spans the window\'s full height, not just the row '
+    'above the player bar',
+    (tester) async {
+      _useDesktopWindow(tester);
+      await tester.pumpWidget(_buildApp(_router()));
+      await tester.pumpAndSettle();
+
+      final sidebarHeight = tester.getSize(find.byType(GlassPanel)).height;
+      // Window height (1000) minus the 8px top/bottom margins _DesktopLayout
+      // applies around the sidebar — critically, *not* also minus the player
+      // bar's own height, which is what the old nested-Column shape reduced
+      // it by.
+      expect(
+        sidebarHeight,
+        closeTo(1000 - 8 - 8, 1),
+        reason:
+            'A sidebar still sharing height with the player bar below it '
+            'would be noticeably shorter than window height minus its own '
+            'margins',
+      );
+    },
+  );
+
+  testWidgets('the player bar no longer runs full-width beneath the sidebar', (
+    tester,
+  ) async {
+    _useDesktopWindow(tester);
+    await tester.pumpWidget(_buildApp(_router()));
+    await tester.pumpAndSettle();
+
+    final sidebarRight = tester.getTopRight(find.byType(GlassPanel)).dx;
+    final barLeft = tester.getTopLeft(find.byKey(MiniPlayerBar.contentKey)).dx;
+    expect(
+      barLeft,
+      greaterThanOrEqualTo(sidebarRight),
+      reason:
+          'The bar must be scoped to the content column to the right of '
+          'the sidebar, not span underneath it',
+    );
+  });
+
+  testWidgets(
+    'the sidebar foot carries now-playing info; the desktop player bar '
+    'carries mode controls instead',
+    (tester) async {
+      _useDesktopWindow(tester);
+      await tester.pumpWidget(_buildApp(_router()));
+      await tester.pumpAndSettle();
+
+      expect(find.byType(SidebarNowPlaying), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byKey(MiniPlayerBar.contentKey),
+          matching: find.byType(MiniPlayerArtwork),
+        ),
+        findsNothing,
+        reason:
+            'Now-playing info moved to the sidebar; the bar must not '
+            'duplicate it',
+      );
+      // The width that artwork/title used to occupy now carries shuffle and
+      // repeat instead (see MiniPlayerBar.showNowPlaying's doc comment).
+      expect(
+        find.descendant(
+          of: find.byKey(MiniPlayerBar.contentKey),
+          matching: find.byIcon(Icons.shuffle),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(MiniPlayerBar.contentKey),
+          matching: find.byIcon(Icons.repeat),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets('tapping the sidebar now-playing tile opens the full player', (
+    tester,
+  ) async {
+    _useDesktopWindow(tester);
+    await tester.pumpWidget(_buildApp(_router()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byType(SidebarNowPlaying));
+    await tester.pumpAndSettle();
+
+    expect(find.text('body:${AppRoutes.player}'), findsOneWidget);
+  });
+
+  testWidgets(
+    'the desktop player bar\'s queue button opens the full player, since no '
+    'standalone queue view exists outside it',
+    (tester) async {
+      _useDesktopWindow(tester);
+      await tester.pumpWidget(_buildApp(_router()));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byIcon(Icons.queue_music));
+      await tester.pumpAndSettle();
+
+      expect(find.text('body:${AppRoutes.player}'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'mobile\'s bottom bar keeps its now-playing info block (regression '
+    'guard)',
+    (tester) async {
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(420, 900);
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(_buildApp(_router()));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.descendant(
+          of: find.byKey(MiniPlayerBar.contentKey),
+          matching: find.byType(MiniPlayerArtwork),
+        ),
+        findsOneWidget,
+      );
+      expect(
+        find.descendant(
+          of: find.byKey(MiniPlayerBar.contentKey),
+          matching: find.byIcon(Icons.shuffle),
+        ),
+        findsNothing,
+        reason: 'The desktop-only mode controls must not leak into mobile',
+      );
+    },
+  );
+
+  testWidgets(
+    'tablet\'s bottom bar keeps its now-playing info block (regression '
+    'guard)',
+    (tester) async {
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(800, 900);
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(_buildApp(_router()));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.descendant(
+          of: find.byKey(MiniPlayerBar.contentKey),
+          matching: find.byType(MiniPlayerArtwork),
+        ),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'the desktop shell does not overflow at the 1200dp breakpoint floor',
+    (tester) async {
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(1200, 800);
+      addTearDown(tester.view.reset);
+      await tester.pumpWidget(_buildApp(_router()));
+      await tester.pumpAndSettle();
+
+      expect(tester.takeException(), isNull);
+    },
+  );
+
+  // -------------------------------------------------------------------------
+  // v5.30.5 — macOS traffic-light gutter handoff. The gutter used to live on
+  // DesktopAppBar (in the content column, x >= 236 — nowhere near the
+  // lights); it now lives on the sidebar itself, which actually occupies the
+  // window's top-left corner. debugDefaultTargetPlatformOverride is reset
+  // synchronously at the end of the test body, same as desktop_app_bar_test.
+  // dart — the binding's end-of-test invariant check runs before
+  // addTearDown/tearDown would fire.
+  // -------------------------------------------------------------------------
+
+  testWidgets(
+    'macOS sidebar reserves extra top padding for the traffic lights; other '
+    'platforms keep the original inset',
+    (tester) async {
+      _useDesktopWindow(tester);
+
+      await tester.pumpWidget(_buildApp(_router()));
+      await tester.pumpAndSettle();
+      final defaultPanelTop = tester.getTopLeft(find.byType(GlassPanel)).dy;
+      final defaultMarkTop = tester.getTopLeft(find.byType(InoriMark)).dy;
+      expect(
+        defaultMarkTop - defaultPanelTop,
+        closeTo(24, 2),
+        reason: 'Non-macOS keeps the pre-v5.30.5 24px title-row inset',
+      );
+
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      await tester.pumpWidget(_buildApp(_router()));
+      await tester.pumpAndSettle();
+      final macPanelTop = tester.getTopLeft(find.byType(GlassPanel)).dy;
+      final macMarkTop = tester.getTopLeft(find.byType(InoriMark)).dy;
+      debugDefaultTargetPlatformOverride = null;
+
+      expect(
+        macMarkTop - macPanelTop,
+        closeTo(30, 2),
+        reason:
+            'macOS needs the enlarged inset to clear the traffic lights '
+            '(see _DesktopSidebar._macTitleRowTopInset)',
+      );
+    },
+  );
 }

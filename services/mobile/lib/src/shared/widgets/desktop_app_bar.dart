@@ -9,6 +9,7 @@ import 'package:inori_music/src/shared/desktop_integration.dart';
 import 'package:inori_music/src/shared/system_titlebar_provider.dart';
 import 'package:inori_music/src/shared/theme/skin_provider.dart';
 import 'package:inori_music/src/shared/titlebar_material_provider.dart';
+import 'package:inori_music/src/shared/widgets/shell_chrome.dart';
 
 /// Drop-in [AppBar] replacement that doubles as the window's draggable
 /// title-bar region on desktop, replacing the standalone strip that shipped
@@ -93,8 +94,17 @@ class DesktopAppBar extends StatelessWidget implements PreferredSizeWidget {
         // Reserve space for the native traffic lights (macOS draws them
         // above whatever Flutter renders, at a fixed offset from the
         // window's top-left) rather than letting the title/leading content
-        // start flush against them.
-        final withMacGutter = isMac
+        // start flush against them — but only when nothing else already
+        // has. Before v5.30.5 this fired unconditionally on macOS, which
+        // double-reserved the gutter once the desktop shell's sidebar grew
+        // tall enough to own the actual top-left corner itself (see
+        // ShellChrome's doc comment): this bar sits at x >= 236 inside the
+        // shell, nowhere near the lights, so the 70px was pure dead space
+        // there while the sidebar — the thing actually under the lights —
+        // reserved nothing at all.
+        final reservesGutter =
+            ShellChrome.of(context)?.reservesTrafficLightGutter ?? false;
+        final withMacGutter = isMac && !reservesGutter
             ? Padding(padding: const EdgeInsets.only(left: 70), child: appBar)
             : appBar;
 
@@ -175,12 +185,20 @@ class DesktopSliverAppBar extends StatelessWidget {
         // to dodge the macOS traffic lights — unlike DesktopAppBar's flat
         // bar, padding the whole widget here would also shift the expanded
         // cover-art background, which is meant to stay edge-to-edge.
+        //
+        // Same ShellChrome handoff as DesktopAppBar (see its doc comment) —
+        // once the desktop shell's full-height sidebar owns the window's
+        // top-left corner, this bar (which only ever renders at x >= 236
+        // inside that shell) has nothing left to dodge.
+        final reservesGutter =
+            ShellChrome.of(context)?.reservesTrafficLightGutter ?? false;
+        final needsGutter = isMac && !reservesGutter;
         final leadingContent =
             leading ??
             (automaticallyImplyLeading && Navigator.canPop(context)
                 ? const BackButton()
                 : null);
-        final resolvedLeading = isMac && leadingContent != null
+        final resolvedLeading = needsGutter && leadingContent != null
             ? Padding(
                 padding: const EdgeInsets.only(left: 70),
                 child: leadingContent,
@@ -205,7 +223,7 @@ class DesktopSliverAppBar extends StatelessWidget {
           title: draggableBackground == null ? title : null,
           backgroundColor: hasMaterial ? Colors.transparent : null,
           leading: resolvedLeading,
-          leadingWidth: isMac && leadingContent != null ? 126 : null,
+          leadingWidth: needsGutter && leadingContent != null ? 126 : null,
           automaticallyImplyLeading: false,
           actions: [
             ...?actions,

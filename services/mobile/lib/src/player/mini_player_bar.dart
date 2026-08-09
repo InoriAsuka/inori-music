@@ -8,6 +8,8 @@ import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/audio/sleep_timer_notifier.dart';
 import 'package:inori_music/src/catalog/artwork_provider.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
+import 'package:inori_music/src/player/playback_mode_buttons.dart';
+import 'package:inori_music/src/player/volume_control.dart';
 import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/theme/skin_provider.dart';
 import 'package:inori_music/src/shared/widgets/spring_interaction.dart';
@@ -36,8 +38,20 @@ import 'package:inori_music/src/shared/widgets/spring_interaction.dart';
 /// progress bar lives inside the middle column instead): overlaying it on
 /// the content row would need it to win hit-testing priority over whatever
 /// sits underneath, which is a UX trade-off this phase didn't set out to make.
+///
+/// [showNowPlaying] (added v5.30.5) splits the bar into two shapes. Mobile
+/// and tablet keep the original one — section 1 is the cover + title/artist,
+/// and the bar is the *only* place either lives. The desktop shell instead
+/// docks a [SidebarNowPlaying] block at the foot of the floating sidebar (see
+/// `shell_scaffold.dart`'s field-report follow-up), so its player bar passes
+/// `showNowPlaying: false`: section 1 becomes shuffle/repeat instead, and the
+/// width that would have gone to artwork/title goes to section 3 growing
+/// from "sleep timer alone" into "volume, sleep timer, queue" — controls that
+/// only fit once the bar isn't also carrying now-playing info.
 class MiniPlayerBar extends ConsumerWidget {
-  const MiniPlayerBar({super.key});
+  const MiniPlayerBar({super.key, this.showNowPlaying = true});
+
+  final bool showNowPlaying;
 
   /// EchoMusic's `PlayerBar.vue` footer height (`h-21`).
   static const _contentHeight = 84.0;
@@ -48,8 +62,29 @@ class MiniPlayerBar extends ConsumerWidget {
   /// EchoMusic's transport icon size (`width="22" height="22"` on
   /// prev/next/play-mode in `PlayerBar.vue`). The play/pause glyph itself
   /// stays a little larger, matching the existing (pre-v5.30.0) proportion
-  /// between it and its siblings.
+  /// between it and its siblings. Also applied to the v5.30.5 desktop-only
+  /// controls (shuffle/repeat/volume/queue) — EchoMusic's own "play-mode"
+  /// icons share this same 22px, so this doubles as their size too.
   static const _transportIconSize = 22.0;
+
+  /// Below this width, section 3's volume control has no room for its inline
+  /// slider and collapses to an icon-only trigger that opens the slider in a
+  /// popover instead — judged against the section's own measured width (via
+  /// the LayoutBuilder in [_desktopActionsRow]), not the window's, per the
+  /// basis-mismatch lesson `full_player_screen.dart`'s
+  /// `_compactControlsBreakpoint` documents.
+  ///
+  /// 240, not a rounder-looking 200 — section 3 in expanded mode measures
+  /// exactly 234px (three 48px default IconButton tap targets for
+  /// volume/timer/queue, plus [VolumeControl]'s 90px slider track: no inline
+  /// gaps, since this Row sets none). 200 left a real gap between "not narrow
+  /// enough to switch to compact" and "actually wide enough for 234px",
+  /// which overflowed rather than triggering the collapse meant to prevent
+  /// exactly that — caught by test/mini_player_bar_desktop_test.dart, not by
+  /// inspection. 240 clears 234 with a few px to spare; compact mode itself
+  /// only needs 144px (three icons, no slider), so anything below 240 has
+  /// ample room once collapsed.
+  static const _volumeCompactThreshold = 240.0;
 
   /// Identifies the fixed-height content row in tests, so its rendered size
   /// can be asserted against without relying on it being the only widget of
@@ -90,50 +125,67 @@ class MiniPlayerBar extends ConsumerWidget {
                     borderRadius: BorderRadius.circular(8),
                     child: Row(
                       children: [
-                        // Section 1 — artwork + title/artist. Flexible, so it
+                        // Section 1 — artwork + title/artist on mobile/
+                        // tablet, or shuffle/repeat once the desktop shell
+                        // has moved now-playing info to the sidebar (see
+                        // [showNowPlaying]). Either way it's Expanded, so it
                         // absorbs whatever width the fixed-size transport
                         // trio and section 3 don't need.
                         Expanded(
-                          child: Row(
-                            children: [
-                              _MiniPlayerArtwork(
-                                albumId:
-                                    mediaItem?.extras?['albumId'] as String?,
-                                size: _artworkSize,
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                          child: showNowPlaying
+                              ? Row(
                                   children: [
-                                    Text(
-                                      title,
-                                      style: TextStyle(
-                                        color: context.skinColors.onSurface,
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
+                                    MiniPlayerArtwork(
+                                      albumId:
+                                          mediaItem?.extras?['albumId']
+                                              as String?,
+                                      size: _artworkSize,
                                     ),
-                                    if (artist.isNotEmpty)
-                                      Text(
-                                        artist,
-                                        style: TextStyle(
-                                          color: context
-                                              .skinColors
-                                              .onSurfaceVariant,
-                                          fontSize: 11,
-                                        ),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            title,
+                                            style: TextStyle(
+                                              color:
+                                                  context.skinColors.onSurface,
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          if (artist.isNotEmpty)
+                                            Text(
+                                              artist,
+                                              style: TextStyle(
+                                                color: context
+                                                    .skinColors
+                                                    .onSurfaceVariant,
+                                                fontSize: 11,
+                                              ),
+                                              maxLines: 1,
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                        ],
                                       ),
+                                    ),
+                                  ],
+                                )
+                              : const Row(
+                                  mainAxisAlignment: MainAxisAlignment.start,
+                                  children: [
+                                    ShuffleButton(iconSize: _transportIconSize),
+                                    RepeatModeButton(
+                                      iconSize: _transportIconSize,
+                                    ),
                                   ],
                                 ),
-                              ),
-                            ],
-                          ),
                         ),
 
                         // Section 2 — the transport trio. Fixed-size, kept
@@ -196,53 +248,25 @@ class MiniPlayerBar extends ConsumerWidget {
 
                         // Section 3 — actions. Mirrors section 1's flex so
                         // section 2 actually sits in the middle instead of
-                        // drifting toward whichever side has less in it.
+                        // drifting toward whichever side has less in it. Just
+                        // the sleep timer on mobile/tablet, same as before
+                        // v5.30.5; volume and a queue entry point join it once
+                        // section 1 has given up its now-playing info (see
+                        // [showNowPlaying]) — measured against this section's
+                        // own width via LayoutBuilder, not the window's (see
+                        // [_volumeCompactThreshold]'s doc comment for why).
                         Expanded(
                           child: Align(
                             alignment: Alignment.centerRight,
-                            child: Consumer(
-                              builder: (context, ref, _) {
-                                final timerState = ref.watch(
-                                  sleepTimerProvider,
-                                );
-                                final active = timerState.active;
-                                final remaining = timerState.remaining;
-                                final label = timerState.stopAfterTrack
-                                    ? '♪'
-                                    : (remaining != null
-                                          ? _formatRemaining(remaining)
-                                          : null);
-                                return active
-                                    ? TextButton.icon(
-                                        icon: Icon(
-                                          Icons.alarm,
-                                          size: 18,
-                                          color: Theme.of(
-                                            context,
-                                          ).colorScheme.primary,
+                            child: showNowPlaying
+                                ? _sleepTimerButton()
+                                : LayoutBuilder(
+                                    builder: (context, constraints) =>
+                                        _desktopActionsRow(
+                                          context,
+                                          constraints.maxWidth,
                                         ),
-                                        label: Text(
-                                          label ?? '',
-                                          style: TextStyle(
-                                            fontSize: 10,
-                                            color: Theme.of(
-                                              context,
-                                            ).colorScheme.primary,
-                                          ),
-                                        ),
-                                        onPressed: () =>
-                                            _showSleepTimerSheet(context, ref),
-                                      )
-                                    : IconButton(
-                                        icon: const Icon(Icons.alarm, size: 22),
-                                        color:
-                                            context.skinColors.onSurfaceVariant,
-                                        tooltip: 'Sleep timer',
-                                        onPressed: () =>
-                                            _showSleepTimerSheet(context, ref),
-                                      );
-                              },
-                            ),
+                                  ),
                           ),
                         ),
                       ],
@@ -262,6 +286,84 @@ class MiniPlayerBar extends ConsumerWidget {
     final s = d.inSeconds.remainder(60).toString().padLeft(2, '0');
     return '$m:$s';
   }
+}
+
+/// The sleep-timer control shared by both of section 3's shapes (see
+/// [MiniPlayerBar.showNowPlaying]) — a top-level function rather than code
+/// duplicated inline so mobile/tablet's "just the timer" case and desktop's
+/// "timer among volume and queue" case can't drift into two different timer
+/// widgets that happen to look alike today and diverge tomorrow.
+Widget _sleepTimerButton() {
+  return Consumer(
+    builder: (context, ref, _) {
+      final timerState = ref.watch(sleepTimerProvider);
+      final active = timerState.active;
+      final remaining = timerState.remaining;
+      final label = timerState.stopAfterTrack
+          ? '♪'
+          : (remaining != null
+                ? MiniPlayerBar._formatRemaining(remaining)
+                : null);
+      return active
+          ? TextButton.icon(
+              icon: Icon(
+                Icons.alarm,
+                size: 18,
+                color: Theme.of(context).colorScheme.primary,
+              ),
+              label: Text(
+                label ?? '',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: Theme.of(context).colorScheme.primary,
+                ),
+              ),
+              onPressed: () => _showSleepTimerSheet(context, ref),
+            )
+          : IconButton(
+              icon: const Icon(Icons.alarm, size: 22),
+              color: context.skinColors.onSurfaceVariant,
+              tooltip: 'Sleep timer',
+              onPressed: () => _showSleepTimerSheet(context, ref),
+            );
+    },
+  );
+}
+
+/// Section 3's desktop shape, once now-playing info has moved to the
+/// sidebar's own [SidebarNowPlaying] block: volume, the sleep timer, and a
+/// queue entry point. [availableWidth] is this section's own measured width
+/// (from the `LayoutBuilder` in [MiniPlayerBar.build]) — what decides
+/// whether the volume slider fits inline or collapses to an icon-only
+/// popover trigger, see [MiniPlayerBar._volumeCompactThreshold].
+///
+/// The queue button doesn't open a queue view of its own — there isn't one
+/// outside [FullPlayerScreen] (docked beside the player on wide windows, a
+/// bottom sheet otherwise), and building a second queue UI just for this
+/// entry point would be a second thing to keep in sync with the first. It
+/// opens the same route the sidebar's now-playing tile and this bar's own
+/// title/artist tap already do.
+Widget _desktopActionsRow(BuildContext context, double availableWidth) {
+  final compactVolume = availableWidth < MiniPlayerBar._volumeCompactThreshold;
+  return Row(
+    mainAxisSize: MainAxisSize.min,
+    children: [
+      VolumeControl(
+        compact: compactVolume,
+        iconSize: MiniPlayerBar._transportIconSize,
+      ),
+      _sleepTimerButton(),
+      IconButton(
+        icon: const Icon(
+          Icons.queue_music,
+          size: MiniPlayerBar._transportIconSize,
+        ),
+        color: context.skinColors.onSurfaceVariant,
+        tooltip: 'Queue',
+        onPressed: () => context.push(AppRoutes.player),
+      ),
+    ],
+  );
 }
 
 void _showSleepTimerSheet(BuildContext context, WidgetRef ref) {
@@ -377,8 +479,12 @@ class _MiniPlayerProgressBarState
 /// future caller passing something other than 56 still gets sane
 /// proportions); [MiniPlayerBar] itself always passes 56, EchoMusic's
 /// `PlayerBar.vue` cover size.
-class _MiniPlayerArtwork extends ConsumerWidget {
-  const _MiniPlayerArtwork({this.albumId, this.size = 44});
+///
+/// Public since v5.30.5 — [SidebarNowPlaying] (below) also needs it, once
+/// the desktop shell moved the "what's playing" cover+title tile out of the
+/// player bar and into the sidebar's own foot.
+class MiniPlayerArtwork extends ConsumerWidget {
+  const MiniPlayerArtwork({super.key, this.albumId, this.size = 44});
 
   final String? albumId;
   final double size;
@@ -453,6 +559,80 @@ class _MiniPlayerArtwork extends ConsumerWidget {
       ),
       clipBehavior: Clip.antiAlias,
       child: child,
+    );
+  }
+}
+
+/// The sidebar's own "what's playing" tile — the cover + title/artist half
+/// of what [MiniPlayerBar] used to show in every layout, split out in
+/// v5.30.5 so the desktop shell can dock it at the foot of the sidebar (per
+/// the v5.30.0 field report's red-boxed reference layout) while the player
+/// bar itself keeps only transport controls. Tapping it opens the full
+/// player, exactly like tapping the bar's own now-playing section already
+/// does on mobile/tablet — see [MiniPlayerBar]'s outer `InkWell`.
+class SidebarNowPlaying extends ConsumerWidget {
+  const SidebarNowPlaying({super.key});
+
+  /// Smaller than the mobile/tablet bar's 56px — the sidebar is a fixed
+  /// 220px column, not a width that grows with the window.
+  static const _artworkSize = 48.0;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final mediaItem = ref.watch(playerProvider.select((s) => s.mediaItem));
+    final t = AppLocalizations.of(context);
+    final title = mediaItem?.title ?? t.nothingPlaying;
+    final artist = mediaItem?.artist ?? '';
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => context.push(AppRoutes.player),
+          child: Padding(
+            padding: const EdgeInsets.all(6),
+            child: Row(
+              children: [
+                MiniPlayerArtwork(
+                  albumId: mediaItem?.extras?['albumId'] as String?,
+                  size: _artworkSize,
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        style: TextStyle(
+                          color: context.skinColors.onSurface,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (artist.isNotEmpty)
+                        Text(
+                          artist,
+                          style: TextStyle(
+                            color: context.skinColors.onSurfaceVariant,
+                            fontSize: 11,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
