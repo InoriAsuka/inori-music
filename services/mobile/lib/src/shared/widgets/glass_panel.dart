@@ -23,7 +23,6 @@ class GlassPanel extends StatelessWidget {
     this.padding = const EdgeInsets.all(16),
     this.borderRadius = 20,
     this.blurSigma = 18,
-    this.borderRadiusOverride,
   });
 
   final Widget child;
@@ -34,19 +33,9 @@ class GlassPanel extends StatelessWidget {
   /// blurred, so it only needs to add the sense of a second surface.
   final double blurSigma;
 
-  /// Escape hatch for a panel that needs *different* rounding per corner —
-  /// added v5.30.7 for the desktop sidebar, whose top-left corner has to
-  /// match the macOS window's own corner radius once the panel sits flush
-  /// against it (see `_DesktopSidebar` in shell_scaffold.dart), while its
-  /// other three corners keep the panel's usual rounding. `null` (the
-  /// default) keeps every existing call site — which only ever wanted one
-  /// uniform [borderRadius] — completely unchanged; this is additive, not a
-  /// replacement for the simple case.
-  final BorderRadius? borderRadiusOverride;
-
   @override
   Widget build(BuildContext context) {
-    final radius = borderRadiusOverride ?? BorderRadius.circular(borderRadius);
+    final radius = BorderRadius.circular(borderRadius);
     // The shadow lives on this outer DecoratedBox rather than inside the
     // ClipRRect below — ClipRRect clips everything painted within it,
     // including a shadow drawn by whatever it wraps, so a shadow added to

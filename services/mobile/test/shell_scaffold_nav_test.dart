@@ -22,6 +22,16 @@
 // see mini_player_bar_desktop_test.dart for the bar's own wide-shape
 // coverage.
 //
+// v5.31.0 drops the floating-GlassPanel sidebar (margin, rounded corners,
+// its own macOS-only traffic-light gutter math) for an EchoMusic-style flush
+// column: no margin, a single right-edge hairline, a flat blank drag strip
+// (48px macOS / 24px other desktop platforms) standing in for the old
+// geometry-derived `_macTitleRowTopInset`. The macOS-gutter tests below are
+// replaced accordingly rather than merely retuned — the mechanism they were
+// asserting against no longer exists. This file also gains coverage for the
+// new cross-column accent gradient (`_LayoutAccentGradient`) that papers
+// over the seam between the flush sidebar and the content column.
+//
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -35,7 +45,6 @@ import 'package:inori_music/src/player/mini_player_bar.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/player/player_state.dart' as pstate;
 import 'package:inori_music/src/shared/router.dart';
-import 'package:inori_music/src/shared/widgets/glass_panel.dart';
 import 'package:inori_music/src/shared/widgets/inori_mark.dart';
 import 'package:inori_music/src/shared/widgets/shell_scaffold.dart';
 
@@ -331,24 +340,58 @@ void main() {
     },
   );
 
-  testWidgets('the desktop sidebar floats with a margin instead of sitting '
-      'flush against the window edge', (tester) async {
-    _useDesktopWindow(tester);
-    await tester.pumpWidget(_buildApp(_router()));
-    await tester.pumpAndSettle();
+  testWidgets(
+    'the desktop sidebar sits flush against the window\'s top-left corner '
+    '(v5.31.0 EchoMusic-style flush column — no floating panel, no margin)',
+    (tester) async {
+      _useDesktopWindow(tester);
+      await tester.pumpWidget(_buildApp(_router()));
+      await tester.pumpAndSettle();
 
-    final topLeft = tester.getTopLeft(find.byType(GlassPanel));
-    expect(
-      topLeft.dx,
-      greaterThan(0),
-      reason: 'A flush sidebar would start at x=0',
-    );
-    expect(
-      topLeft.dy,
-      greaterThan(0),
-      reason: 'A flush sidebar would start at y=0',
-    );
-  });
+      expect(
+        tester.getTopLeft(find.byKey(desktopSidebarKey)),
+        Offset.zero,
+        reason:
+            'EchoMusic\'s Sidebar.vue is `h-full` with no margin — a '
+            'floating panel (the pre-v5.31.0 shape) would start at a '
+            'positive offset on both axes',
+      );
+    },
+  );
+
+  testWidgets(
+    'the desktop sidebar paints only a right-edge hairline — no left/top/'
+    'bottom border, no rounding, no shadow',
+    (tester) async {
+      _useDesktopWindow(tester);
+      await tester.pumpWidget(_buildApp(_router()));
+      await tester.pumpAndSettle();
+
+      final box = tester.widget<DecoratedBox>(find.byKey(desktopSidebarKey));
+      final decoration = box.decoration as BoxDecoration;
+      final border = decoration.border! as Border;
+      expect(border.right.width, greaterThan(0));
+      expect(
+        border.top,
+        BorderSide.none,
+        reason:
+            'EchoMusic\'s sidebar has no top border — it is flush, not '
+            'boxed',
+      );
+      expect(border.left, BorderSide.none);
+      expect(border.bottom, BorderSide.none);
+      expect(
+        decoration.borderRadius,
+        isNull,
+        reason: 'A flush column has no corners to round',
+      );
+      expect(
+        decoration.boxShadow,
+        anyOf(isNull, isEmpty),
+        reason: 'A flush column casts no shadow — it is not floating',
+      );
+    },
+  );
 
   // -------------------------------------------------------------------------
   // v5.30.5 — four-region desktop layout (field-report follow-up: the
@@ -364,18 +407,19 @@ void main() {
       await tester.pumpWidget(_buildApp(_router()));
       await tester.pumpAndSettle();
 
-      final sidebarHeight = tester.getSize(find.byType(GlassPanel)).height;
-      // Window height (1000) minus the 8px top/bottom margins _DesktopLayout
-      // applies around the sidebar — critically, *not* also minus the player
-      // bar's own height, which is what the old nested-Column shape reduced
-      // it by.
+      final sidebarHeight = tester
+          .getSize(find.byKey(desktopSidebarKey))
+          .height;
+      // Window height (1000), full stop — v5.31.0 drops the 8px top/bottom
+      // margins the floating-panel shape used to reserve, and critically
+      // this is still *not* also reduced by the player bar's own height,
+      // which is what the pre-v5.30.5 nested-Column shape used to do.
       expect(
         sidebarHeight,
-        closeTo(1000 - 8 - 8, 1),
+        closeTo(1000, 1),
         reason:
             'A sidebar still sharing height with the player bar below it '
-            'would be noticeably shorter than window height minus its own '
-            'margins',
+            'would be noticeably shorter than the full window height',
       );
     },
   );
@@ -387,7 +431,7 @@ void main() {
     await tester.pumpWidget(_buildApp(_router()));
     await tester.pumpAndSettle();
 
-    final sidebarRight = tester.getTopRight(find.byType(GlassPanel)).dx;
+    final sidebarRight = tester.getTopRight(find.byKey(desktopSidebarKey)).dx;
     final barLeft = tester.getTopLeft(find.byKey(MiniPlayerBar.contentKey)).dx;
     expect(
       barLeft,
@@ -414,11 +458,11 @@ void main() {
         findsOneWidget,
         reason: 'The cover+title block belongs with the transport controls',
       );
-      // Nowhere in the sidebar's own floating panel (list, account block,
-      // title row) duplicates it.
+      // Nowhere in the sidebar itself (list, account block, title row)
+      // duplicates it.
       expect(
         find.descendant(
-          of: find.byType(GlassPanel),
+          of: find.byKey(desktopSidebarKey),
           matching: find.byType(MiniPlayerArtwork),
         ),
         findsNothing,
@@ -568,18 +612,20 @@ void main() {
   );
 
   testWidgets(
-    'the sidebar\'s selected pill sits inset from the panel edge rather '
+    'the sidebar\'s selected pill sits inset from the sidebar edge rather '
     'than spanning it edge-to-edge',
     (tester) async {
       // v5.30.7 field report: the selected pill's rounded background used
-      // to run flush against GlassPanel's own hairline border, reading as
-      // if it were spilling out of the panel.
+      // to run flush against the sidebar's own hairline border, reading as
+      // if it were spilling out of it. Still true after v5.31.0 flushed the
+      // sidebar itself against the window edge — the pill's own inset is
+      // independent of whether the sidebar around it floats or not.
       _useDesktopWindow(tester);
       await tester.pumpWidget(_buildApp(_router()));
       await tester.pumpAndSettle();
 
-      final panelLeft = tester.getTopLeft(find.byType(GlassPanel)).dx;
-      final panelWidth = tester.getSize(find.byType(GlassPanel)).width;
+      final panelLeft = tester.getTopLeft(find.byKey(desktopSidebarKey)).dx;
+      final panelWidth = tester.getSize(find.byKey(desktopSidebarKey)).width;
       final selectedTile = find
           .byWidgetPredicate((w) => w is ListTile && w.selected)
           .first;
@@ -588,13 +634,14 @@ void main() {
       expect(
         tileRect.left,
         greaterThan(panelLeft),
-        reason: 'The pill must not start flush at the panel\'s own left edge',
+        reason: 'The pill must not start flush at the sidebar\'s own left edge',
       );
       expect(
         tileRect.right,
         lessThan(panelLeft + panelWidth),
         reason:
-            'The pill must not extend all the way to the panel\'s right edge',
+            'The pill must not extend all the way to the sidebar\'s right '
+            'edge',
       );
     },
   );
@@ -676,91 +723,219 @@ void main() {
   );
 
   // -------------------------------------------------------------------------
-  // v5.30.5 — macOS traffic-light gutter handoff. The gutter used to live on
-  // DesktopAppBar (in the content column, x >= 236 — nowhere near the
-  // lights); it now lives on the sidebar itself, which actually occupies the
-  // window's top-left corner. debugDefaultTargetPlatformOverride is reset
-  // synchronously at the end of the test body, same as desktop_app_bar_test.
-  // dart — the binding's end-of-test invariant check runs before
-  // addTearDown/tearDown would fire.
+  // v5.31.0 — the sidebar's own blank drag strip replaces the geometry-
+  // derived macOS-only top inset (`_macTitleRowTopInset`, deleted this
+  // phase) with EchoMusic's flat `isMac ? 48 : 24` band. The sidebar is
+  // flush against the window's top-left corner on *every* desktop platform
+  // now — there is no floating-panel margin left for the traffic lights to
+  // straddle — so unlike the v5.30.5-v5.30.7 tests this replaces, there is
+  // no separate "does the panel itself move" question left to ask.
+  // debugDefaultTargetPlatformOverride is reset synchronously at the end of
+  // the test body, same as desktop_app_bar_test.dart — the binding's
+  // end-of-test invariant check runs before addTearDown/tearDown would fire.
   // -------------------------------------------------------------------------
 
   testWidgets(
-    'macOS sidebar reserves extra top padding for the traffic lights; other '
-    'platforms keep the original inset',
+    'the sidebar\'s drag strip is 24px on non-macOS desktop platforms, with '
+    'the wordmark row at a fixed inset below it',
     (tester) async {
       _useDesktopWindow(tester);
-
+      // The drag strip only renders under DesktopIntegration.isDesktop (see
+      // _DesktopSidebar._usesCustomChrome) — the ambient test-runner platform
+      // is not itself one of macOS/windows/linux, so this needs an explicit
+      // override to exercise the "real desktop, not macOS" branch at all.
+      // Same convention desktop_app_bar_test.dart already uses throughout.
+      debugDefaultTargetPlatformOverride = TargetPlatform.windows;
       await tester.pumpWidget(_buildApp(_router()));
       await tester.pumpAndSettle();
-      final defaultPanelTopLeft = tester.getTopLeft(find.byType(GlassPanel));
-      final defaultMarkTop = tester.getTopLeft(find.byType(InoriMark)).dy;
-      expect(
-        defaultMarkTop - defaultPanelTopLeft.dy,
-        closeTo(24, 2),
-        reason: 'Non-macOS keeps the pre-v5.30.5 24px title-row inset',
-      );
-      expect(
-        defaultPanelTopLeft,
-        const Offset(8, 8),
-        reason: 'Non-macOS keeps floating 8px in from every edge',
-      );
 
-      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
-      await tester.pumpWidget(_buildApp(_router()));
-      await tester.pumpAndSettle();
-      final macPanelTopLeft = tester.getTopLeft(find.byType(GlassPanel));
-      final macMarkTop = tester.getTopLeft(find.byType(InoriMark)).dy;
-      final macPanel = tester.widget<GlassPanel>(find.byType(GlassPanel));
+      final dragStripHeight = tester
+          .getSize(find.byKey(desktopSidebarDragStripKey))
+          .height;
+      final markTop = tester.getTopLeft(find.byType(InoriMark)).dy;
       debugDefaultTargetPlatformOverride = null;
 
-      // v5.30.7 field report: the lights sat *outside* the panel's rounded
-      // top-left corner, not merely close to it — the fix is the panel
-      // sitting flush against that corner (see _DesktopLayout's own doc
-      // comment on why more margin can never fix a fixed-position overlay),
-      // not a bigger inset within the old floating shape.
+      expect(dragStripHeight, 24);
       expect(
-        macPanelTopLeft,
-        Offset.zero,
+        markTop,
+        closeTo(24 + 24, 3),
         reason:
-            'The panel must sit flush against the window\'s top-left corner '
-            'so the traffic lights land inside it, not on the margin gap '
-            'around it',
-      );
-      expect(
-        macMarkTop - macPanelTopLeft.dy,
-        closeTo(38, 2),
-        reason:
-            'macOS needs the enlarged inset to clear the traffic lights '
-            '(see _DesktopSidebar._macTitleRowTopInset — re-derived for the '
-            'flush-corner panel origin above, no longer the old 30 that '
-            'assumed an 8px-inset panel)',
-      );
-      expect(
-        macPanel.borderRadiusOverride,
-        const BorderRadius.only(
-          topLeft: Radius.circular(12),
-          topRight: Radius.circular(16),
-          bottomLeft: Radius.circular(16),
-          bottomRight: Radius.circular(16),
-        ),
-        reason:
-            'The flush corner should match the macOS window\'s own radius '
-            '(12) rather than the panel\'s usual rounding (16), so it reads '
-            'as part of the window frame instead of a second competing curve',
+            'Sidebar origin (y=0, flush) + 24px drag strip + the wordmark '
+            'row\'s own fixed 24px top padding',
       );
     },
   );
 
   testWidgets(
-    'non-macOS keeps the panel\'s uniform corner radius (no override)',
+    'the sidebar\'s drag strip is 48px on macOS, with the wordmark row '
+    'pushed further down to match',
+    (tester) async {
+      _useDesktopWindow(tester);
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      await tester.pumpWidget(_buildApp(_router()));
+      await tester.pumpAndSettle();
+
+      final dragStripHeight = tester
+          .getSize(find.byKey(desktopSidebarDragStripKey))
+          .height;
+      final markTop = tester.getTopLeft(find.byType(InoriMark)).dy;
+      final sidebarTopLeft = tester.getTopLeft(find.byKey(desktopSidebarKey));
+      debugDefaultTargetPlatformOverride = null;
+
+      expect(dragStripHeight, 48);
+      expect(
+        sidebarTopLeft,
+        Offset.zero,
+        reason:
+            'The sidebar is flush on every desktop platform now — macOS '
+            'gets a taller drag strip, not a different margin',
+      );
+      expect(
+        markTop,
+        closeTo(48 + 24, 3),
+        reason:
+            'Sidebar origin (y=0, flush) + 48px drag strip (comfortably '
+            'clears the traffic lights\' lowest point at window-y=26) + the '
+            'wordmark row\'s own fixed 24px top padding',
+      );
+    },
+  );
+
+  // -------------------------------------------------------------------------
+  // v5.31.0 — the sidebar dropped GlassPanel (which supplied its own
+  // Material internally) for a plain DecoratedBox + Material(type:
+  // transparency). This regressed twice before (v5.22.0, and again the
+  // GlassPanel-based sidebar avoided it through v5.30.7) whenever something
+  // opaque ended up between a ListTile and its nearest Material ancestor, so
+  // it gets an explicit guard rather than relying on incidental coverage
+  // from the tests above.
+  // -------------------------------------------------------------------------
+
+  testWidgets(
+    'sidebar tiles still paint their selected background and ink after '
+    'losing GlassPanel\'s built-in Material (regression guard)',
     (tester) async {
       _useDesktopWindow(tester);
       await tester.pumpWidget(_buildApp(_router()));
       await tester.pumpAndSettle();
 
-      final panel = tester.widget<GlassPanel>(find.byType(GlassPanel));
-      expect(panel.borderRadiusOverride, isNull);
+      // A held-down gesture (rather than a plain tap) forces Flutter to
+      // actually paint an ink-splash frame while the pointer is down — a
+      // missing Material ancestor throws during that paint, not merely on
+      // tap-up, so a bare tap()+settle() would not exercise the failure
+      // mode this guards against.
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.text('History')),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+      expect(tester.takeException(), isNull);
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(tester.takeException(), isNull);
+
+      final tile = tester
+          .widgetList<ListTile>(find.byType(ListTile))
+          .firstWhere((t) => (t.title! as Text).data == 'History');
+      expect(tile.selected, isTrue);
+    },
+  );
+
+  // -------------------------------------------------------------------------
+  // v5.31.0 — the cross-column accent gradient that papers over the seam
+  // between the flush sidebar and the content column (EchoMusic's own
+  // `layout-accent-gradient`, see _DesktopLayout's doc comment).
+  // -------------------------------------------------------------------------
+
+  testWidgets(
+    'the accent gradient spans both the sidebar and the content column, '
+    'anchored to the window\'s top edge',
+    (tester) async {
+      _useDesktopWindow(tester);
+      await tester.pumpWidget(_buildApp(_router()));
+      await tester.pumpAndSettle();
+
+      final gradientRect = tester.getRect(find.byKey(layoutAccentGradientKey));
+      expect(gradientRect.topLeft, Offset.zero);
+      expect(
+        gradientRect.width,
+        closeTo(1400, 1),
+        reason:
+            'It must cover the full window width — both the 220px sidebar '
+            'and the content column beside it — not just one of them',
+      );
+    },
+  );
+
+  testWidgets(
+    'the accent gradient does not intercept clicks meant for what sits '
+    'beneath it — a sidebar nav item under the wash is still selectable',
+    (tester) async {
+      _useDesktopWindow(tester);
+      // macOS, deliberately: it has the taller (48px) drag strip, so its
+      // header stack is the worst case for how far down the gradient needs
+      // to reach — see _layoutAccentGradientHeight's doc comment for the
+      // measured numbers this test is calibrated against. If this passes on
+      // macOS it passes on every other desktop platform too. Reset
+      // synchronously at the end of the test body below (not via
+      // addTearDown) — same reason as the drag-strip tests above and
+      // desktop_app_bar_test.dart: the binding's end-of-test invariant check
+      // runs before addTearDown/tearDown callbacks would fire.
+      debugDefaultTargetPlatformOverride = TargetPlatform.macOS;
+      // Artists is the default `_router()` initialLocation, which would make
+      // it pre-selected — tapping an already-selected tile and observing it
+      // still selected afterwards would not prove the tap actually landed.
+      // Starting on Playlists instead leaves every item in the first
+      // (DISCOVER) group free to be this test's real, observable state
+      // change.
+      await tester.pumpWidget(
+        _buildApp(_router(initialLocation: AppRoutes.playlists)),
+      );
+      await tester.pumpAndSettle();
+
+      // Found dynamically rather than assumed by name/index: exactly which
+      // row's on-screen *centre* (what tester.tap actually targets) falls
+      // under the gradient's band depends on live measurements this test
+      // should not have to hardcode (dense ListTile's rendered height,
+      // Divider's default height, the account block's height, …). Skipping
+      // already-selected tiles matters too — tapping a tile that was
+      // selected before the tap proves nothing about whether the tap itself
+      // landed.
+      final gradientBottom = tester
+          .getRect(find.byKey(layoutAccentGradientKey))
+          .bottom;
+      final tileFinder = find.byType(ListTile);
+      int? targetIndex;
+      for (var i = 0; i < tileFinder.evaluate().length; i++) {
+        final candidate = tileFinder.at(i);
+        final tile = tester.widget<ListTile>(candidate);
+        if (tile.selected) continue;
+        if (tester.getCenter(candidate).dy < gradientBottom) {
+          targetIndex = i;
+          break;
+        }
+      }
+      expect(
+        targetIndex,
+        isNotNull,
+        reason:
+            'This test only proves something if some unselected nav tile '
+            'actually has its tap-target centre under the gradient\'s band '
+            '— if this fails, _layoutAccentGradientHeight no longer reaches '
+            'far enough to be testing anything real',
+      );
+      final targetFinder = tileFinder.at(targetIndex!);
+      final label = (tester.widget<ListTile>(targetFinder).title! as Text).data;
+
+      await tester.tap(targetFinder);
+      await tester.pumpAndSettle();
+
+      final selected = tester
+          .widgetList<ListTile>(find.byType(ListTile))
+          .where((t) => t.selected)
+          .toList();
+      debugDefaultTargetPlatformOverride = null;
+      expect(selected, hasLength(1));
+      expect((selected.single.title! as Text).data, label);
     },
   );
 }

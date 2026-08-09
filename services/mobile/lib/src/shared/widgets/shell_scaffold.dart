@@ -9,13 +9,15 @@ import 'package:window_manager/window_manager.dart' show DragToMoveArea;
 
 import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/auth/auth_notifier.dart';
+import 'package:inori_music/src/catalog/cover_palette_provider.dart';
 import 'package:inori_music/src/player/mini_player_bar.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/desktop_integration.dart';
 import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/system_titlebar_provider.dart';
+import 'package:inori_music/src/shared/theme/artwork_overlay_skin.dart'
+    show CoverPaletteAccent;
 import 'package:inori_music/src/shared/theme/skin_provider.dart';
-import 'package:inori_music/src/shared/widgets/glass_panel.dart';
 import 'package:inori_music/src/shared/widgets/inori_mark.dart';
 import 'package:inori_music/src/shared/widgets/shell_chrome.dart';
 
@@ -347,22 +349,7 @@ class _TabletLayout extends StatelessWidget {
 // Desktop layout
 // ---------------------------------------------------------------------------
 
-/// Whether macOS's native traffic-light buttons need dedicated layout
-/// treatment from this shell's own chrome, rather than sitting inside a real
-/// OS title bar. Shared by [_DesktopLayout] (which corner the sidebar panel
-/// floats flush against) and [_DesktopSidebar] (title row inset, panel
-/// corner radius) so the two can never independently drift out of sync —
-/// before v5.30.7 folded this into one place, that was exactly how the
-/// v5.30.0 gutter bug happened (see [ShellChrome]'s doc comment). The same
-/// three-part gate `FullPlayerScreen._needsMacTrafficLightGutter` uses for
-/// its own, unrelated call site (that screen has no sidebar ancestor to
-/// share this with — see that function's own doc comment).
-bool _macTrafficLightGutterNeeded(WidgetRef ref) =>
-    DesktopIntegration.isDesktop &&
-    defaultTargetPlatform == TargetPlatform.macOS &&
-    !ref.watch(systemTitleBarProvider);
-
-class _DesktopLayout extends ConsumerWidget {
+class _DesktopLayout extends StatelessWidget {
   const _DesktopLayout({
     required this.navGroups,
     required this.selectedIndex,
@@ -378,7 +365,7 @@ class _DesktopLayout extends ConsumerWidget {
   final Widget bottomBar;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     // Four regions laid out side by side rather than nested, matching the
     // v5.30.0 field report's red-boxed reference layout: the sidebar spans
     // the window's *full* height — including the "now playing" tile docked
@@ -390,61 +377,195 @@ class _DesktopLayout extends ConsumerWidget {
     // exactly the "sidebar shorter than the window, bar spanning underneath
     // it too" shape the field report's photo ruled out.
     //
-    // macOS's native traffic lights are painted by the OS at a fixed window
-    // coordinate, independent of anything Flutter draws — they do not move
-    // just because this panel has a margin. Floating the panel 8px in on
-    // every side (the v5.30.0-v5.30.6 shape) put the panel's own top-left
-    // corner seam directly under the lights, so they sat *outside* the
-    // panel, straddling its rounded edge (the v5.30.7 field report's
-    // screenshot). The fix is not to add more margin — that just moves the
-    // seam, it can never get *under* a fixed-position overlay — it's to
-    // remove the margin on the two sides the lights are actually next to, so
-    // the panel's own corner is no longer there to straddle: the lights end
-    // up sitting inside the panel with the window's own native inset around
-    // them, exactly like Apple Music's own sidebar. Right and bottom keep
-    // their float — nothing sits at the window's top-right or bottom-left
-    // corners that needs the same treatment.
-    final flushTopLeft = _macTrafficLightGutterNeeded(ref);
+    // v5.31.0 drops the floating-panel-with-margin shape entirely (see
+    // _DesktopSidebar's own doc comment for the EchoMusic reference this now
+    // follows) — the sidebar sits flush against the window's left, top, and
+    // bottom edges with no Padding wrapper at all, so there is no longer a
+    // panel corner for macOS's native traffic lights to straddle and nothing
+    // here needs to special-case which corner they land near. That removes
+    // the whole v5.30.0-v5.30.7 lineage of gutter-margin bugs by construction
+    // rather than by patching the margin math again.
     return Scaffold(
-      body: Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      body: Stack(
         children: [
-          Padding(
-            padding: flushTopLeft
-                ? const EdgeInsets.fromLTRB(0, 0, 8, 8)
-                : const EdgeInsets.fromLTRB(8, 8, 8, 8),
-            child: SizedBox(
-              width: 220,
-              child: _DesktopSidebar(
-                navGroups: navGroups,
-                selectedIndex: selectedIndex,
-                onItemTapped: onItemTapped,
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              SizedBox(
+                width: 220,
+                child: _DesktopSidebar(
+                  navGroups: navGroups,
+                  selectedIndex: selectedIndex,
+                  onItemTapped: onItemTapped,
+                ),
               ),
-            ),
+              Expanded(
+                child: ShellChrome(
+                  // The sidebar above still spans the window's full height and
+                  // therefore still owns the top-left corner macOS's native
+                  // traffic lights land in — every DesktopAppBar rendered by a
+                  // screen in this content column would otherwise reserve
+                  // gutter space for lights that are nowhere near it (this
+                  // column starts at x=220, not the window edge).
+                  reservesTrafficLightGutter: true,
+                  child: Column(
+                    children: [
+                      Expanded(child: child),
+                      bottomBar,
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
-          Expanded(
-            child: ShellChrome(
-              // The sidebar above already reserves room for macOS's native
-              // traffic lights at the window's top-left corner (see
-              // _DesktopSidebar's _macTitleRowTopInset) — every DesktopAppBar
-              // rendered by a screen in this content column would otherwise
-              // double-reserve it, which is exactly the coordinate bug the
-              // field report traced: the gutter lived on the AppBar, which by
-              // then only ever rendered at x >= 236, nowhere near the lights.
-              reservesTrafficLightGutter: true,
-              child: Column(
-                children: [
-                  Expanded(child: child),
-                  bottomBar,
-                ],
-              ),
-            ),
+          // EchoMusic's MainLayout.vue paints a `layout-accent-gradient` div
+          // that spans *both* columns, positioned above the Row in source
+          // order (i.e. above it in paint order too) — its own comment there
+          // reads "主题色顶部渐变氛围层（横跨侧栏与内容，盖住中缝避免出现分隔白线）"
+          // ("theme-colour top gradient ambience layer, spanning the sidebar
+          // and content, covering the seam so no dividing white line
+          // appears"). Same idea here: the sidebar's hairline border is a
+          // real, deliberate seam (see _DesktopSidebar), but a single flat
+          // hairline between two otherwise-identical flat fills can still
+          // read as a harder break than intended at the very top of the
+          // window, where both columns' own top chrome (the sidebar's drag
+          // strip/wordmark, the content column's DesktopAppBar) sit right
+          // next to each other with nothing else to soften the join. A
+          // low-opacity wash across the top of *both* columns papers over
+          // that without touching the hairline itself.
+          const Positioned(
+            top: 0,
+            left: 0,
+            right: 0,
+            child: _LayoutAccentGradient(),
           ),
         ],
       ),
     );
   }
 }
+
+/// Height of [_LayoutAccentGradient]'s wash. A fixed pixel count rather than
+/// a fraction of window height: what it needs to visually bridge is the
+/// sidebar's own top chrome — drag strip + wordmark row + account block +
+/// divider + the first section header — which is fixed-height regardless of
+/// how tall the window is, so a taller window does not need a
+/// proportionally taller wash to cover the same seam. Measured directly
+/// (`shell_scaffold_nav_test.dart`'s drag-strip tests pin the inputs this
+/// depends on) rather than estimated: on the worst case, macOS's 48px strip,
+/// that stack puts the first nav tile's own centre at y=226 (24px shorter,
+/// y=202, on other desktop platforms — `_DesktopSidebar._dragStripHeight`
+/// is the only thing that differs between the two). 240 clears the macOS
+/// figure with a small margin, so the wash — deliberately — reaches
+/// slightly past the sidebar's own header block into the first nav row
+/// rather than stopping exactly at its boundary. That overlap is what a
+/// "still clickable through the wash" test needs in order to be testing
+/// anything real — a gradient that only ever covered blank space could
+/// never prove [IgnorePointer] below is doing its
+/// job.
+const _layoutAccentGradientHeight = 240.0;
+
+/// Max opacity at the gradient's top edge, tuned by the *ambient skin's* own
+/// brightness rather than the cover-backdrop luminance
+/// `artwork_overlay_skin.dart` branches on — that file's `isLightBackdrop`
+/// answers "is the artwork backdrop behind full-bleed player/lyrics content
+/// light", which has no counterpart here: this shell's sidebar and content
+/// surfaces always render in the ambient skin's own colours (see
+/// _DesktopSidebar's doc comment on why this file never wraps itself in an
+/// overlay SkinScope), so it is *that* brightness the wash sits on top of,
+/// not any particular track's cover. A saturated accent at a given alpha
+/// reads as a clean tint over Moonlit Indigo's dark ground but as a visibly
+/// dirty smudge over Sakura Dusk's near-white one (more of the wash's own
+/// hue survives against a background with little of its own colour to
+/// assert against it) — halving the ceiling on a light base keeps the same
+/// wash from crossing that line. Exposed as a top-level function (rather
+/// than inlined) so a test can assert both branches directly without
+/// pumping a widget, the same pattern `full_player_screen.dart`'s
+/// `playerArtworkSize`/`playerControlWidth` already use.
+double layoutAccentGradientMaxAlpha(Brightness ambientBrightness) =>
+    ambientBrightness == Brightness.dark ? 0.24 : 0.12;
+
+/// The colour [_LayoutAccentGradient] washes down from. Cover-driven when a
+/// palette is available — [CoverPaletteAccent.accentOverArtwork] is the same
+/// swatch-preference order `artworkOverlaySkin` picks for its own on-artwork
+/// controls — and the ambient skin's own accent otherwise, so nothing playing
+/// (or a palette that hasn't resolved yet) still renders a sensible colour
+/// instead of a transparent gap. A free function for the same
+/// pump-free-testability reason as [layoutAccentGradientMaxAlpha].
+Color layoutAccentGradientColor({
+  required CoverPalette? palette,
+  required Color fallback,
+}) => palette?.accentOverArtwork ?? fallback;
+
+/// Test hook for [_LayoutAccentGradient] — same reasoning as
+/// [desktopSidebarKey]: the widget itself is private, so a test needs a
+/// public marker to locate, size, and hit-test it.
+const layoutAccentGradientKey = Key('layout-accent-gradient');
+
+/// EchoMusic's `MainLayout.vue` paints a `layout-accent-gradient` div above
+/// both the sidebar and the content column — see _DesktopLayout's doc
+/// comment for the source comment explaining why (masking the seam between
+/// two otherwise-flat, adjacent fills). This is that div: a purely decorative
+/// top-anchored wash, low-opacity enough to read as ambience rather than a
+/// colour block, that never intercepts a pointer event meant for whatever it
+/// sits above (the sidebar's title row, account block, and first nav rows all
+/// render underneath the top of this band).
+///
+/// A dedicated [ConsumerWidget] rather than inlined into _DesktopLayout.build
+/// so watching the current track's palette only rebuilds this ~200px strip,
+/// not the whole sidebar/content/player-bar tree underneath it.
+class _LayoutAccentGradient extends ConsumerWidget {
+  const _LayoutAccentGradient();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final mediaItem = ref.watch(playerProvider.select((s) => s.mediaItem));
+    final albumId = mediaItem?.extras?['albumId'] as String?;
+    final localArtUri = mediaItem?.artUri;
+    final palette = ref
+        .watch(
+          coverPaletteProvider((albumId: albumId, localArtUri: localArtUri)),
+        )
+        .valueOrNull;
+    final accent = layoutAccentGradientColor(
+      palette: palette,
+      fallback: context.skinColors.sakuraPink,
+    );
+    final maxAlpha = layoutAccentGradientMaxAlpha(Theme.of(context).brightness);
+
+    return IgnorePointer(
+      key: layoutAccentGradientKey,
+      child: SizedBox(
+        height: _layoutAccentGradientHeight,
+        width: double.infinity,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                accent.withValues(alpha: maxAlpha),
+                accent.withValues(alpha: 0),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Test hook for locating the sidebar's own root surface — the same purpose
+/// [MiniPlayerBar.contentKey] serves for that bar. Needed because [_DesktopSidebar]
+/// itself is library-private (tests live in a different library and cannot
+/// spell the type), and because the sidebar no longer renders a distinctively-
+/// typed [GlassPanel] the way it did through v5.30.7.
+const desktopSidebarKey = Key('desktop-sidebar');
+
+/// Test hook for the blank drag strip at the sidebar's own top — lets a test
+/// measure its height directly instead of reverse-engineering it from the
+/// wordmark row's position.
+const desktopSidebarDragStripKey = Key('desktop-sidebar-drag-strip');
 
 class _DesktopSidebar extends ConsumerWidget {
   const _DesktopSidebar({
@@ -460,49 +581,49 @@ class _DesktopSidebar extends ConsumerWidget {
   final int selectedIndex;
   final ValueChanged<int> onItemTapped;
 
-  /// macOS positions its native traffic-light buttons at a fixed offset from
-  /// the window's top-left corner, independent of whatever Flutter renders
-  /// underneath (a system constant, not something this app controls): 20pt
-  /// in from the left edge, 12pt button diameter, 20pt centre-to-centre
-  /// spacing, vertical centre ~20pt down from the window's top edge. That
-  /// puts their lowest point at window-coordinate y = 20 + 12/2 = 26.
-  ///
-  /// Through v5.30.6 this panel floated 8px in from the window edge (see
-  /// _DesktopLayout's old unconditional outer Padding), so window-coordinate
-  /// y=26 sat only 26 - 8 = 18px into the panel's own local coordinate
-  /// space, and this inset was 30 (18 rounded up past the minimum, leaving
-  /// roughly a button-diameter of daylight under the cluster). v5.30.7
-  /// floats the panel flush against the top-left corner instead (see
-  /// _DesktopLayout's doc comment on why — the lights sat *outside* the
-  /// panel's rounded corner, not just close to it), which moves the panel's
-  /// local origin from window-y=8 to window-y=0. Re-deriving from that same
-  /// window-coordinate fact: 26 - 0 = 26px is the new bare minimum, plus the
-  /// same ~12px buffer the old value used (30 - 18 = 12) = 38. That also
-  /// matches the simpler cross-check of just preserving the wordmark row's
-  /// prior *absolute* on-screen position, which was already visually tuned:
-  /// old panel margin (8) + old inset (30) = 38 from the true window top.
-  /// Both derivations agree, hence 38 rather than a fresh guess.
-  static const _macTitleRowTopInset = 38.0;
+  /// EchoMusic's `Sidebar.vue` renders a blank `drag-region` div as the
+  /// sidebar's very first child — `isMac ? 'h-12' : 'h-6'` (48px / 24px) —
+  /// rather than computing a top inset from the traffic lights' exact
+  /// geometry and pushing the wordmark row down by whatever clears them (the
+  /// v5.30.0-v5.30.7 approach this replaces; see git history for the
+  /// now-deleted `_macTitleRowTopInset`, which had grown a multi-paragraph
+  /// derivation of a single pixel constant — a sign the approach itself, not
+  /// just the number, was the wrong shape). Matching EchoMusic directly is
+  /// both simpler and more robust: macOS's lights (20pt from the left edge,
+  /// 12pt diameter, vertical centre ~20pt down the window, so their lowest
+  /// point sits at window-coordinate y=26) comfortably fit inside a 48px
+  /// band without this file ever needing to know their exact geometry, and
+  /// it no longer has to be re-derived every time the sidebar's own margin
+  /// changes — which is exactly what forced two rewrites of that constant
+  /// between v5.30.0 and v5.30.7.
+  static const _macDragStripHeight = 48.0;
 
-  /// The pre-v5.30.5 inset, kept everywhere the traffic lights aren't a
-  /// concern: non-macOS (the caption-button trio there is ordinary Flutter
-  /// content, not a native overlay) or the user opted into the real OS title
-  /// bar, where the lights live inside actual native chrome above this panel
-  /// rather than over it.
-  static const _defaultTitleRowTopInset = 24.0;
+  /// Non-macOS desktop platforms get a smaller band purely for EchoMusic
+  /// visual parity and a convenient drag handle — nothing sits under it
+  /// there that needs dodging (Windows/Linux's own window-caption buttons
+  /// live in the content column's [DesktopAppBar], not the sidebar).
+  static const _dragStripHeight = 24.0;
 
-  /// macOS's own window corner radius (Big Sur onward settled on roughly
-  /// 10-12pt at standard scale — Apple has never published an exact value,
-  /// this is the commonly-measured figure other custom-chrome Mac apps use).
-  /// Matching it on the panel's flush top-left corner (see
-  /// [_macTrafficLightGutterNeeded]) is what makes that corner read as part
-  /// of the window's own frame instead of a second, competing curve sitting
-  /// right at the edge.
-  static const _macWindowCornerRadius = 12.0;
+  /// The wordmark row's own padding — fixed regardless of platform now that
+  /// traffic-light clearance lives in the drag strip above it (see
+  /// [_macDragStripHeight]) instead of in this row's own top inset. This is
+  /// the same constant v5.30.0 shipped before v5.30.5 first taught this row
+  /// to inflate its own top inset for the lights; it never actually needed
+  /// to change once something else took over clearing them.
+  static const _titleRowPadding = EdgeInsets.fromLTRB(16, 24, 16, 12);
 
-  /// This panel's usual uniform rounding everywhere the flush-corner
-  /// treatment above doesn't apply.
-  static const _panelCornerRadius = 16.0;
+  /// Whether this shell draws its own drag strip at all, instead of relying
+  /// on a real OS-drawn title bar to make the window draggable. Mirrors
+  /// [DesktopAppBar]'s own `useSystemTitleBar` branch for the same reason:
+  /// once the system title bar is on, that real bar already spans the
+  /// *entire* window width — sidebar included — and already handles
+  /// dragging, so stacking this shell's own blank strip underneath it would
+  /// just be dead space with nothing left to do. Desktop-gated for the same
+  /// reason [DesktopAppBar] checks `DesktopIntegration.isDesktop` before
+  /// ever touching `DragToMoveArea` — that widget assumes a real native
+  /// window exists underneath it.
+  static bool _usesCustomChrome(WidgetRef ref) =>
+      DesktopIntegration.isDesktop && !ref.watch(systemTitleBarProvider);
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -529,17 +650,11 @@ class _DesktopSidebar extends ConsumerWidget {
       rows.add(const SizedBox(height: 8));
     }
 
-    final needsTrafficLightGutter = _macTrafficLightGutterNeeded(ref);
+    final usesCustomChrome = _usesCustomChrome(ref);
+    final isMac = defaultTargetPlatform == TargetPlatform.macOS;
 
     final titleRow = Padding(
-      padding: EdgeInsets.fromLTRB(
-        16,
-        needsTrafficLightGutter
-            ? _macTitleRowTopInset
-            : _defaultTitleRowTopInset,
-        16,
-        12,
-      ),
+      padding: _titleRowPadding,
       child: Row(
         children: [
           const InoriMark(size: 22),
@@ -562,46 +677,56 @@ class _DesktopSidebar extends ConsumerWidget {
       ),
     );
 
-    // GlassPanel (Material inside, not a plain coloured Container): ListTile
-    // paints its selected tile colour and ink splashes onto the nearest
-    // Material ancestor, so a ColoredBox in between swallows both — the same
-    // defect the sidebar had in v5.22.0. Zero padding here: the sidebar
-    // already manages every inset itself (title row, account block, list
-    // rows), and GlassPanel's own default padding would double up with all
-    // of them rather than just framing the floating panel's edge.
-    return GlassPanel(
-      padding: EdgeInsets.zero,
-      borderRadius: _panelCornerRadius,
-      // Only the flush corner needs to differ — see _DesktopLayout's doc
-      // comment on why that corner alone loses its margin, and
-      // _macWindowCornerRadius's on why it borrows the window's own radius
-      // rather than the panel's usual one. The other three corners are
-      // untouched by any of this, so they keep _panelCornerRadius exactly as
-      // every other platform/setting combination already does.
-      borderRadiusOverride: needsTrafficLightGutter
-          ? const BorderRadius.only(
-              topLeft: Radius.circular(_macWindowCornerRadius),
-              topRight: Radius.circular(_panelCornerRadius),
-              bottomLeft: Radius.circular(_panelCornerRadius),
-              bottomRight: Radius.circular(_panelCornerRadius),
-            )
-          : null,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Draggable so the blank space the traffic lights sit over still
-          // lets the user move the window, matching Apple Music's own
-          // sidebar header — before this fix nothing in the sidebar was a
-          // drag region at all, since DragToMoveArea only ever wrapped
-          // DesktopAppBar's row in the content column to the right.
-          // Mac-only: Windows/Linux keep the plain, non-draggable title row
-          // they've always had, since their own drag region and window
-          // buttons already live in that content-column bar.
-          needsTrafficLightGutter ? DragToMoveArea(child: titleRow) : titleRow,
-          const _AccountBlock(),
-          const Divider(),
-          Expanded(child: ListView(children: rows)),
-        ],
+    // EchoMusic's Sidebar.vue: `h-full flex flex-col bg-bg-sidebar border-r
+    // border-[var(--border-subtle)]` — a flush, edge-to-edge column with a
+    // single hairline on the side facing the content column; no margin, no
+    // rounding, no shadow. Replaces the floating GlassPanel this sidebar used
+    // through v5.30.7: a panel with its own margin and rounded corners reads
+    // as a second surface competing with the content column instead of one
+    // continuous shell (the user's own "割裂感" field report), and floating
+    // it needed increasingly special-cased macOS-only corner/margin logic
+    // just to keep the native traffic lights from straddling its edge — see
+    // the now-deleted `_macWindowCornerRadius`/`GlassPanel.borderRadiusOverride`.
+    // Flush removes the seam those tricks kept patching instead of removing.
+    //
+    // Material(type: transparency), not a bare DecoratedBox: ListTile paints
+    // its selected tile colour and ink splashes onto the nearest Material
+    // ancestor, so anything opaque in between swallows both silently — the
+    // same defect this sidebar had in v5.22.0. GlassPanel used to supply that
+    // Material internally; now that it's gone from this call site, this
+    // widget has to supply one itself. `type: transparency` paints nothing of
+    // its own, so the DecoratedBox below still fully controls the visible
+    // fill and hairline.
+    return DecoratedBox(
+      key: desktopSidebarKey,
+      decoration: BoxDecoration(
+        color: context.skinColors.surface,
+        border: Border(
+          right: BorderSide(
+            color: context.skinColors.outlineVariant,
+            width: 0.8,
+          ),
+        ),
+      ),
+      child: Material(
+        type: MaterialType.transparency,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (usesCustomChrome)
+              DragToMoveArea(
+                child: SizedBox(
+                  key: desktopSidebarDragStripKey,
+                  width: double.infinity,
+                  height: isMac ? _macDragStripHeight : _dragStripHeight,
+                ),
+              ),
+            titleRow,
+            const _AccountBlock(),
+            const Divider(),
+            Expanded(child: ListView(children: rows)),
+          ],
+        ),
       ),
     );
   }
@@ -770,12 +895,14 @@ class _SidebarTile extends StatelessWidget {
   final bool isSelected;
   final VoidCallback onTap;
 
-  /// Horizontal gap between the panel's own edge and the tile's selected
+  /// Horizontal gap between the sidebar's own edge and the tile's selected
   /// pill. Without this the pill (painted across the ListTile's *own*
   /// bounds, which used to run edge-to-edge inside the panel) shared exactly
-  /// the same x-coordinates as GlassPanel's hairline border, so a selected
-  /// row read as spilling out of the panel rather than floating inside it
-  /// (v5.30.7 field report).
+  /// the same x-coordinates as the sidebar's own hairline border (v5.30.7's
+  /// GlassPanel border, now v5.31.0's flush DecoratedBox border — the inset
+  /// this creates matters the same way regardless of which one is drawing
+  /// it), so a selected row read as spilling out of the sidebar rather than
+  /// sitting inside it (v5.30.7 field report).
   static const _horizontalInset = 8.0;
 
   /// [ListTileThemeData.contentPadding] (skin_definition.dart) already

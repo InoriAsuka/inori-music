@@ -25,6 +25,7 @@ import 'package:inori_music/src/shared/theme/skin_definition.dart';
 import 'package:inori_music/src/shared/titlebar_material_provider.dart';
 import 'package:inori_music/src/shared/theme/skin_provider.dart';
 import 'package:inori_music/src/shared/widgets/desktop_app_bar.dart';
+import 'package:inori_music/src/shared/widgets/shell_chrome.dart';
 
 // ---------------------------------------------------------------------------
 // Language picker data
@@ -87,6 +88,30 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               leading: const Icon(Icons.lock_outline),
               title: Text(t.changePassword),
               onTap: () => _showChangePasswordDialog(context, ref, t),
+            ),
+            const Divider(),
+          ],
+
+          // Guest sign-in entry point — v5.30.7 deleted this screen's own
+          // login row outright on the theory that the desktop sidebar's
+          // account block (`_GuestSignInPrompt` in shell_scaffold.dart)
+          // already covered it, but that block only exists inside
+          // `_DesktopSidebar`, which only ever renders at >=1200dp. Mobile
+          // and tablet guests were left with *no* UI path back to a real
+          // account at all — a real regression, not a style choice (see
+          // requirement.md's v5.31.0 entry). `ShellChrome.of(context)` is
+          // the signal, not a raw width/breakpoint check: it is only ever
+          // provided by `_DesktopLayout`, so this reads directly off
+          // "is a sidebar actually present above this screen" instead of
+          // guessing from a breakpoint number that lives in a different file
+          // and could silently drift out of sync with it.
+          if (isGuest && ShellChrome.of(context) == null) ...[
+            const _SectionHeader(title: 'Account'),
+            ListTile(
+              leading: const Icon(Icons.login),
+              title: Text(t.tapToSignIn),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => ref.read(authProvider.notifier).exitGuestMode(),
             ),
             const Divider(),
           ],
@@ -291,11 +316,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
           // Sign out — a guest was never logged in, so there is nothing to
           // sign out of here. Their way back to a real account is the
+          // guest sign-in entry point above (narrower layouts) or the
           // desktop sidebar's own account block (`_GuestSignInPrompt` in
-          // shell_scaffold.dart) rather than a control on this screen —
-          // v5.30.7 removed Settings' own guest-facing login button (it sat
-          // in the Account section above) once that sidebar entry point made
-          // it a duplicate.
+          // shell_scaffold.dart, >=1200dp) rather than a control down here.
           if (!isGuest) ...[
             const _SectionHeader(title: 'Account Actions'),
             ListTile(
