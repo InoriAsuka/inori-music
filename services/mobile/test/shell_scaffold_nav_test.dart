@@ -6,11 +6,21 @@
 // breakpoint.
 //
 // v5.30.5 adds: the four-region desktop layout (full-height sidebar, player
-// bar scoped to the content column), the sidebar's own SidebarNowPlaying
-// foot block versus the desktop player bar's now-controls-only shape, the
-// mobile/tablet regression guard for the bar keeping its now-playing info,
-// and the macOS traffic-light gutter handoff from DesktopAppBar to the
-// sidebar itself.
+// bar scoped to the content column), the mobile/tablet regression guard for
+// the bar keeping its now-playing info, and the macOS traffic-light gutter
+// handoff from DesktopAppBar to the sidebar itself.
+//
+// v5.30.6 reverts one v5.30.5 decision: that phase had docked a
+// SidebarNowPlaying cover+title block at the sidebar's own foot and left the
+// desktop player bar with mode controls only, on the theory that the
+// v5.30.0 field report's red-boxed layout meant "move the cover out of the
+// bar". The user's actual ask was that the cover stay *with* the transport
+// controls, just not spread across the full window width — so
+// SidebarNowPlaying is gone and the desktop bar carries its own cover+title
+// again, same as every other breakpoint. The four-region layout itself
+// (full-height sidebar, bar scoped to the content column) is unaffected —
+// see mini_player_bar_desktop_test.dart for the bar's own wide-shape
+// coverage.
 //
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -50,9 +60,9 @@ class _StubPlayerNotifier extends PlayerNotifier {
 /// `/player` is registered as a top-level sibling of the `ShellRoute`, not
 /// nested inside it — matching production's actual router.dart, where
 /// FullPlayerScreen is a full-bleed route with no shell chrome behind it.
-/// It needs to exist here at all only because v5.30.5 gave both
-/// SidebarNowPlaying and the desktop player bar's queue button a real
-/// `context.push(AppRoutes.player)` call to land somewhere.
+/// It needs to exist here at all only because the player bar's own
+/// title/artist tap and its queue button both make a real
+/// `context.push(AppRoutes.player)` call that needs somewhere to land.
 GoRouter _router({String initialLocation = AppRoutes.artists}) => GoRouter(
   initialLocation: initialLocation,
   routes: [
@@ -358,26 +368,34 @@ void main() {
   });
 
   testWidgets(
-    'the sidebar foot carries now-playing info; the desktop player bar '
-    'carries mode controls instead',
+    'the desktop player bar carries its own now-playing info; the sidebar '
+    'foot does not (v5.30.6 revert of the v5.30.5 SidebarNowPlaying detour)',
     (tester) async {
       _useDesktopWindow(tester);
       await tester.pumpWidget(_buildApp(_router()));
       await tester.pumpAndSettle();
 
-      expect(find.byType(SidebarNowPlaying), findsOneWidget);
       expect(
         find.descendant(
           of: find.byKey(MiniPlayerBar.contentKey),
           matching: find.byType(MiniPlayerArtwork),
         ),
-        findsNothing,
-        reason:
-            'Now-playing info moved to the sidebar; the bar must not '
-            'duplicate it',
+        findsOneWidget,
+        reason: 'The cover+title block belongs with the transport controls',
       );
-      // The width that artwork/title used to occupy now carries shuffle and
-      // repeat instead (see MiniPlayerBar.showNowPlaying's doc comment).
+      // Nowhere in the sidebar's own floating panel (list, account block,
+      // title row) duplicates it.
+      expect(
+        find.descendant(
+          of: find.byType(GlassPanel),
+          matching: find.byType(MiniPlayerArtwork),
+        ),
+        findsNothing,
+      );
+      // This window is wide enough that the bar's own measured width also
+      // crosses its wide-shape threshold, so shuffle/repeat flank the
+      // transport group too — see MiniPlayerBar's doc comment on the
+      // width-driven switch that replaced the old showNowPlaying flag.
       expect(
         find.descendant(
           of: find.byKey(MiniPlayerBar.contentKey),
@@ -395,18 +413,26 @@ void main() {
     },
   );
 
-  testWidgets('tapping the sidebar now-playing tile opens the full player', (
-    tester,
-  ) async {
-    _useDesktopWindow(tester);
-    await tester.pumpWidget(_buildApp(_router()));
-    await tester.pumpAndSettle();
+  testWidgets(
+    'tapping the desktop player bar\'s own now-playing section opens the '
+    'full player',
+    (tester) async {
+      _useDesktopWindow(tester);
+      await tester.pumpWidget(_buildApp(_router()));
+      await tester.pumpAndSettle();
 
-    await tester.tap(find.byType(SidebarNowPlaying));
-    await tester.pumpAndSettle();
+      // MiniPlayerBar wraps its whole content row in one InkWell; the cover
+      // and title/artist text have no tap handlers of their own (unlike the
+      // transport/action buttons elsewhere in the row), so tapping the
+      // artwork reaches that outer InkWell — the same behaviour
+      // SidebarNowPlaying's own tile used to provide before v5.30.6 moved
+      // the cover+title block back into the bar.
+      await tester.tap(find.byType(MiniPlayerArtwork));
+      await tester.pumpAndSettle();
 
-    expect(find.text('body:${AppRoutes.player}'), findsOneWidget);
-  });
+      expect(find.text('body:${AppRoutes.player}'), findsOneWidget);
+    },
+  );
 
   testWidgets(
     'the desktop player bar\'s queue button opens the full player, since no '

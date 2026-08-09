@@ -162,13 +162,19 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
       ).showSnackBar(SnackBar(content: Text(next.message)));
     });
 
-    // Tablet/mobile keep the original bar — cover + title/artist is the only
-    // place either lives at those widths. Desktop docks that block at the
-    // sidebar's own foot instead (see SidebarNowPlaying in
-    // mini_player_bar.dart), so its bar renders transport controls only —
-    // see MiniPlayerBar.showNowPlaying's doc comment for the full split.
-    const compactBottomBar = MiniPlayerBar();
-    const desktopBottomBar = MiniPlayerBar(showNowPlaying: false);
+    // One shared instance for every breakpoint (mobile/tablet/desktop alike)
+    // since v5.30.6 — MiniPlayerBar decides its own cover-vs-no-cover,
+    // shuffle/repeat-flanked-transport-vs-not shape internally from its own
+    // measured width now (see that class's doc comment on why the
+    // `showNowPlaying` flag this used to need per layout was retired). A
+    // brief v5.30.5 detour docked the cover+title block at the sidebar's own
+    // foot instead (see the since-deleted SidebarNowPlaying) on the theory
+    // that the field report's red-boxed layout meant "move it out of the
+    // bar"; the user's actual ask was that the cover stay *with* the
+    // transport controls, just not spread across the full window width, so
+    // v5.30.6 reverted that and left the four-region layout itself
+    // (full-height sidebar, bar scoped to the content column) untouched.
+    const bottomBar = MiniPlayerBar();
 
     // Guest mode drops the whole server-catalog nav (Artists/Albums/Search/
     // Favorites/History) — meaningless without an account — but keeps the
@@ -192,7 +198,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
               ],
         selectedIndex: selectedIndex,
         onItemTapped: (i) => _onItemTapped(context, items, i),
-        bottomBar: desktopBottomBar,
+        bottomBar: bottomBar,
         child: widget.child,
       );
     } else if (width >= 600) {
@@ -200,7 +206,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
         navItems: items,
         selectedIndex: selectedIndex,
         onItemTapped: (i) => _onItemTapped(context, items, i),
-        bottomBar: compactBottomBar,
+        bottomBar: bottomBar,
         child: widget.child,
       );
     } else {
@@ -208,7 +214,7 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
         navItems: items,
         selectedIndex: selectedIndex,
         onItemTapped: (i) => _onItemTapped(context, items, i),
-        bottomBar: compactBottomBar,
+        bottomBar: bottomBar,
         child: widget.child,
       );
     }
@@ -542,8 +548,6 @@ class _DesktopSidebar extends ConsumerWidget {
           const _AccountBlock(),
           const Divider(),
           Expanded(child: ListView(children: rows)),
-          const Divider(),
-          const SidebarNowPlaying(),
         ],
       ),
     );

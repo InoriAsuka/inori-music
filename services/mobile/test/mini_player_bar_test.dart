@@ -9,14 +9,27 @@
 // audio_service or just_audio.
 //
 import 'package:audio_service/audio_service.dart';
+import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:inori_music/l10n/app_localizations.dart';
+import 'package:inori_music/src/catalog/artwork_provider.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/player/player_state.dart' as pstate;
 import 'package:inori_music/src/player/mini_player_bar.dart';
+
+/// Stubs the artwork URL lookup so a test can drive the "server track has a
+/// resolvable cover" branch without a network round trip — same shape as
+/// full_player_layout_test.dart's own _StubArtworkNotifier.
+class _StubArtworkNotifier extends ArtworkUrlNotifier {
+  _StubArtworkNotifier(this._url);
+  final String? _url;
+
+  @override
+  Future<String?> build(String albumId) async => _url;
+}
 
 // ---------------------------------------------------------------------------
 // Stub PlayerNotifier — subclasses the real one but overrides build() to
@@ -44,9 +57,12 @@ class _StubPlayerNotifier extends PlayerNotifier {
 // Helpers
 // ---------------------------------------------------------------------------
 
-Widget _buildApp(_StubPlayerNotifier stub) {
+Widget _buildApp(
+  _StubPlayerNotifier stub, {
+  List<Override> extraOverrides = const [],
+}) {
   return ProviderScope(
-    overrides: [playerProvider.overrideWith(() => stub)],
+    overrides: [playerProvider.overrideWith(() => stub), ...extraOverrides],
     child: MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
@@ -246,6 +262,139 @@ void main() {
               tester.getCenter(find.byIcon(Icons.skip_next)).dx) /
           2;
       expect((trioCentre - barCentre).abs(), lessThan(4));
+    },
+  );
+
+  // ---------------------------------------------------------------------
+  // v5.30.6 — local-library artwork fix (requirement.md v5.30.6 / plan
+  // Phase v5.30.6, item B). A local track has no albumId at all — its cover
+  // is an embedded image extracted straight from the file and exposed as a
+  // file:// URI on MediaItem.artUri. Before this, MiniPlayerArtwork only
+  // ever knew how to ask the server for a cover via albumId, so every
+  // guest-mode local track showed the music-note placeholder in the bar
+  // even though the exact same track already rendered its cover correctly
+  // in every list row (which reads straight from the local DB rather than
+  // going through this widget). track_artwork_test.dart covers the shared
+  // TrackArtwork logic itself in more depth; these two prove MiniPlayerBar
+  // actually threads mediaItem's fields through to it.
+  // ---------------------------------------------------------------------
+
+  testWidgets(
+    'a local track (artUri, no albumId) renders its embedded cover via '
+    'Image.file rather than the placeholder',
+    (tester) async {
+      final mediaItem = MediaItem(
+        id: 'local:track-1',
+        title: 'Local Track',
+        artUri: Uri.file('/tmp/does-not-need-to-exist.jpg'),
+      );
+      final stub = _StubPlayerNotifier(
+        pstate.PlayerState(
+          queue: [mediaItem],
+          currentIndex: 0,
+          mediaItem: mediaItem,
+          playbackState: PlaybackState(playing: false),
+        ),
+      );
+      await tester.pumpWidget(_buildApp(stub));
+      await tester.pump();
+
+      final image = tester.widget<Image>(find.byType(Image));
+      expect(
+        image.image,
+        isA<FileImage>(),
+        reason:
+            'A local track carries its cover as a file:// artUri, not an '
+            'albumId — before v5.30.6 the bar could only ever ask the '
+            'server, so this always rendered the placeholder instead',
+      );
+      expect(find.byIcon(Icons.music_note), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'a server track (albumId, no artUri) still resolves its cover through '
+    'artworkUrlProvider',
+    (tester) async {
+      final mediaItem = MediaItem(
+        id: 'track-002',
+        title: 'Server Track',
+        extras: {'albumId': 'album-x'},
+      );
+      final stub = _StubPlayerNotifier(
+        pstate.PlayerState(
+          queue: [mediaItem],
+          currentIndex: 0,
+          mediaItem: mediaItem,
+          playbackState: PlaybackState(playing: false),
+        ),
+      );
+      await tester.pumpWidget(
+        _buildApp(
+          stub,
+          extraOverrides: [
+            artworkUrlProvider.overrideWith(
+              () => _StubArtworkNotifier('https://example/a.jpg'),
+            ),
+          ],
+        ),
+      );
+      // Two pumps: artworkUrlProvider's build() is async, so the first frame
+      // only gets as far as AsyncLoading (which TrackArtwork renders as the
+      // placeholder) — the second lets that microtask actually complete.
+      await tester.pump();
+      await tester.pump();
+
+      // Not also asserting Image's absence: CachedNetworkImage wraps a
+      // plain Image internally (with a CachedNetworkImageProvider, not a
+      // FileImage) — its own presence is what proves this branch was taken.
+      expect(find.byType(CachedNetworkImage), findsOneWidget);
+    },
+  );
+
+  // ---------------------------------------------------------------------
+  // v5.30.6 — Apple-style floating shadow (requirement.md v5.30.6 / plan
+  // Phase v5.30.6, item D). Material's own `elevation` shadow is fully
+  // retired in favour of an explicit two-layer BoxShadow (floating_shadow
+  // _test.dart covers that function itself in depth); this just proves the
+  // bar actually wires the replacement in rather than merely adding a
+  // shadow *alongside* the old one.
+  // ---------------------------------------------------------------------
+
+  testWidgets(
+    'the bar\'s drop shadow is an explicit BoxShadow; Material elevation is '
+    'off, not just superseded',
+    (tester) async {
+      final stub = _StubPlayerNotifier(pstate.PlayerState());
+      await tester.pumpWidget(_buildApp(stub));
+      await tester.pump();
+
+      final shadowFinder = find.byWidgetPredicate((widget) {
+        if (widget is! DecoratedBox) return false;
+        final decoration = widget.decoration;
+        return decoration is BoxDecoration &&
+            (decoration.boxShadow?.isNotEmpty ?? false);
+      });
+      expect(shadowFinder, findsOneWidget);
+      final decoration =
+          tester.widget<DecoratedBox>(shadowFinder).decoration as BoxDecoration;
+      expect(decoration.boxShadow, hasLength(2));
+
+      final material = tester.widget<Material>(
+        find
+            .ancestor(
+              of: find.byKey(MiniPlayerBar.contentKey),
+              matching: find.byType(Material),
+            )
+            .first,
+      );
+      expect(
+        material.elevation,
+        0,
+        reason:
+            'A non-zero elevation here would paint a second, duplicate '
+            'shadow underneath the explicit BoxShadow above',
+      );
     },
   );
 }

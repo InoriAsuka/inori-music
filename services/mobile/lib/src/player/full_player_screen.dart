@@ -1,7 +1,5 @@
-import 'dart:io';
 import 'dart:math' as math;
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/foundation.dart'
     show defaultTargetPlatform, TargetPlatform;
 import 'package:flutter/material.dart';
@@ -11,7 +9,6 @@ import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/audio/eq_notifier.dart';
 import 'package:inori_music/src/audio/sleep_timer_notifier.dart';
 import 'package:inori_music/src/audio/speed_notifier.dart';
-import 'package:inori_music/src/catalog/artwork_provider.dart';
 import 'package:inori_music/src/favorites/track_favorite_notifier.dart';
 import 'package:inori_music/src/local_library/audio_quality.dart';
 import 'package:inori_music/src/local_library/local_library_db.dart';
@@ -28,6 +25,7 @@ import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/player/karaoke_screen.dart';
 import 'package:inori_music/src/player/playback_mode_buttons.dart';
 import 'package:inori_music/src/player/player_state.dart' as ps;
+import 'package:inori_music/src/player/track_artwork.dart';
 import 'package:inori_music/src/player/volume_control.dart';
 import 'package:inori_music/src/shared/desktop_integration.dart';
 import 'package:inori_music/src/shared/system_titlebar_provider.dart';
@@ -1078,10 +1076,12 @@ Widget _topBarScrim({required BuildContext context, required Widget child}) {
   );
 }
 
-/// Large artwork widget for the full player screen.
-/// Watches [artworkUrlProvider] for the album and shows CachedNetworkImage when
-/// a URL is available; falls back to a music-note icon otherwise.
-class _FullPlayerArtwork extends ConsumerWidget {
+/// Large artwork widget for the full player screen. The actual "which
+/// source wins" logic — local `file://` art vs. the server's presigned
+/// album-artwork URL vs. a fallback glyph — lives in the shared
+/// [TrackArtwork] (see `track_artwork.dart`) since v5.30.6; this is now just
+/// that widget wired to this screen's own [_ArtworkFallback] glyph.
+class _FullPlayerArtwork extends StatelessWidget {
   const _FullPlayerArtwork({
     required this.size,
     this.albumId,
@@ -1096,35 +1096,12 @@ class _FullPlayerArtwork extends ConsumerWidget {
   final Uri? localArtUri;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final artUri = localArtUri;
-    if (artUri != null && artUri.scheme == 'file') {
-      return Image.file(
-        File(artUri.toFilePath()),
-        width: size,
-        height: size,
-        fit: BoxFit.cover,
-        errorBuilder: (_, _, _) => const _ArtworkFallback(),
-      );
-    }
-    if (albumId == null || albumId!.isEmpty) {
-      return const _ArtworkFallback();
-    }
-    final artworkAsync = ref.watch(artworkUrlProvider(albumId!));
-    return artworkAsync.when(
-      data: (url) {
-        if (url == null || url.isEmpty) return const _ArtworkFallback();
-        return CachedNetworkImage(
-          imageUrl: url,
-          width: size,
-          height: size,
-          fit: BoxFit.cover,
-          placeholder: (context, _) => const _ArtworkFallback(),
-          errorWidget: (context, _, error) => const _ArtworkFallback(),
-        );
-      },
-      loading: () => const _ArtworkFallback(),
-      error: (error, _) => const _ArtworkFallback(),
+  Widget build(BuildContext context) {
+    return TrackArtwork(
+      size: size,
+      albumId: albumId,
+      localArtUri: localArtUri,
+      fallback: (context) => const _ArtworkFallback(),
     );
   }
 }
