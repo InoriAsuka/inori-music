@@ -10,6 +10,7 @@ import 'package:inori_music/src/player/mini_player_bar.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/theme/skin_provider.dart';
+import 'package:inori_music/src/shared/widgets/glass_panel.dart';
 import 'package:inori_music/src/shared/widgets/inori_mark.dart';
 
 /// Adaptive shell scaffold:
@@ -351,15 +352,22 @@ class _DesktopLayout extends StatelessWidget {
           Expanded(
             child: Row(
               children: [
-                SizedBox(
-                  width: 220,
-                  child: _DesktopSidebar(
-                    navGroups: navGroups,
-                    selectedIndex: selectedIndex,
-                    onItemTapped: onItemTapped,
+                // Floating, not flush: Apple Music's desktop sidebar sits in
+                // its own inset rounded panel rather than a Material sheet
+                // butted up against a divider — the margin plus GlassPanel's
+                // own hairline border does the job the VerticalDivider used
+                // to do, so the divider is gone rather than duplicating it.
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 8),
+                  child: SizedBox(
+                    width: 220,
+                    child: _DesktopSidebar(
+                      navGroups: navGroups,
+                      selectedIndex: selectedIndex,
+                      onItemTapped: onItemTapped,
+                    ),
                   ),
                 ),
-                const VerticalDivider(thickness: 0.5, width: 0.5),
                 Expanded(child: child),
               ],
             ),
@@ -410,12 +418,16 @@ class _DesktopSidebar extends ConsumerWidget {
       rows.add(const SizedBox(height: 8));
     }
 
-    // Material, not a plain coloured Container: ListTile paints its selected
-    // tile colour and ink splashes onto the nearest Material ancestor, so a
-    // ColoredBox in between swallows both — which is why the sidebar's
-    // selected-row highlight never actually showed.
-    return Material(
-      color: context.skinColors.surface,
+    // GlassPanel (Material inside, not a plain coloured Container): ListTile
+    // paints its selected tile colour and ink splashes onto the nearest
+    // Material ancestor, so a ColoredBox in between swallows both — the same
+    // defect the sidebar had in v5.22.0. Zero padding here: the sidebar
+    // already manages every inset itself (title row, account block, list
+    // rows), and GlassPanel's own default padding would double up with all
+    // of them rather than just framing the floating panel's edge.
+    return GlassPanel(
+      padding: EdgeInsets.zero,
+      borderRadius: 16,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -457,15 +469,25 @@ class _DesktopSidebar extends ConsumerWidget {
 /// way in at all. EchoMusic's equivalent block also carries membership
 /// level/VIP badges; those have no counterpart in this project's user model,
 /// so only the name and the settings affordance are kept.
+///
+/// Guest mode used to render this the same way with `t.guest` ("Guest") as
+/// the "username" — a placeholder dressed up as an identity, with nothing to
+/// tap. EchoMusic's own account block treats "not logged in" as its own
+/// state instead: the primary line reads "未登录" and a muted second line
+/// invites the tap. v5.30.0 follows that: guest mode gets a distinct,
+/// tappable login prompt rather than a fake account row.
 class _AccountBlock extends ConsumerWidget {
   const _AccountBlock();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final t = AppLocalizations.of(context);
     final auth = ref.watch(authProvider).valueOrNull;
     final isGuest = auth?.isGuest ?? false;
-    final username = isGuest ? t.guest : (auth?.username ?? '');
+
+    if (isGuest) return const _GuestSignInPrompt();
+
+    final t = AppLocalizations.of(context);
+    final username = auth?.username ?? '';
     final initial = username.isEmpty ? '?' : username[0].toUpperCase();
 
     return Padding(
@@ -496,19 +518,77 @@ class _AccountBlock extends ConsumerWidget {
               overflow: TextOverflow.ellipsis,
             ),
           ),
-          // Guest mode already has Settings as a nav destination of its own
-          // (see _guestItems) — a second copy right above it is just noise.
-          if (!isGuest)
-            IconButton(
-              icon: Icon(
-                Icons.settings_outlined,
-                size: 18,
-                color: context.skinColors.onSurfaceVariant,
-              ),
-              tooltip: t.settings,
-              onPressed: () => context.go(AppRoutes.settings),
+          IconButton(
+            icon: Icon(
+              Icons.settings_outlined,
+              size: 18,
+              color: context.skinColors.onSurfaceVariant,
             ),
+            tooltip: t.settings,
+            onPressed: () => context.go(AppRoutes.settings),
+          ),
         ],
+      ),
+    );
+  }
+}
+
+/// The guest-mode account block: a tappable row inviting sign-in rather than
+/// a placeholder name. Tapping it calls the same [AuthNotifier.exitGuestMode]
+/// the Settings screen's own "登录" button already calls — the router's
+/// `isPastGate` redirect then takes over and lands on `/login`, so this is a
+/// second entry point to one action rather than a second implementation of
+/// it. Settings is deliberately not duplicated here (unlike the signed-in
+/// branch above): guest mode already carries Settings as its own nav
+/// destination (see [_ShellScaffoldState._guestItems]).
+class _GuestSignInPrompt extends ConsumerWidget {
+  const _GuestSignInPrompt();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = AppLocalizations.of(context);
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () => ref.read(authProvider.notifier).exitGuestMode(),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 14,
+                  backgroundColor: context.skinColors.surfaceVariant,
+                  child: Icon(
+                    Icons.person_outline,
+                    size: 16,
+                    color: context.skinColors.onSurfaceVariant,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    t.tapToSignIn,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: context.skinColors.onSurfaceVariant,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right,
+                  size: 18,
+                  color: context.skinColors.onSurfaceVariant,
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }

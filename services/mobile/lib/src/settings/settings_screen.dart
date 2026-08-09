@@ -15,6 +15,7 @@ import 'package:inori_music/src/auth/auth_notifier.dart';
 import 'package:inori_music/src/lyrics/bilingual_lyrics_notifier.dart';
 import 'package:inori_music/src/offline/download_notifier.dart';
 import 'package:inori_music/src/offline/offline_db.dart';
+import 'package:inori_music/src/player/cover_flow_mode_provider.dart';
 import 'package:inori_music/src/shared/background_provider.dart';
 import 'package:inori_music/src/shared/desktop_integration.dart';
 import 'package:inori_music/src/shared/locale_provider.dart';
@@ -134,6 +135,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 title: const Text('皮肤'),
                 subtitle: Text(skinState.active.displayName),
                 onTap: () => _showSkinSheet(context, ref),
+              );
+            },
+          ),
+          Consumer(
+            builder: (context, ref, _) {
+              final enabled = ref.watch(coverFlowModeProvider);
+              return SwitchListTile(
+                secondary: const Icon(Icons.view_carousel_outlined),
+                title: const Text('Cover Flow 封面'),
+                subtitle: const Text('播放页封面改为左右层叠展示，可见张数随窗口宽度变化'),
+                value: enabled,
+                onChanged: (v) =>
+                    ref.read(coverFlowModeProvider.notifier).setEnabled(v),
               );
             },
           ),

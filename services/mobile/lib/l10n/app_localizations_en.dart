@@ -57,6 +57,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get guest => 'Guest';
 
   @override
+  String get tapToSignIn => 'Tap to sign in';
+
+  @override
   String get favorites => 'Favorites';
 
   @override

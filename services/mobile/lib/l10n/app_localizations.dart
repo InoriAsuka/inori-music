@@ -196,6 +196,12 @@ abstract class AppLocalizations {
   /// **'Guest'**
   String get guest;
 
+  /// Desktop sidebar account block prompt shown in guest mode; tapping it exits guest mode and lands on the login screen
+  ///
+  /// In en, this message translates to:
+  /// **'Tap to sign in'**
+  String get tapToSignIn;
+
   /// No description provided for @favorites.
   ///
   /// In en, this message translates to:

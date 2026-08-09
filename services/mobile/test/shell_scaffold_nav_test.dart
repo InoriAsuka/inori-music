@@ -15,6 +15,7 @@ import 'package:inori_music/src/auth/auth_notifier.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/player/player_state.dart' as pstate;
 import 'package:inori_music/src/shared/router.dart';
+import 'package:inori_music/src/shared/widgets/glass_panel.dart';
 import 'package:inori_music/src/shared/widgets/shell_scaffold.dart';
 
 // ---------------------------------------------------------------------------
@@ -237,25 +238,52 @@ void main() {
     expect(find.text('body:${AppRoutes.settings}'), findsOneWidget);
   });
 
-  testWidgets('guest sidebar labels the account block without a second '
-      'settings button', (tester) async {
+  testWidgets(
+    'guest sidebar shows a sign-in prompt instead of a placeholder name, '
+    'without a second settings button',
+    (tester) async {
+      // v5.30.0: the account block used to render `t.guest` ("Guest") as if
+      // it were a real username. EchoMusic's own account block treats "not
+      // logged in" as a distinct, tappable state instead — this sidebar now
+      // does the same.
+      _useDesktopWindow(tester);
+      await tester.pumpWidget(guestApp());
+      await tester.pumpAndSettle();
+
+      expect(find.text('Guest'), findsNothing);
+      expect(find.text('Tap to sign in'), findsOneWidget);
+      // Settings is already a destination here, so the account block must not
+      // duplicate it — the only settings glyph on screen is the nav row's.
+      expect(find.byIcon(Icons.settings_outlined), findsOneWidget);
+      expect(
+        find.descendant(
+          of: find.byType(ListTile),
+          matching: find.byIcon(Icons.settings_outlined),
+        ),
+        findsOneWidget,
+      );
+      // Two destinations don't warrant a section header.
+      expect(find.text('DISCOVER'), findsNothing);
+      expect(find.text('LIBRARY'), findsNothing);
+    },
+  );
+
+  testWidgets('the desktop sidebar floats with a margin instead of sitting '
+      'flush against the window edge', (tester) async {
     _useDesktopWindow(tester);
-    await tester.pumpWidget(guestApp());
+    await tester.pumpWidget(_buildApp(_router()));
     await tester.pumpAndSettle();
 
-    expect(find.text('Guest'), findsOneWidget);
-    // Settings is already a destination here, so the account block must not
-    // duplicate it — the only settings glyph on screen is the nav row's.
-    expect(find.byIcon(Icons.settings_outlined), findsOneWidget);
+    final topLeft = tester.getTopLeft(find.byType(GlassPanel));
     expect(
-      find.descendant(
-        of: find.byType(ListTile),
-        matching: find.byIcon(Icons.settings_outlined),
-      ),
-      findsOneWidget,
+      topLeft.dx,
+      greaterThan(0),
+      reason: 'A flush sidebar would start at x=0',
     );
-    // Two destinations don't warrant a section header.
-    expect(find.text('DISCOVER'), findsNothing);
-    expect(find.text('LIBRARY'), findsNothing);
+    expect(
+      topLeft.dy,
+      greaterThan(0),
+      reason: 'A flush sidebar would start at y=0',
+    );
   });
 }

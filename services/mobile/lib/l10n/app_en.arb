@@ -20,6 +20,8 @@
   "@localLibrary": { "description": "Guest-mode nav destination: locally imported audio files" },
   "guest": "Guest",
   "@guest": { "description": "Placeholder account name shown in guest mode" },
+  "tapToSignIn": "Tap to sign in",
+  "@tapToSignIn": { "description": "Desktop sidebar account block prompt shown in guest mode; tapping it exits guest mode and lands on the login screen" },
   "favorites": "Favorites",
   "history": "History",
   "settings": "Settings",

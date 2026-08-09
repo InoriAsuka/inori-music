@@ -57,6 +57,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get guest => '游客';
 
   @override
+  String get tapToSignIn => '点击登录';
+
+  @override
   String get favorites => '收藏';
 
   @override

@@ -57,6 +57,9 @@ class AppLocalizationsJa extends AppLocalizations {
   String get guest => 'ゲスト';
 
   @override
+  String get tapToSignIn => 'タップしてログイン';
+
+  @override
   String get favorites => 'お気に入り';
 
   @override

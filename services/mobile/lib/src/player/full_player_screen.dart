@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart'
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/audio/eq_notifier.dart';
 import 'package:inori_music/src/audio/sleep_timer_notifier.dart';
 import 'package:inori_music/src/audio/speed_notifier.dart';
@@ -21,6 +22,8 @@ import 'package:inori_music/src/lyrics/local_lyrics_provider.dart';
 import 'package:inori_music/src/lyrics/lyric_line.dart';
 import 'package:inori_music/src/lyrics/lyrics_background.dart';
 import 'package:inori_music/src/lyrics/lyrics_provider.dart';
+import 'package:inori_music/src/player/cover_flow_artwork.dart';
+import 'package:inori_music/src/player/cover_flow_mode_provider.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/player/karaoke_screen.dart';
 import 'package:inori_music/src/player/player_state.dart' as ps;
@@ -165,111 +168,132 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
         child: SafeArea(
           child: Column(
             children: [
-              // Top bar
-              Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
-                child: Row(
-                  children: [
-                    // macOS draws its traffic lights over whatever Flutter
-                    // renders, at a fixed offset from the window's top-left.
-                    // This screen is a full-bleed route with no DesktopAppBar,
-                    // so without a gutter the close button sits underneath
-                    // them — the same reservation DesktopAppBar already makes.
-                    if (_needsMacTrafficLightGutter(ref))
-                      const SizedBox(width: 70),
-                    IconButton(
-                      icon: Icon(
-                        Icons.keyboard_arrow_down,
-                        size: 32,
-                        color: context.skinColors.onBackground,
-                      ),
-                      tooltip: 'Close player',
-                      onPressed: () => Navigator.of(context).maybePop(),
+              // Top bar. Wrapped in its own Builder so `context` here is a
+              // *descendant* of the SkinScope LyricsBackground inserts a few
+              // widgets up — without it, every context.skinColors call below
+              // resolved via the FullPlayerScreen element itself, which sits
+              // *above* that SkinScope in the tree (inherited-widget lookups
+              // only walk up, never down into what build() is about to
+              // return). That is a real, separate bug from the one this
+              // block's scrim addresses: the top bar was never actually
+              // picking up the artwork-derived colours at all, in either
+              // brightness branch, regardless of the cover — confirmed by
+              // probing it directly (the resolved colour was byte-identical
+              // to the ambient skin's fixed onSurfaceVariant no matter what
+              // palette was fed in). A muted grey sized for Sakura Dusk's
+              // light background, painted over a colour field that can be
+              // any brightness, is unreadable exactly the way the v5.29.0
+              // field report described — this was the actual root cause, not
+              // a global-vs-local mismatch in an already-dynamic colour.
+              Builder(
+                builder: (context) => _topBarScrim(
+                  context: context,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 8,
                     ),
-                    Expanded(
-                      child: Text(
-                        'Now Playing',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: context.skinColors.onSurfaceVariant,
-                        ),
-                      ),
-                    ),
-                    IconButton(
-                      icon: Icon(
-                        Icons.queue_music,
-                        color: context.skinColors.onSurfaceVariant,
-                      ),
-                      tooltip: 'Queue',
-                      onPressed: () => canSplit
-                          ? _togglePanel(_SidePanel.queue)
-                          : _showQueueSheet(context, ref),
-                    ),
-                    IconButton(
-                      icon: Icon(
-                        Icons.mic_external_on,
-                        color: context.skinColors.onSurfaceVariant,
-                      ),
-                      tooltip: 'Karaoke',
-                      // Only gated on "is anything playing at all". It used to
-                      // also require a local track to carry an embedded lyrics
-                      // tag, which silently disabled the button for every
-                      // instrumental / untagged local file — a dead control with
-                      // no explanation, and the only way into the lyrics screen.
-                      // KaraokeScreen already renders "No lyrics available" over
-                      // the artwork backdrop, which is exactly what a server
-                      // track with no lyrics has always done.
-                      onPressed: trackId.isEmpty
-                          ? null
-                          : () => canSplit
-                                ? _togglePanel(_SidePanel.lyrics)
-                                : Navigator.of(context).push(
-                                    MaterialPageRoute<void>(
-                                      builder: (_) => const KaraokeScreen(),
-                                      fullscreenDialog: true,
-                                    ),
-                                  ),
-                    ),
-                    // Technical detail (sample rate/bitrate/format) — only
-                    // meaningful for local files; the server catalog has no
-                    // equivalent metadata to show (out of scope, see
-                    // requirement.md v5.19.0).
-                    if (trackId.startsWith(localTrackIdPrefix))
-                      IconButton(
-                        icon: Icon(
-                          Icons.info_outline,
-                          color: context.skinColors.onSurfaceVariant,
-                        ),
-                        tooltip: '详情',
-                        onPressed: () =>
-                            _showLocalTrackDetails(context, trackId),
-                      ),
-                    // EQ icon button
-                    Consumer(
-                      builder: (ctx, ref2, _) {
-                        final eqEnabled = ref2
-                            .watch(eqNotifierProvider)
-                            .enabled;
-                        return IconButton(
+                    child: Row(
+                      children: [
+                        // macOS draws its traffic lights over whatever Flutter
+                        // renders, at a fixed offset from the window's top-left.
+                        // This screen is a full-bleed route with no DesktopAppBar,
+                        // so without a gutter the close button sits underneath
+                        // them — the same reservation DesktopAppBar already makes.
+                        if (_needsMacTrafficLightGutter(ref))
+                          const SizedBox(width: 70),
+                        IconButton(
                           icon: Icon(
-                            Icons.equalizer,
-                            color: eqEnabled
-                                ? context.skinColors.sakuraPinkLight
-                                : context.skinColors.onSurfaceVariant,
+                            Icons.keyboard_arrow_down,
+                            size: 32,
+                            color: context.skinColors.onBackground,
                           ),
-                          tooltip: 'Equalizer',
-                          onPressed: () => ref2
-                              .read(eqNotifierProvider.notifier)
-                              .setEnabled(!eqEnabled),
-                        );
-                      },
+                          tooltip: 'Close player',
+                          onPressed: () => Navigator.of(context).maybePop(),
+                        ),
+                        Expanded(
+                          child: Text(
+                            AppLocalizations.of(context).nowPlaying,
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: context.skinColors.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          icon: Icon(
+                            Icons.queue_music,
+                            color: context.skinColors.onSurfaceVariant,
+                          ),
+                          tooltip: 'Queue',
+                          onPressed: () => canSplit
+                              ? _togglePanel(_SidePanel.queue)
+                              : _showQueueSheet(context, ref),
+                        ),
+                        IconButton(
+                          icon: Icon(
+                            Icons.mic_external_on,
+                            color: context.skinColors.onSurfaceVariant,
+                          ),
+                          tooltip: 'Karaoke',
+                          // Only gated on "is anything playing at all". It used to
+                          // also require a local track to carry an embedded lyrics
+                          // tag, which silently disabled the button for every
+                          // instrumental / untagged local file — a dead control with
+                          // no explanation, and the only way into the lyrics screen.
+                          // KaraokeScreen already renders "No lyrics available" over
+                          // the artwork backdrop, which is exactly what a server
+                          // track with no lyrics has always done.
+                          onPressed: trackId.isEmpty
+                              ? null
+                              : () => canSplit
+                                    ? _togglePanel(_SidePanel.lyrics)
+                                    : Navigator.of(context).push(
+                                        MaterialPageRoute<void>(
+                                          builder: (_) => const KaraokeScreen(),
+                                          fullscreenDialog: true,
+                                        ),
+                                      ),
+                        ),
+                        // Technical detail (sample rate/bitrate/format) — only
+                        // meaningful for local files; the server catalog has no
+                        // equivalent metadata to show (out of scope, see
+                        // requirement.md v5.19.0).
+                        if (trackId.startsWith(localTrackIdPrefix))
+                          IconButton(
+                            icon: Icon(
+                              Icons.info_outline,
+                              color: context.skinColors.onSurfaceVariant,
+                            ),
+                            tooltip: '详情',
+                            onPressed: () =>
+                                _showLocalTrackDetails(context, trackId),
+                          ),
+                        // EQ icon button
+                        Consumer(
+                          builder: (ctx, ref2, _) {
+                            final eqEnabled = ref2
+                                .watch(eqNotifierProvider)
+                                .enabled;
+                            return IconButton(
+                              icon: Icon(
+                                Icons.equalizer,
+                                color: eqEnabled
+                                    ? context.skinColors.sakuraPinkLight
+                                    : context.skinColors.onSurfaceVariant,
+                              ),
+                              tooltip: 'Equalizer',
+                              onPressed: () => ref2
+                                  .read(eqNotifierProvider.notifier)
+                                  .setEnabled(!eqEnabled),
+                            );
+                          },
+                        ),
+                      ],
                     ),
-                  ],
+                  ),
                 ),
               ),
 
@@ -366,6 +390,15 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
       regionWidth: regionWidth,
     );
     final compactControls = controlWidth < _compactControlsBreakpoint;
+    // Cover Flow only replaces the wide-layout artwork tile (see
+    // cover_flow_artwork.dart's doc comment): the narrow layout's PageView
+    // already owns horizontal swipe gestures for paging to lyrics, and a
+    // second horizontal gesture for flowing through the queue underneath it
+    // would fight the first rather than compose with it. A single-track
+    // queue has no neighbours to flow through, so it falls back to the plain
+    // tile too rather than rendering a Cover Flow of one.
+    final coverFlowEnabled =
+        canSplit && ref.watch(coverFlowModeProvider) && state.queue.length > 1;
 
     return Column(
       children: [
@@ -375,7 +408,28 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
         // PageView — and the page-dot indicator that came with it — only
         // earns its keep below the breakpoint. Above it the dots were a
         // stray mark under the cover with nothing to page to.
-        if (canSplit)
+        if (coverFlowEnabled)
+          CoverFlowArtwork(
+            itemCount: state.queue.length,
+            currentIndex: state.currentIndex,
+            centerSize: coverSize,
+            width: regionWidth,
+            itemBuilder: (context, index, size) => ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: _FullPlayerArtwork(
+                size: size,
+                albumId: state.queue[index].extras?['albumId'] as String?,
+                localArtUri: state.queue[index].artUri,
+              ),
+            ),
+            onSelect: (index) => ref
+                .read(playerProvider.notifier)
+                .playQueue(
+                  state.queue.map((m) => m.id).toList(),
+                  initialIndex: index,
+                ),
+          )
+        else if (canSplit)
           _artworkTile(context, state, size: coverSize)
         else ...[
           SizedBox(
@@ -991,6 +1045,34 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
     final secs = d.inSeconds % 60;
     return '$mins:${secs.toString().padLeft(2, '0')}';
   }
+}
+
+/// Guarantees the top bar's own title/icons stay legible regardless of what
+/// locally sits behind them.
+///
+/// [artworkOverlaySkin] already decides ink colour (white or near-black) from
+/// the backdrop's *global* dominant-colour luminance, but
+/// [CoverFluidBackground] is a moving, multi-swatch colour field — the strip
+/// directly behind the top bar can easily land on a patch that disagrees with
+/// that global call. A gradient scrim in the same polarity as the resolved
+/// ink (dark behind white ink, light behind dark ink) swamps that local
+/// variance instead of trying to read it — the same technique most players
+/// use behind a nav bar sitting over artwork. [context] must already be a
+/// descendant of the derived overlay SkinScope (see the Builder wrapping this
+/// call in [_FullPlayerScreenState.build]) or this reads the wrong ink.
+Widget _topBarScrim({required BuildContext context, required Widget child}) {
+  final inkIsLight = context.skinColors.onBackground.computeLuminance() > 0.5;
+  final scrim = inkIsLight ? Colors.black : Colors.white;
+  return DecoratedBox(
+    decoration: BoxDecoration(
+      gradient: LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [scrim.withValues(alpha: 0.5), scrim.withValues(alpha: 0.0)],
+      ),
+    ),
+    child: child,
+  );
 }
 
 /// Large artwork widget for the full player screen.
