@@ -35,18 +35,29 @@
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show LogicalKeyboardKey;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/auth/auth_notifier.dart';
+import 'package:inori_music/src/catalog/playlists_screen.dart'
+    show catalogPlaylistsProvider;
+import 'package:inori_music/src/playback/playback_engine.dart';
+import 'package:inori_music/src/playback/playback_engine_provider.dart';
 import 'package:inori_music/src/player/mini_player_bar.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/player/player_state.dart' as pstate;
+import 'package:inori_music/src/player/player_transition.dart';
+import 'package:inori_music/src/player/queue_list.dart';
 import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/widgets/inori_mark.dart';
 import 'package:inori_music/src/shared/widgets/shell_scaffold.dart';
+import 'package:inori_music/src/user_playlist/user_playlist_notifier.dart';
+
+import 'support/fake_playback_engine.dart';
 
 // ---------------------------------------------------------------------------
 // Stubs — neither auth nor the player may touch the network/audio stack here.
@@ -71,6 +82,18 @@ class _StubPlayerNotifier extends PlayerNotifier {
 
   @override
   pstate.PlayerState build() => _state;
+}
+
+/// v5.33.0: the desktop sidebar's own playlist tabs section
+/// (`SidebarPlaylistsSection`) watches `userPlaylistProvider` for every
+/// signed-in desktop test in this file now, not just the ones specifically
+/// about playlists — without this stub it would hit the real notifier's
+/// `_fetchPlaylists()`, a live Dio call this test harness has no server
+/// behind (the same reason `catalogPlaylistsProvider` below is stubbed
+/// too).
+class _EmptyUserPlaylistNotifier extends UserPlaylistNotifier {
+  @override
+  Future<List<UserPlaylist>> build() async => const [];
 }
 
 /// The routes the shell navigates between. Bodies are placeholders — this
@@ -100,6 +123,9 @@ GoRouter _router({String initialLocation = AppRoutes.artists}) => GoRouter(
           AppRoutes.favorites,
           AppRoutes.history,
           AppRoutes.playlists,
+          AppRoutes.myPlaylists,
+          AppRoutes.forYou,
+          AppRoutes.explore,
           AppRoutes.settings,
           AppRoutes.localLibrary,
         ])
@@ -142,10 +168,20 @@ Widget _buildApp(
   GoRouter router, {
   AuthState auth = _signedIn,
   pstate.PlayerState? playerState,
+  // Defaults to PlaybackCapabilities.none, matching the real just_audio
+  // engine's own reported capabilities (see just_audio_engine.dart) — every
+  // pre-v5.33.0 test here implicitly assumed "no output-device entry",
+  // which this default preserves without touching any of them.
+  PlaybackCapabilities capabilities = PlaybackCapabilities.none,
 }) => ProviderScope(
   overrides: [
     authProvider.overrideWith(() => _StubAuthNotifier(auth)),
     playerProvider.overrideWith(() => _StubPlayerNotifier(playerState)),
+    playbackEngineProvider.overrideWithValue(
+      FakePlaybackEngine(capabilities: capabilities),
+    ),
+    userPlaylistProvider.overrideWith(_EmptyUserPlaylistNotifier.new),
+    catalogPlaylistsProvider.overrideWith((ref) async => const []),
   ],
   child: MaterialApp.router(
     localizationsDelegates: AppLocalizations.localizationsDelegates,
@@ -163,9 +199,30 @@ void _useDesktopWindow(WidgetTester tester) {
 }
 
 void main() {
+  // v5.33.0: SidebarGroupCollapseNotifier persists to SharedPreferences,
+  // whose test-time mock backing store is a plain static and does *not*
+  // reset itself between individual `testWidgets` cases in the same file —
+  // without this, a collapse left behind by one test (e.g. "collapsing a
+  // group hides its rows...", below) would leak into whichever test runs
+  // next and change what it starts from. Matches
+  // search_history_notifier_test.dart's own setUp for the same class of
+  // provider.
+  setUp(() {
+    SharedPreferences.setMockInitialValues({});
+  });
+
   testWidgets('desktop sidebar groups destinations under section headers', (
     tester,
   ) async {
+    // v5.33.0: the desktop sidebar's own two groups no longer share their
+    // content with the mobile/tablet flat nav (_navItems) — see
+    // shell_scaffold.dart's _desktopDiscoverItems/_desktopLibraryItems doc
+    // comments. DISCOVER now holds the two EchoMusic-skeleton destinations
+    // (For You/Explore) instead of catalog browsing, and catalog browsing
+    // (Artists/Albums/Search) moved into LIBRARY alongside Favorites/
+    // History — Playlists is deliberately absent from both: it now lives in
+    // the sidebar's own tabbed playlist section instead of the flat groups
+    // (see the "Playlists is reachable" test below for its new path).
     _useDesktopWindow(tester);
     await tester.pumpWidget(_buildApp(_router()));
     await tester.pumpAndSettle();
@@ -173,12 +230,13 @@ void main() {
     expect(find.text('DISCOVER'), findsOneWidget);
     expect(find.text('LIBRARY'), findsOneWidget);
     for (final label in [
+      'For You',
+      'Explore',
+      'Favorites',
+      'History',
       'Artists',
       'Albums',
       'Search',
-      'Favorites',
-      'History',
-      'Playlists',
     ]) {
       expect(
         find.text(label),
@@ -186,6 +244,13 @@ void main() {
         reason: '$label must have exactly one sidebar entry',
       );
     }
+    expect(
+      find.text('Playlists'),
+      findsNothing,
+      reason:
+          'Playlists is no longer a flat nav item — it lives in the '
+          'tabbed playlist section now',
+    );
   });
 
   testWidgets('sidebar account block shows the signed-in username', (
@@ -212,17 +277,46 @@ void main() {
     expect(find.text('body:${AppRoutes.settings}'), findsOneWidget);
   });
 
-  testWidgets('Playlists is reachable from the sidebar', (tester) async {
-    // Regression guard: /playlists and PlaylistsScreen both existed before
-    // v5.22.0 but nothing in the app linked to them.
+  testWidgets(
+    'catalog playlists are reachable from the sidebar\'s Collected tab',
+    (tester) async {
+      // Regression guard, updated for v5.33.0: /playlists and
+      // PlaylistsScreen both existed before v5.22.0 but nothing in the app
+      // linked to them; that stayed true through v5.32.0 via a flat
+      // "Playlists" nav item. v5.33.0 moves catalog playlists into the
+      // sidebar's own tabbed playlist section (SidebarPlaylistsSection)
+      // instead — the *destination* being reachable is what this guards,
+      // not any particular nav-item shape, so this follows the section's
+      // new path (Collected tab -> View All) rather than asserting the old
+      // one is still there.
+      _useDesktopWindow(tester);
+      await tester.pumpWidget(_buildApp(_router()));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Collected'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('View All'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('body:${AppRoutes.playlists}'), findsOneWidget);
+    },
+  );
+
+  testWidgets('this account\'s own playlists are reachable from the sidebar\'s '
+      'Created tab', (tester) async {
+    // The other half of the same guard — user_playlist_notifier.dart's
+    // own playlists, previously unreachable from the desktop sidebar at
+    // all (AppRoutes.myPlaylists existed but nothing linked to it either).
     _useDesktopWindow(tester);
     await tester.pumpWidget(_buildApp(_router()));
     await tester.pumpAndSettle();
 
-    await tester.tap(find.text('Playlists'));
+    // Created is already the section's default tab — no tap needed to
+    // select it, unlike the Collected case above.
+    await tester.tap(find.text('View All'));
     await tester.pumpAndSettle();
 
-    expect(find.text('body:${AppRoutes.playlists}'), findsOneWidget);
+    expect(find.text('body:${AppRoutes.myPlaylists}'), findsOneWidget);
   });
 
   testWidgets('selection tracks the active route across group boundaries', (
@@ -646,18 +740,124 @@ void main() {
     },
   );
 
+  // -------------------------------------------------------------------------
+  // v5.33.0 — the desktop queue drawer. Through v5.32.0 this same button
+  // pushed AppRoutes.player outright (a deliberate v5.30.5 stopgap: "没有从
+  // 主界面打开队列的通路就先跳播放页，不要为此新造队列 UI") — now that the desktop
+  // shell has a spacious, stationary content column to dock a panel over,
+  // that stopgap is replaced with an actual drawer instead of navigating
+  // away. QueueList (queue_list.dart) is a public class specifically so this
+  // drawer and FullPlayerScreen's own docked panel/bottom sheet share one
+  // implementation — see full_player_layout_test.dart's own assertion that
+  // the *same* type renders there.
+  // -------------------------------------------------------------------------
+
+  Widget appWithQueue() {
+    final items = [
+      MediaItem(id: 'q-1', title: 'First Track', artist: 'Artist A'),
+      MediaItem(id: 'q-2', title: 'Second Track', artist: 'Artist B'),
+    ];
+    return _buildApp(
+      _router(),
+      playerState: pstate.PlayerState(
+        queue: items,
+        currentIndex: 0,
+        mediaItem: items.first,
+        playbackState: PlaybackState(playing: false),
+      ),
+    );
+  }
+
   testWidgets(
-    'the desktop player bar\'s queue button opens the full player, since no '
-    'standalone queue view exists outside it',
+    'the desktop player bar\'s queue button opens a docked drawer without '
+    'leaving the current route',
     (tester) async {
       _useDesktopWindow(tester);
-      await tester.pumpWidget(_buildApp(_router()));
+      await tester.pumpWidget(appWithQueue());
       await tester.pumpAndSettle();
+
+      expect(find.byType(QueueList), findsNothing);
 
       await tester.tap(find.byIcon(Icons.queue_music));
+      // Never pumpAndSettle a controller-driven slide (playerTransitionDuration
+      // reuses the same non-repeating AnimationController this codebase's
+      // other transitions use, so pumpAndSettle *would* eventually return
+      // here — but every other test in this codebase advances explicitly by
+      // the known duration instead, and doing the same here keeps this test
+      // from being the odd one out if the drawer's animation is ever swapped
+      // for something that does repeat).
+      await tester.pump();
+      await tester.pump(playerTransitionDuration);
+
+      expect(
+        find.byType(QueueList),
+        findsOneWidget,
+        reason: 'The drawer must actually render the shared queue list',
+      );
+      expect(
+        find.text('body:${AppRoutes.artists}'),
+        findsOneWidget,
+        reason:
+            'A drawer overlays the current page — it must not navigate '
+            'away from it',
+      );
+      expect(find.text('body:${AppRoutes.player}'), findsNothing);
+    },
+  );
+
+  testWidgets('tapping outside the open drawer closes it', (tester) async {
+    _useDesktopWindow(tester);
+    await tester.pumpWidget(appWithQueue());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.queue_music));
+    await tester.pump();
+    await tester.pump(playerTransitionDuration);
+    expect(find.byType(QueueList), findsOneWidget);
+
+    // Inside the content column (sidebar is 220px wide) but well clear of
+    // the drawer's own 360px-wide panel anchored to the content column's
+    // right edge (window width 1400) — this point can only be hit by the
+    // drawer's barrier, never by the panel itself.
+    await tester.tapAt(const Offset(400, 300));
+    await tester.pump();
+    await tester.pump(playerTransitionReverseDuration);
+
+    expect(find.byType(QueueList), findsNothing);
+  });
+
+  testWidgets('pressing Escape closes the open drawer', (tester) async {
+    _useDesktopWindow(tester);
+    await tester.pumpWidget(appWithQueue());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byIcon(Icons.queue_music));
+    await tester.pump();
+    await tester.pump(playerTransitionDuration);
+    expect(find.byType(QueueList), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    await tester.pump(playerTransitionReverseDuration);
+
+    expect(find.byType(QueueList), findsNothing);
+  });
+
+  testWidgets(
+    'the closed drawer does not block clicks on the content underneath it',
+    (tester) async {
+      _useDesktopWindow(tester);
+      await tester.pumpWidget(appWithQueue());
       await tester.pumpAndSettle();
 
-      expect(find.text('body:${AppRoutes.player}'), findsOneWidget);
+      // Same point the "tapping outside" case above uses as its barrier
+      // target — with the drawer closed this must reach whatever is
+      // actually there instead, which a stray IgnorePointer(ignoring:
+      // false) bug would prevent silently (no exception, just a dead tap).
+      await tester.tapAt(const Offset(400, 300));
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
     },
   );
 
@@ -884,11 +1084,14 @@ void main() {
       // Artists is the default `_router()` initialLocation, which would make
       // it pre-selected — tapping an already-selected tile and observing it
       // still selected afterwards would not prove the tap actually landed.
-      // Starting on Playlists instead leaves every item in the first
-      // (DISCOVER) group free to be this test's real, observable state
-      // change.
+      // Starting on Favorites instead (v5.33.0: the desktop sidebar's own
+      // DISCOVER group no longer contains Artists at all — see
+      // shell_scaffold.dart's _desktopDiscoverItems/_desktopLibraryItems —
+      // so Favorites, LIBRARY's own first item, is what leaves the whole
+      // DISCOVER group free to be this test's real, observable state
+      // change now) leaves every item in the first (DISCOVER) group free.
       await tester.pumpWidget(
-        _buildApp(_router(initialLocation: AppRoutes.playlists)),
+        _buildApp(_router(initialLocation: AppRoutes.favorites)),
       );
       await tester.pumpAndSettle();
 
@@ -936,6 +1139,174 @@ void main() {
       debugDefaultTargetPlatformOverride = null;
       expect(selected, hasLength(1));
       expect((selected.single.title! as Text).data, label);
+    },
+  );
+
+  // -------------------------------------------------------------------------
+  // v5.33.0 — collapsible groups + the flat-index trap. This codebase has
+  // been bitten by the "closure captures the loop's final value, every tile
+  // reports the same index" bug before (see the `final index = flatIndex;`
+  // snapshot in _DesktopSidebar.build), and collapsing a group is exactly
+  // the kind of change that could plausibly reintroduce it (or a sibling
+  // bug: renumbering the *surviving* rows instead of just hiding some).
+  // -------------------------------------------------------------------------
+
+  testWidgets('collapsing a group hides its rows without renumbering any other '
+      'group\'s tiles — a tap on a later item still dispatches to the '
+      'correct route', (tester) async {
+    _useDesktopWindow(tester);
+    await tester.pumpWidget(_buildApp(_router()));
+    await tester.pumpAndSettle();
+
+    expect(find.text('For You'), findsOneWidget);
+    expect(find.text('Explore'), findsOneWidget);
+
+    // The whole header row (label + chevron) shares one InkWell/onTap —
+    // tapping the label text itself is enough to toggle it.
+    await tester.tap(find.text('DISCOVER'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('For You'),
+      findsNothing,
+      reason: 'Collapsing DISCOVER must hide its own rows',
+    );
+    expect(find.text('Explore'), findsNothing);
+    // LIBRARY's own rows are unaffected by DISCOVER collapsing — this is
+    // what proves flatIndex kept advancing through the hidden group
+    // instead of skipping it.
+    expect(find.text('Search'), findsOneWidget);
+
+    await tester.tap(find.text('Search'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.text('body:${AppRoutes.search}'),
+      findsOneWidget,
+      reason:
+          'Search is the *last* item in the flat desktop list — if '
+          'collapsing DISCOVER had renumbered anything, this is the tile '
+          'most likely to land on the wrong route',
+    );
+  });
+
+  testWidgets('a collapsed group can be expanded again, restoring its rows', (
+    tester,
+  ) async {
+    _useDesktopWindow(tester);
+    await tester.pumpWidget(_buildApp(_router()));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('DISCOVER'));
+    await tester.pumpAndSettle();
+    expect(find.text('For You'), findsNothing);
+
+    await tester.tap(find.text('DISCOVER'));
+    await tester.pumpAndSettle();
+    expect(find.text('For You'), findsOneWidget);
+    expect(find.text('Explore'), findsOneWidget);
+  });
+
+  // -------------------------------------------------------------------------
+  // v5.33.0 — the "装置" (output device) footer entry is capability-driven:
+  // PlaybackCapabilities.outputDeviceSelection is false under the current
+  // just_audio engine (see just_audio_engine.dart), so this entry must not
+  // render at all today — not a disabled/greyed-out state, an absence.
+  // -------------------------------------------------------------------------
+
+  testWidgets(
+    'the sidebar\'s Output Device entry is absent when the engine reports '
+    'no output-device-selection capability (today\'s default)',
+    (tester) async {
+      _useDesktopWindow(tester);
+      await tester.pumpWidget(_buildApp(_router()));
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('Downloads'),
+        findsOneWidget,
+        reason: 'Downloads has no capability gate — it must still render',
+      );
+      expect(find.text('Output Device'), findsNothing);
+    },
+  );
+
+  testWidgets(
+    'the sidebar\'s Output Device entry appears once the engine reports '
+    'outputDeviceSelection: true — proving this is capability-driven, not '
+    'a hardcoded hide',
+    (tester) async {
+      _useDesktopWindow(tester);
+      await tester.pumpWidget(
+        _buildApp(
+          _router(),
+          capabilities: const PlaybackCapabilities(outputDeviceSelection: true),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Output Device'), findsOneWidget);
+    },
+  );
+
+  // -------------------------------------------------------------------------
+  // v5.33.0 — the guest-mode desktop sidebar must stay the simple shape
+  // ("范围限制": guest gets the two nav items + account card + download, not
+  // the full EchoMusic skeleton) even though the signed-in sidebar grew a
+  // playlist section and a footer this phase.
+  // -------------------------------------------------------------------------
+
+  testWidgets(
+    'guest mode\'s desktop sidebar has no playlist section and no Output '
+    'Device entry — the EchoMusic skeleton addition is signed-in only',
+    (tester) async {
+      _useDesktopWindow(tester);
+      await tester.pumpWidget(
+        _buildApp(
+          _router(initialLocation: AppRoutes.localLibrary),
+          auth: _guest,
+          capabilities: const PlaybackCapabilities(outputDeviceSelection: true),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Created'), findsNothing);
+      expect(find.text('Collected'), findsNothing);
+      expect(
+        find.text('Output Device'),
+        findsNothing,
+        reason:
+            'Guest mode omits the whole footer even when the capability '
+            'would otherwise show it — the gate is isGuest, not just the '
+            'capability',
+      );
+    },
+  );
+
+  testWidgets(
+    'guest mode\'s desktop sidebar omits Downloads too — the whole footer '
+    'is signed-in only, not just the capability-gated half of it',
+    (tester) async {
+      // This test documents the actual v5.33.0 decision rather than just
+      // asserting it: the task brief left "download 对游客有无意义" an open
+      // question ("如果下载对游客无意义就不显示"). download_notifier.dart's own
+      // downloadProvider has no guest/signed-in branch of its own, but
+      // settings_screen.dart's _OfflineLibrarySection — the screen this
+      // entry actually opens — is itself `if (!isGuest)`-gated ("downloads
+      // require an account"). Keeping the whole footer, Downloads included,
+      // out of the guest shell (rather than rendering a Downloads entry
+      // that opens a Settings screen with no Offline Library section left
+      // to show) is the consistent reading of that existing gate.
+      _useDesktopWindow(tester);
+      await tester.pumpWidget(
+        _buildApp(
+          _router(initialLocation: AppRoutes.localLibrary),
+          auth: _guest,
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Downloads'), findsNothing);
     },
   );
 }

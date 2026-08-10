@@ -74,5 +74,20 @@
   "noHistory": "再生履歴がありません",
   "noData": "データがありません",
   "recentSearches": "最近の検索",
-  "clearSearchHistory": "検索履歴を削除"
+  "clearSearchHistory": "検索履歴を削除",
+  "forYou": "おすすめ",
+  "forYouComingSoon": "パーソナライズされたおすすめは今後のアップデートで提供予定です。",
+  "sidebarExplore": "探索",
+  "recentlyAdded": "最近追加",
+  "randomPicks": "ランダムピック",
+  "createdPlaylists": "作成済み",
+  "collectedPlaylists": "コレクション",
+  "sortAlphabetically": "名前順に並べ替え",
+  "refresh": "更新",
+  "viewAll": "すべて表示",
+  "noCreatedPlaylistsYet": "プレイリストはまだありません",
+  "noCollectedPlaylistsYet": "コレクションしたプレイリストはまだありません",
+  "notSignedIn": "未サインイン",
+  "downloads": "ダウンロード",
+  "outputDevice": "出力デバイス"
 }

@@ -12,6 +12,8 @@ import 'package:inori_music/src/catalog/tracks_screen.dart';
 import 'package:inori_music/src/catalog/playlists_screen.dart';
 import 'package:inori_music/src/catalog/playlist_detail_screen.dart';
 import 'package:inori_music/src/catalog/search_screen.dart';
+import 'package:inori_music/src/discover/explore_screen.dart';
+import 'package:inori_music/src/discover/for_you_screen.dart';
 import 'package:inori_music/src/player/full_player_screen.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/player/player_transition.dart';
@@ -42,6 +44,12 @@ abstract class AppRoutes {
   static const playlistDetail = '/playlists/:id';
   static const search = '/search';
   static const player = '/player';
+  // v5.33.0 — the desktop sidebar's "发现音乐" group (EchoMusic骨架, see
+  // shell_scaffold.dart's _discoverItems). Nested under /discover rather
+  // than sitting at the root alongside artists/albums/etc. so the two read
+  // as a related pair rather than two unrelated top-level destinations.
+  static const forYou = '/discover/for-you';
+  static const explore = '/discover/explore';
   static const favorites = '/library/favorites';
   static const history = '/library/history';
   static const historyStats = '/library/history/stats';
@@ -297,6 +305,14 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: AppRoutes.search,
             builder: (context, state) => const SearchScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.forYou,
+            builder: (context, state) => const ForYouScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.explore,
+            builder: (context, state) => const ExploreScreen(),
           ),
           GoRoute(
             path: AppRoutes.favorites,

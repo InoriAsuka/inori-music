@@ -10,8 +10,10 @@ import 'package:window_manager/window_manager.dart' show DragToMoveArea;
 import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/auth/auth_notifier.dart';
 import 'package:inori_music/src/catalog/cover_palette_provider.dart';
+import 'package:inori_music/src/playback/playback_engine_provider.dart';
 import 'package:inori_music/src/player/mini_player_bar.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
+import 'package:inori_music/src/player/queue_drawer.dart';
 import 'package:inori_music/src/shared/desktop_integration.dart';
 import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/system_titlebar_provider.dart';
@@ -20,6 +22,8 @@ import 'package:inori_music/src/shared/theme/artwork_overlay_skin.dart'
 import 'package:inori_music/src/shared/theme/skin_provider.dart';
 import 'package:inori_music/src/shared/widgets/inori_mark.dart';
 import 'package:inori_music/src/shared/widgets/shell_chrome.dart';
+import 'package:inori_music/src/shared/widgets/sidebar_group_collapse_provider.dart';
+import 'package:inori_music/src/shared/widgets/sidebar_playlists_section.dart';
 
 /// Adaptive shell scaffold:
 /// - Mobile (<600dp): BottomNavigationBar + MiniPlayerBar
@@ -41,15 +45,24 @@ class ShellScaffold extends ConsumerStatefulWidget {
 
 class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
   /// Navigation split into the two groups EchoMusic uses — browsing the
-  /// server's catalog vs. the things this account has accumulated. The
-  /// grouping is only rendered by the desktop sidebar; the narrower layouts
-  /// flatten it back into a single strip (NavigationBar/NavigationRail have
-  /// no section-header concept), which is why [_navItems] concatenates them
-  /// and every index-based helper works off that flat list.
+  /// server's catalog vs. the things this account has accumulated. Feeds
+  /// [_navItems], which is what the narrower layouts' flat
+  /// NavigationBar/NavigationRail render (they have no section-header
+  /// concept) *and* what [_selectedIndex]/[_onItemTapped] dispatch off for
+  /// those two layouts.
   ///
-  /// `AppRoutes.playlists` is new here: the route and its screen already
-  /// existed but nothing anywhere in the app linked to them, so catalog
-  /// playlists were unreachable outside a deep link.
+  /// v5.33.0 gives the desktop sidebar its own, differently-organised
+  /// EchoMusic-style groups (see [_desktopDiscoverItems]/
+  /// [_desktopLibraryItems] below) without touching this pair — the phase's
+  /// own scope note is explicit that only `_DesktopSidebar` (>=1200dp)
+  /// changes, and mobile/tablet keep exactly the six destinations they had
+  /// before (a real content freeze, not just "the widget code is
+  /// untouched": an earlier pass folded the desktop-only regrouping into
+  /// this shared pair, which silently changed the phone bottom bar from six
+  /// destinations to seven — caught by
+  /// `test/shell_scaffold_nav_test.dart`'s own "mobile bottom bar carries
+  /// all six destinations" regression guard, which is exactly what it
+  /// exists to catch).
   List<_NavItem> _discoverItems(AppLocalizations t) => [
     _NavItem(
       label: t.artists,
@@ -81,6 +94,73 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
   List<_NavItem> _navItems(AppLocalizations t) => [
     ..._discoverItems(t),
     ..._libraryItems(t),
+  ];
+
+  /// The desktop sidebar's own "发现音乐" group — EchoMusic's `Sidebar.vue`
+  /// puts 为您推荐/探索发现 here (see for_you_screen.dart/explore_screen.dart),
+  /// not the catalog-browsing destinations [_discoverItems] holds for the
+  /// narrower layouts. A separate function/list from [_discoverItems]
+  /// rather than a shared one specifically so mobile/tablet's own six
+  /// destinations (via [_navItems]) can stay completely unmodified — see
+  /// this class's own doc comment above for why that separation is load
+  /// bearing, not incidental.
+  List<_NavItem> _desktopDiscoverItems(AppLocalizations t) => [
+    _NavItem(
+      label: t.forYou,
+      icon: Icons.auto_awesome_outlined,
+      route: AppRoutes.forYou,
+    ),
+    _NavItem(
+      label: t.sidebarExplore,
+      icon: Icons.explore_outlined,
+      route: AppRoutes.explore,
+    ),
+  ];
+
+  /// The desktop sidebar's own "我的乐库" group. EchoMusic's own 我的乐库
+  /// (favourites/personal FM/cloud drive/history) has no catalog-browsing
+  /// entries in it at all; 私人FM/我的云盘 have no counterpart in this app's
+  /// backend and are deliberately excluded (see requirement.md's v5.33.0
+  /// entry), which would leave this group with only favourites/history —
+  /// thin enough that artists/albums/search are folded in here too, so the
+  /// desktop sidebar's skeleton reads as populated rather than an
+  /// afterthought, at the cost of no longer matching EchoMusic's own
+  /// category boundary exactly. Catalog playlists are *not* folded in here
+  /// even though [_libraryItems] (the mobile/tablet equivalent) still
+  /// carries them as a flat item — the desktop sidebar surfaces both
+  /// playlist subsystems through its own dedicated tabbed section
+  /// (`SidebarPlaylistsSection`) instead, see [_DesktopSidebar].
+  List<_NavItem> _desktopLibraryItems(AppLocalizations t) => [
+    _NavItem(
+      label: t.favorites,
+      icon: Icons.favorite_outline,
+      route: AppRoutes.favorites,
+    ),
+    _NavItem(label: t.history, icon: Icons.history, route: AppRoutes.history),
+    _NavItem(
+      label: t.artists,
+      icon: Icons.people_outline,
+      route: AppRoutes.artists,
+    ),
+    _NavItem(
+      label: t.albums,
+      icon: Icons.album_outlined,
+      route: AppRoutes.albums,
+    ),
+    _NavItem(label: t.search, icon: Icons.search, route: AppRoutes.search),
+  ];
+
+  /// The desktop sidebar's own flat item list — [_desktopDiscoverItems] +
+  /// [_desktopLibraryItems] concatenated, the same "flatten the groups for
+  /// index purposes" shape [_navItems] already established, just over a
+  /// different pair of lists. This is what [_DesktopSidebar]'s own
+  /// `onItemTapped`/`selectedIndex` are computed against — a completely
+  /// separate index domain from [_navItems], not a shared one, which is
+  /// exactly what lets the two layouts' destinations differ without either
+  /// one's index scheme corrupting the other's.
+  List<_NavItem> _desktopNavItems(AppLocalizations t) => [
+    ..._desktopDiscoverItems(t),
+    ..._desktopLibraryItems(t),
   ];
 
   /// Guest mode is a local-files player with no server catalog behind it, so
@@ -189,18 +269,36 @@ class _ShellScaffoldState extends ConsumerState<ShellScaffold> {
     final selectedIndex = _selectedIndex(context, items);
 
     if (width >= 1200) {
+      // A completely separate flat item list/index from `items`/
+      // `selectedIndex` above (guest mode excepted — see the ternary
+      // below) — see [_desktopNavItems]'s own doc comment for why sharing
+      // one list between mobile/tablet and the desktop sidebar is exactly
+      // the mistake this phase's own field report caught.
+      final desktopItems = isGuest ? items : _desktopNavItems(t);
+      final desktopSelectedIndex = isGuest
+          ? selectedIndex
+          : _selectedIndex(context, desktopItems);
       return _DesktopLayout(
         // Two guest destinations under a section header would be more chrome
         // than content, so guest mode gets one unlabelled group.
         navGroups: isGuest
-            ? [(header: null, items: items)]
+            ? [(header: null, collapseKey: null, items: desktopItems)]
             : [
-                (header: t.discover, items: _discoverItems(t)),
-                (header: t.library, items: _libraryItems(t)),
+                (
+                  header: t.discover,
+                  collapseKey: 'discover',
+                  items: _desktopDiscoverItems(t),
+                ),
+                (
+                  header: t.library,
+                  collapseKey: 'library',
+                  items: _desktopLibraryItems(t),
+                ),
               ],
-        selectedIndex: selectedIndex,
-        onItemTapped: (i) => _onItemTapped(context, items, i),
+        selectedIndex: desktopSelectedIndex,
+        onItemTapped: (i) => _onItemTapped(context, desktopItems, i),
         bottomBar: bottomBar,
+        isGuest: isGuest,
         child: widget.child,
       );
     } else if (width >= 600) {
@@ -356,6 +454,7 @@ class _DesktopLayout extends StatelessWidget {
     required this.onItemTapped,
     required this.child,
     required this.bottomBar,
+    required this.isGuest,
   });
 
   final List<_NavGroup> navGroups;
@@ -363,6 +462,22 @@ class _DesktopLayout extends StatelessWidget {
   final ValueChanged<int> onItemTapped;
   final Widget child;
   final Widget bottomBar;
+
+  /// Threaded down to [_DesktopSidebar] so it can keep the guest shell to
+  /// its own explicitly simple shape (two nav items + the account card +,
+  /// where it's meaningful, the download entry) instead of the full
+  /// EchoMusic skeleton (collapsible groups, the playlist tabs section, the
+  /// device entry) — v5.33.0's own scope note: a guest account has no
+  /// server-side playlists to preview and no output-device capability
+  /// question that differs from a signed-in session, so none of that
+  /// skeleton earns its keep here.
+  final bool isGuest;
+
+  /// Fixed sidebar column width — named so [QueueDrawer]'s own positioning
+  /// below can reference the exact same figure the sidebar's `SizedBox`
+  /// uses, rather than a second, independently-typed `220` that could drift
+  /// out of sync with it.
+  static const _sidebarWidth = 220.0;
 
   @override
   Widget build(BuildContext context) {
@@ -392,11 +507,12 @@ class _DesktopLayout extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               SizedBox(
-                width: 220,
+                width: _sidebarWidth,
                 child: _DesktopSidebar(
                   navGroups: navGroups,
                   selectedIndex: selectedIndex,
                   onItemTapped: onItemTapped,
+                  isGuest: isGuest,
                 ),
               ),
               Expanded(
@@ -439,6 +555,23 @@ class _DesktopLayout extends StatelessWidget {
             right: 0,
             child: _LayoutAccentGradient(),
           ),
+          // The mini bar's queue button (see mini_player_bar.dart's
+          // _openQueue) toggles queueDrawerOpenProvider rather than
+          // navigating away — this is what actually renders that drawer.
+          // Scoped to start at _sidebarWidth, not left: 0, so it only ever
+          // overlays the content column: the sidebar's own nav stays fully
+          // clickable while the drawer is open, matching Spotify/EchoMusic
+          // (their queue panels dock over the page, not over their own nav
+          // rail). Always mounted (not wrapped in `if (open)`) — see
+          // QueueDrawer's own doc comment for why its AnimationController
+          // needs to outlive a single open/close cycle.
+          const Positioned(
+            top: 0,
+            left: _sidebarWidth,
+            right: 0,
+            bottom: 0,
+            child: QueueDrawer(),
+          ),
         ],
       ),
     );
@@ -447,23 +580,25 @@ class _DesktopLayout extends StatelessWidget {
 
 /// Height of [_LayoutAccentGradient]'s wash. A fixed pixel count rather than
 /// a fraction of window height: what it needs to visually bridge is the
-/// sidebar's own top chrome — drag strip + wordmark row + account block +
+/// sidebar's own top chrome — drag strip + wordmark row + account card +
 /// divider + the first section header — which is fixed-height regardless of
 /// how tall the window is, so a taller window does not need a
 /// proportionally taller wash to cover the same seam. Measured directly
 /// (`shell_scaffold_nav_test.dart`'s drag-strip tests pin the inputs this
 /// depends on) rather than estimated: on the worst case, macOS's 48px strip,
-/// that stack puts the first nav tile's own centre at y=226 (24px shorter,
-/// y=202, on other desktop platforms — `_DesktopSidebar._dragStripHeight`
-/// is the only thing that differs between the two). 240 clears the macOS
-/// figure with a small margin, so the wash — deliberately — reaches
-/// slightly past the sidebar's own header block into the first nav row
-/// rather than stopping exactly at its boundary. That overlap is what a
-/// "still clickable through the wash" test needs in order to be testing
-/// anything real — a gradient that only ever covered blank space could
-/// never prove [IgnorePointer] below is doing its
-/// job.
-const _layoutAccentGradientHeight = 240.0;
+/// that stack puts the first nav tile's own centre at y=242 as of v5.33.0's
+/// account card redesign (up from y=226 pre-v5.33.0 — the filled card's own
+/// margin/padding, see `_accountCard`, adds real height the old bare row
+/// didn't have; 24px shorter, y=218, on other desktop platforms —
+/// `_DesktopSidebar._dragStripHeight` is the only thing that differs
+/// between the two). 250 clears the macOS figure with a small margin, so
+/// the wash — deliberately — reaches slightly past the sidebar's own
+/// header block into the first nav row rather than stopping exactly at its
+/// boundary. That overlap is what a "still clickable through the wash"
+/// test needs in order to be testing anything real — a gradient that only
+/// ever covered blank space could never prove [IgnorePointer] below is
+/// doing its job.
+const _layoutAccentGradientHeight = 250.0;
 
 /// Max opacity at the gradient's top edge, tuned by the *ambient skin's* own
 /// brightness rather than the cover-backdrop luminance
@@ -572,6 +707,7 @@ class _DesktopSidebar extends ConsumerWidget {
     required this.navGroups,
     required this.selectedIndex,
     required this.onItemTapped,
+    required this.isGuest,
   });
 
   final List<_NavGroup> navGroups;
@@ -580,6 +716,14 @@ class _DesktopSidebar extends ConsumerWidget {
   /// are laid out in.
   final int selectedIndex;
   final ValueChanged<int> onItemTapped;
+
+  /// See [_DesktopLayout.isGuest]'s own doc comment — gates the v5.33.0
+  /// EchoMusic-skeleton additions (playlist tabs, download/device entries)
+  /// off entirely rather than rendering them empty; the nav groups
+  /// themselves and the account card above are unaffected by this flag
+  /// (they already had their own guest-appropriate shapes before this
+  /// phase).
+  final bool isGuest;
 
   /// EchoMusic's `Sidebar.vue` renders a blank `drag-region` div as the
   /// sidebar's very first child — `isMac ? 'h-12' : 'h-6'` (48px / 24px) —
@@ -627,24 +771,48 @@ class _DesktopSidebar extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final collapsedGroups = ref.watch(sidebarGroupCollapseProvider);
+
     // Flat index that keeps walking across group boundaries, so the sidebar's
     // notion of "item 4" stays the same as the bottom bar's and the rail's.
+    // Collapsing a group only hides its *rows* below — flatIndex still
+    // advances through every item in it exactly as if it were expanded, so
+    // collapse state can never desync this sidebar's index scheme from the
+    // one _navItems (and therefore the mobile/tablet layouts, and
+    // onItemTapped's own route lookup) use.
     var flatIndex = 0;
     final rows = <Widget>[];
     for (final group in navGroups) {
       final header = group.header;
-      if (header != null) rows.add(_SectionHeader(label: header));
+      final collapseKey = group.collapseKey;
+      final collapsed =
+          collapseKey != null && collapsedGroups.contains(collapseKey);
+      if (header != null) {
+        rows.add(
+          _SectionHeader(
+            label: header,
+            collapsed: collapsed,
+            onToggle: collapseKey == null
+                ? null
+                : () => ref
+                      .read(sidebarGroupCollapseProvider.notifier)
+                      .setCollapsed(collapseKey, !collapsed),
+          ),
+        );
+      }
       for (final item in group.items) {
         // Snapshot per row: the callback would otherwise close over the loop
         // counter itself and every tile would report the final index.
         final index = flatIndex;
-        rows.add(
-          _SidebarTile(
-            item: item,
-            isSelected: index == selectedIndex,
-            onTap: () => onItemTapped(index),
-          ),
-        );
+        if (!collapsed) {
+          rows.add(
+            _SidebarTile(
+              item: item,
+              isSelected: index == selectedIndex,
+              onTap: () => onItemTapped(index),
+            ),
+          );
+        }
         flatIndex++;
       }
       rows.add(const SizedBox(height: 8));
@@ -724,12 +892,151 @@ class _DesktopSidebar extends ConsumerWidget {
             titleRow,
             const _AccountBlock(),
             const Divider(),
-            Expanded(child: ListView(children: rows)),
+            Expanded(
+              child: ListView(
+                children: [
+                  ...rows,
+                  // Guest mode keeps the simple two-item shell (see
+                  // [isGuest]'s own doc comment) — a guest account has no
+                  // server-side playlists to preview at all, so this
+                  // section would only ever show its own empty state,
+                  // which is not what "范围限制" asked for here.
+                  if (!isGuest) ...[
+                    const Divider(height: 24),
+                    const SidebarPlaylistsSection(),
+                  ],
+                ],
+              ),
+            ),
+            if (!isGuest) const Divider(height: 1),
+            if (!isGuest) const _SidebarBottomEntries(),
           ],
         ),
       ),
     );
   }
+}
+
+/// The sidebar's own footer — EchoMusic's `Sidebar.vue` pins 下载/装置 below
+/// the scrollable nav content rather than letting them scroll away with it.
+/// Guest-gated at the call site above, not here: a guest account has
+/// nothing downloaded through this app's own account-gated download flow
+/// (`_OfflineLibrarySection` in settings_screen.dart is itself `if
+/// (!isGuest)`-gated for the same reason) and the output-device question
+/// does not differ for a guest session, so there is nothing this footer
+/// would show that isn't already covered by keeping the guest shell simple.
+class _SidebarBottomEntries extends ConsumerWidget {
+  const _SidebarBottomEntries();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final t = AppLocalizations.of(context);
+    // Capability-driven, not a hardcoded hide: PlaybackCapabilities.
+    // outputDeviceSelection is false under the current just_audio engine
+    // (see just_audio_engine.dart's own capabilities getter, which
+    // explains exactly why: "just_audio exposes none of the output chain").
+    // That is *why* this row does not render today, not a TODO standing in
+    // for a real check — once a future engine (media_kit, then the
+    // in-house one) reports outputDeviceSelection: true, this appears with
+    // no code change here at all. This is playback_engine.dart's own
+    // stated rule ("a control the engine cannot honour must not be shown")
+    // applied to sidebar chrome instead of a settings screen for the first
+    // time.
+    final canSelectOutputDevice = ref.watch(
+      playbackCapabilitiesProvider.select((c) => c.outputDeviceSelection),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _SidebarBottomEntry(
+            icon: Icons.download_outlined,
+            label: t.downloads,
+            // Reuses the existing Offline Library section in Settings
+            // (download_notifier.dart's downloadProvider is what actually
+            // manages downloads) rather than building a second downloads
+            // screen — this is a shortcut into where that capability
+            // already lives, not a new subsystem.
+            onTap: () => context.go(AppRoutes.settings),
+          ),
+          if (canSelectOutputDevice)
+            _SidebarBottomEntry(
+              icon: Icons.speaker_outlined,
+              label: t.outputDevice,
+              // The actual output-device picker UI is out of scope for
+              // this phase (it has nothing to drive yet — see the doc
+              // comment above); Settings is where that control will live
+              // once an engine actually reports this capability, matching
+              // the download entry's own destination above.
+              onTap: () => context.go(AppRoutes.settings),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SidebarBottomEntry extends StatelessWidget {
+  const _SidebarBottomEntry({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(
+        horizontal: _SidebarTile._horizontalInset,
+        vertical: 2,
+      ),
+      child: ListTile(
+        dense: true,
+        contentPadding: _SidebarTile._contentPadding,
+        leading: Icon(
+          icon,
+          size: 20,
+          color: context.skinColors.onSurfaceVariant,
+        ),
+        title: Text(
+          label,
+          style: TextStyle(
+            fontSize: 13,
+            color: context.skinColors.onSurfaceVariant,
+          ),
+        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        onTap: onTap,
+      ),
+    );
+  }
+}
+
+/// Shared "filled rounded card" chrome both [_AccountBlock] and
+/// [_GuestSignInPrompt] sit inside — EchoMusic's own account block is a
+/// distinct surface (a lightly filled, rounded rectangle) rather than a
+/// bare row painted directly on the sidebar's own background, which is what
+/// this file rendered through v5.32.0 (v5.33.0 field report: "整块应该是一个
+/// 带浅填充的圆角卡片，不是裸的一行"). Pulled out once, with its own margin
+/// replacing each variant's separate outer `Padding`, so the two variants
+/// can't drift apart on inset/radius/fill even though their content
+/// differs.
+Widget _accountCard({required BuildContext context, required Widget child}) {
+  return Container(
+    margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+    decoration: BoxDecoration(
+      color: context.skinColors.surfaceContainer,
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: child,
+  );
 }
 
 /// Signed-in identity plus the app's only entry point to Settings outside
@@ -759,8 +1066,8 @@ class _AccountBlock extends ConsumerWidget {
     final username = auth?.username ?? '';
     final initial = username.isEmpty ? '?' : username[0].toUpperCase();
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 8, 8),
+    return _accountCard(
+      context: context,
       child: Row(
         children: [
           CircleAvatar(
@@ -781,7 +1088,8 @@ class _AccountBlock extends ConsumerWidget {
               username,
               style: TextStyle(
                 fontSize: 13,
-                color: context.skinColors.onSurfaceVariant,
+                fontWeight: FontWeight.w600,
+                color: context.skinColors.onSurface,
               ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
@@ -807,24 +1115,27 @@ class _AccountBlock extends ConsumerWidget {
 /// the Settings screen's own "登录" button already calls — the router's
 /// `isPastGate` redirect then takes over and lands on `/login`, so this is a
 /// second entry point to one action rather than a second implementation of
-/// it. Settings is deliberately not duplicated here (unlike the signed-in
-/// branch above): guest mode already carries Settings as its own nav
-/// destination (see [_ShellScaffoldState._guestItems]).
+/// it — v5.33.0 changes only this widget's own chrome (the shared
+/// [_accountCard] fill, and a second, primary "未登录" line above the
+/// existing [AppLocalizations.tapToSignIn] prompt) and leaves that
+/// `onTap` untouched. Settings is deliberately not duplicated here (unlike
+/// the signed-in branch above): guest mode already carries Settings as its
+/// own nav destination (see [_ShellScaffoldState._guestItems]).
 class _GuestSignInPrompt extends ConsumerWidget {
   const _GuestSignInPrompt();
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = AppLocalizations.of(context);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+    return _accountCard(
+      context: context,
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(8),
           onTap: () => ref.read(authProvider.notifier).exitGuestMode(),
           child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
+            padding: const EdgeInsets.symmetric(vertical: 2),
             child: Row(
               children: [
                 CircleAvatar(
@@ -838,15 +1149,30 @@ class _GuestSignInPrompt extends ConsumerWidget {
                 ),
                 const SizedBox(width: 10),
                 Expanded(
-                  child: Text(
-                    t.tapToSignIn,
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: context.skinColors.onSurfaceVariant,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        t.notSignedIn,
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: context.skinColors.onSurface,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      Text(
+                        t.tapToSignIn,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: context.skinColors.onSurfaceVariant,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ),
                 ),
                 Icon(
@@ -863,24 +1189,62 @@ class _GuestSignInPrompt extends ConsumerWidget {
   }
 }
 
+/// A nav group's header row — plain text (as before v5.33.0) when
+/// [onToggle] is null (guest mode's single unlabelled group never collapses
+/// — see [_ShellScaffoldState.build]'s guest branch, which passes
+/// `collapseKey: null`), otherwise a tappable row with a chevron that flips
+/// to reflect [collapsed]. The chevron's own rotation is what actually
+/// carries the state visually — [InkWell] here needs the ambient
+/// `Material(type: transparency)` [_DesktopSidebar] already wraps its whole
+/// column in (the same requirement [_SidebarTile]'s own selected-pill ink
+/// has), not a Material of its own.
 class _SectionHeader extends StatelessWidget {
-  const _SectionHeader({required this.label});
+  const _SectionHeader({
+    required this.label,
+    this.collapsed = false,
+    this.onToggle,
+  });
   final String label;
+  final bool collapsed;
+  final VoidCallback? onToggle;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    final row = Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-      child: Text(
-        label.toUpperCase(),
-        style: TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.8,
-          color: context.skinColors.outline,
-        ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label.toUpperCase(),
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.8,
+                color: context.skinColors.outline,
+              ),
+            ),
+          ),
+          if (onToggle != null)
+            AnimatedRotation(
+              // 0 turns (pointing down) expanded, a quarter-turn
+              // counter-clockwise (pointing right) collapsed — the same
+              // expanded/collapsed convention a Material ExpansionTile
+              // chevron uses, so this reads as "foldable" on sight without
+              // needing a second visual cue.
+              turns: collapsed ? -0.25 : 0,
+              duration: const Duration(milliseconds: 150),
+              child: Icon(
+                Icons.expand_more,
+                size: 16,
+                color: context.skinColors.outline,
+              ),
+            ),
+        ],
       ),
     );
+    if (onToggle == null) return row;
+    return InkWell(onTap: onToggle, child: row);
   }
 }
 
@@ -970,4 +1334,15 @@ class _NavItem {
 
 /// A sidebar section. A null [header] renders the items with no section
 /// label — used by guest mode, whose two destinations don't need grouping.
-typedef _NavGroup = ({String? header, List<_NavItem> items});
+///
+/// [collapseKey] is a stable, untranslated identifier
+/// ([SidebarGroupCollapseNotifier] persists collapsed state keyed by it, so
+/// a language switch can't reset — or silently merge — a group's fold
+/// state the way keying off the translated [header] text would) — null
+/// alongside a null [header] for guest mode's single group, which never
+/// collapses.
+typedef _NavGroup = ({
+  String? header,
+  String? collapseKey,
+  List<_NavItem> items,
+});

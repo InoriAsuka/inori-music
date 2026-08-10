@@ -10,7 +10,13 @@ import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/theme/skin_provider.dart';
 import 'package:inori_music/src/shared/widgets/desktop_app_bar.dart';
 
-final _playlistsProvider = FutureProvider<List<Playlist>>((ref) {
+/// Public (not file-private) since v5.33.0 so the desktop sidebar's own
+/// "收藏歌单" tab (`shell_scaffold.dart`'s playlist section) can watch the
+/// exact same provider this screen does, rather than duplicating the
+/// catalog-playlists fetch under a second name — one cache entry, one
+/// in-flight request, one place either would show a stale list if the
+/// other just mutated something server-side.
+final catalogPlaylistsProvider = FutureProvider<List<Playlist>>((ref) {
   return ref.watch(catalogRepositoryProvider).listPlaylists();
 });
 
@@ -20,7 +26,7 @@ class PlaylistsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final t = AppLocalizations.of(context);
-    final state = ref.watch(_playlistsProvider);
+    final state = ref.watch(catalogPlaylistsProvider);
     return Scaffold(
       appBar: DesktopAppBar(title: Text(t.playlists)),
       body: state.when(
@@ -38,7 +44,7 @@ class PlaylistsScreen extends ConsumerWidget {
               Text('$e', textAlign: TextAlign.center),
               const SizedBox(height: 12),
               FilledButton(
-                onPressed: () => ref.refresh(_playlistsProvider),
+                onPressed: () => ref.refresh(catalogPlaylistsProvider),
                 child: Text(t.retry),
               ),
             ],

@@ -28,6 +28,7 @@ import 'package:inori_music/src/player/cover_flow_mode_provider.dart';
 import 'package:inori_music/src/player/full_player_screen.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/player/player_state.dart' as pstate;
+import 'package:inori_music/src/player/queue_list.dart';
 import 'package:inori_music/src/lyrics/lyric_line.dart';
 import 'package:inori_music/src/lyrics/lyrics_provider.dart';
 import 'package:inori_music/src/playback/playback_engine_provider.dart';
@@ -299,6 +300,12 @@ void main() {
       findsNothing,
       reason: 'Wide windows dock the queue rather than covering the player',
     );
+    // v5.33.0: QueueList moved to its own public file specifically so this
+    // docked panel and the desktop shell's own QueueDrawer
+    // (shell_scaffold_nav_test.dart) share one implementation instead of
+    // growing a second one that could drift on reorder/delete/jump-to-track
+    // behaviour — this is the direct proof this call site actually uses it.
+    expect(find.byType(QueueList), findsOneWidget);
   });
 
   testWidgets('the same button closes the panel again', (tester) async {

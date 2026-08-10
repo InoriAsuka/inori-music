@@ -23,6 +23,7 @@
 import 'package:audio_service/audio_service.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -405,6 +406,95 @@ void main() {
             'The elapsed label crossing from 4 characters ("9:59") to 5 '
             '("10:00") must not nudge how much width is left for the slider',
       );
+    },
+  );
+
+  // ---------------------------------------------------------------------
+  // v5.33.0 — time labels must not wrap under a boosted textScaler
+  // ---------------------------------------------------------------------
+
+  testWidgets(
+    'the wide seek row\'s time labels stay single-line under a boosted '
+    'textScaler',
+    (tester) async {
+      // Field report: "0:43" rendered as two lines ("0:4" / "3") and "3:05"
+      // as ("3:0" / "5") once the system font scale was increased.
+      // _timeLabelWidth measured its reserved slot against the *default*
+      // TextScaler (1.0) while the real Text below always painted at
+      // whatever MediaQuery.textScalerOf(context) reported — so any scale
+      // above 1.0 measured a narrower slot than the real glyphs needed.
+      // 1.3 is inside the field report's own repro range.
+      final mediaItem = MediaItem(id: 'track-1', title: 'Idol');
+      await tester.pumpWidget(
+        ProviderScope(
+          overrides: [
+            playerProvider.overrideWith(
+              () => _StubPlayerNotifier(
+                pstate.PlayerState(
+                  queue: [mediaItem],
+                  currentIndex: 0,
+                  mediaItem: mediaItem,
+                  playbackState: PlaybackState(playing: true),
+                  position: const Duration(seconds: 43),
+                  duration: const Duration(minutes: 3, seconds: 5),
+                ),
+              ),
+            ),
+          ],
+          child: MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            builder: (context, child) => MediaQuery(
+              data: MediaQuery.of(
+                context,
+              ).copyWith(textScaler: const TextScaler.linear(1.3)),
+              child: child!,
+            ),
+            home: Scaffold(
+              body: SizedBox(width: 900, child: const MiniPlayerBar()),
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      // Measures the *actual rendered height* against an independent
+      // single-line reference — not just "the widget exists" (which a
+      // silently-two-line label would still satisfy) and not a hand-picked
+      // pixel constant (which would go stale the moment the label's font
+      // size changes). The reference painter reuses the render object's own
+      // resolved span and textScaler, laid out at TextPainter's default
+      // unbounded width, so it can never itself wrap — that makes its
+      // height a trustworthy "one line" yardstick to compare the real,
+      // width-constrained label against. A label that wrapped to two lines
+      // renders at roughly double this height; framework line-height
+      // rounding never gets remotely close to doubling it.
+      RenderParagraph paragraphFor(String text) =>
+          tester.renderObject<RenderParagraph>(find.text(text));
+
+      double singleLineReferenceHeight(RenderParagraph paragraph) {
+        final reference = TextPainter(
+          text: paragraph.text,
+          textDirection: TextDirection.ltr,
+          textScaler: paragraph.textScaler,
+        )..layout();
+        return reference.height;
+      }
+
+      for (final label in ['0:43', '3:05']) {
+        final paragraph = paragraphFor(label);
+        final actualHeight = paragraph.size.height;
+        final oneLineHeight = singleLineReferenceHeight(paragraph);
+
+        expect(
+          actualHeight,
+          lessThan(oneLineHeight * 1.5),
+          reason:
+              '"$label" rendered at $actualHeight logical px tall against a '
+              'single-line reference of $oneLineHeight — that only happens '
+              'if it wrapped onto a second line',
+        );
+      }
     },
   );
 }

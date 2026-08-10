@@ -219,4 +219,49 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get clearSearchHistory => '検索履歴を削除';
+
+  @override
+  String get forYou => 'おすすめ';
+
+  @override
+  String get forYouComingSoon => 'パーソナライズされたおすすめは今後のアップデートで提供予定です。';
+
+  @override
+  String get sidebarExplore => '探索';
+
+  @override
+  String get recentlyAdded => '最近追加';
+
+  @override
+  String get randomPicks => 'ランダムピック';
+
+  @override
+  String get createdPlaylists => '作成済み';
+
+  @override
+  String get collectedPlaylists => 'コレクション';
+
+  @override
+  String get sortAlphabetically => '名前順に並べ替え';
+
+  @override
+  String get refresh => '更新';
+
+  @override
+  String get viewAll => 'すべて表示';
+
+  @override
+  String get noCreatedPlaylistsYet => 'プレイリストはまだありません';
+
+  @override
+  String get noCollectedPlaylistsYet => 'コレクションしたプレイリストはまだありません';
+
+  @override
+  String get notSignedIn => '未サインイン';
+
+  @override
+  String get downloads => 'ダウンロード';
+
+  @override
+  String get outputDevice => '出力デバイス';
 }

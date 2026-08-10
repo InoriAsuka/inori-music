@@ -464,4 +464,71 @@ void main() {
       );
     },
   );
+
+  // ---------------------------------------------------------------------
+  // v5.33.0 — floating card margin/inset symmetry (field report: "控制条
+  // 完全可以参考 EchoMusic 这样的上下左右留白等宽，而不是现在我们这种基本贴边"). Both
+  // assertions measure real rendered geometry rather than the constants
+  // themselves — a regression that re-introduces four independent literals
+  // (even ones that happen to still agree numerically) would still be
+  // caught here, where re-hardcoding the same constant back into the
+  // assertion would not catch it.
+  // ---------------------------------------------------------------------
+
+  testWidgets(
+    'the floating card keeps an equal outer margin on all four sides',
+    (tester) async {
+      final stub = _StubPlayerNotifier(pstate.PlayerState());
+      await tester.pumpWidget(_buildApp(stub));
+      await tester.pump();
+
+      final outer = tester.getRect(find.byType(MiniPlayerBar));
+      final card = tester.getRect(find.byKey(MiniPlayerBar.cardKey));
+
+      final left = card.left - outer.left;
+      final top = card.top - outer.top;
+      final right = outer.right - card.right;
+      final bottom = outer.bottom - card.bottom;
+
+      expect(
+        top,
+        closeTo(left, 0.5),
+        reason:
+            'Through v5.32.0 the top margin was a bare 0 while the other '
+            'three sides were 8',
+      );
+      expect(right, closeTo(left, 0.5));
+      expect(bottom, closeTo(left, 0.5));
+    },
+  );
+
+  testWidgets(
+    'the cover sits equidistant from the card\'s left edge and its top edge',
+    (tester) async {
+      final mediaItem = MediaItem(id: 'track-001', title: 'Idol');
+      final stub = _StubPlayerNotifier(
+        pstate.PlayerState(
+          queue: [mediaItem],
+          currentIndex: 0,
+          mediaItem: mediaItem,
+          playbackState: PlaybackState(playing: false),
+        ),
+      );
+      await tester.pumpWidget(_buildApp(stub));
+      await tester.pump();
+
+      final card = tester.getRect(find.byKey(MiniPlayerBar.cardKey));
+      final cover = tester.getRect(find.byType(MiniPlayerArtwork));
+
+      expect(
+        cover.left - card.left,
+        closeTo(cover.top - card.top, 0.5),
+        reason:
+            'Through v5.32.0 the horizontal inset was a flat 12 against a '
+            'vertical gap of 14 (the natural result of centring the 56px '
+            'cover in the 84px content row), so the cover sat measurably '
+            'closer to the card\'s left edge than to its top edge',
+      );
+    },
+  );
 }

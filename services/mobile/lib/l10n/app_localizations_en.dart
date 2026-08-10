@@ -220,4 +220,50 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get clearSearchHistory => 'Clear search history';
+
+  @override
+  String get forYou => 'For You';
+
+  @override
+  String get forYouComingSoon =>
+      'Personalized recommendations are coming in a future update.';
+
+  @override
+  String get sidebarExplore => 'Explore';
+
+  @override
+  String get recentlyAdded => 'Recently Added';
+
+  @override
+  String get randomPicks => 'Random Picks';
+
+  @override
+  String get createdPlaylists => 'Created';
+
+  @override
+  String get collectedPlaylists => 'Collected';
+
+  @override
+  String get sortAlphabetically => 'Sort alphabetically';
+
+  @override
+  String get refresh => 'Refresh';
+
+  @override
+  String get viewAll => 'View All';
+
+  @override
+  String get noCreatedPlaylistsYet => 'No playlists yet';
+
+  @override
+  String get noCollectedPlaylistsYet => 'No collected playlists';
+
+  @override
+  String get notSignedIn => 'Not Signed In';
+
+  @override
+  String get downloads => 'Downloads';
+
+  @override
+  String get outputDevice => 'Output Device';
 }

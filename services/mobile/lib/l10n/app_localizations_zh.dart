@@ -219,4 +219,49 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get clearSearchHistory => '清除搜索历史';
+
+  @override
+  String get forYou => '为您推荐';
+
+  @override
+  String get forYouComingSoon => '个性化推荐将在后续版本推出，敬请期待。';
+
+  @override
+  String get sidebarExplore => '探索发现';
+
+  @override
+  String get recentlyAdded => '最近添加';
+
+  @override
+  String get randomPicks => '随机发现';
+
+  @override
+  String get createdPlaylists => '自建歌单';
+
+  @override
+  String get collectedPlaylists => '收藏歌单';
+
+  @override
+  String get sortAlphabetically => '按名称排序';
+
+  @override
+  String get refresh => '刷新';
+
+  @override
+  String get viewAll => '查看全部';
+
+  @override
+  String get noCreatedPlaylistsYet => '暂无自建歌单';
+
+  @override
+  String get noCollectedPlaylistsYet => '暂无收藏歌单';
+
+  @override
+  String get notSignedIn => '未登录';
+
+  @override
+  String get downloads => '下载';
+
+  @override
+  String get outputDevice => '装置';
 }

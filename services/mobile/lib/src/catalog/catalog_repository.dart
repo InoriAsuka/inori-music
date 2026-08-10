@@ -22,7 +22,10 @@ class CatalogRepository {
   CatalogRepository(this._api);
   final CatalogApi _api;
 
-  Future<List<CatalogArtist>> listArtists({int limit = 50, int offset = 0}) async {
+  Future<List<CatalogArtist>> listArtists({
+    int limit = 50,
+    int offset = 0,
+  }) async {
     final resp = await _api.listCatalogArtists(limit: limit, offset: offset);
     return resp.data?.artists ?? [];
   }
@@ -31,16 +34,31 @@ class CatalogRepository {
     String? artistId,
     int limit = 50,
     int offset = 0,
+    // sortBy/sortOrder default to null/'asc', matching the server's own
+    // handler defaults (handler_catalog.go's parseCatalogPage) — an unset
+    // sortBy sorts by title, which is what every pre-v5.33.0 caller of this
+    // method already implicitly relied on. Added for the sidebar's own
+    // "探索发现" screen (recently-added albums, sortBy: 'createdAt') rather
+    // than invented speculatively — `AlbumSortByCreatedAt` in the server's
+    // catalog/types.go confirms 'createdAt' is a real, already-supported
+    // value, not a guess.
+    String? sortBy,
+    String? sortOrder,
   }) async {
     final resp = await _api.listCatalogAlbums(
       artistId: artistId,
       limit: limit,
       offset: offset,
+      sortBy: sortBy,
+      sortOrder: sortOrder,
     );
     return resp.data?.albums ?? [];
   }
 
-  Future<List<CatalogTrack>> listTracks({int limit = 50, int offset = 0}) async {
+  Future<List<CatalogTrack>> listTracks({
+    int limit = 50,
+    int offset = 0,
+  }) async {
     final resp = await _api.listCatalogTracks(limit: limit, offset: offset);
     return resp.data?.tracks ?? [];
   }
@@ -100,7 +118,10 @@ class CatalogRepository {
   }
 
   Future<List<Playlist>> listPlaylists({int limit = 50, int offset = 0}) async {
-    final resp = await _api.apiV1CatalogPlaylistsGet(limit: limit, offset: offset);
+    final resp = await _api.apiV1CatalogPlaylistsGet(
+      limit: limit,
+      offset: offset,
+    );
     return resp.data?.playlists ?? [];
   }
 

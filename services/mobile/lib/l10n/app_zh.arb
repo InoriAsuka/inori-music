@@ -74,5 +74,20 @@
   "noHistory": "暂无播放记录",
   "noData": "暂无数据",
   "recentSearches": "最近搜索",
-  "clearSearchHistory": "清除搜索历史"
+  "clearSearchHistory": "清除搜索历史",
+  "forYou": "为您推荐",
+  "forYouComingSoon": "个性化推荐将在后续版本推出，敬请期待。",
+  "sidebarExplore": "探索发现",
+  "recentlyAdded": "最近添加",
+  "randomPicks": "随机发现",
+  "createdPlaylists": "自建歌单",
+  "collectedPlaylists": "收藏歌单",
+  "sortAlphabetically": "按名称排序",
+  "refresh": "刷新",
+  "viewAll": "查看全部",
+  "noCreatedPlaylistsYet": "暂无自建歌单",
+  "noCollectedPlaylistsYet": "暂无收藏歌单",
+  "notSignedIn": "未登录",
+  "downloads": "下载",
+  "outputDevice": "装置"
 }

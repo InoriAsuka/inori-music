@@ -8,6 +8,7 @@ import 'package:inori_music/src/audio/sleep_timer_notifier.dart';
 import 'package:inori_music/src/catalog/cover_palette_provider.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/player/playback_mode_buttons.dart';
+import 'package:inori_music/src/player/queue_drawer_provider.dart';
 import 'package:inori_music/src/player/track_artwork.dart';
 import 'package:inori_music/src/player/volume_control.dart';
 import 'package:inori_music/src/shared/router.dart';
@@ -15,6 +16,7 @@ import 'package:inori_music/src/shared/theme/skin_provider.dart';
 import 'package:inori_music/src/shared/widgets/floating_shadow.dart';
 import 'package:inori_music/src/shared/widgets/hover_link_text.dart';
 import 'package:inori_music/src/shared/widgets/seek_bar_effects.dart';
+import 'package:inori_music/src/shared/widgets/shell_chrome.dart';
 import 'package:inori_music/src/shared/widgets/spring_interaction.dart';
 
 /// Persistent mini-player bar displayed at the bottom of the shell scaffold.
@@ -123,6 +125,44 @@ class MiniPlayerBar extends ConsumerWidget {
   /// some common type in the tree.
   static const contentKey = ValueKey('miniPlayerBarContent');
 
+  /// Identifies the floating card's own outer edge (the [DecoratedBox]
+  /// carrying the rounded corners + shadow) — distinct from [contentKey],
+  /// which spans only the fixed-height content row and excludes the narrow
+  /// shape's extra top progress strip. Margin/inset tests need the whole
+  /// card's bounds, not just the content row's.
+  static const cardKey = ValueKey('miniPlayerBarCard');
+
+  /// Uniform outer margin between the floating bar and whatever surrounds it
+  /// (the shell's content column, the window edge…), on all four sides.
+  ///
+  /// Through v5.32.0 this was `EdgeInsets.fromLTRB(8, 0, 8, 8)` — three sides
+  /// at 8, the top at a bare 0 — so the top edge butted directly against
+  /// whatever sits above the bar instead of floating clear of it like the
+  /// other three (v5.33.0 field report: "控制条完全可以参考 EchoMusic 这样的上下
+  /// 左右留白等宽，而不是现在我们这种基本贴边"). One named constant applied via
+  /// [EdgeInsets.all] is the actual fix, not just picking a number — four
+  /// independent literals is exactly what let three of them agree on 8 and
+  /// leave the fourth behind; a fifth ad hoc literal added later to "fix"
+  /// this would only repeat the mistake.
+  static const _outerMargin = 8.0;
+
+  /// Horizontal inset between the floating card's own border and its
+  /// content (the cover, title/artist, transport controls…).
+  ///
+  /// Derived from, rather than independently chosen alongside, the
+  /// *vertical* gap the layout already produces for free: an [_artworkSize]
+  /// (56px) cover centred inside the [_contentHeight] (84px) content row
+  /// leaves (84-56)/2 = 14px above and below it with no padding of its own.
+  /// Through v5.32.0 the horizontal inset was a flat, unrelated 12
+  /// (`EdgeInsets.symmetric(horizontal: 12)`), so the cover sat measurably
+  /// closer to the card's left edge than to its top/bottom edges — the
+  /// other half of the v5.33.0 field report ("四边留白等宽"). Computing this
+  /// from the same two constants that already produce the vertical figure —
+  /// instead of hand-typing 14 to match today's values — keeps the two
+  /// figures from drifting apart again if either constant above ever
+  /// changes.
+  static const _contentHorizontalInset = (_contentHeight - _artworkSize) / 2;
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final playerState = ref.watch(playerProvider);
@@ -166,12 +206,13 @@ class MiniPlayerBar extends ConsumerWidget {
     }
 
     return Padding(
-      padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+      padding: const EdgeInsets.all(_outerMargin),
       // The shadow lives on this outer DecoratedBox, not inside the
       // Material below — see floatingShadow's doc comment on why a
       // clipping ancestor (this Material clips its own rounded corners)
       // must never sit between a BoxShadow and open air.
       child: DecoratedBox(
+        key: cardKey,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(16),
           boxShadow: floatingShadow(context.skinColors.miniPlayerShadow),
@@ -199,7 +240,9 @@ class MiniPlayerBar extends ConsumerWidget {
                     child: SafeArea(
                       top: false,
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: _contentHorizontalInset,
+                        ),
                         // No outer InkWell here since v5.30.7 — the whole
                         // content row used to open the full player on tap,
                         // which meant tapping the title/artist (reasonable
@@ -463,7 +506,7 @@ Widget _wideContent(
               alignment: Alignment.centerRight,
               child: LayoutBuilder(
                 builder: (context, constraints) =>
-                    _wideActionsRow(context, constraints.maxWidth),
+                    _wideActionsRow(context, ref, constraints.maxWidth),
               ),
             ),
           ),
@@ -703,12 +746,14 @@ Widget _sleepTimerButton() {
 /// decides whether the volume slider fits inline or collapses to an
 /// icon-only popover trigger, see [MiniPlayerBar._volumeCompactThreshold].
 ///
-/// The queue button doesn't open a queue view of its own — there isn't one
-/// outside [FullPlayerScreen] (docked beside the player on wide windows, a
-/// bottom sheet otherwise), and building a second queue UI just for this
-/// entry point would be a second thing to keep in sync with the first. It
-/// opens the same route the bar's own title/artist tap already does.
-Widget _wideActionsRow(BuildContext context, double availableWidth) {
+/// The queue button's own behaviour is [_openQueue] — see that function's
+/// doc comment for why it differs by shell width instead of opening the
+/// same thing everywhere.
+Widget _wideActionsRow(
+  BuildContext context,
+  WidgetRef ref,
+  double availableWidth,
+) {
   final compactVolume = availableWidth < MiniPlayerBar._volumeCompactThreshold;
   return Row(
     mainAxisSize: MainAxisSize.min,
@@ -725,10 +770,43 @@ Widget _wideActionsRow(BuildContext context, double availableWidth) {
         ),
         color: context.skinColors.onSurfaceVariant,
         tooltip: 'Queue',
-        onPressed: () => context.push(AppRoutes.player),
+        onPressed: () => _openQueue(context, ref),
       ),
     ],
   );
+}
+
+/// Opens the play queue from the mini bar's own queue button.
+///
+/// Desktop — detected via [ShellChrome.of] returning non-null, the same
+/// signal `settings_screen.dart` already uses for "is a desktop sidebar
+/// actually present above this screen" — slides a docked drawer in over the
+/// content column instead of navigating away. [ShellChrome] is only ever
+/// provided by `_DesktopLayout` (shell_scaffold.dart, the >=1200dp shell),
+/// so this reads directly off "is the real desktop shell above this bar"
+/// rather than guessing from a breakpoint number that lives in a different
+/// file. v5.30.5 explicitly deferred building any queue UI at all ("没有从
+/// 主界面打开队列的通路就先跳播放页，不要为此新造队列 UI") — this is that deferred
+/// work, landing on a *drawer* (not a second queue list) because
+/// [QueueList] already exists and needs no duplicate.
+///
+/// Every narrower layout keeps the pre-v5.33.0 behaviour: push the full
+/// player route. [_narrowContent] (the phone-width shape) carries no queue
+/// button at all, so in practice this only matters for a tablet-width
+/// window — its own mini bar can still be wide enough to render
+/// [_wideActionsRow] (see [MiniPlayerBar._wideBreakpoint], which only checks
+/// this bar's own measured width) even though there is no desktop sidebar
+/// above it. A right-docked drawer competing with a tablet's much narrower
+/// content column is a worse trade there than the full player's own queue
+/// presentation (a docked panel above its split breakpoint, a bottom sheet
+/// below it — see full_player_screen.dart's own queue button), which is
+/// already a good experience and needs nothing new built for it.
+void _openQueue(BuildContext context, WidgetRef ref) {
+  if (ShellChrome.of(context) != null) {
+    ref.read(queueDrawerOpenProvider.notifier).toggle();
+  } else {
+    context.push(AppRoutes.player);
+  }
 }
 
 void _showSleepTimerSheet(BuildContext context, WidgetRef ref) {
@@ -937,7 +1015,11 @@ class _MiniPlayerSeekRowState extends ConsumerState<_MiniPlayerSeekRow> {
           // characters: the ':' separator's advance width isn't guaranteed
           // to match a tabular digit's, so a character count would over- or
           // under-reserve depending on the active font.
-          final labelWidth = _timeLabelWidth(playerState.duration, timeStyle);
+          final labelWidth = _timeLabelWidth(
+            playerState.duration,
+            timeStyle,
+            MediaQuery.textScalerOf(context),
+          );
           return Row(
             children: [
               SizedBox(
@@ -949,6 +1031,15 @@ class _MiniPlayerSeekRowState extends ConsumerState<_MiniPlayerSeekRow> {
                 child: Text(
                   _formatSeekTime(Duration(milliseconds: value.toInt())),
                   textAlign: TextAlign.right,
+                  // v5.33.0 fix: without these, a reserved width that's off
+                  // by even a fraction of a pixel from what the paragraph
+                  // layout actually needs (see _timeLabelWidth's doc
+                  // comment) makes Text wrap the overflowing glyph onto a
+                  // second line instead of the single line this slot is
+                  // sized for — the field report's "0:43" rendering as
+                  // "0:4"/"3".
+                  maxLines: 1,
+                  softWrap: false,
                   style: timeStyle,
                 ),
               ),
@@ -1053,6 +1144,10 @@ class _MiniPlayerSeekRowState extends ConsumerState<_MiniPlayerSeekRow> {
                 // — its digits stay adjacent to the track's other end.
                 child: Text(
                   _formatSeekTime(playerState.duration),
+                  // See the elapsed-time label above for why these two are
+                  // required, not stylistic.
+                  maxLines: 1,
+                  softWrap: false,
                   style: timeStyle,
                 ),
               ),
@@ -1068,12 +1163,36 @@ class _MiniPlayerSeekRowState extends ConsumerState<_MiniPlayerSeekRow> {
 /// text — see the v5.32.0 doc comment where this is called for why both
 /// labels share this one measurement rather than each sizing off its own
 /// current text.
-double _timeLabelWidth(Duration duration, TextStyle style) {
+///
+/// [textScaler] must be the same one the real [Text] widgets render with —
+/// pass `MediaQuery.textScalerOf(context)`, never the default. Through
+/// v5.32.0 this measured at the implicit default (`TextScaler.noScaling`,
+/// i.e. 1.0) while the real `Text` below rendered at whatever the ambient
+/// `MediaQuery` reported, so a user with a larger system font size got a
+/// slot measured for 1.0x and text painted wider than that — the v5.33.0
+/// field report's "0:43"/"3:05" splitting across two lines, with the last
+/// character landing on the second one.
+double _timeLabelWidth(
+  Duration duration,
+  TextStyle style,
+  TextScaler textScaler,
+) {
   final painter = TextPainter(
     text: TextSpan(text: _formatSeekTime(duration), style: style),
     textDirection: TextDirection.ltr,
+    textScaler: textScaler,
   )..layout();
-  return painter.width;
+  // ceilToDouble() plus a further +2, not the raw sub-pixel double
+  // `painter.width` returns. `SizedBox.width` reserves *exactly* what it is
+  // given with zero tolerance, so even a rounding discrepancy of a few
+  // hundredths of a pixel between this measurement pass and the paragraph
+  // layout `Text` performs later at paint time is enough to push the last
+  // glyph just past the box's edge — and with nothing capping line count,
+  // that glyph wraps onto a second line rather than clipping invisibly.
+  // maxLines/softWrap on the two call sites (see _MiniPlayerSeekRowState)
+  // are the second half of this fix: they turn "reservation was a little
+  // short" back into "clip a fraction of a pixel" instead of "wrap".
+  return painter.width.ceilToDouble() + 2;
 }
 
 /// `mm:ss`, or `h:mm:ss` once a track runs past an hour — long-form local

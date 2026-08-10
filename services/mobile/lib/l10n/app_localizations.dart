@@ -519,6 +519,96 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Clear search history'**
   String get clearSearchHistory;
+
+  /// Sidebar 'Discover' group destination: a personalized-recommendations screen with no backing capability yet (see for_you_screen.dart)
+  ///
+  /// In en, this message translates to:
+  /// **'For You'**
+  String get forYou;
+
+  /// Guiding empty-state body text on the For You screen
+  ///
+  /// In en, this message translates to:
+  /// **'Personalized recommendations are coming in a future update.'**
+  String get forYouComingSoon;
+
+  /// Sidebar 'Discover' group destination backed by real catalog data (recently-added/random albums)
+  ///
+  /// In en, this message translates to:
+  /// **'Explore'**
+  String get sidebarExplore;
+
+  /// Explore screen section heading
+  ///
+  /// In en, this message translates to:
+  /// **'Recently Added'**
+  String get recentlyAdded;
+
+  /// Explore screen section heading
+  ///
+  /// In en, this message translates to:
+  /// **'Random Picks'**
+  String get randomPicks;
+
+  /// Sidebar playlist section tab: this account's own user_playlist_* playlists
+  ///
+  /// In en, this message translates to:
+  /// **'Created'**
+  String get createdPlaylists;
+
+  /// Sidebar playlist section tab: server-curated catalog playlists
+  ///
+  /// In en, this message translates to:
+  /// **'Collected'**
+  String get collectedPlaylists;
+
+  /// No description provided for @sortAlphabetically.
+  ///
+  /// In en, this message translates to:
+  /// **'Sort alphabetically'**
+  String get sortAlphabetically;
+
+  /// No description provided for @refresh.
+  ///
+  /// In en, this message translates to:
+  /// **'Refresh'**
+  String get refresh;
+
+  /// Sidebar playlist section: link to the full list screen
+  ///
+  /// In en, this message translates to:
+  /// **'View All'**
+  String get viewAll;
+
+  /// No description provided for @noCreatedPlaylistsYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No playlists yet'**
+  String get noCreatedPlaylistsYet;
+
+  /// No description provided for @noCollectedPlaylistsYet.
+  ///
+  /// In en, this message translates to:
+  /// **'No collected playlists'**
+  String get noCollectedPlaylistsYet;
+
+  /// Desktop sidebar account card primary line in guest mode; tapToSignIn is the card's second line
+  ///
+  /// In en, this message translates to:
+  /// **'Not Signed In'**
+  String get notSignedIn;
+
+  /// Desktop sidebar footer entry point into the existing Offline Library section in Settings
+  ///
+  /// In en, this message translates to:
+  /// **'Downloads'**
+  String get downloads;
+
+  /// Desktop sidebar footer entry point, only rendered when PlaybackCapabilities.outputDeviceSelection is true
+  ///
+  /// In en, this message translates to:
+  /// **'Output Device'**
+  String get outputDevice;
 }
 
 class _AppLocalizationsDelegate
