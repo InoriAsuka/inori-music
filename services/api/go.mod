@@ -5,8 +5,10 @@ go 1.25.1
 require (
 	github.com/jackc/pgx/v5 v5.10.0
 	github.com/meilisearch/meilisearch-go v0.36.3
+	github.com/mozillazg/go-pinyin v0.21.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.42.0
 	golang.org/x/crypto v0.53.0
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -47,7 +49,6 @@ require (
 	github.com/moby/sys/user v0.4.0 // indirect
 	github.com/moby/sys/userns v0.1.0 // indirect
 	github.com/moby/term v0.5.2 // indirect
-	github.com/mozillazg/go-pinyin v0.21.0 // indirect
 	github.com/opencontainers/go-digest v1.0.0 // indirect
 	github.com/opencontainers/image-spec v1.1.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
@@ -67,5 +68,4 @@ require (
 	golang.org/x/sync v0.21.0 // indirect
 	golang.org/x/sys v0.46.0 // indirect
 	golang.org/x/text v0.38.0 // indirect
-	gopkg.in/yaml.v3 v3.0.1 // indirect
 )

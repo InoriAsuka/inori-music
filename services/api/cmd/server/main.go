@@ -138,6 +138,9 @@ func main() {
 	// Player state service — PostgreSQL when pool is available, in-memory otherwise.
 	var playerstateSvc *playerstate.Service
 	if pool != nil {
+		if err := playerstatepg.Migrate(ctx, pool); err != nil {
+			log.Printf("player state migration: %v", err)
+		}
 		psRepo := playerstatepg.NewRepository(pool)
 		playerstateSvc = playerstate.NewService(psRepo)
 	} else {
@@ -148,6 +151,9 @@ func main() {
 	// Search history service — PostgreSQL when pool is available, in-memory otherwise.
 	var searchHistorySvc *searchhistory.Service
 	if pool != nil {
+		if err := searchhistorypg.Migrate(ctx, pool); err != nil {
+			log.Printf("search history migration: %v", err)
+		}
 		shRepo := searchhistorypg.NewRepository(pool)
 		searchHistorySvc = searchhistory.NewService(shRepo)
 	} else {

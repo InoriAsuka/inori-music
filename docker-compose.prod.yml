@@ -3,7 +3,6 @@
 #
 # Environment variables (set in .env):
 #   INORI_ADMIN_TOKEN       — static bootstrap admin token
-#   INORI_AUTH_SECRET       — JWT signing secret
 #   POSTGRES_PASSWORD       — PostgreSQL password
 
 name: inori-music
@@ -34,12 +33,28 @@ services:
         condition: service_healthy
     environment:
       INORI_HTTP_ADDR: "0.0.0.0:8080"
-      INORI_DB_DSN: "postgres://inori:${POSTGRES_PASSWORD}@postgres:5432/inori?sslmode=disable"
+      INORI_DATABASE_URL: "postgres://inori:${POSTGRES_PASSWORD}@postgres:5432/inori?sslmode=disable"
       INORI_ADMIN_TOKEN: "${INORI_ADMIN_TOKEN:?INORI_ADMIN_TOKEN required}"
-      INORI_AUTH_SECRET: "${INORI_AUTH_SECRET:?INORI_AUTH_SECRET required}"
       INORI_STREAM_SIGNING_KEY: "${INORI_STREAM_SIGNING_KEY:?INORI_STREAM_SIGNING_KEY required}"
       INORI_STORAGE_REPOSITORY_FILE: "/data/storage-backends.json"
       INORI_MEDIA_OBJECT_REPOSITORY_FILE: "/data/media-objects.json"
+      # Optional — bootstraps the first admin account on a brand-new database
+      # (no-op, not an error, when either is unset or an admin already
+      # exists). Leave unset to provision the first admin directly in
+      # Postgres instead; set both in .env for self-service first login.
+      INORI_INITIAL_ADMIN_USER: "${INORI_INITIAL_ADMIN_USER:-}"
+      INORI_INITIAL_ADMIN_PASSWORD: "${INORI_INITIAL_ADMIN_PASSWORD:-}"
+      # Optional — comma-separated browser origins allowed by CORS. Unset
+      # means permissive mode (any origin reflected); set this to the
+      # web/admin consoles' real public origin(s) once known.
+      INORI_CORS_ORIGINS: "${INORI_CORS_ORIGINS:-}"
+      # Optional — session lifetime (Go duration syntax). "24h" mirrors the
+      # server's own built-in default; override in .env to change it.
+      INORI_SESSION_TTL: "${INORI_SESSION_TTL:-24h}"
+      # Optional — periodic storage-backend health/capacity refresh interval
+      # (Go duration syntax, e.g. "15m"). Unset disables the scheduler
+      # (server default); set in .env to enable it.
+      INORI_STORAGE_REFRESH_INTERVAL: "${INORI_STORAGE_REFRESH_INTERVAL:-}"
     volumes:
       - api_data:/data
       # Mount media directories for local/NFS backends (read-only)
