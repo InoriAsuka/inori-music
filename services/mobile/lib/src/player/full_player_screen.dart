@@ -39,10 +39,67 @@ import 'package:inori_music/src/shared/widgets/spring_interaction.dart';
 
 /// Full-screen player overlay with progress bar, controls, and queue sheet.
 class FullPlayerScreen extends ConsumerStatefulWidget {
-  const FullPlayerScreen({super.key});
+  const FullPlayerScreen({super.key, this.transition});
+
+  /// Cooperation contract with this route's own page transition — see
+  /// [PlayerTransition]'s own doc comment. Supplied only by
+  /// `player_transition.dart`'s `playerPageTransitionsBuilder` (the router
+  /// wiring behind [AppRoutes.player]). Null for every direct construction
+  /// of this screen, which is what every existing test in
+  /// full_player_layout_test.dart does (a bare `MaterialApp(home:
+  /// FullPlayerScreen())`, no player-route transition in sight) — both
+  /// effects [transition] would otherwise drive degrade sensibly when it's
+  /// null: [_FullPlayerScreenState._backdropSettled] treats "no transition to
+  /// wait for" the same as "already complete" (see that field's doc
+  /// comment), and [_dragHandle] just renders its child with no gesture
+  /// wrapper at all.
+  final PlayerTransition? transition;
 
   @override
   ConsumerState<FullPlayerScreen> createState() => _FullPlayerScreenState();
+}
+
+/// Cooperation contract between [FullPlayerScreen] and the router-level
+/// transition wrapper that actually owns the slide/scrim/drag-to-dismiss
+/// motion (`player_transition.dart`'s `_PlayerTransitionShell`).
+///
+/// Two separate things bundled into one object rather than two nullable
+/// constructor parameters on [FullPlayerScreen], since they are always
+/// supplied — or omitted — together: [progress] gates
+/// [_FullPlayerScreenState._backdropSettled] (see that field's doc comment),
+/// while the three callbacks let this screen forward a drag gesture
+/// recognised on a small, deliberately-scoped part of its own tree (see
+/// [_FullPlayerScreenState._dragHandle]) back up to the controller that
+/// actually owns the dismiss motion. This screen never drives that motion
+/// itself — [_PlayerTransitionShell] does, so there is exactly one
+/// AnimationController for it, not two that could fall out of sync.
+@immutable
+class PlayerTransition {
+  const PlayerTransition({
+    required this.progress,
+    required this.onDragStart,
+    required this.onDragUpdate,
+    required this.onDragEnd,
+  });
+
+  /// How far this screen's own page-route transition has progressed — 0 at
+  /// the very start of the entrance slide, 1 once fully open. The same
+  /// `Animation<double>` go_router's `CustomTransitionPage` drives its own
+  /// slide/scrim with, not a derived copy — so this screen and its
+  /// transition are always watching identical progress.
+  final Animation<double> progress;
+
+  final VoidCallback onDragStart;
+
+  /// Vertical pointer delta since the last update, in logical pixels —
+  /// positive is downward, the same sign [DragUpdateDetails.primaryDelta]
+  /// uses.
+  final ValueChanged<double> onDragUpdate;
+
+  /// Vertical pointer velocity at release, in logical pixels per second —
+  /// positive is downward, the same sign [DragEndDetails.primaryVelocity]
+  /// uses.
+  final ValueChanged<double> onDragEnd;
 }
 
 /// Which panel, if any, is docked beside the player.
@@ -136,16 +193,113 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
   /// into that formula — see its doc comment for why.
   static const _narrowArtworkSize = 280.0;
 
+  /// Whether [build] may render the real [CoverFluidBackground] (via
+  /// [LyricsBackground.useFluidBackground]) instead of its cheap stand-in.
+  ///
+  /// v5.32.0 field report: "点击封面展开播放页，会卡顿后才弹出播放页". Verified
+  /// against [CoverFluidBackground]'s own implementation, not assumed: its
+  /// first frame composites four separate draws of the cover image through a
+  /// `ColorFiltered` matrix, then a 64-sigma `BackdropFilter` blur over the
+  /// full screen — real GPU work, all landing on the exact frames a 320ms
+  /// slide-up transition needs to stay smooth. [GlassPanel]'s own
+  /// `BackdropFilter` (sigma 18, one image) is a smaller second contributor
+  /// left alone here — deferring it too would mean the transport controls
+  /// render with no frosted surface at all while sliding in, which reads as
+  /// more broken than a slightly heavier settle frame. The lyrics `PageView`
+  /// (narrow layout) and side panel (wide layout, when opened) were also
+  /// checked and are *not* contributors: neither builds its lyrics page
+  /// until the user actually navigates to it — Flutter's `PageView` has zero
+  /// implicit-scroll cache extent by default, so the off-screen page is
+  /// never even constructed, let alone watching `lyricsProvider`.
+  ///
+  /// One-way latch rather than tracking [PlayerTransition.progress] live:
+  /// once the backdrop has paid its one-time setup cost there is nothing
+  /// left to save by tearing it down again for a later close/cancel drag,
+  /// and re-latching false on every close would reintroduce the exact
+  /// first-frame cost this exists to avoid — just on the way out instead of
+  /// in.
+  bool _backdropSettled = false;
+
+  /// The transition this screen is currently listening to, so
+  /// [didUpdateWidget] can tell "still the same one" from "go_router handed
+  /// me a different Animation instance" and (de)register the status listener
+  /// accordingly instead of leaking or double-registering it.
+  Animation<double>? _observedTransitionProgress;
+
   @override
   void initState() {
     super.initState();
     _pageController = PageController();
+    _observeTransitionProgress(widget.transition?.progress);
+  }
+
+  @override
+  void didUpdateWidget(FullPlayerScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.transition?.progress != oldWidget.transition?.progress) {
+      _observeTransitionProgress(widget.transition?.progress);
+    }
+  }
+
+  /// Starts (or immediately resolves) tracking [progress] toward
+  /// [_backdropSettled] — shared by [initState] and [didUpdateWidget] so
+  /// there is exactly one place that decides "already done" vs. "wait for
+  /// the status listener".
+  void _observeTransitionProgress(Animation<double>? progress) {
+    _observedTransitionProgress?.removeStatusListener(_handleTransitionStatus);
+    _observedTransitionProgress = progress;
+    if (_backdropSettled) return;
+    // Null (no transition to wait for, see the widget doc comment) or
+    // already complete (e.g. this screen got rebuilt after its entrance
+    // finished) both mean there is nothing left to defer.
+    if (progress == null || progress.isCompleted) {
+      _backdropSettled = true;
+    } else {
+      progress.addStatusListener(_handleTransitionStatus);
+    }
+  }
+
+  void _handleTransitionStatus(AnimationStatus status) {
+    if (_backdropSettled || status != AnimationStatus.completed) return;
+    setState(() => _backdropSettled = true);
   }
 
   @override
   void dispose() {
+    _observedTransitionProgress?.removeStatusListener(_handleTransitionStatus);
     _pageController.dispose();
     super.dispose();
+  }
+
+  /// Wraps [child] with the vertical drag-to-dismiss gesture (see
+  /// [PlayerTransition]) when this screen was opened through the real player
+  /// route, and returns [child] untouched otherwise.
+  ///
+  /// Deliberately scoped to just the top bar's title area — see [build]'s
+  /// only call site — rather than the whole screen. Apple Music-style
+  /// drag-anywhere-to-dismiss has to coexist with this screen's own vertical
+  /// scrollables (the lyrics list, the queue list), and a bare
+  /// [GestureDetector.onVerticalDrag*] wrapping content that also contains a
+  /// [Scrollable] puts two vertical-drag recognizers in the same gesture
+  /// arena with no principled way to prefer one over the other from here.
+  /// The title bar never has a scrollable under it, so restricting the
+  /// handle to it sidesteps that conflict entirely rather than trying to
+  /// arbitrate it — full-screen drag-to-dismiss that correctly hands off
+  /// to/from a scrolled-to-the-top list is a considerably bigger feature
+  /// (see e.g. how `DraggableScrollableSheet` coordinates this) and out of
+  /// scope for this pass.
+  Widget _dragHandle({required Widget child}) {
+    final transition = widget.transition;
+    if (transition == null) return child;
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onVerticalDragStart: (_) => transition.onDragStart(),
+      onVerticalDragUpdate: (details) =>
+          transition.onDragUpdate(details.primaryDelta ?? 0),
+      onVerticalDragEnd: (details) =>
+          transition.onDragEnd(details.primaryVelocity ?? 0),
+      child: child,
+    );
   }
 
   @override
@@ -169,6 +323,9 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
       body: LyricsBackground(
         albumId: state.mediaItem?.extras?['albumId'] as String?,
         localArtUri: state.mediaItem?.artUri,
+        // See _backdropSettled's own doc comment — this is the v5.32.0 fix
+        // for the transition-open stutter, not a visual choice.
+        useFluidBackground: _backdropSettled,
         child: SafeArea(
           child: Column(
             children: [
@@ -216,13 +373,15 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                           onPressed: () => Navigator.of(context).maybePop(),
                         ),
                         Expanded(
-                          child: Text(
-                            AppLocalizations.of(context).nowPlaying,
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: context.skinColors.onSurfaceVariant,
+                          child: _dragHandle(
+                            child: Text(
+                              AppLocalizations.of(context).nowPlaying,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: context.skinColors.onSurfaceVariant,
+                              ),
                             ),
                           ),
                         ),
@@ -586,7 +745,8 @@ class _FullPlayerScreenState extends ConsumerState<FullPlayerScreen> {
                         trackHeight: 3,
                         trackShape: const GradientSliderTrackShape(),
                         thumbShape: GlowingSliderThumbShape(
-                          enabledThumbRadius: 6,
+                          radius: 6,
+                          maxRadius: 6,
                           glowing: isPlaying,
                           glowColor: context.skinColors.sakuraPink.withValues(
                             alpha: 0.3,

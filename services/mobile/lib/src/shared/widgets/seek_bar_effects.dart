@@ -126,14 +126,27 @@ Color _lighten(Color color, double amount) {
 /// carefully avoid them.
 class GlowingSliderThumbShape extends SliderComponentShape {
   const GlowingSliderThumbShape({
-    required this.enabledThumbRadius,
+    required this.radius,
+    required this.maxRadius,
     required this.glowing,
     required this.glowColor,
   });
 
-  /// Matches RoundSliderThumbShape's own contract — 0 means "draw nothing",
-  /// used by both seek rows in this app to collapse the thumb away at rest.
-  final double enabledThumbRadius;
+  /// Radius to actually *paint* this frame. Matches RoundSliderThumbShape's
+  /// own contract — 0 means "draw nothing" — and is what the mini bar's wide
+  /// seek row varies between 0 (at rest) and its revealed size (on hover or
+  /// drag). The full player's seek bar just passes a constant here, since its
+  /// thumb never collapses.
+  final double radius;
+
+  /// Radius Flutter reserves *track space* for, via [getPreferredSize] — see
+  /// that override's doc comment. Deliberately a separate field from
+  /// [radius] rather than reusing it: this must stay the same value across
+  /// every rebuild of a given seek bar, no matter what [radius] does from
+  /// frame to frame, so callers should pass the largest [radius] this shape
+  /// will ever be asked to paint (for the full player's constant-radius
+  /// thumb, that is just the same value as [radius] itself).
+  final double maxRadius;
   final bool glowing;
   final Color glowColor;
 
@@ -143,9 +156,23 @@ class GlowingSliderThumbShape extends SliderComponentShape {
 
   static const _glowBlurSigma = 8.0;
 
+  /// v5.32.0 field report: "鼠标放上去出现控制点会导致整个进度条收缩一部分"
+  /// ("hovering to reveal the thumb shrinks the whole track"). Root cause:
+  /// [BaseSliderTrackShape.getPreferredRect] insets the track at each end by
+  /// `max(thumbWidth, overlayWidth) / 2`, using *this method's* return value
+  /// — not whatever [paint] happens to draw that frame. The previous
+  /// implementation returned `Size.fromRadius(radius)` here, so the instant
+  /// a hover swapped in a bigger `radius` the reserved inset grew with it,
+  /// visibly shrinking the track by exactly that many pixels on both ends —
+  /// the track was never actually shrinking, it was being asked to lay out
+  /// inside a smaller rectangle every time the thumb grew. Returning
+  /// [maxRadius] — a value that never changes across a given seek bar's
+  /// lifetime — keeps that reserved inset, and therefore the track's own
+  /// geometry, fixed; only what [paint] draws inside that fixed reservation
+  /// is allowed to react to hover.
   @override
   Size getPreferredSize(bool isEnabled, bool isDiscrete) =>
-      Size.fromRadius(enabledThumbRadius);
+      Size.fromRadius(maxRadius);
 
   @override
   void paint(
@@ -162,12 +189,12 @@ class GlowingSliderThumbShape extends SliderComponentShape {
     required double textScaleFactor,
     required Size sizeWithOverflow,
   }) {
-    if (enabledThumbRadius <= 0) return;
+    if (radius <= 0) return;
     final canvas = context.canvas;
     if (glowing) {
       canvas.drawCircle(
         center,
-        enabledThumbRadius * _glowRadiusMultiplier,
+        radius * _glowRadiusMultiplier,
         Paint()
           ..color = glowColor
           ..maskFilter = const MaskFilter.blur(
@@ -182,7 +209,7 @@ class GlowingSliderThumbShape extends SliderComponentShape {
     );
     canvas.drawCircle(
       center,
-      enabledThumbRadius,
+      radius,
       Paint()..color = colorTween.evaluate(enableAnimation)!,
     );
   }

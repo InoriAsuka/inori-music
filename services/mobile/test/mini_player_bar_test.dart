@@ -10,12 +10,14 @@
 //
 import 'package:audio_service/audio_service.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/catalog/artwork_provider.dart';
+import 'package:inori_music/src/catalog/cover_palette_provider.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/player/player_state.dart' as pstate;
 import 'package:inori_music/src/player/mini_player_bar.dart';
@@ -336,6 +338,14 @@ void main() {
             artworkUrlProvider.overrideWith(
               () => _StubArtworkNotifier('https://example/a.jpg'),
             ),
+            // v5.32.0: MiniPlayerBar now also watches coverPaletteProvider
+            // itself (to prime the cache for the full player screen — see
+            // its own doc comment), which without this override would run
+            // the real PaletteGenerator.fromImageProvider against a URL
+            // that the test HTTP client 400s — same real-network guard
+            // full_player_layout_test.dart's own _appWithRouter already
+            // needs for the same reason.
+            coverPaletteProvider.overrideWith((ref, source) async => null),
           ],
         ),
       );
@@ -394,6 +404,63 @@ void main() {
         reason:
             'A non-zero elevation here would paint a second, duplicate '
             'shadow underneath the explicit BoxShadow above',
+      );
+    },
+  );
+
+  // ---------------------------------------------------------------------
+  // v5.32.0 — cover hover-scale affordance (EchoMusic's PlayerBar.vue
+  // group-hover:scale-110, telling users the cover is what opens the full
+  // player — see MiniPlayerArtwork's own surrounding _HoverScaleCover doc
+  // comment).
+  // ---------------------------------------------------------------------
+
+  testWidgets(
+    'the cover scales up on hover and back down once the pointer leaves',
+    (tester) async {
+      final mediaItem = MediaItem(id: 'track-001', title: 'Idol');
+      final stub = _StubPlayerNotifier(
+        pstate.PlayerState(
+          queue: [mediaItem],
+          currentIndex: 0,
+          mediaItem: mediaItem,
+          playbackState: PlaybackState(playing: false),
+        ),
+      );
+      await tester.pumpWidget(_buildApp(stub));
+      await tester.pump();
+
+      AnimatedScale scale() =>
+          tester.widget<AnimatedScale>(find.byType(AnimatedScale));
+
+      expect(scale().scale, 1.0, reason: 'At rest, no hover has happened yet');
+
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      await mouse.addPointer(location: Offset.zero);
+      addTearDown(mouse.removePointer);
+      await mouse.moveTo(tester.getCenter(find.byType(MiniPlayerArtwork)));
+      await tester.pump();
+
+      final hoveredScale = scale().scale;
+      expect(
+        hoveredScale,
+        greaterThan(1.0),
+        reason:
+            'Hovering the cover must grow it, matching EchoMusic\'s own '
+            'group-hover:scale-110 affordance',
+      );
+      expect(
+        hoveredScale,
+        inInclusiveRange(1.06, 1.10),
+        reason: 'Field report\'s own bound: noticeable but not exaggerated',
+      );
+
+      await mouse.moveTo(const Offset(-10, -10));
+      await tester.pump();
+      expect(
+        scale().scale,
+        1.0,
+        reason: 'Moving the pointer away must shrink it back to rest',
       );
     },
   );

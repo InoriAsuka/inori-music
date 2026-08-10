@@ -14,6 +14,7 @@ import 'package:inori_music/src/catalog/playlist_detail_screen.dart';
 import 'package:inori_music/src/catalog/search_screen.dart';
 import 'package:inori_music/src/player/full_player_screen.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
+import 'package:inori_music/src/player/player_transition.dart';
 import 'package:inori_music/src/favorites/favorites_screen.dart';
 import 'package:inori_music/src/history/history_screen.dart';
 import 'package:inori_music/src/history/history_stats_screen.dart';
@@ -89,7 +90,8 @@ class _DeepLinkTrackScreen extends ConsumerStatefulWidget {
   final String trackId;
 
   @override
-  ConsumerState<_DeepLinkTrackScreen> createState() => _DeepLinkTrackScreenState();
+  ConsumerState<_DeepLinkTrackScreen> createState() =>
+      _DeepLinkTrackScreenState();
 }
 
 class _DeepLinkTrackScreenState extends ConsumerState<_DeepLinkTrackScreen> {
@@ -102,9 +104,9 @@ class _DeepLinkTrackScreenState extends ConsumerState<_DeepLinkTrackScreen> {
         if (mounted) context.go(AppRoutes.player);
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Could not play track: $e')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Could not play track: $e')));
           context.go(AppRoutes.artists);
         }
       }
@@ -114,9 +116,7 @@ class _DeepLinkTrackScreenState extends ConsumerState<_DeepLinkTrackScreen> {
   @override
   Widget build(BuildContext context) {
     // Briefly visible while the async play resolves.
-    return const Scaffold(
-      body: Center(child: CircularProgressIndicator()),
-    );
+    return const Scaffold(body: Center(child: CircularProgressIndicator()));
   }
 }
 
@@ -129,7 +129,6 @@ class _DeepLinkTrackScreenState extends ConsumerState<_DeepLinkTrackScreen> {
 /// GoRouter resolves these paths directly to the shell widgets with no extra
 /// top-level route needed.  `deepAlbum` and `deepArtist` constants are kept
 /// for documentation purposes but require no dedicated handler.
-
 
 // ---------------------------------------------------------------------------
 // Guest-mode route allow-list
@@ -191,7 +190,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       // which drops back to genuinely unauthenticated so this same rule set
       // routes them to /login normally (see settings_screen.dart).
       if (isGuest && isLoginRoute) return AppRoutes.localLibrary;
-      if (isGuest && !_guestAllowedRoutes.any((r) => state.matchedLocation.startsWith(r))) {
+      if (isGuest &&
+          !_guestAllowedRoutes.any(
+            (r) => state.matchedLocation.startsWith(r),
+          )) {
         return AppRoutes.localLibrary;
       }
       return null;
@@ -209,18 +211,42 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const LoginScreen(),
       ),
 
-      // Full player overlay — no shell
+      // Full player overlay — no shell. pageBuilder (not builder) so this
+      // gets a CustomTransitionPage instead of the platform's default
+      // PageTransitionsTheme (FadeUpwardsPageTransitionsBuilder, which only
+      // offsets 25% of the screen height plus a fade) — see
+      // player_transition.dart for the actual slide/scrim/drag-to-dismiss
+      // motion and why it's not defined inline here.
       GoRoute(
         path: AppRoutes.player,
-        builder: (context, state) => const FullPlayerScreen(),
+        pageBuilder: (context, state) => CustomTransitionPage<void>(
+          key: state.pageKey,
+          // Only exists to satisfy CustomTransitionPage's required `child` —
+          // playerPageTransitionsBuilder ignores it and builds its own
+          // FullPlayerScreen instead, because `child` here is built *before*
+          // `animation` exists (this pageBuilder callback never sees it),
+          // while FullPlayerScreen specifically needs that live Animation to
+          // gate its own first-frame cost (see FullPlayerScreen.transition's
+          // doc comment) — there is no way to construct the real, wired-up
+          // instance at this call site.
+          child: const FullPlayerScreen(),
+          // False, not the CustomTransitionPage default of true: this route
+          // rises to *cover* the shell rather than replacing it outright, so
+          // the shell must stay in the tree (and visible, in the gap this
+          // page's own translation opens up) for the scrim/slide in
+          // player_transition.dart to have anything to sit over.
+          opaque: false,
+          transitionDuration: playerTransitionDuration,
+          reverseTransitionDuration: playerTransitionReverseDuration,
+          transitionsBuilder: playerPageTransitionsBuilder,
+        ),
       ),
 
       // Deep link: inori://tracks/<id>  →  play track then go to /player
       GoRoute(
         path: '/tracks/:id',
-        builder: (context, state) => _DeepLinkTrackScreen(
-          trackId: state.pathParameters['id']!,
-        ),
+        builder: (context, state) =>
+            _DeepLinkTrackScreen(trackId: state.pathParameters['id']!),
       ),
 
       // inori://albums/<id> and inori://artists/<id> are handled by GoRouter's
@@ -237,7 +263,8 @@ final routerProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: ':id',
-                builder: (_, state) => ArtistDetailScreen(id: state.pathParameters['id']!),
+                builder: (_, state) =>
+                    ArtistDetailScreen(id: state.pathParameters['id']!),
               ),
             ],
           ),
@@ -247,7 +274,8 @@ final routerProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: ':id',
-                builder: (_, state) => AlbumDetailScreen(id: state.pathParameters['id']!),
+                builder: (_, state) =>
+                    AlbumDetailScreen(id: state.pathParameters['id']!),
               ),
             ],
           ),
@@ -261,7 +289,8 @@ final routerProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: ':id',
-                builder: (_, state) => PlaylistDetailScreen(id: state.pathParameters['id']!),
+                builder: (_, state) =>
+                    PlaylistDetailScreen(id: state.pathParameters['id']!),
               ),
             ],
           ),

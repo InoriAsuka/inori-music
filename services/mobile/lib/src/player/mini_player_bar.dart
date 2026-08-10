@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/audio/sleep_timer_notifier.dart';
+import 'package:inori_music/src/catalog/cover_palette_provider.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/player/playback_mode_buttons.dart';
 import 'package:inori_music/src/player/track_artwork.dart';
@@ -96,13 +97,14 @@ class MiniPlayerBar extends ConsumerWidget {
   /// the narrow shape itself still holds at a 375dp phone width.
   static const _wideBreakpoint = 640.0;
 
-  /// Width shared by the wide shape's transport-group row and the seek row
-  /// beneath it, so the two visually align as one block (same width, same
-  /// centre axis) instead of the seek row either overflowing past the
-  /// transport group or leaving mismatched slack beside it. A literal shared
-  /// constant rather than an `IntrinsicWidth`/measure-and-mirror trick: the
-  /// five transport-group icons are a fixed, known size, so their row's
-  /// natural width is itself effectively a constant.
+  /// Width of just the transport-group row (shuffle/prev/play/next/repeat),
+  /// centred inside the wider middle column [miniPlayerMiddleColumnWidth]
+  /// computes (see [_wideContent]) — through v5.31.0 this constant also
+  /// doubled as the seek row's own width, which is exactly what the
+  /// v5.32.0 field report ("进度条太短，与整条比例失调") called out: capping
+  /// the seek row at however wide five fixed-size icons happen to need left
+  /// it looking like an afterthought on a spacious desktop bar. The two are
+  /// independent now — this constant only ever sizes the icon row.
   ///
   /// 248, not a rounder-looking 240 — the five-icon row (shuffle, prev, the
   /// larger play/pause circle, next, repeat) with `spaceBetween` and no
@@ -142,6 +144,26 @@ class MiniPlayerBar extends ConsumerWidget {
     // TrackArtwork's doc comment for why this and albumId are mutually
     // exclusive rather than both being checked against the same track.
     final localArtUri = mediaItem?.artUri;
+
+    // v5.32.0: primes coverPaletteProvider for whatever is currently
+    // playing, well before the user can ever open the full player screen —
+    // this bar is mounted for the whole time something is loaded, on every
+    // platform, unlike the desktop shell's own _LayoutAccentGradient (which
+    // only exists ≥1200dp and would otherwise be the *only* continuous
+    // watcher). coverPaletteProvider is `autoDispose`, so its cached
+    // PaletteGenerator result only survives between the mini bar closing and
+    // the full player opening because *some* widget kept watching it the
+    // whole time in between — before this, on any layout narrower than
+    // 1200dp, nothing did, and the full player recomputed the palette from
+    // scratch (a real PaletteGenerator pass over the decoded image) on every
+    // single open. The value itself is unused here — this watch exists
+    // purely to keep the provider warm, mirroring the image itself already
+    // being decoded for MiniPlayerArtwork below.
+    if (albumId != null || localArtUri != null) {
+      ref.watch(
+        coverPaletteProvider((albumId: albumId, localArtUri: localArtUri)),
+      );
+    }
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
@@ -303,12 +325,59 @@ Widget _narrowContent(
   );
 }
 
+/// Width of the wide shape's middle column (the transport-group row stacked
+/// over the seek row) — derived from the row's own measured width, never
+/// the window's (the same basis-mismatch lesson every other breakpoint in
+/// this file documents) and never the transport row's icon count, which is
+/// what produced the pre-v5.32.0 fixed 248 this replaces as the *column's*
+/// width. [MiniPlayerBar._transportBlockWidth] still sizes the transport
+/// button row itself, centred inside this wider column (see [_wideContent])
+/// — only the seek row actually grows to fill it.
+///
+/// v5.32.0 field report: "进度条太短，与整条比例失调" — with the seek row
+/// capped at the same 248px as the five transport icons, a ~1200px desktop
+/// bar left it looking like an afterthought squeezed between two much wider
+/// sections. 0.46 of the row's own available width, clamped to
+/// [_middleColumnFloor, 640]: at [MiniPlayerBar._wideBreakpoint] (640, the
+/// narrowest this shape ever renders at) it already clears the 248px
+/// transport row with room to spare (640 * 0.46 ≈ 294); by a spacious
+/// 1400px desktop bar it reaches roughly 644, capped at 640 so sections 1
+/// and 3 (now-playing info, the action group) always keep a usable share
+/// rather than this column eating the whole row on an ultrawide monitor.
+double miniPlayerMiddleColumnWidth(double rowWidth) =>
+    (rowWidth * 0.46).clamp(_middleColumnFloor, 640.0);
+
+/// Floor for [miniPlayerMiddleColumnWidth] — comfortably above
+/// [MiniPlayerBar._transportBlockWidth] (248) so the transport row keeps
+/// margin on both sides once centred in the column, even at the clamp's
+/// lower bound.
+const _middleColumnFloor = 290.0;
+
+/// Width of the seek row (progress bar + time labels) within the middle
+/// column — wider than the transport-button row stacked above it (which
+/// stays pinned to [MiniPlayerBar._transportBlockWidth] so its five icons
+/// don't spread out with ugly gaps at the column's full width), clamped to
+/// a usable band.
+///
+/// 0.7 of the middle column: the field report's own suggested 55%-75% range
+/// (see requirement.md's v5.32.0 entry), picked toward the wide end of it
+/// because the row's own content — two fixed-width time labels plus the
+/// gaps beside them, see [_MiniPlayerSeekRowState._timeLabelGap] — already
+/// eats a fixed chunk of whatever width it is given, so the *track* itself
+/// (the part that actually reads as "the progress bar") ends up narrower
+/// than 0.7 alone suggests. The floor/ceiling bound it independently of the
+/// middle column's own clamp.
+double miniPlayerSeekRowWidth(double middleColumnWidth) =>
+    (middleColumnWidth * 0.7).clamp(220.0, 460.0);
+
 /// The wide shape (v5.30.6): cover+title on the left; a shuffle/repeat-
-/// flanked transport group with its own seek row underneath, centred; and
-/// volume/timer/queue on the right. Sections 1 and 3 share equal Expanded
-/// flex around section 2's fixed [MiniPlayerBar._transportBlockWidth] so it
-/// stays centred regardless of how long the title or how the action group's
-/// own width shifts between compact and expanded volume.
+/// flanked transport group with its own, independently-sized seek row
+/// underneath, centred; and volume/timer/queue on the right. Sections 1 and
+/// 3 share equal Expanded flex around section 2's own computed
+/// [miniPlayerMiddleColumnWidth] so it stays centred regardless of how long
+/// the title or how the action group's own width shifts between compact and
+/// expanded volume — the same relationship as before v5.32.0, just against
+/// a wider, measured column instead of the transport row's fixed size.
 Widget _wideContent(
   BuildContext context,
   WidgetRef ref, {
@@ -320,65 +389,87 @@ Widget _wideContent(
   required bool isPlaying,
   required bool isBuffering,
 }) {
-  return Row(
-    children: [
-      Expanded(
-        child: _nowPlayingInfo(
-          context,
-          title: title,
-          artist: artist,
-          albumId: albumId,
-          artistId: artistId,
-          localArtUri: localArtUri,
-        ),
-      ),
-      SizedBox(
-        width: MiniPlayerBar._transportBlockWidth,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  return LayoutBuilder(
+    builder: (context, constraints) {
+      final middleWidth = miniPlayerMiddleColumnWidth(constraints.maxWidth);
+      return Row(
+        children: [
+          Expanded(
+            child: _nowPlayingInfo(
+              context,
+              title: title,
+              artist: artist,
+              albumId: albumId,
+              artistId: artistId,
+              localArtUri: localArtUri,
+            ),
+          ),
+          SizedBox(
+            width: middleWidth,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                const ShuffleButton(iconSize: MiniPlayerBar._transportIconSize),
-                _transportButton(
-                  context: context,
-                  icon: Icons.skip_previous,
-                  tooltip: 'Previous',
-                  onPressed: () => ref.read(playerProvider.notifier).previous(),
+                // The five-icon row stays at its own compact, calibrated
+                // width and is centred in the wider column — stretching it
+                // across the full column with spaceBetween would spread the
+                // icons apart with the same ugly gaps _transportBlockWidth's
+                // own doc comment exists to avoid.
+                Center(
+                  child: SizedBox(
+                    width: MiniPlayerBar._transportBlockWidth,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const ShuffleButton(
+                          iconSize: MiniPlayerBar._transportIconSize,
+                        ),
+                        _transportButton(
+                          context: context,
+                          icon: Icons.skip_previous,
+                          tooltip: 'Previous',
+                          onPressed: () =>
+                              ref.read(playerProvider.notifier).previous(),
+                        ),
+                        _playPauseButton(
+                          context,
+                          ref,
+                          isPlaying: isPlaying,
+                          isBuffering: isBuffering,
+                        ),
+                        _transportButton(
+                          context: context,
+                          icon: Icons.skip_next,
+                          tooltip: 'Next',
+                          onPressed: () =>
+                              ref.read(playerProvider.notifier).next(),
+                        ),
+                        const RepeatModeButton(
+                          iconSize: MiniPlayerBar._transportIconSize,
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
-                _playPauseButton(
-                  context,
-                  ref,
-                  isPlaying: isPlaying,
-                  isBuffering: isBuffering,
-                ),
-                _transportButton(
-                  context: context,
-                  icon: Icons.skip_next,
-                  tooltip: 'Next',
-                  onPressed: () => ref.read(playerProvider.notifier).next(),
-                ),
-                const RepeatModeButton(
-                  iconSize: MiniPlayerBar._transportIconSize,
+                const SizedBox(height: 4),
+                SizedBox(
+                  width: miniPlayerSeekRowWidth(middleWidth),
+                  child: const _MiniPlayerSeekRow(),
                 ),
               ],
             ),
-            const SizedBox(height: 4),
-            const _MiniPlayerSeekRow(),
-          ],
-        ),
-      ),
-      Expanded(
-        child: Align(
-          alignment: Alignment.centerRight,
-          child: LayoutBuilder(
-            builder: (context, constraints) =>
-                _wideActionsRow(context, constraints.maxWidth),
           ),
-        ),
-      ),
-    ],
+          Expanded(
+            child: Align(
+              alignment: Alignment.centerRight,
+              child: LayoutBuilder(
+                builder: (context, constraints) =>
+                    _wideActionsRow(context, constraints.maxWidth),
+              ),
+            ),
+          ),
+        ],
+      );
+    },
   );
 }
 
@@ -393,7 +484,9 @@ Widget _wideContent(
 /// row did this via an outer InkWell in [MiniPlayerBar.build], which fought
 /// with turning the title/artist into links), while title and artist each
 /// link to their own detail page via [HoverLinkText] when the current track
-/// carries the id for it.
+/// carries the id for it. v5.32.0 adds the hover-scale affordance itself
+/// (see [_HoverScaleCover]) that tells users the cover — and only the cover
+/// — is what that gesture lives on.
 Widget _nowPlayingInfo(
   BuildContext context, {
   required String title,
@@ -404,17 +497,7 @@ Widget _nowPlayingInfo(
 }) {
   return Row(
     children: [
-      MouseRegion(
-        cursor: SystemMouseCursors.click,
-        child: GestureDetector(
-          onTap: () => context.push(AppRoutes.player),
-          child: MiniPlayerArtwork(
-            albumId: albumId,
-            localArtUri: localArtUri,
-            size: MiniPlayerBar._artworkSize,
-          ),
-        ),
-      ),
+      _HoverScaleCover(albumId: albumId, localArtUri: localArtUri),
       const SizedBox(width: 12),
       Expanded(
         child: Column(
@@ -452,6 +535,65 @@ Widget _nowPlayingInfo(
       ),
     ],
   );
+}
+
+/// The cover art in [_nowPlayingInfo], grown slightly on hover — this bar's
+/// own version of EchoMusic's `PlayerBar.vue` `group-hover:scale-110`
+/// (`transition-transform duration-500`), the visual cue that the cover —
+/// and, since v5.30.7, only the cover — is what opens the full player.
+/// Needs its own [State] rather than a plain function (like the rest of this
+/// file's small widget helpers) because "is the mouse over it right now" is
+/// exactly the kind of transient, per-instance value a stateless function
+/// has nowhere to keep.
+class _HoverScaleCover extends StatefulWidget {
+  const _HoverScaleCover({required this.albumId, required this.localArtUri});
+
+  final String? albumId;
+  final Uri? localArtUri;
+
+  @override
+  State<_HoverScaleCover> createState() => _HoverScaleCoverState();
+}
+
+class _HoverScaleCoverState extends State<_HoverScaleCover> {
+  bool _hovering = false;
+
+  /// 1.08, inside the field report's own "1.06-1.10" range but toward its
+  /// gentler end: this cover (56px, see MiniPlayerBar._artworkSize) sits in
+  /// a much denser row than EchoMusic's own player bar, immediately beside
+  /// the title/artist text — the same absolute growth reads proportionally
+  /// larger at this size, and needs headroom on the right so the scaled
+  /// cover doesn't visually collide with that text.
+  static const _hoverScale = 1.08;
+
+  /// 200ms rather than EchoMusic's own 500ms — that duration suits a
+  /// deliberate, tap-driven CSS transition; hover feedback in a desktop app
+  /// reads as laggy at anywhere close to it. 200ms is snappy enough to feel
+  /// like direct response to the pointer while still being a visible ease
+  /// rather than a snap-cut.
+  static const _hoverDuration = Duration(milliseconds: 200);
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovering = true),
+      onExit: (_) => setState(() => _hovering = false),
+      child: GestureDetector(
+        onTap: () => context.push(AppRoutes.player),
+        child: AnimatedScale(
+          scale: _hovering ? _hoverScale : 1.0,
+          duration: _hoverDuration,
+          curve: Curves.easeOut,
+          child: MiniPlayerArtwork(
+            albumId: widget.albumId,
+            localArtUri: widget.localArtUri,
+            size: MiniPlayerBar._artworkSize,
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 /// A plain prev/next transport icon. The play/pause button is not built from
@@ -783,11 +925,32 @@ class _MiniPlayerSeekRowState extends ConsumerState<_MiniPlayerSeekRow> {
         curve: Curves.linear,
         builder: (context, animatedPositionMs, _) {
           final value = (_dragValue ?? animatedPositionMs).clamp(0.0, maxMs);
+          // v5.32.0: reserved off the *duration's* formatted width, not the
+          // elapsed label's own — elapsed can never format longer than the
+          // duration it's counting up to, so this is always the widest this
+          // track's labels will need. Without a fixed slot, elapsed crossing
+          // a digit-count boundary (9:59 -> 10:00) widens the label and
+          // steals that many px from the slider below — v5.30.6's
+          // tabularFigures only keeps *same*-digit-count redraws (9:58 ->
+          // 9:59) from jittering; it can't do anything about the digit count
+          // itself changing. Measured via TextPainter rather than counting
+          // characters: the ':' separator's advance width isn't guaranteed
+          // to match a tabular digit's, so a character count would over- or
+          // under-reserve depending on the active font.
+          final labelWidth = _timeLabelWidth(playerState.duration, timeStyle);
           return Row(
             children: [
-              Text(
-                _formatSeekTime(Duration(milliseconds: value.toInt())),
-                style: timeStyle,
+              SizedBox(
+                width: labelWidth,
+                // Right-aligned so the digits stay adjacent to the track —
+                // any slack from reserving room for a wider duration sits on
+                // the far side, away from the slider, instead of pushing the
+                // label's own digits away from it.
+                child: Text(
+                  _formatSeekTime(Duration(milliseconds: value.toInt())),
+                  textAlign: TextAlign.right,
+                  style: timeStyle,
+                ),
               ),
               const SizedBox(width: _timeLabelGap),
               Expanded(
@@ -821,7 +984,17 @@ class _MiniPlayerSeekRowState extends ConsumerState<_MiniPlayerSeekRow> {
                       alpha: 0.12,
                     ),
                     thumbShape: GlowingSliderThumbShape(
-                      enabledThumbRadius: active ? 7 : 0,
+                      radius: active ? 7 : 0,
+                      // Fixed regardless of `active` — see
+                      // GlowingSliderThumbShape.getPreferredSize's doc
+                      // comment. This is the v5.32.0 fix for "鼠标放上去出现
+                      // 控制点会导致整个进度条收缩一部分": before, this field
+                      // and `radius` were the same value, so revealing the
+                      // thumb on hover also grew the track's own reserved
+                      // layout inset by the same amount, visibly shrinking
+                      // the track. Now the reservation never moves; only the
+                      // painted thumb does.
+                      maxRadius: 7,
                       // Only while the thumb itself is actually visible
                       // (active) — this row's whole design is "near
                       // invisible at rest, revealed on interact"; an ambient
@@ -832,8 +1005,25 @@ class _MiniPlayerSeekRowState extends ConsumerState<_MiniPlayerSeekRow> {
                         alpha: 0.28,
                       ),
                     ),
-                    overlayShape: RoundSliderOverlayShape(
-                      overlayRadius: active ? 16 : 0,
+                    // Constant overlayRadius for the same reason `maxRadius`
+                    // above is constant: RoundSliderOverlayShape is a
+                    // Flutter SDK shape whose own getPreferredSize returns
+                    // Size.fromRadius(overlayRadius) unconditionally (not
+                    // gated on activation), so toggling this 0/16 with
+                    // `active` — the pre-v5.32.0 code here — fed the exact
+                    // same max(thumbWidth, overlayWidth) term in
+                    // BaseSliderTrackShape.getPreferredRect that the thumb
+                    // fix above addresses, via a second shape we don't
+                    // control the internals of. Flutter's own thumb
+                    // hover/press activation animation already drives the
+                    // *painted* overlay radius from 0 up to this constant
+                    // (RoundSliderOverlayShape.paint tweens against
+                    // activationAnimation, never against this field
+                    // directly) — so dropping the ternary costs nothing
+                    // visually and removes this shape's own contribution to
+                    // the shrink bug.
+                    overlayShape: const RoundSliderOverlayShape(
+                      overlayRadius: 16,
                     ),
                   ),
                   child: Slider(
@@ -857,13 +1047,33 @@ class _MiniPlayerSeekRowState extends ConsumerState<_MiniPlayerSeekRow> {
                 ),
               ),
               const SizedBox(width: _timeLabelGap),
-              Text(_formatSeekTime(playerState.duration), style: timeStyle),
+              SizedBox(
+                width: labelWidth,
+                // Left-aligned, the mirror image of the elapsed label above
+                // — its digits stay adjacent to the track's other end.
+                child: Text(
+                  _formatSeekTime(playerState.duration),
+                  style: timeStyle,
+                ),
+              ),
             ],
           );
         },
       ),
     );
   }
+}
+
+/// Width to reserve for a time label showing [duration]'s own formatted
+/// text — see the v5.32.0 doc comment where this is called for why both
+/// labels share this one measurement rather than each sizing off its own
+/// current text.
+double _timeLabelWidth(Duration duration, TextStyle style) {
+  final painter = TextPainter(
+    text: TextSpan(text: _formatSeekTime(duration), style: style),
+    textDirection: TextDirection.ltr,
+  )..layout();
+  return painter.width;
 }
 
 /// `mm:ss`, or `h:mm:ss` once a track runs past an hour — long-form local
