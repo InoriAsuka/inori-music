@@ -2,8 +2,12 @@
 # docker-compose.prod.yml — production stack
 #
 # Environment variables (set in .env):
-#   INORI_ADMIN_TOKEN       — static bootstrap admin token
-#   POSTGRES_PASSWORD       — PostgreSQL password
+#   INORI_ADMIN_TOKEN        — static bootstrap admin token
+#   INORI_STREAM_SIGNING_KEY — HMAC key for signed streaming URLs
+#   MEILI_SEARCH_KEY         — Meilisearch master key, shared as-is by the
+#                              meilisearch service (MEILI_MASTER_KEY) and
+#                              the api service's Meilisearch client
+#   POSTGRES_PASSWORD        — PostgreSQL password
 
 name: inori-music
 
@@ -55,6 +59,20 @@ services:
       # (Go duration syntax, e.g. "15m"). Unset disables the scheduler
       # (server default); set in .env to enable it.
       INORI_STORAGE_REFRESH_INTERVAL: "${INORI_STORAGE_REFRESH_INTERVAL:-}"
+      # Meilisearch full-text search backend (see the "meilisearch" service
+      # below). Without these two, catalog search silently falls back to
+      # PostgreSQL full-text search with no log line at all — the
+      # meilisearch container keeps running, just never queried. MEILI_HOST
+      # points at the meilisearch service's in-network address (fixed, not
+      # user-configurable, like INORI_DATABASE_URL's "postgres" hostname
+      # above). MEILI_SEARCH_KEY must be the *exact same* value as the
+      # meilisearch service's MEILI_MASTER_KEY below: the api service's
+      # Meilisearch client creates/configures indexes on startup, which
+      # needs admin-level permissions that a dedicated search-only
+      # Meilisearch API key does not have — reusing the master key here is
+      # required, not just convenient.
+      MEILI_HOST: "http://meilisearch:7700"
+      MEILI_SEARCH_KEY: "${MEILI_SEARCH_KEY:?MEILI_SEARCH_KEY required}"
     volumes:
       - api_data:/data
       # Mount media directories for local/NFS backends (read-only)
