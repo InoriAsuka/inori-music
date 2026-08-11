@@ -1,8 +1,24 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- SECURITY TRADE-OFF (v5.36.0) — android:usesCleartextTraffic below
+         deliberately downgrades Android's default posture; keep this
+         reasoning attached to the switch, not scattered elsewhere.
+         The self-hosted server has no HTTPS in front of it (LAN-only
+         deployment) and its address is entered by the user at runtime
+         (Settings > Server), so there is no fixed domain known at build
+         time to scope a network security config allowlist to — it's this
+         single attribute or nothing. Without it, just_audio's Android
+         backend (a real ExoPlayer instance, unlike dio's dart:io-based
+         HTTP calls) refuses to open the http:// stream and playback fails;
+         ExoPlayer's own internal localhost proxy for header/caching support
+         needs cleartext too, independent of the remote scheme.
+         Revert condition: once the server is reachable over HTTPS, delete
+         this one attribute — Android's post-P default (cleartext traffic
+         blocked) already covers it, no other file needs to change. -->
     <application
         android:label="inori_music"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:usesCleartextTraffic="true">
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -68,6 +84,14 @@
             android:name="flutterEmbedding"
             android:value="2" />
     </application>
+
+    <!-- Required to reach the self-hosted server at all: API calls (dio) and
+         audio streaming (just_audio) both need it (v5.36.0). The debug and
+         profile manifests already declare this, but only for the Flutter
+         tool's own use (hot reload, DevTools) — that grant is stripped out
+         of release builds along with the rest of those overlays, so without
+         a copy here a release APK has no network access whatsoever. -->
+    <uses-permission android:name="android.permission.INTERNET" />
 
     <!-- Required for media controls via bluetooth / headset buttons and foreground service -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
