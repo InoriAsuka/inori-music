@@ -79,6 +79,14 @@ jobs:
         env:
           NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
 
+      # Guards the 2026-08-11 incident: a production build without
+      # NEXT_PUBLIC_API_BASE_URL must fail loudly instead of silently baking
+      # "http://localhost:8080" into .next/routes-manifest.json. Runs its own
+      # builds (unset var, then a real non-localhost value) and inspects the
+      # actual manifest — see scripts/verify-production-build-requires-api-base-url.mjs.
+      - name: Verify build-time config contract
+        run: npm run verify:build-config
+
   mobile:
     name: Flutter mobile checks
     runs-on: ubuntu-latest
@@ -225,6 +233,14 @@ jobs:
         env:
           NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
 
+      # Guards the 2026-08-11 incident: a production build without
+      # NEXT_PUBLIC_API_BASE_URL must fail loudly instead of silently baking
+      # "http://localhost:8080" into .next/routes-manifest.json. Runs its own
+      # builds (unset var, then a real non-localhost value) and inspects the
+      # actual manifest — see scripts/verify-production-build-requires-api-base-url.mjs.
+      - name: Verify build-time config contract
+        run: npm run verify:build-config
+
   admin-e2e:
     name: Admin E2E smoke tests
     runs-on: ubuntu-latest
@@ -278,6 +294,8 @@ jobs:
       - name: Build admin
         working-directory: services/admin
         run: npx next build
+        env:
+          NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
 
       - name: Start admin server
         working-directory: services/admin

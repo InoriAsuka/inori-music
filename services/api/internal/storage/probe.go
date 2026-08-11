@@ -56,6 +56,16 @@ func (prober *FilesystemProber) Probe(ctx context.Context, backend StorageBacken
 		return fmt.Errorf("%w: root is not a directory", ErrProbeFailed)
 	}
 
+	// Read-only local backends (e.g. a music library bind-mounted `:ro` — the
+	// common case for a music server) can never pass the write-based probe
+	// below by design, not because anything is actually wrong. Stop here with
+	// a read-only reachability check instead of always reporting unhealthy.
+	// Writable backends (including local backends that don't set ReadOnly)
+	// fall through to the original write/read/range-read probe unchanged.
+	if backend.Type == BackendTypeLocal && backend.Config.Local != nil && backend.Config.Local.ReadOnly {
+		return probeReadableDirectory(root)
+	}
+
 	file, err := os.CreateTemp(root, ".inori-music-probe-*")
 	if err != nil {
 		return fmt.Errorf("%w: create probe file: %v", ErrProbeFailed, err)
@@ -93,6 +103,24 @@ func (prober *FilesystemProber) Probe(ctx context.Context, backend StorageBacken
 	}
 	if err := os.Remove(probePath); err != nil {
 		return fmt.Errorf("%w: remove probe file: %v", ErrProbeFailed, err)
+	}
+	return nil
+}
+
+// probeReadableDirectory verifies a mount is reachable using only read
+// operations: open the directory and list at least one entry. An empty
+// directory (io.EOF from Readdirnames) is a healthy, valid result — a
+// freshly mounted read-only library legitimately has nothing in it yet, and
+// that is not itself a reason to report the backend unhealthy.
+func probeReadableDirectory(root string) error {
+	dir, err := os.Open(root)
+	if err != nil {
+		return fmt.Errorf("%w: open root for read: %v", ErrProbeFailed, err)
+	}
+	defer dir.Close()
+
+	if _, err := dir.Readdirnames(1); err != nil && !errors.Is(err, io.EOF) {
+		return fmt.Errorf("%w: list root: %v", ErrProbeFailed, err)
 	}
 	return nil
 }

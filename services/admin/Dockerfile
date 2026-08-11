@@ -43,6 +43,21 @@ COPY packages/api-contract ../../packages/api-contract
 COPY packages/ui ../../packages/ui
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
+# Must be threaded from --build-arg into the actual build environment via ARG
+# + ENV (an ARG alone is only visible to RUN/other build-time instructions,
+# not to their subprocess environment in a way next.config.ts's
+# process.env.NEXT_PUBLIC_API_BASE_URL can see — it needs ENV). Incident
+# (2026-08-11): this ARG line was missing (same gap as web/Dockerfile), so
+# .github/workflows/docker.yml's `--build-arg NEXT_PUBLIC_API_BASE_URL=...`
+# was silently discarded by BuildKit ("build arg not consumed"), `next
+# build` saw an empty var, and next.config.ts's old fallback baked
+# "http://localhost:8080" into the image's routes-manifest.json —
+# permanently, since a standalone `next start` never re-reads env vars for
+# rewrites. next.config.ts now throws instead of falling back during a
+# production build, so a regression here fails this RUN step outright
+# instead of silently shipping a broken image.
+ARG NEXT_PUBLIC_API_BASE_URL
+ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
 RUN npm run build
 
 # Independent of the deps/builder path depth above: Next.js's output:

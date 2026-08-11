@@ -62,6 +62,13 @@ type BackendConfig struct {
 
 type LocalConfig struct {
 	RootPath string `json:"rootPath"`
+	// ReadOnly marks a backend whose mount is expected to reject writes (e.g. a
+	// music library bind-mounted `:ro`, the common case for a music server).
+	// The prober uses this to pick a stat/list-only health check instead of its
+	// default write-a-probe-file check, which would otherwise always report
+	// such a backend unhealthy. Writable backends (the zero value, false) keep
+	// the original write-based probe unchanged.
+	ReadOnly bool `json:"readOnly"`
 }
 
 type NFSConfig struct {
