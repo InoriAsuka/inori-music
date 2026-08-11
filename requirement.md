@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`5.35.0`
+`5.36.0`
 
 ## Product Goal
 
@@ -39,6 +39,14 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Media object administration must support metadata-only bulk lifecycle updates scoped by exactly one safe selection filter.
 - Bulk lifecycle updates must support dry-run previews that do not persist metadata changes.
 - Committed lifecycle updates must record latest transition metadata for audit preparation.
+
+### v5.36.0 - 2026-08-12
+
+- **fix: 客户端从来没有过联网能力——三处平台层缺口，与应用代码无关** — 用户实机反馈「客户端无法登录服务端」。排查发现根因全部在平台配置层，登录逻辑本身没有问题。（1）**macOS**：`com.apple.security.network.client` 在整个 `services/mobile/macos/` 目录零出现，而 `com.apple.security.app-sandbox` 为 `true` 且两份 entitlements 都确实挂在 Xcode 的 `CODE_SIGN_ENTITLEMENTS` 上。App Sandbox 下内核（Seatbelt/MACF）在 `connect()` 层拒绝一切出站连接，位置低于任何 HTTP 栈，因此与 dio/just_audio 是否走 NSURLSession 无关。这是 Flutter 的已知模板缺口——`flutter create` 的 macOS 模板只给 `com.apple.security.network.server`（入站，供调试期 Dart VM service 用），从不给 `network.client`。`DebugProfile.entitlements` 同样缺失，意味着 **debug 构建也一样连不出去**，沙盒没有 debug 专用豁免。（2）**Android**：`INTERNET` 权限只存在于 `android/app/src/debug/` 与 `profile/` 两份 overlay manifest（Flutter 工具为 hot reload / DevTools 自用而加），**`main/AndroidManifest.xml` 里没有**，而 overlay 不进 release 包——release APK 因此完全没有网络访问权限。（3）**Android 明文 HTTP**：`<application>` 无 `usesCleartextTraffic`，Android 9+ 默认禁明文，而自托管服务端只有 `http://`（局域网部署，无 HTTPS）。
+- **修复** — `com.apple.security.network.client` 加入 `Release.entitlements` 与 `DebugProfile.entitlements` 两份文件；`INTERNET` 权限加入 `main/AndroidManifest.xml`；`android:usesCleartextTraffic="true"` 加在 `<application>` 上。明文放行是**降低安全基线换可用性**的显式取舍：服务端地址由用户在运行时填入（设置 > 服务器），构建期没有已知固定域名可供 network security config 圈定 allowlist，只能整体放行或不放行。取舍理由与**收回条件**（服务端一旦有 HTTPS，删掉这一个属性即可，Android 9+ 的默认策略自动接管，其他文件都不用动）以注释形式钉在开关原地，而非散落各处。
+- **归因修正（子代理独立核实推翻了初始诊断的两处）** — 其一：初始诊断认为 Android 明文策略会拦截登录请求。核实 Flutter 官方文档与 `flutter/flutter#106678` 后确认，`dart:io` 的 socket 属于「Dart 拥有的 socket」，该策略自 Dart 2.2.0 起已撤回、且从未覆盖它，**dio 的 API 调用（含登录）不受明文策略约束**；真正解释「release 登录不上」的是 `INTERNET` 权限缺失。`usesCleartextTraffic` 实际修复的是 `just_audio` 的 Android 后端（真正的原生网络栈 ExoPlayer）播放 `http://` 音频流失败，以及 ExoPlayer 内部用于 header/缓存支持的 localhost 代理同样需要明文。修复内容不变，归因更准。其二：初始诊断认为 iOS 完全不受影响。登录/API 部分成立（`dart:io` 走原始 socket，ATS 管不到），但 **`just_audio` 在 iOS 上包装的是 `AVPlayer`——一个真正受 ATS 约束的原生组件**，服务端只有 `http://` 意味着 iOS 上大概率能登录但播放会被 ATS 拦下（标准报错 `NSURLErrorDomain -1022`）。这是与 Android 同形状、但初始诊断未覆盖的缺口，按本次任务边界未修改 iOS `Info.plist`，留作后续 phase。
+- **守卫测试及证伪** — 新增 `services/mobile/test/platform_network_capability_test.dart`（3 条架构测试，风格照既有的 `test/playback_boundary_test.dart`），直接解析上述平台配置文件本身并断言各端联网能力齐备。**这类配置全部不在 Dart 代码里，`flutter analyze` 与既有 404 条测试一条都覆盖不到——这正是缺口能潜伏至今的原因**，也是本次「加守卫」比「修配置」本身更重要的理由：下次任何人重新生成平台目录都会把它们冲掉，且同样没有任何信号。证伪：逐个删除 macOS 两份文件的 entitlement（分别删、分别验证互不掩盖）、Android 的 `INTERNET` 权限、`usesCleartextTraffic` 属性，四次均实测确认测试精确失败并报出具体文件与原因，恢复后 `git diff` 确认逐字节一致。
+- **验证** — `flutter analyze --no-fatal-infos`：0 error / 0 warning，仅 `player_state_reporter.dart:21` 一条既有 info（未触碰该文件）；`flutter test`：**407 passed**（v5.35.0 基线 404 + 新增 3 条守卫测试）。纯客户端平台配置改动，无服务端 schema 变更，不同步 OpenAPI `info.version`。
 
 ### v5.35.0 - 2026-08-12
 
