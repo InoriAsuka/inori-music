@@ -4,6 +4,15 @@
 <dict>
 	<key>com.apple.security.app-sandbox</key>
 	<true/>
+	<!-- Outbound network access (v5.36.0): under App Sandbox, the kernel
+	     (Seatbelt/MACF) refuses every outbound connect() unless this key is
+	     present — this is enforced below the HTTP stack, so it doesn't
+	     matter that dio/just_audio never go through NSURLSession. Without
+	     it, login and every other call to the self-hosted server fail
+	     silently at the socket layer. Needed in both Debug and Release —
+	     the sandbox has no debug-only carve-out. -->
+	<key>com.apple.security.network.client</key>
+	<true/>
 	<!-- Guest-mode local library (v5.12.0): required so a file/folder picked
 	     via file_picker's NSOpenPanel stays readable after selection under
 	     App Sandbox. Read-only is enough — the app never writes back to the
