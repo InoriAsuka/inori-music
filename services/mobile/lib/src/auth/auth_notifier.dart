@@ -318,8 +318,30 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
   String _describeUnexpected(Object e) {
     if (e is PlatformException) {
       // Secure storage lands here — the plugin surfaces every non-`noErr`
-      // Keychain status as a PlatformException carrying the OSStatus.
-      return 'Secure storage error (${e.code}): ${e.message ?? 'no detail'}';
+      // Keychain status as a PlatformException carrying the OSStatus in its
+      // message, formatted as "Code: <status>, Message: <…>".
+      final detail = e.message ?? '';
+      // macOS gates keychain access behind a system authorisation prompt, and
+      // this app is ad-hoc signed — its code signature changes with every
+      // build, so the prompt returns for each new build the user installs,
+      // not only on first run. The write that triggers it is the one in
+      // login(), which means the first sign-in after an update races the
+      // dialog and loses. Tell the user what to do instead of printing an
+      // OSStatus at them; the form keeps its values, so retrying is one click.
+      const authPrompt = [
+        '-25293', // errSecAuthFailed
+        '-25308', // errSecInteractionNotAllowed
+        '-25315', // errSecInteractionRequired
+        '-128', // errSecUserCanceled
+      ];
+      for (final code in authPrompt) {
+        if (detail.contains(code)) {
+          return 'Keychain access was not granted ($code). Click "Allow" in '
+              'the macOS dialog, then press Sign In again.';
+        }
+      }
+      return 'Secure storage error (${e.code}): '
+          '${detail.isEmpty ? 'no detail' : detail}';
     }
     if (e is TypeError) {
       // A response that parsed as JSON but not into the shape we cast to —

@@ -40,6 +40,30 @@ final historyApiProvider = Provider<HistoryApi>((ref) {
 });
 
 // ---------------------------------------------------------------------------
+// Playback URL resolution
+// ---------------------------------------------------------------------------
+
+/// Makes a playback descriptor URL absolute against the configured server.
+///
+/// The server hands back `streamUrl` as a **relative** path —
+/// `/api/v1/catalog/tracks/<id>/stream?exp=…&sig=…`. That is correct for the
+/// web client, which is same-origin and lets the browser fill in the rest; it
+/// is unusable for a native player. `Uri.parse('/api/v1/…')` yields a URI with
+/// no scheme and no host, and handing that to AVPlayer produces
+/// `NSURLErrorUnsupportedURL (-1002)` — there is nothing to connect to.
+///
+/// The comment this replaces read "streamUrl already carries HMAC signature
+/// from the server — use as-is". The signature part is true (`exp`/`sig` mean
+/// no Authorization header is needed, which matters because the engine sends
+/// none). "Use as-is" was the mistake: signed does not imply addressable.
+///
+/// [Uri.resolve] covers both shapes — a presigned object-storage URL is
+/// already absolute, possibly on an entirely different host, and passes
+/// through untouched.
+String absolutePlaybackUrl(String url, String base) =>
+    Uri.parse(base).resolve(url).toString();
+
+// ---------------------------------------------------------------------------
 // Player notifier — owns the just_audio AudioPlayer + queue logic
 // ---------------------------------------------------------------------------
 
@@ -129,16 +153,21 @@ class PlayerNotifier extends Notifier<pstate.PlayerState> {
       final descriptor = resp.data;
       if (descriptor == null) return null;
 
+      final base = await ref.read(baseUrlProvider.future);
+
       if (descriptor.presignedUrl != null &&
           descriptor.presignedUrl!.isNotEmpty) {
-        return descriptor.presignedUrl;
+        return absolutePlaybackUrl(descriptor.presignedUrl!, base);
       }
       if (descriptor.streamUrl != null && descriptor.streamUrl!.isNotEmpty) {
-        // streamUrl already carries HMAC signature from the server — use as-is.
-        return descriptor.streamUrl;
+        // Signed (exp+sig), but relative — see absolutePlaybackUrl.
+        return absolutePlaybackUrl(descriptor.streamUrl!, base);
       }
-      // Fallback: construct stream URL; Flutter sends Authorization: Bearer <token>.
-      final base = await ref.read(baseUrlProvider.future);
+      // Last resort, and effectively unreachable: the server always returns a
+      // signed streamUrl. Worth stating plainly that this one would fail —
+      // the engine attaches no Authorization header to its audio sources, so
+      // an unsigned stream URL gets a 401, not audio. The previous comment
+      // here claimed Flutter sends the bearer token; it does not.
       return '$base/api/v1/catalog/tracks/$trackId/stream';
     } catch (e) {
       debugPrint(

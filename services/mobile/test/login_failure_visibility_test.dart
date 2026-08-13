@@ -34,7 +34,15 @@ import 'package:inori_music/src/shared/router.dart';
 /// "nothing stored" (which is why the app got as far as the login form), and
 /// every write is refused outright.
 class _KeychainRejectingStorage extends FlutterSecureStorage {
-  const _KeychainRejectingStorage();
+  const _KeychainRejectingStorage({
+    this.message =
+        "Code: -34018, Message: A required entitlement isn't present.",
+  });
+
+  /// The plugin formats every non-`noErr` Keychain status this way; the
+  /// numeric OSStatus is the only thing distinguishing "this build can never
+  /// write" from "the user has not answered the prompt yet".
+  final String message;
 
   @override
   Future<void> write({
@@ -49,7 +57,7 @@ class _KeychainRejectingStorage extends FlutterSecureStorage {
   }) async {
     throw PlatformException(
       code: 'Unexpected security result code',
-      message: "Code: -34018, Message: A required entitlement isn't present.",
+      message: message,
     );
   }
 
@@ -119,6 +127,28 @@ void main() {
         expect(error, contains('-34018'));
       },
     );
+
+    test('a keychain authorisation refusal says what to do about it', () async {
+      // v5.37.1: with macOS switched to the legacy keychain, the OS now asks
+      // for authorisation — and because the app is ad-hoc signed its
+      // signature changes every build, so the prompt returns after each
+      // update. The sign-in that triggers the prompt loses the race against
+      // it. An OSStatus is not an instruction; this must be.
+      final container = _containerWith(
+        const _KeychainRejectingStorage(
+          message: 'Code: -25293, Message: Authorization failed.',
+        ),
+      );
+      await container.read(authProvider.future);
+
+      await container
+          .read(authProvider.notifier)
+          .login('admin', 'hunter2', baseUrl: 'http://10.0.0.1:8080');
+
+      final error = container.read(authProvider).value!.error!;
+      expect(error, contains('Allow'));
+      expect(error, contains('Sign In again'));
+    });
 
     test('abandonPendingAuth releases the gate', () async {
       final container = _containerWith(const _KeychainRejectingStorage());

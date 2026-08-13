@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`5.37.0`
+`5.37.1`
 
 ## Product Goal
 
@@ -39,6 +39,15 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Media object administration must support metadata-only bulk lifecycle updates scoped by exactly one safe selection filter.
 - Bulk lifecycle updates must support dry-run previews that do not persist metadata changes.
 - Committed lifecycle updates must record latest transition metadata for audit preparation.
+
+### v5.37.1 - 2026-08-13
+
+- **fix: `-1002 unsupported URL`——服务端返回的 `streamUrl` 是相对路径，客户端原样交给了 AVPlayer** — v5.37.0 后用户实测：登录已通（**那个 macOS 授权弹窗恰恰实机证实了 v5.37.0 的 keychain 诊断**——弹窗授权正是旧版文件式 keychain 的标志行为），但进入主页后封面不显示、播放报 `unsupported url`。对生产实例实测 `/api/v1/catalog/tracks/{id}/playback` 返回 `"streamUrl": "/api/v1/catalog/tracks/4977b05d33167cff/stream?exp=1786592689&sig=DeALC--…"`——**没有 scheme，没有 host**。这对 Web 端是正确的（同源，浏览器自己补全），对原生播放器则完全不可用：`Uri.parse('/api/v1/…')` 得到相对 URI，`ProgressiveAudioSource` 交给 AVPlayer 就是 `NSURLErrorUnsupportedURL (-1002)`。`player_notifier.dart` 的 `resolvePlaybackUrl` 原样返回，注释写着「streamUrl already carries HMAC signature from the server — **use as-is**」：签名那半句是对的（`exp`+`sig` 意味着不需要 Authorization header，这很重要因为引擎确实一个 header 都不带），**「use as-is」是错的——签过名不等于可寻址**。加重情节：这个分支排在**会拼 base 的兜底分支之前**，那段正确的拼接代码永远不可能被执行到。
+- **修复** — 新增顶层纯函数 `absolutePlaybackUrl(url, base) => Uri.parse(base).resolve(url).toString()`，`presignedUrl` 与 `streamUrl` 两条分支都过它。`Uri.resolve` 同时覆盖两种形状——对象存储返回的 presigned URL 本就是绝对的（常在完全不同的主机上），原样透传不会被改写、签名不会被破坏。所有播放入口（`playTrack` / `_buildConcatQueue` / `enqueue` / `enqueueNext`）都经由 `resolvePlaybackUrl`，改一处全覆盖。顺带修掉兜底分支上的另一句假注释「Fallback: construct stream URL; **Flutter sends Authorization: Bearer `<token>`**」——不发，`ProgressiveAudioSource(Uri.parse(u))` 不带任何 header，这条兜底真被走到只会拿 401；改成如实说明它会失败以及为什么。
+- **封面缺失不是客户端问题（服务端数据缺口，划归 v6）** — 对全部 5 张专辑逐个查 `/api/v1/catalog/albums/{id}/artwork`，**无一例外返回 `{"error":{"code":"no_artwork","message":"no artwork"}}`**。服务端库里根本没有封面数据；客户端 `artwork_provider.dart` 正确地把 404/错误处理成 `null`、`TrackArtwork` 正确地退回音符占位图——**行为完全正确，只是没有东西可显示**。而 FLAC 文件本身元数据齐全（stream 端点前几百字节就能直接读到完整 Vorbis comment：album / ALBUMARTIST / artist / composer / ISRC / UPC…），说明**入库时没有提取内嵌封面**。属于媒体摄取缺口，按路线图归 **v6**，本次不做。
+- **macOS 授权弹窗：有意不做自动重试** — v5.37.0 切到旧版文件式 keychain 后 OS 开始弹窗授权，而本应用是 **ad-hoc 签名、每次构建的代码签名都不同**，因此**这个弹窗每装一个新版本都会再出现一次**，不只首次安装；触发它的写入正好在 `login()` 里，于是「安装新版后的第一次登录」必然输给弹窗。未实现自动重试是因为那需要猜「用户多久会点允许」，而本机无完整 Xcode、无法复现验证，猜出的等待时长既可能不够也可能白白卡住 UI。改为把报错变成可执行指令：识别授权类 OSStatus（`-25293` errSecAuthFailed / `-25308` errSecInteractionNotAllowed / `-25315` errSecInteractionRequired / `-128` errSecUserCanceled）并给出「点击系统弹窗的『允许』，然后再按一次登录」；表单内容不会被清空，重试就是一次点击。根治需要正式签名（须 Apple Developer Team）或改用不走 keychain 的凭证存储，留待后续。
+- **守卫测试及证伪** — 新增 `services/mobile/test/playback_url_test.dart`（6 条）：相对路径补全主机、**签名必须存活**（引擎不带 header，`exp`+`sig` 是唯一凭证，修主机时把 query 丢了会把 -1002 换成 401、看起来像另一个 bug）、绝对 presigned URL 原样透传、带端口的 base、base 末尾斜杠不重复、结果恒有 scheme 与 host；`login_failure_visibility_test.dart` 加一条断言授权类 OSStatus 必须产出含「Allow」「Sign In again」的指令式文案。证伪：把 `absolutePlaybackUrl` 退回恒等函数（即修复前的 use-as-is 行为），实测精确失败且 `Actual` 打印出的正是 AVPlayer 拒绝的那个字符串。
+- **验证** — `flutter analyze --no-fatal-infos`：0 error / 0 warning，仅 `player_state_reporter.dart:21` 一条既有 info（未触碰该文件）；`flutter test`：**424 passed**（v5.37.0 基线 417 + 新增 7）。`dart format` 只对本次改动的 4 个文件执行。纯客户端改动，无服务端 schema 变更，不同步 OpenAPI `info.version`。
 
 ### v5.37.0 - 2026-08-13
 
