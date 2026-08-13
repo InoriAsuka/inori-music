@@ -21,6 +21,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:inori_music/l10n/app_localizations.dart';
 import 'package:inori_music/src/auth/auth_notifier.dart';
+import 'package:inori_music/src/playback/playback_engine.dart';
 import 'package:inori_music/src/playback/playback_engine_provider.dart';
 import 'package:inori_music/src/settings/settings_screen.dart';
 import 'package:inori_music/src/shared/widgets/shell_chrome.dart';
@@ -64,22 +65,31 @@ const _signedIn = AuthState(
   userId: 'u-1',
 );
 
-Widget _buildApp(AuthNotifier Function() authNotifier, {Widget? shellChrome}) =>
-    ProviderScope(
-      overrides: [
-        authProvider.overrideWith(authNotifier),
-        // _EqSection asks playbackCapabilitiesProvider (derived from this) for
-        // whether to show live EQ controls or the "unsupported" placeholder —
-        // either branch is safe to render, this just avoids depending on
-        // whichever a real engine happens to resolve to on the test host.
-        playbackEngineProvider.overrideWithValue(FakePlaybackEngine()),
-      ],
-      child: MaterialApp(
-        localizationsDelegates: AppLocalizations.localizationsDelegates,
-        supportedLocales: AppLocalizations.supportedLocales,
-        home: shellChrome ?? const SettingsScreen(),
-      ),
-    );
+Widget _buildApp(
+  AuthNotifier Function() authNotifier, {
+  Widget? shellChrome,
+  PlaybackCapabilities capabilities = PlaybackCapabilities.none,
+}) => ProviderScope(
+  overrides: [
+    authProvider.overrideWith(authNotifier),
+    // _EqSection and the crossfade slider both ask
+    // playbackCapabilitiesProvider (derived from this) for whether to
+    // show live controls or the "unsupported" placeholder — either
+    // branch is safe to render, this just avoids depending on
+    // whichever a real engine happens to resolve to on the test host.
+    // Defaults to PlaybackCapabilities.none (everything gated off) so
+    // existing callers that don't care about a specific capability
+    // keep exercising the "engine supports nothing extra" branch.
+    playbackEngineProvider.overrideWithValue(
+      FakePlaybackEngine(capabilities: capabilities),
+    ),
+  ],
+  child: MaterialApp(
+    localizationsDelegates: AppLocalizations.localizationsDelegates,
+    supportedLocales: AppLocalizations.supportedLocales,
+    home: shellChrome ?? const SettingsScreen(),
+  ),
+);
 
 void main() {
   group('Account section (v5.30.7 / v5.31.0)', () {
@@ -142,5 +152,67 @@ void main() {
       );
       expect(find.text('Tap to sign in'), findsNothing);
     });
+  });
+
+  group('Crossfade slider capability gate (v5.38.1)', () {
+    // v5.38.0 added MediaKitEngine (Windows), which honestly reports
+    // capabilities.crossfade: false and treats crossfadeSeconds as a
+    // documented no-op setter. The slider itself had no capability check
+    // at all, so on that engine it dragged, showed a number, and
+    // persisted a value the engine silently discarded. These tests guard
+    // the fix mirroring _EqSection's existing gate.
+    testWidgets(
+      'crossfade: false (e.g. media_kit on Windows) shows the disabled '
+      'explanatory tile and renders no crossfade Slider',
+      (tester) async {
+        await tester.pumpWidget(
+          _buildApp(
+            () => _StubAuthNotifier(_signedIn),
+            capabilities: const PlaybackCapabilities(crossfade: false),
+          ),
+        );
+        await tester.pumpAndSettle();
+        // The crossfade tile sits inside the "音频" section, well past the
+        // Account/Appearance/Offline Library/歌词 sections above it — the
+        // screen's root ListView only builds slivers near the viewport, so
+        // it isn't in the tree until scrolled into range.
+        await tester.scrollUntilVisible(find.text('切歌淡入淡出'), 300);
+        await tester.pumpAndSettle();
+
+        expect(tester.takeException(), isNull);
+        expect(find.text('切歌淡入淡出'), findsOneWidget);
+        expect(find.text('当前播放引擎不提供切歌淡入淡出'), findsOneWidget);
+        expect(find.byType(Slider), findsNothing);
+
+        final tile = tester.widget<ListTile>(
+          find.ancestor(
+            of: find.text('当前播放引擎不提供切歌淡入淡出'),
+            matching: find.byType(ListTile),
+          ),
+        );
+        expect(tile.enabled, isFalse);
+      },
+    );
+
+    testWidgets(
+      'crossfade: true (just_audio — every platform except Windows) still '
+      'renders the working, draggable slider',
+      (tester) async {
+        await tester.pumpWidget(
+          _buildApp(
+            () => _StubAuthNotifier(_signedIn),
+            capabilities: const PlaybackCapabilities(crossfade: true),
+          ),
+        );
+        await tester.pumpAndSettle();
+        await tester.scrollUntilVisible(find.text('切歌淡入淡出'), 300);
+        await tester.pumpAndSettle();
+
+        expect(tester.takeException(), isNull);
+        expect(find.text('切歌淡入淡出'), findsOneWidget);
+        expect(find.text('当前播放引擎不提供切歌淡入淡出'), findsNothing);
+        expect(find.byType(Slider), findsOneWidget);
+      },
+    );
   });
 }

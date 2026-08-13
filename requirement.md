@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`5.38.0`
+`5.38.1`
 
 ## Product Goal
 
@@ -39,6 +39,14 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Media object administration must support metadata-only bulk lifecycle updates scoped by exactly one safe selection filter.
 - Bulk lifecycle updates must support dry-run previews that do not persist metadata changes.
 - Committed lifecycle updates must record latest transition metadata for audit preparation.
+
+### v5.38.1 - 2026-08-13
+
+- **fix: 切歌淡入淡出滑块没有能力位门控——v5.38.0 新增的 `MediaKitEngine` 上，滑块能拖、数字会变，底层什么也不会发生** — v5.38.0 引入第二个播放引擎（Windows 专用）时如实记录了这个 gap 但未修：`MediaKitEngine` 诚实报 `capabilities.crossfade: false`，`crossfadeSeconds` setter 是文档化的空操作；但 `settings_screen.dart`「切歌淡入淡出」滑块（`// Crossfade slider` 这个 `Consumer`）从 v5.27.0 引入至今完全没有读过 `playbackCapabilitiesProvider`。这正是本仓库反复出现的头号缺陷形态——界面零反馈的静默失败——的一次新鲜实例，且是上一个版本亲手引入的。
+- **修复：照搬 `_EqSection`（`settings_screen.dart:1034`）已经定好的门控写法** — 在滑块的 `Consumer.builder` 顶部加 `if (!ref.watch(playbackCapabilitiesProvider).crossfade)` 早返回，禁用态与均衡器同一套视觉语言：保留原图标（`Icons.swap_horiz`）、原标题「切歌淡入淡出」、中文说明「当前播放引擎不提供切歌淡入淡出」、`Icons.lock_outline` 尾部图标、`enabled: false`。不是简单隐藏——一个无声消失的控件只比说谎的控件好一点点，均衡器区块已经替这个问题定过调，这次跟它保持一致。
+- **守卫测试及证伪** — `test/settings_screen_test.dart` 新增两条：`crossfade: false` 时断言禁用态 tile 存在（标题+说明文案+`Icons.lock_outline`+`ListTile.enabled == false`）且树上找不到任何 `Slider`；`crossfade: true` 时断言可拖动的 `Slider` 仍正常渲染（守住 just_audio 路径——除 Windows 外的所有平台——不被这次改动连带破坏）。`_buildApp` 测试夹具新增 `capabilities` 参数，透传给已有的 `FakePlaybackEngine`，与均衡器测试同一条已建立的路子。**证伪**：临时把门控代码退回 v5.38.0 的原样（滑块不读能力位），重跑这两条新测试——`crossfade: false` 用例精确失败（`Expected: exactly one matching candidate / Actual: Found 0 widgets with text "当前播放引擎不提供切歌淡入淡出"`），`crossfade: true` 用例依然通过（回退后两种能力状态都无条件渲染滑块，符合预期，证明这条测试单独并不能抓出门控缺失，必须两条搭配才是完整的证据链）。随后已恢复修复代码并重新跑绿。
+- **确认的既有 gap，本次记录但不修：播放速度控件同样没有能力位门控，但目前还不是活跃缺陷** — 排查中一并确认「播放速度」控件（`settings_screen.dart` 约 239 行的入口 tile 与约 395 行的速度选择 bottom sheet、`full_player_screen.dart` 约 1046 行同一个 bottom sheet 的另一处入口）同样从未读过 `playbackCapabilitiesProvider`。但 `PlaybackCapabilities.speedControl` 在 `JustAudioEngine` 与 `MediaKitEngine` 两个现存引擎上均为 `true`（`just_audio_engine.dart:71`、`media_kit_engine.dart:16`），所以今天没有任何引擎会走到"不支持"分支——不是活跃缺陷。明确写下触发条件：**第一个报告 `speedControl: false` 的引擎出现时，这里会变成和这次修的 crossfade 一模一样的静默失败**，到时候需要照本次同一个模式补门控。这次不加：没有引擎能产生 `false` 分支，加了就是一段没有任何测试能真正验证到 false 路径的死代码。
+- **验证** — `flutter analyze --no-fatal-infos`：0 error / 0 warning，仅 `player_state_reporter.dart:21` 一条既有 info（未触碰该文件）。`flutter test`：**433 passed**（v5.38.0 基线 431 + 新增 2）。`dart format` 只对本次改动的 2 个文件执行（`lib/src/settings/settings_screen.dart`、`test/settings_screen_test.dart`），未对目录跑。纯客户端改动，无服务端 schema 变更，不同步 OpenAPI `info.version`。
 
 ### v5.38.0 - 2026-08-13
 

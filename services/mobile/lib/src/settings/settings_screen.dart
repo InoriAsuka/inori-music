@@ -289,6 +289,21 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           // Crossfade slider
           Consumer(
             builder: (context, ref, _) {
+              // Asks the engine, not the platform — same rule as
+              // _EqSection (settings_screen.dart:1034). media_kit
+              // (Windows) honestly reports crossfade: false and its
+              // crossfadeSeconds setter is a documented no-op; without
+              // this gate the slider would drag, show a number, and
+              // persist a value the engine silently discards.
+              if (!ref.watch(playbackCapabilitiesProvider).crossfade) {
+                return const ListTile(
+                  leading: Icon(Icons.swap_horiz),
+                  title: Text('切歌淡入淡出'),
+                  subtitle: Text('当前播放引擎不提供切歌淡入淡出'),
+                  trailing: Icon(Icons.lock_outline),
+                  enabled: false,
+                );
+              }
               final seconds = ref.watch(crossfadeProvider);
               return ListTile(
                 leading: const Icon(Icons.swap_horiz),
