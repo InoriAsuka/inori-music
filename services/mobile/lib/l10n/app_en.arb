@@ -105,5 +105,11 @@
   "downloads": "Downloads",
   "@downloads": { "description": "Desktop sidebar footer entry point into the existing Offline Library section in Settings" },
   "outputDevice": "Output Device",
-  "@outputDevice": { "description": "Desktop sidebar footer entry point, only rendered when PlaybackCapabilities.outputDeviceSelection is true" }
+  "@outputDevice": { "description": "Desktop sidebar footer entry point, only rendered when PlaybackCapabilities.outputDeviceSelection is true" },
+  "splashConnecting": "Connecting…",
+  "@splashConnecting": { "description": "Splash screen status line shown while auth resolves" },
+  "splashTakingLonger": "This is taking longer than usual. Check the server address and your network.",
+  "@splashTakingLonger": { "description": "Splash screen status line once auth has stayed unresolved past the slow threshold" },
+  "splashBackToSignIn": "Back to sign in",
+  "@splashBackToSignIn": { "description": "Splash screen escape hatch shown alongside splashTakingLonger; releases the splash gate and returns to the login form" }
 }

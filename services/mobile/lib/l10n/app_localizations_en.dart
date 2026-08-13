@@ -266,4 +266,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get outputDevice => 'Output Device';
+
+  @override
+  String get splashConnecting => 'Connecting…';
+
+  @override
+  String get splashTakingLonger =>
+      'This is taking longer than usual. Check the server address and your network.';
+
+  @override
+  String get splashBackToSignIn => 'Back to sign in';
 }

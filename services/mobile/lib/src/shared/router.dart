@@ -156,6 +156,67 @@ const _guestAllowedRoutes = [
 ];
 
 // ---------------------------------------------------------------------------
+// Gate rules
+// ---------------------------------------------------------------------------
+
+/// The auth gate, as a pure function of (auth state, current location).
+/// Returns the location to redirect to, or null to stay put.
+///
+/// Split out of [routerProvider] so it can be unit-tested directly: these
+/// rules decide which screen you are looking at, and one of them shipped
+/// wrong for long enough to leave users staring at an inert splash screen —
+/// but the rules only existed inside a GoRouter closure, and exercising that
+/// means standing up the whole shell (AudioService included). Untestable in
+/// practice is how a rule this load-bearing goes unchecked.
+@visibleForTesting
+String? resolveAuthRedirect({
+  required AsyncValue<AuthState> authState,
+  required String location,
+}) {
+  final isLoginRoute = location == AppRoutes.login;
+
+  // While auth is loading, show a real splash instead of flashing content
+  // — except on the login screen itself. An interactive sign-in starts
+  // *from* /login and puts auth into AsyncLoading, so the unconditional
+  // form of this rule tore the form away mid-submit and parked the user
+  // on a screen with no controls, no status text and no way back. The
+  // login form already renders an inline spinner on its button and inline
+  // error text beneath the fields for exactly this state; until this
+  // exception existed, neither had ever been reachable.
+  if (authState is AsyncLoading && !isLoginRoute) return AppRoutes.splash;
+
+  final authValue = authState.valueOrNull;
+  final isLoggedIn = authValue?.isAuthenticated ?? false;
+  final isGuest = authValue?.isGuest ?? false;
+  final isPastGate = isLoggedIn || isGuest;
+
+  // Splash is only ever valid while loading (handled above) — once auth
+  // has resolved, always move off it immediately no matter the result,
+  // rather than falling through to the isLoginRoute-keyed rules below
+  // (which don't match "/splash" and would otherwise strand the user
+  // there indefinitely).
+  if (location == AppRoutes.splash) {
+    if (isLoggedIn) return AppRoutes.artists;
+    if (isGuest) return AppRoutes.localLibrary;
+    return AppRoutes.login;
+  }
+
+  if (!isPastGate && !isLoginRoute) return AppRoutes.login;
+  if (isLoggedIn && isLoginRoute) return AppRoutes.artists;
+  // Mirrors the isLoggedIn rule above: once past the gate (as a guest),
+  // /login is never something you "sit on" — landing there (e.g. right
+  // after tapping "Continue as Guest") bounces into the app. A guest who
+  // wants to log in for real instead calls AuthNotifier.exitGuestMode(),
+  // which drops back to genuinely unauthenticated so this same rule set
+  // routes them to /login normally (see settings_screen.dart).
+  if (isGuest && isLoginRoute) return AppRoutes.localLibrary;
+  if (isGuest && !_guestAllowedRoutes.any(location.startsWith)) {
+    return AppRoutes.localLibrary;
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // Router provider
 // ---------------------------------------------------------------------------
 
@@ -166,46 +227,10 @@ final routerProvider = Provider<GoRouter>((ref) {
   return GoRouter(
     initialLocation: AppRoutes.artists,
     refreshListenable: notifier,
-    redirect: (context, state) {
-      final authState = ref.read(authProvider);
-
-      // While auth is loading, show a real splash instead of flashing content.
-      if (authState is AsyncLoading) return AppRoutes.splash;
-
-      final authValue = authState.valueOrNull;
-      final isLoggedIn = authValue?.isAuthenticated ?? false;
-      final isGuest = authValue?.isGuest ?? false;
-      final isPastGate = isLoggedIn || isGuest;
-      final isLoginRoute = state.matchedLocation == AppRoutes.login;
-
-      // Splash is only ever valid while loading (handled above) — once auth
-      // has resolved, always move off it immediately no matter the result,
-      // rather than falling through to the isLoginRoute-keyed rules below
-      // (which don't match "/splash" and would otherwise strand the user
-      // there indefinitely).
-      if (state.matchedLocation == AppRoutes.splash) {
-        if (isLoggedIn) return AppRoutes.artists;
-        if (isGuest) return AppRoutes.localLibrary;
-        return AppRoutes.login;
-      }
-
-      if (!isPastGate && !isLoginRoute) return AppRoutes.login;
-      if (isLoggedIn && isLoginRoute) return AppRoutes.artists;
-      // Mirrors the isLoggedIn rule above: once past the gate (as a guest),
-      // /login is never something you "sit on" — landing there (e.g. right
-      // after tapping "Continue as Guest") bounces into the app. A guest who
-      // wants to log in for real instead calls AuthNotifier.exitGuestMode(),
-      // which drops back to genuinely unauthenticated so this same rule set
-      // routes them to /login normally (see settings_screen.dart).
-      if (isGuest && isLoginRoute) return AppRoutes.localLibrary;
-      if (isGuest &&
-          !_guestAllowedRoutes.any(
-            (r) => state.matchedLocation.startsWith(r),
-          )) {
-        return AppRoutes.localLibrary;
-      }
-      return null;
-    },
+    redirect: (context, state) => resolveAuthRedirect(
+      authState: ref.read(authProvider),
+      location: state.matchedLocation,
+    ),
     routes: [
       // Splash — no shell, transient (see redirect above)
       GoRoute(

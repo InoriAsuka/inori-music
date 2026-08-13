@@ -264,4 +264,13 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get outputDevice => '装置';
+
+  @override
+  String get splashConnecting => '正在连接…';
+
+  @override
+  String get splashTakingLonger => '耗时比平常更长，请检查服务器地址与网络连接。';
+
+  @override
+  String get splashBackToSignIn => '返回登录';
 }

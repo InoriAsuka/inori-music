@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:dio/dio.dart';
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -115,8 +116,18 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
   /// Enter guest mode: purely local, no network call. Persists the choice so
   /// a relaunch goes straight back into guest mode (see [build]).
   Future<void> continueAsGuest() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_kLastModeGuestKey, true);
+    // Remembering the choice is a convenience (skip the login screen on the
+    // next cold start), not a precondition for guest mode — which is purely
+    // local and needs no storage at all. So a storage failure must not be
+    // able to stop someone from getting in. This is bound straight to a
+    // button's onPressed, where anything thrown is an uncaught async error:
+    // the button would simply do nothing, forever, with no explanation.
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(_kLastModeGuestKey, true);
+    } catch (_) {
+      // Guest mode still works; it just won't be remembered next launch.
+    }
     state = const AsyncData(AuthState(status: AuthStatus.guest));
   }
 
@@ -131,16 +142,49 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     state = const AsyncData(AuthState(status: AuthStatus.unauthenticated));
   }
 
-  Future<void> login(String username, String password, {String? baseUrl}) async {
+  /// Releases the splash gate when auth never resolved on its own.
+  ///
+  /// The router holds the UI on the splash screen for as long as auth is
+  /// [AsyncLoading], and that screen has no controls — it was written on the
+  /// assumption that resolution always happens "well under a second", so when
+  /// the assumption fails it becomes a dead end. The splash offers this after
+  /// a timeout. Dropping to unauthenticated hands control back to the
+  /// router's ordinary rules, which land on /login with [reason] displayed.
+  ///
+  /// Safe to call while [build] is still in flight: if that future later
+  /// completes it simply publishes its own real result over this one.
+  void abandonPendingAuth(String reason) {
+    state = AsyncData(
+      AuthState(status: AuthStatus.unauthenticated, error: reason),
+    );
+  }
+
+  /// Signs in and **always** leaves [state] in a resolved (non-loading) state,
+  /// on every path. That total-ness is load-bearing, not defensive style: the
+  /// router pins the UI to the splash screen for exactly as long as auth is
+  /// [AsyncLoading] (see `router.dart`), so a single escaping exception used
+  /// to strand the user on a static logo screen permanently, with nothing
+  /// logged and nothing shown. See [_describeUnexpected].
+  Future<void> login(
+    String username,
+    String password, {
+    String? baseUrl,
+  }) async {
     state = const AsyncLoading();
 
-    if (baseUrl != null && baseUrl.isNotEmpty) {
-      await _storage.write(key: _kBaseUrlKey, value: baseUrl);
-    }
-
     try {
+      // Inside the try: this is a keychain write, and keychain writes fail for
+      // reasons that have nothing to do with the credentials (see
+      // secureStorageProvider). It used to sit above the try, so on macOS the
+      // very first statement after AsyncLoading threw straight past every
+      // handler.
+      if (baseUrl != null && baseUrl.isNotEmpty) {
+        await _storage.write(key: _kBaseUrlKey, value: baseUrl);
+      }
+
       final dio = _dio;
-      final savedBase = await _storage.read(key: _kBaseUrlKey) ?? 'http://localhost:8080';
+      final savedBase =
+          await _storage.read(key: _kBaseUrlKey) ?? 'http://localhost:8080';
       final response = await dio.post(
         '$savedBase/api/v1/auth/login',
         data: {'username': username, 'password': password},
@@ -155,20 +199,33 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
       await _storage.write(key: _kUserIdKey, value: userId);
       await _storage.write(key: _kUsernameKey, value: username);
       // A real login always wins over a previously-remembered guest session.
-      (await SharedPreferences.getInstance()).remove(_kLastModeGuestKey);
+      await (await SharedPreferences.getInstance()).remove(_kLastModeGuestKey);
 
-      state = AsyncData(AuthState(
-        status: AuthStatus.authenticated,
-        token: token,
-        userId: userId,
-        username: username,
-      ));
+      state = AsyncData(
+        AuthState(
+          status: AuthStatus.authenticated,
+          token: token,
+          userId: userId,
+          username: username,
+        ),
+      );
     } on DioException catch (e) {
       final msg = _extractError(e);
-      state = AsyncData(AuthState(
-        status: AuthStatus.unauthenticated,
-        error: msg,
-      ));
+      state = AsyncData(
+        AuthState(status: AuthStatus.unauthenticated, error: msg),
+      );
+    } catch (e) {
+      // Catch-all on purpose. Transport failures are only one of the ways this
+      // method can fail; it also writes to the keychain three times, touches
+      // SharedPreferences, and casts the response body. None of those throw a
+      // DioException, and any of them escaping leaves the router parked on the
+      // splash screen forever.
+      state = AsyncData(
+        AuthState(
+          status: AuthStatus.unauthenticated,
+          error: _describeUnexpected(e),
+        ),
+      );
     }
   }
 
@@ -176,7 +233,8 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     final token = await _storage.read(key: _kTokenKey);
     if (token != null) {
       try {
-        final savedBase = await _storage.read(key: _kBaseUrlKey) ?? 'http://localhost:8080';
+        final savedBase =
+            await _storage.read(key: _kBaseUrlKey) ?? 'http://localhost:8080';
         await _dio.post(
           '$savedBase/api/v1/auth/logout',
           options: Options(headers: {'Authorization': 'Bearer $token'}),
@@ -191,7 +249,8 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
   }
 
   Future<void> changePassword(String current, String newPwd) async {
-    final savedBase = await _storage.read(key: _kBaseUrlKey) ?? 'http://localhost:8080';
+    final savedBase =
+        await _storage.read(key: _kBaseUrlKey) ?? 'http://localhost:8080';
     final token = await _storage.read(key: _kTokenKey);
     await _dio.post(
       '$savedBase/api/v1/me/change-password',
@@ -202,7 +261,8 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
 
   /// Revoke all active sessions except the current one.
   Future<void> revokeAllOtherSessions() async {
-    final savedBase = await _storage.read(key: _kBaseUrlKey) ?? 'http://localhost:8080';
+    final savedBase =
+        await _storage.read(key: _kBaseUrlKey) ?? 'http://localhost:8080';
     final token = await _storage.read(key: _kTokenKey);
     await _dio.delete(
       '$savedBase/api/v1/me/sessions/revoke-all',
@@ -211,7 +271,8 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
   }
 
   Future<Map<String, dynamic>> _fetchMe(String token) async {
-    final savedBase = await _storage.read(key: _kBaseUrlKey) ?? 'http://localhost:8080';
+    final savedBase =
+        await _storage.read(key: _kBaseUrlKey) ?? 'http://localhost:8080';
     final response = await _dio.get(
       '$savedBase/api/v1/me',
       options: Options(headers: {'Authorization': 'Bearer $token'}),
@@ -243,6 +304,31 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
           'Login failed';
     }
     return 'Login failed';
+  }
+
+  /// Turns a non-transport failure into text a user can actually report back.
+  ///
+  /// Deliberately keeps the raw platform code rather than collapsing
+  /// everything to "Login failed": the difference between "wrong password"
+  /// and "this build cannot write to the keychain at all" is the difference
+  /// between a user error and a packaging bug, and only one of them is worth
+  /// the user retyping their password over. A macOS keychain rejection
+  /// (`-34018`) reaching the screen as an opaque "Login failed" would have
+  /// been almost as useless as the frozen splash it replaces.
+  String _describeUnexpected(Object e) {
+    if (e is PlatformException) {
+      // Secure storage lands here — the plugin surfaces every non-`noErr`
+      // Keychain status as a PlatformException carrying the OSStatus.
+      return 'Secure storage error (${e.code}): ${e.message ?? 'no detail'}';
+    }
+    if (e is TypeError) {
+      // A response that parsed as JSON but not into the shape we cast to —
+      // usually a URL pointing at something that is not this API, or a server
+      // too old for this client.
+      return 'Unexpected response from server. Check the server URL and that '
+          'it is running a compatible version.';
+    }
+    return 'Login failed: $e';
   }
 }
 

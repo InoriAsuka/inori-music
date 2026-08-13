@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`5.36.0`
+`5.37.0`
 
 ## Product Goal
 
@@ -39,6 +39,18 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Media object administration must support metadata-only bulk lifecycle updates scoped by exactly one safe selection filter.
 - Bulk lifecycle updates must support dry-run previews that do not persist metadata changes.
 - Committed lifecycle updates must record latest transition metadata for audit preparation.
+
+### v5.37.0 - 2026-08-13
+
+- **fix: 点下登录就永远停在 logo 页——四个缺陷叠出来的死局，且发生在任何网络请求之前** — 用户实机反馈 v5.36.0 构建：「表单的三个元素填好后，点击登录，然后跳转到 logo 页面就没有动静了……给人的感觉就是卡死了」。v5.36.0 补的平台联网能力是必要的但**不充分**：登录路径在发出第一个网络请求之前就已经死了，那批修复根本没被走到。完整链条：（1）`AuthNotifier.login` 首句 `state = const AsyncLoading()`；（2）`router.dart` 的 redirect **无条件**把 `AsyncLoading` 送去 `/splash`，用户被立刻从 `/login` 拽走——这就是「跳转到 logo 页」；（3）`login()` 里第一个真正的操作 `_storage.write(key: _kBaseUrlKey, ...)` 写在 **`try` 块外面**；（4）该写入在 macOS 上必然抛 `PlatformException`；（5）`login()` 只有 `on DioException` 接不住，`_submit()` 直接 `await login()` 也无 try/catch，成为**未捕获异步错误**，界面零痕迹；（6）`state` 永久钉在 `AsyncLoading`，redirect 每次求值都返回 `/splash`；（7）`SplashScreen` 按「绝不可能卡住」设计（源码注释原话 *"a transient gate, not a screen a user should ever need to act on"*），260ms 淡入跑完就是**完全静止的一张图**，无 spinner / 无状态文字 / 无超时 / 无出口。**第 3–5 步决定它会卡住，第 2 步和第 7 步决定卡住后用户和开发者都拿不到任何信息。**
+- **根因一：macOS keychain 写入从来没成功过（读写不对称是它潜伏至今的原因）** — `flutter_secure_storage` 9.2.4 在 macOS 联邦到 `flutter_secure_storage_macos` 3.1.3，其 `MacOsOptions` 默认 `useDataProtectionKeyChain = true`，而 `api_client.dart` 的 `secureStorageProvider` 只传了 `aOptions`/`iOptions`，**`mOptions` 从未传过**。macOS 上启用 data protection keychain 要求应用属于某 keychain access group，需要带 Team ID 前缀的 `keychain-access-groups` entitlement；本工程 `CODE_SIGN_IDENTITY = "-"`（ad-hoc）且**无 `DEVELOPMENT_TEAM`**，`macos/`+`ios/` 全目录 `keychain` 零命中，于是每次 `SecItemAdd` 返回 `errSecMissingEntitlement (-34018)`。读插件 Swift 源码确认不对称：`read()` 把 `errSecItemNotFound` 显式改写成 `status: errSecSuccess, value: nil`——全新安装查不到 → **返回 null 而非错误**，所以冷启动一切正常、登录表单照常显示；`write()` 的 `SecItemAdd` 必须选一个 access group 写进去，硬失败，`handleResponse` 把任何非 `noErr` 原样包成 `FlutterError` → Dart 侧 `PlatformException`。**只有写会炸，而唯一触发写的动作就是登录本身。**
+- **修法选择：不是补 entitlement（照搬 v5.36.0 的直觉在这里是错的）** — 该 entitlement 的值形如 `$(AppIdentifierPrefix)com.inori.music`，而 ad-hoc 签名根本没有 `AppIdentifierPrefix` 可解析，补了也不生效。改为 `mOptions: MacOsOptions(useDataProtectionKeyChain: false)` 走旧版文件式 keychain——App Sandbox 下应用访问自己的 keychain 条目**不需要任何 entitlement**。无迁移问题（macOS 构建从未写成功过一条记录），iOS 不受影响（该选项只作用于 macOS）。
+- **根因二：`login()` 不是全函数** — 它要做三次 keychain 写入、一次 SharedPreferences 操作、两次类型转换，**没有一个会抛 `DioException`**，而它只 catch 这一种。顺带排除的嫌疑：对生产实例实测服务端响应为 `{token, expiresAt, userId}`，与客户端 cast 完全对得上，类型转换不是本次成因（但共用同一条逃逸路径，一并纳入兜底）。另一条决定性排除：dio 配了 `connectTimeout: 15s`/`receiveTimeout: 30s`，**纯网络问题最多卡 30 秒就会抛 `DioException` 并被正确显示**——用户描述的「完全没动静」本身就证明故障点在网络请求之前。修复：写入移进 `try`；补 `catch (e)` 兜底；新增 `_describeUnexpected` 把平台码原样带到界面（`-34018` 是打包缺陷不是密码打错，**折叠成笼统的 "Login failed" 几乎和冻结的 splash 一样没用**）。同形状的另一处：`continueAsGuest()` 直接绑 `onPressed`，SharedPreferences 抛异常就是「按钮点了永远没反应」——游客模式纯本地根本不需要存储，改为存储失败也照样进入。
+- **根因三：路由把用户从登录页抢走，导致两处 UI 长期是死代码** — `login_screen.dart` 里 `isLoading` 时按钮上的 `CircularProgressIndicator`（170–188 行）与失败时字段下方的内联错误文案（151–167 行）**代码一直都在但从来不可达**，因为 redirect 在 `AsyncLoading` 第一时间就把用户送去了 `/splash`；登录页本来就是照「自己显示加载与错误」设计的。修复为 `if (authState is AsyncLoading && !isLoginRoute)`——交互式登录本来就**从 `/login` 出发**，不该被自己触发的加载态赶走；冷启动的初始鉴权仍正常走 splash。顺带把整段 gate 规则从 GoRouter 闭包抽成顶层纯函数 `resolveAuthRedirect({authState, location})`：这些规则决定用户看到哪一屏，其中一条错了足够久、久到把人困在静止的 splash 上，**而它此前只存在于闭包里，想测就得起整个 shell（含 AudioService）——实践上不可测，正是这么关键的规则一直没人校验的原因**。
+- **根因四：splash 没有「我还活着」的信号** — 即便前三条都修好，一个没有出口的 gate 本身就是错的形状。改为**常驻**进度指示（不是一次性淡入动画，它唯一职责就是区分「在干活」和「已经死了」）＋状态文字（新增三条 l10n，en/ja/zh 齐全）＋超过 8 秒改文案并给出「返回登录」出口，调用新增的 `AuthNotifier.abandonPendingAuth(reason)` 把状态拉回 unauthenticated 让路由常规规则重新接管。
+- **守卫测试及证伪** — 新增 `services/mobile/test/login_failure_visibility_test.dart`（10 条，三组：`login()` 全函数性含 `-34018` 必须出现在用户可见文案里、`secureStorageProvider` 的 macOS 选项、`resolveAuthRedirect` 全部分支）。逐项退回修复前实测：删 `mOptions` → 选项守卫 `Expected: 'false' / Actual: 'true'`；redirect 恢复无条件 → `Expected: null / Actual: '/splash'`；删 `catch (e)` → `PlatformException(-34018)` 从 `auth_notifier.dart:178` 的 `login()` 逃逸；**写入移回 `try` 外但保留 catch-all → 仍然逃逸**，单独验这一项是为了证明两处改动各自独立必要（只补兜底而不搬动写入位置仍会漏）。
+- **未做 / 留待确认** — **无法本地实机复现**：本机只有 Command Line Tools 无完整 Xcode（`xcodebuild` 报 `requires Xcode`），macOS 客户端跑不起来；`-34018` 这条归因是**读插件源码 + 签名配置推导**得出的，逻辑闭合且每个症状都对得上，但没有实机日志坐实。根因二/三/四与平台无关，无论根因一是否成立都必然要修——**且它们保证了：万一根因一判断有误，下一次报告里会带着真实错误文案，而不再是「完全不知道是什么情况」**。用户实测所用具体平台未确认（release 工作流同时出 macOS/Windows/APK），本次修复对三端均有效，故未作阻塞。iOS ATS 拦播放（v5.36.0 已记录）仍未修。
+- **验证** — `flutter analyze --no-fatal-infos`：0 error / 0 warning，仅 `player_state_reporter.dart:21` 一条既有 info（未触碰该文件）；`flutter test`：**417 passed**（v5.36.0 基线 407 + 新增 10）。`dart format` 只对本次改动的 5 个手写文件执行，未触碰 l10n 生成产物与仓库存量文件。纯客户端改动，无服务端 schema 变更，不同步 OpenAPI `info.version`。
 
 ### v5.36.0 - 2026-08-12
 

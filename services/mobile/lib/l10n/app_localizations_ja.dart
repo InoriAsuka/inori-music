@@ -264,4 +264,13 @@ class AppLocalizationsJa extends AppLocalizations {
 
   @override
   String get outputDevice => '出力デバイス';
+
+  @override
+  String get splashConnecting => '接続中…';
+
+  @override
+  String get splashTakingLonger => '通常より時間がかかっています。サーバーアドレスとネットワークをご確認ください。';
+
+  @override
+  String get splashBackToSignIn => 'ログインに戻る';
 }

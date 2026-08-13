@@ -609,6 +609,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Output Device'**
   String get outputDevice;
+
+  /// Splash screen status line shown while auth resolves
+  ///
+  /// In en, this message translates to:
+  /// **'Connecting…'**
+  String get splashConnecting;
+
+  /// Splash screen status line once auth has stayed unresolved past the slow threshold
+  ///
+  /// In en, this message translates to:
+  /// **'This is taking longer than usual. Check the server address and your network.'**
+  String get splashTakingLonger;
+
+  /// Splash screen escape hatch shown alongside splashTakingLonger; releases the splash gate and returns to the login form
+  ///
+  /// In en, this message translates to:
+  /// **'Back to sign in'**
+  String get splashBackToSignIn;
 }
 
 class _AppLocalizationsDelegate

@@ -89,5 +89,8 @@
   "noCollectedPlaylistsYet": "暂无收藏歌单",
   "notSignedIn": "未登录",
   "downloads": "下载",
-  "outputDevice": "装置"
+  "outputDevice": "装置",
+  "splashConnecting": "正在连接…",
+  "splashTakingLonger": "耗时比平常更长，请检查服务器地址与网络连接。",
+  "splashBackToSignIn": "返回登录"
 }

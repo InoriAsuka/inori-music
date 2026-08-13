@@ -16,7 +16,29 @@ final forceLogoutStream = StreamController<void>.broadcast();
 final secureStorageProvider = Provider<FlutterSecureStorage>(
   (_) => const FlutterSecureStorage(
     aOptions: AndroidOptions(encryptedSharedPreferences: true),
-    iOptions: IOSOptions(accessibility: KeychainAccessibility.first_unlock_this_device),
+    iOptions: IOSOptions(
+      accessibility: KeychainAccessibility.first_unlock_this_device,
+    ),
+    // macOS (v5.37.0): the plugin defaults to the *data protection* keychain
+    // (`kSecUseDataProtectionKeychain = true`). On macOS that keychain only
+    // admits apps that carry a keychain access group entitlement, and such an
+    // entitlement is only meaningful with a real Team ID prefix. This app is
+    // ad-hoc signed (`CODE_SIGN_IDENTITY = "-"`, no `DEVELOPMENT_TEAM`), so
+    // there is no prefix to claim and every `SecItemAdd` came back
+    // `errSecMissingEntitlement` (-34018).
+    //
+    // The failure was write-only, which is why it hid for so long: a *read*
+    // miss maps to `errSecItemNotFound`, which the plugin reports as "no
+    // value" rather than an error, so the app started normally and showed the
+    // login form. Only the first write — i.e. the moment someone actually
+    // tried to sign in — ever hit it.
+    //
+    // The legacy file-based keychain needs no entitlement at all: under App
+    // Sandbox an app always reaches its own keychain items. Nothing to
+    // migrate, because no macOS build ever managed to write a single item.
+    // Affects macOS only — iOS ignores this option (and always has a valid
+    // application-identifier from provisioning).
+    mOptions: MacOsOptions(useDataProtectionKeyChain: false),
   ),
 );
 
@@ -38,7 +60,10 @@ final dioProvider = Provider<Dio>((ref) {
     BaseOptions(
       connectTimeout: const Duration(seconds: 15),
       receiveTimeout: const Duration(seconds: 30),
-      headers: {'Accept': 'application/json', 'Content-Type': 'application/json'},
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
     ),
   );
 
@@ -47,7 +72,8 @@ final dioProvider = Provider<Dio>((ref) {
       onRequest: (options, handler) async {
         final storage = ref.read(secureStorageProvider);
         final token = await storage.read(key: _kTokenKey);
-        final baseUrl = await storage.read(key: _kBaseUrlKey) ?? _kDefaultBaseUrl;
+        final baseUrl =
+            await storage.read(key: _kBaseUrlKey) ?? _kDefaultBaseUrl;
         options.baseUrl = baseUrl;
         if (token != null) {
           options.headers['Authorization'] = 'Bearer $token';

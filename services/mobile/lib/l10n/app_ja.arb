@@ -89,5 +89,8 @@
   "noCollectedPlaylistsYet": "コレクションしたプレイリストはまだありません",
   "notSignedIn": "未サインイン",
   "downloads": "ダウンロード",
-  "outputDevice": "出力デバイス"
+  "outputDevice": "出力デバイス",
+  "splashConnecting": "接続中…",
+  "splashTakingLonger": "通常より時間がかかっています。サーバーアドレスとネットワークをご確認ください。",
+  "splashBackToSignIn": "ログインに戻る"
 }
