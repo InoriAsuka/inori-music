@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`5.37.2`
+`5.38.0`
 
 ## Product Goal
 
@@ -39,6 +39,19 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Media object administration must support metadata-only bulk lifecycle updates scoped by exactly one safe selection filter.
 - Bulk lifecycle updates must support dry-run previews that do not persist metadata changes.
 - Committed lifecycle updates must record latest transition metadata for audit preparation.
+
+### v5.38.0 - 2026-08-13
+
+- **feat: Windows 从未能播放过音频——补第二个 `PlaybackEngine` 实现（`media_kit`/libmpv），仅限 Windows** — `just_audio` 0.9.x 只为 android/ios/macos/web 注册插件实现，Windows 上没有任何后备，方法调用直接 `MissingPluginException`。`playback_engine.dart` 的接口本身（v5.27.0 立下的接缝）早就写明了这一点，但四个版本以来始终只有一个实现在跑，没人真正验证过它是否名副其实地"引擎无关"。本次新增 `lib/src/playback/media_kit_engine.dart`，用 `media_kit`（Flutter 对 libmpv 的封装）实现 `PlaybackEngine` 的传输（play/pause/stop/seek/seekToIndex）、队列（setQueue/append/insert/remove/move）、音量、倍速、循环、随机播放，以及全部观测流，仅在 Windows 上启用；**macOS/Linux/Android/iOS 保持 `just_audio` 完全不变**——macOS 播放能力刚在 v5.37.0/.1/.2 三个版本里从彻底不可用修到正常，本次不冒这个险。
+- **顺带的第二重目的比第一重更重要：一个只有一份实现的接口，等于从未被验证过** — 接上第二个引擎恰恰是逼出「`PlaybackEngine` 到底有没有偷偷长成 `just_audio` 的形状」的唯一办法。逐一核实每个方法在两个引擎下的真实语义后，发现接口确实在多处隐藏了未言明的 `just_audio`假设，本次以代码注释 + 修正的方式逐一钉死，而不是绕开：（1）`setVolume(double volume)` 从未写明取值范围是 0.0–1.0——这恰好是 `just_audio` 自己的原生范围，`media_kit`/libmpv 原生范围是 0–100，接口文档现已在 `playback_engine.dart` 补一句说明，`MediaKitEngine.setVolume` 按 ×100 换算，否则 Windows 上每首歌都会被放到几乎静音；（2）`durationStream`/`duration` 的 `Duration?`——`just_audio` 用 `null` 表示"时长未知"，`media_kit` 的 `PlayerState.duration` 默认值是 `Duration.zero` 且从不为 `null`，直接透传会在每次切歌时短暂闪一下"0:00"总时长直到真实元数据到达；`MediaKitEngine` 把 `Duration.zero` 折算回 `null` 以还原接口本来想表达的"未知"语义；（3）`seekToIndex`——`media_kit` 的 `Player.jump(index)` 内部会先调用 `play()` 才移动播放位置，而 `just_audio` 的 `seek(index:)` 只改位置、不动播放/暂停状态；接口自己的文档对这一点完全没有约束（只因为写文档时只有一个引擎），不处理的话，暂停状态下点"下一首"会在 Windows 上意外自动恢复播放。`MediaKitEngine.seekToIndex` 记录跳转前的播放状态，跳转后如原本是暂停就补一次 `pause()`，让两个引擎在这条隐含契约上真正一致。
+- **确认的既有 gap（本次未修，如实报告）：`crossfadeSeconds` 是裸 setter，没有能力检查通道，且设置页的滑块从未按能力位门控** — `CrossfadeNotifier` 在每次启动和每次设置变更时都无条件调用 `engine.crossfadeSeconds = x`，不像均衡器路径那样有"空对象"可以优雅拒绝；`settings_screen.dart` 里"切歌淡入淡出"滑块本身也完全没有读 `playbackCapabilitiesProvider`，用户在 Windows 上依然能拖动这个滑块、看着数字变化，但底层什么也不会发生。这个 gap 在只有一个引擎、且那个引擎恰好支持 crossfade 的四个版本里完全没有暴露的机会；现在报告出来，本次不顺手改（不在这次的范围内，需要单独评估是加能力位门控还是把滑块也纳入 `capabilities` 驱动的隐藏逻辑），留作后续。
+- **接口空缺，不是引擎限制：`outputDeviceSelection`/`exclusiveOutput`/`outputFormatControl` 三个能力位在 `media_kit` 上照样诚实报 `false`** — libmpv 三者都真的支持（`audio-device`/`audio-device-list` 枚举与选择、`--audio-exclusive` 独占模式、`--audio-format`/`--audio-samplerate` 采样格式控制），但 `PlaybackEngine` 接口本身从未声明过枚举/选择设备的方法——三个能力位从 v5.27.0 起就只是声明，没有配套 API。`shell_scaffold.dart:946` 的侧栏"输出设备"入口在 `outputDeviceSelection` 为真时立即渲染；这次如果提前把它翻真，得到的会是一个点了没有任何反应的侧栏入口——这正是本仓库最近几个版本一直在到处修的"死入口"形状。三个能力位继续诚实报 `false`，代码注释里写清楚这是接口没跟上、不是 libmpv 做不到，设备选择留作独立的后续 phase。
+- **不做：`crossfade`/均衡器在 `media_kit` 引擎上诚实报不支持，不新增引擎切换开关** — `capabilities.crossfade`/`capabilities.equalizer` 均报 `false`，`equalizer` getter 返回 `null`。两者都是最有可能在自研 Rust/Symphonia 引擎落地时被整体推倒重做的部分（`JustAudioEngine` 的 crossfade 本身也只是手搓的音量渐变，并非 `just_audio` 原生能力），`PlaybackCapabilities` 存在的意义正是让引擎能诚实拒绝一个功能而不是硬凑。未添加任何"选择播放引擎"的用户设置——引擎完全由平台决定，不是用户可选项。
+- **依赖：只加 Windows 音频包，不拉视频包，不影响其余平台** — `pubspec.yaml` 新增 `media_kit: ^1.2.6` 与 `media_kit_libs_windows_audio: ^1.0.9`（`media_kit` 按媒体类型/平台拆分原生库分发包，这里特意选纯音频的 Windows 专属包，没有引入 `media_kit_libs_windows_video` 或任何 macOS/Linux/Android/iOS 的 libs 包）。`flutter pub get` 自动同步了 `windows/flutter/generated_plugin_registrant.cc`/`generated_plugins.cmake`（Flutter 工具生成文件，非手改），`main()` 里仅在选中 `media_kit` 引擎时才触发 `MediaKit.ensureInitialized()`（封装在 `MediaKitEngine.create()` 内部，与 `JustAudioEngine.create()` 自行处理 Android-only 均衡器同一个模式）。
+- **引擎选择被抽成纯函数，可独立测试** — 新增 `lib/src/playback/engine_selection.dart` 的 `choosePlaybackEngineKind(String operatingSystem)`：不在 `main.dart` 里直接读 `Platform.isWindows`，而是把平台名字作为参数传入、返回 `EngineKind` 枚举，`main()` 是唯一读取真实平台、也是唯一调用这个函数的地方。这样"Windows 选 media_kit，其余平台选 just_audio"这条规则本身可以在不启动任何真实音频栈的前提下被断言，而不必伪造 `dart:io`。
+- **守卫测试** — `test/playback_boundary_test.dart` 的 `_engineImplementations` 加入 `media_kit_engine.dart`，并新增一条对称测试：断言除 `media_kit_engine.dart` 外没有任何 `lib/` 文件 `import 'package:media_kit/'`（原有的 just_audio 版本这条规则自己的注释就写着"加引擎要在这里加文件，而不是放松规则"）。新增 `test/engine_selection_test.dart`（3 条）覆盖 Windows→media_kit、其余四个平台→just_audio、以及未知平台字符串不抛异常而是落到 just_audio。新增 `test/media_kit_engine_capabilities_test.dart`（1 条）——`MediaKitEngine` 的构造会真的创建一个 `Player()`、进而触发 libmpv 加载，这在没有打包 macOS 原生库的本机上会失败，因此 `capabilities` 被拆成模块顶层常量 `mediaKitCapabilities`，测试直接断言这个常量而不实例化引擎，照样是对真实生产代码的断言，不是抄一份影子常量做的空对空测试。顺手删除 `JustAudioEngine.rawPlayer`——`grep` 确认 `lib/`、`test/` 内零调用，doc comment 声称的"audio_service 桥接需要它"经核实为假（`InoriAudioHandler` 早已只通过 `PlaybackEngine` 通信）。
+- **未做 / 已知限制** — **Windows 播放本身无法在本机验证**：本机是 macOS，只有 Command Line Tools 没有完整 Xcode，也没有 Windows 环境，`media_kit` 的真实播放行为、libmpv 原生库加载、`jump()`/`setShuffle()` 等接口在真实 mpv 上的确切行为均依据官方文档与 `media_kit` 1.2.6 包自身源码（本机 `.pub-cache` 内可读）核实，但没有任何一次真实跑通过 Windows 构建；发布后的验证只能交给用户在 CI 构建的产物上做。均衡器（fact 6 之外发现的）设置页滑块 crossfade 能力位门控缺口留待后续单独评估。输出设备选择——枚举/选择 API 本身、以及配套的选择器 UI——是独立的后续 phase。iOS ATS 拦播放（v5.36.0 记录）与专辑封面入库缺口（v5.37.1 记录，划归 v6）均仍未处理。
+- **验证** — `flutter analyze --no-fatal-infos`：0 error / 0 warning，仅 `player_state_reporter.dart:21` 一条既有 info（未触碰该文件）。`flutter test`：**431 passed**（v5.37.2 基线 426 + 新增 5：`engine_selection_test.dart` 3 条 + `media_kit_engine_capabilities_test.dart` 1 条 + `playback_boundary_test.dart` 新增对称用例 1 条）。`dart format` 只对本次改动的 8 个手写 Dart 文件执行（不含 `pubspec.lock`/Flutter 工具自动生成的 Windows 文件）。纯客户端改动，无服务端 schema 变更，不同步 OpenAPI `info.version`。
 
 ### v5.37.2 - 2026-08-13
 

@@ -43,6 +43,11 @@ abstract class PlaybackEngine {
 
   // ---- parameters ----
 
+  /// [volume] is 0.0–1.0, not a percentage and not 0–100 — `just_audio`'s
+  /// own native range, which is why no engine before now had to write this
+  /// down. An engine whose native volume API uses a different scale (`libmpv`
+  /// via media_kit is 0–100) converts at its own call site; see
+  /// `MediaKitEngine.setVolume`.
   Future<void> setVolume(double volume);
   Future<void> setSpeed(double speed);
   Future<void> setRepeatMode(EngineRepeatMode mode);

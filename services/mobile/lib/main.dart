@@ -11,7 +11,10 @@ import 'package:inori_music/src/player/audio_handler.dart';
 import 'package:inori_music/src/player/player_notifier.dart';
 import 'package:inori_music/src/shared/desktop_integration.dart';
 import 'package:inori_music/src/shared/locale_provider.dart';
+import 'package:inori_music/src/playback/engine_selection.dart';
 import 'package:inori_music/src/playback/just_audio_engine.dart';
+import 'package:inori_music/src/playback/media_kit_engine.dart';
+import 'package:inori_music/src/playback/playback_engine.dart';
 import 'package:inori_music/src/playback/playback_engine_provider.dart';
 import 'package:inori_music/src/shared/router.dart';
 import 'package:inori_music/src/shared/theme/skin_definition.dart';
@@ -41,7 +44,17 @@ void main() async {
   // global — a global is what previously let four unrelated notifiers reach
   // into main.dart for the audio player, which made every one of them
   // untestable without booting the real audio stack.
-  final engine = JustAudioEngine.create();
+  //
+  // choosePlaybackEngineKind is the only place that reads the platform for
+  // this decision; everything below it is a pure function of that result,
+  // so the choice itself is unit-tested without booting either audio stack
+  // (see engine_selection_test.dart).
+  final PlaybackEngine engine = switch (choosePlaybackEngineKind(
+    Platform.operatingSystem,
+  )) {
+    EngineKind.mediaKit => MediaKitEngine.create(),
+    EngineKind.justAudio => JustAudioEngine.create(),
+  };
   final mediaSession = await InoriAudioHandler.create(engine);
   runApp(
     ProviderScope(

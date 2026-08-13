@@ -59,11 +59,6 @@ class JustAudioEngine implements PlaybackEngine {
 
   ConcatenatingAudioSource? _queueSource;
 
-  /// The player instance, for the audio_service bridge and the Android
-  /// equalizer only. Not for app logic — everything else goes through
-  /// [PlaybackEngine].
-  AudioPlayer get rawPlayer => _player;
-
   @override
   EngineEqualizer? get equalizer {
     final eq = _equalizer;

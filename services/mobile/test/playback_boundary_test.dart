@@ -11,7 +11,10 @@ import 'package:flutter_test/flutter_test.dart';
 
 /// Files allowed to know which audio package is in use. Adding an engine
 /// means adding its file here, not loosening the rule.
-const _engineImplementations = {'lib/src/playback/just_audio_engine.dart'};
+const _engineImplementations = {
+  'lib/src/playback/just_audio_engine.dart',
+  'lib/src/playback/media_kit_engine.dart',
+};
 
 Iterable<File> _dartFilesUnder(String path) => Directory(path)
     .listSync(recursive: true)
@@ -36,6 +39,32 @@ void main() {
       isEmpty,
       reason:
           'These reach past PlaybackEngine to just_audio directly. Add the '
+          'capability to PlaybackEngine instead — otherwise the next engine '
+          'has to satisfy an interface nobody is actually using.',
+    );
+  });
+
+  // Symmetric with the just_audio test above: media_kit is the second
+  // engine implementation (v5.38.0, Windows only), and the whole point of
+  // the just_audio rule is worthless if the next engine's own package gets
+  // to leak everywhere unchecked.
+  test('only the engine implementation imports media_kit', () {
+    final offenders = <String>[];
+    for (final file in _dartFilesUnder('lib')) {
+      final relative = file.path.replaceFirst(RegExp(r'^.*/mobile/'), '');
+      if (relative == 'lib/src/playback/media_kit_engine.dart') continue;
+      // The generated API client is vendored and irrelevant here.
+      if (relative.startsWith('lib/src/api/generated/')) continue;
+      if (file.readAsStringSync().contains('package:media_kit/')) {
+        offenders.add(relative);
+      }
+    }
+
+    expect(
+      offenders,
+      isEmpty,
+      reason:
+          'These reach past PlaybackEngine to media_kit directly. Add the '
           'capability to PlaybackEngine instead — otherwise the next engine '
           'has to satisfy an interface nobody is actually using.',
     );
