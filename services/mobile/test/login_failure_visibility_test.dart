@@ -1,3 +1,4 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -73,11 +74,42 @@ class _KeychainRejectingStorage extends FlutterSecureStorage {
   }) async => null;
 }
 
+/// Answers every request with a canned successful login response, so these
+/// tests never touch the network.
+///
+/// v5.37.2: `base_url` moved out of the keychain into SharedPreferences (see
+/// [AuthCache] in api_client.dart), so writing it during [AuthNotifier.login]
+/// can no longer be the thing that fails in these tests — a plain prefs
+/// write never throws the way a rejected keychain write does. The *token*
+/// write is still real keychain access and is still inside login()'s
+/// try/catch, so it's still exactly what should fail here; but reaching it
+/// now requires the login POST to actually resolve, hence this adapter.
+class _FakeLoginAdapter implements HttpClientAdapter {
+  @override
+  Future<ResponseBody> fetch(
+    RequestOptions options,
+    Stream<Uint8List>? requestStream,
+    Future<void>? cancelFuture,
+  ) async {
+    return ResponseBody.fromString(
+      '{"token":"tok-123","userId":"user-1","expiresAt":"2099-01-01T00:00:00Z"}',
+      200,
+      headers: {
+        Headers.contentTypeHeader: [Headers.jsonContentType],
+      },
+    );
+  }
+
+  @override
+  void close({bool force = false}) {}
+}
+
 ProviderContainer _containerWith(FlutterSecureStorage storage) {
   final container = ProviderContainer(
     overrides: [secureStorageProvider.overrideWithValue(storage)],
   );
   addTearDown(container.dispose);
+  container.read(dioProvider).httpClientAdapter = _FakeLoginAdapter();
   return container;
 }
 

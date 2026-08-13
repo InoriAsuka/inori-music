@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`5.37.1`
+`5.37.2`
 
 ## Product Goal
 
@@ -39,6 +39,16 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Media object administration must support metadata-only bulk lifecycle updates scoped by exactly one safe selection filter.
 - Bulk lifecycle updates must support dry-run previews that do not persist metadata changes.
 - Committed lifecycle updates must record latest transition metadata for audit preparation.
+
+### v5.37.2 - 2026-08-13
+
+- **fix: 登录后 macOS 钥匙串授权弹窗反复出现——拦截器每个请求读两次钥匙串，弹窗数量直接等于请求数** — macOS 用户反馈：登录之后钥匙串授权弹窗接连不断，刚点了「允许」、输完密码，弹窗马上又跳出来，看起来像死循环。定位到 `api_client.dart` 的 dio 拦截器 `onRequest`：**每一次 HTTP 请求**都会执行 `storage.read(key: auth_token)` 与 `storage.read(key: base_url)` 两次钥匙串读取。v5.37.1 已把 macOS 切到旧版文件式钥匙串（`useDataProtectionKeyChain: false`），而旧版钥匙串的行为是「调用方不在条目的 ACL 里就弹窗授权」；本应用是 ad-hoc 签名、身份不稳定，读取可能被反复判定为「未受信任的调用方」。打开一个艺术家详情页会并发发出艺术家 + 专辑 + 三十多首曲目 + 逐专辑封面查询等几十个请求，弹窗数量因此直接与请求数成正比——这就是「反复弹出」的真实成因，不是逻辑死循环。
+- **顺带发现：三个非密钥值也被塞进了钥匙串** — `base_url`、`user_id`、`username` 都不是凭证，却和 `auth_token` 一起存在 `FlutterSecureStorage` 里，每一个都是多一次 ACL 检查的代价。`auth_notifier.dart` 里 `_kLastModeGuestKey` 常量上原本就写着约定：*"non-secret UI preference, deliberately kept out of FlutterSecureStorage (that's reserved for real credentials)"*——这三个键正是这条约定想要防住的反例，却一直没人对照检查。
+- **修复一：`AuthCache` 进程内读穿透缓存（`api_client.dart` 新增 `authCacheProvider`）** — `token`/`baseUrl` 各自缓存成一个 `Future`：首次调用真正读取存储，之后所有调用（包括与首次读取赛跑的并发调用）都复用同一个 `Future`——`??=` 赋值在函数体内同步执行，早于它存下的那次读取的第一个 `await`，因此天然合并同一时刻并发发出的首访请求（例如艺术家页不等待地并发拉取艺术家/专辑/曲目）。`login()`/`logout()`/401 强制登出三条路径都调用 `setToken`/`setBaseUrl` 立即覆盖缓存，避免登出后仍拿旧 token 发请求、或换服务器后仍悄悄连着旧地址。dio 拦截器与 `AuthNotifier` 读的是同一个 provider 实例的 `AuthCache`，口径统一，不会出现两边各自为政的不一致缓存。
+- **修复二：`base_url`/`user_id`/`username` 迁到 `SharedPreferences`，钥匙串只留 `auth_token`** — 按既有约定归位。**迁移是硬要求，不能跳过**：v5.37.0/v5.37.1 装机的用户这三个值已经写在钥匙串里，直接改读取位置会让已配置的服务器地址「凭空消失」、表现得像被登出。做法：`SharedPreferences` 没有值时读一次钥匙串、写回 `SharedPreferences` 后删除钥匙串副本，此后再也不碰；这次一次性读取允许弹一次授权窗，属于自限成本（发生一次，此后永久消失）。三个键各自独立按需迁移，没有额外引入「是否已完成迁移」的标记位——一个从未在钥匙串写过这三个键的全新安装，Keychain Services 对不存在的条目直接返回 `errSecItemNotFound`、不需要评估 ACL，不会触发授权 UI，因此没有必要为这种情况额外记账。
+- **测试适配（非本次目标，但改了 `base_url` 存储位置就绕不开）** — `login_failure_visibility_test.dart` 里三条「钥匙串写入失败要正确冒泡到界面」的用例，原本靠 `login()` 先把 `base_url` 写进（会被拒绝的）钥匙串来制造失败，因此从来不会真的发出登录请求。`base_url` 改存 `SharedPreferences` 后这条路径不再抛错，登录请求会真的尝试联网。补了 `_FakeLoginAdapter`（`HttpClientAdapter` 桩实现，返回固定的登录成功 JSON，不联网），让流程能走到眼下唯一还会失败的钥匙串写入——`auth_token`——三条用例改为在这一步验证同样的错误文案是否正确冒泡到界面。行为覆盖点不变，只是触发失败的写入从 `base_url` 换成了 `auth_token`。
+- **守卫测试及证伪** — 新增 `services/mobile/test/keychain_read_scaling_test.dart`（2 条）：用继承 `FlutterSecureStorage` 的计数桩（覆写签名抄自 `_KeychainRejectingStorage`）包住真实的 `dioProvider` 拦截器，配合桩 `HttpClientAdapter`（不联网）分别发出 12 个顺序请求与 8 个并发请求，断言钥匙串 `read` 调用次数 `<= 1`。证伪：把拦截器临时改回逐请求直接调用 `storage.read` 的修复前写法后重跑，**顺序请求场景实测 24 次读取（12 请求 × 2 次/请求，精确吻合），并发场景实测 16 次（8 请求 × 2 次/请求，同样精确吻合)**——两个数字都与请求数严格成比例，证明修复前确实是「读取数 = 请求数 × 2」的线性放大；随后已恢复修复代码并重新跑绿。
+- **验证** — `flutter analyze --no-fatal-infos`：0 error / 0 warning，仅 `player_state_reporter.dart:21` 一条既有 info（未触碰该文件）。`flutter test`：**426 passed**（v5.37.1 基线 424 + 新增 2）。`dart format` 只对本次改动的 4 个文件（`api_client.dart`、`auth_notifier.dart`、`login_failure_visibility_test.dart`、`keychain_read_scaling_test.dart`）执行。纯客户端改动，无服务端 schema 变更，不同步 OpenAPI `info.version`。
 
 ### v5.37.1 - 2026-08-13
 

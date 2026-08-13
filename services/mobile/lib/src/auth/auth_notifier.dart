@@ -17,6 +17,12 @@ const _kBaseUrlKey = 'base_url';
 /// UI preference, deliberately kept out of [FlutterSecureStorage] (that's
 /// reserved for real credentials). Lets a guest relaunch straight into guest
 /// mode instead of flashing the login screen again.
+///
+/// v5.37.2: `_kUserIdKey`/`_kUsernameKey`/`_kBaseUrlKey` above used to live in
+/// [FlutterSecureStorage] too, violating exactly this convention — none of
+/// them is a credential, and every one was another keychain ACL prompt on
+/// macOS. They now follow this key's example; see [AuthCache] in
+/// api_client.dart.
 const _kLastModeGuestKey = 'auth.lastModeGuest';
 
 // ---------------------------------------------------------------------------
@@ -71,6 +77,7 @@ class AuthState {
 class AuthNotifier extends AsyncNotifier<AuthState> {
   FlutterSecureStorage get _storage => ref.read(secureStorageProvider);
   Dio get _dio => ref.read(dioProvider);
+  AuthCache get _cache => ref.read(authCacheProvider);
 
   @override
   Future<AuthState> build() async {
@@ -83,9 +90,15 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     });
     ref.onDispose(logoutSub.cancel);
 
-    final token = await _storage.read(key: _kTokenKey);
-    final userId = await _storage.read(key: _kUserIdKey);
-    final username = await _storage.read(key: _kUsernameKey);
+    final prefs = await SharedPreferences.getInstance();
+    // The only remaining keychain read on this path — AuthCache serves every
+    // later call (this launch's, and dioProvider's interceptor) from memory.
+    final token = await _cache.token(_storage);
+    // user_id/username are plain SharedPreferences as of v5.37.2; on a
+    // device still holding either in the keychain from v5.37.0/v5.37.1, this
+    // migrates it once and deletes the keychain copy.
+    final userId = await _migrateToPrefs(prefs, _kUserIdKey);
+    final username = await _migrateToPrefs(prefs, _kUsernameKey);
 
     if (token != null && userId != null) {
       // Validate token by fetching /me
@@ -106,11 +119,41 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     // No valid session — if the last thing this install did was explicitly
     // continue as a guest, skip straight back into guest mode instead of
     // flashing the login screen on every cold start.
-    final prefs = await SharedPreferences.getInstance();
     if (prefs.getBool(_kLastModeGuestKey) ?? false) {
       return const AuthState(status: AuthStatus.guest);
     }
     return const AuthState(status: AuthStatus.unauthenticated);
+  }
+
+  /// One-time migration for a value v5.37.0/v5.37.1 mistakenly stored in the
+  /// keychain: non-secret UI state that never needed keychain protection,
+  /// and every read of it was another macOS authorisation prompt (see
+  /// [AuthCache] in api_client.dart). If [prefs] already has the value —
+  /// true for every launch except the first one after upgrading from either
+  /// of those two versions — this is a synchronous lookup and never touches
+  /// the keychain at all. On a device with nothing to migrate (a fresh
+  /// install, or one that never had this key set), the keychain lookup below
+  /// still runs once per launch, but resolves to "item not found" — Keychain
+  /// Services reports that without any authorisation UI, since there is no
+  /// existing ACL to evaluate; only access to an item that exists prompts.
+  Future<String?> _migrateToPrefs(SharedPreferences prefs, String key) async {
+    final existing = prefs.getString(key);
+    if (existing != null) return existing;
+    final legacy = await _storage.read(key: key);
+    if (legacy != null) {
+      await prefs.setString(key, legacy);
+      await _storage.delete(key: key);
+    }
+    return legacy;
+  }
+
+  /// Read-through helper mirroring [AuthCache.baseUrl] with the
+  /// [SharedPreferences] instance fetched for the caller — used by every
+  /// network call this notifier makes outside of [login] (which already has
+  /// its own `prefs` in hand).
+  Future<String> _resolvedBaseUrl() async {
+    final prefs = await SharedPreferences.getInstance();
+    return _cache.baseUrl(prefs, _storage);
   }
 
   /// Enter guest mode: purely local, no network call. Persists the choice so
@@ -173,18 +216,18 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     state = const AsyncLoading();
 
     try {
-      // Inside the try: this is a keychain write, and keychain writes fail for
-      // reasons that have nothing to do with the credentials (see
-      // secureStorageProvider). It used to sit above the try, so on macOS the
-      // very first statement after AsyncLoading threw straight past every
-      // handler.
+      final prefs = await SharedPreferences.getInstance();
+      // A caller-supplied base URL is a plain SharedPreferences write as of
+      // v5.37.2 — no keychain, no entitlement/authorisation failure mode.
+      // `_cache.setBaseUrl` makes it visible to this very call (below) and to
+      // dioProvider's interceptor immediately, without a re-read.
       if (baseUrl != null && baseUrl.isNotEmpty) {
-        await _storage.write(key: _kBaseUrlKey, value: baseUrl);
+        await prefs.setString(_kBaseUrlKey, baseUrl);
+        _cache.setBaseUrl(baseUrl);
       }
 
       final dio = _dio;
-      final savedBase =
-          await _storage.read(key: _kBaseUrlKey) ?? 'http://localhost:8080';
+      final savedBase = await _cache.baseUrl(prefs, _storage);
       final response = await dio.post(
         '$savedBase/api/v1/auth/login',
         data: {'username': username, 'password': password},
@@ -195,11 +238,17 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
       final token = data['token'] as String;
       final userId = data['userId'] as String;
 
+      // The one keychain write left in this method — and it stays inside
+      // this try/catch on purpose. Keychain writes fail for reasons that
+      // have nothing to do with the credentials (see secureStorageProvider);
+      // this used to sit above the try, so on macOS the very first statement
+      // after AsyncLoading threw straight past every handler.
       await _storage.write(key: _kTokenKey, value: token);
-      await _storage.write(key: _kUserIdKey, value: userId);
-      await _storage.write(key: _kUsernameKey, value: username);
+      _cache.setToken(token);
+      await prefs.setString(_kUserIdKey, userId);
+      await prefs.setString(_kUsernameKey, username);
       // A real login always wins over a previously-remembered guest session.
-      await (await SharedPreferences.getInstance()).remove(_kLastModeGuestKey);
+      await prefs.remove(_kLastModeGuestKey);
 
       state = AsyncData(
         AuthState(
@@ -216,10 +265,11 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
       );
     } catch (e) {
       // Catch-all on purpose. Transport failures are only one of the ways this
-      // method can fail; it also writes to the keychain three times, touches
-      // SharedPreferences, and casts the response body. None of those throw a
-      // DioException, and any of them escaping leaves the router parked on the
-      // splash screen forever.
+      // method can fail; it also writes to the keychain once (the token),
+      // touches SharedPreferences several times (base URL, user id,
+      // username, guest flag), and casts the response body. None of those
+      // throw a DioException, and any of them escaping leaves the router
+      // parked on the splash screen forever.
       state = AsyncData(
         AuthState(
           status: AuthStatus.unauthenticated,
@@ -230,11 +280,10 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
   }
 
   Future<void> logout() async {
-    final token = await _storage.read(key: _kTokenKey);
+    final token = await _cache.token(_storage);
     if (token != null) {
       try {
-        final savedBase =
-            await _storage.read(key: _kBaseUrlKey) ?? 'http://localhost:8080';
+        final savedBase = await _resolvedBaseUrl();
         await _dio.post(
           '$savedBase/api/v1/auth/logout',
           options: Options(headers: {'Authorization': 'Bearer $token'}),
@@ -249,9 +298,8 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
   }
 
   Future<void> changePassword(String current, String newPwd) async {
-    final savedBase =
-        await _storage.read(key: _kBaseUrlKey) ?? 'http://localhost:8080';
-    final token = await _storage.read(key: _kTokenKey);
+    final savedBase = await _resolvedBaseUrl();
+    final token = await _cache.token(_storage);
     await _dio.post(
       '$savedBase/api/v1/me/change-password',
       data: {'currentPassword': current, 'newPassword': newPwd},
@@ -261,9 +309,8 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
 
   /// Revoke all active sessions except the current one.
   Future<void> revokeAllOtherSessions() async {
-    final savedBase =
-        await _storage.read(key: _kBaseUrlKey) ?? 'http://localhost:8080';
-    final token = await _storage.read(key: _kTokenKey);
+    final savedBase = await _resolvedBaseUrl();
+    final token = await _cache.token(_storage);
     await _dio.delete(
       '$savedBase/api/v1/me/sessions/revoke-all',
       options: Options(headers: {'Authorization': 'Bearer $token'}),
@@ -271,8 +318,7 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
   }
 
   Future<Map<String, dynamic>> _fetchMe(String token) async {
-    final savedBase =
-        await _storage.read(key: _kBaseUrlKey) ?? 'http://localhost:8080';
+    final savedBase = await _resolvedBaseUrl();
     final response = await _dio.get(
       '$savedBase/api/v1/me',
       options: Options(headers: {'Authorization': 'Bearer $token'}),
@@ -280,10 +326,15 @@ class AuthNotifier extends AsyncNotifier<AuthState> {
     return response.data as Map<String, dynamic>;
   }
 
+  /// Clears the token (cache + keychain) and the two migrated-out-of-keychain
+  /// identity fields. Does not touch `base_url` — signing out of one account
+  /// shouldn't forget which server the app was pointed at.
   Future<void> _clearStorage() async {
     await _storage.delete(key: _kTokenKey);
-    await _storage.delete(key: _kUserIdKey);
-    await _storage.delete(key: _kUsernameKey);
+    _cache.setToken(null);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(_kUserIdKey);
+    await prefs.remove(_kUsernameKey);
   }
 
   String _extractError(DioException e) {
