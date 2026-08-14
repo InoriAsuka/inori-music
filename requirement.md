@@ -2,7 +2,7 @@
 
 ## Current Version
 
-`5.39.0`
+`5.39.1`
 
 ## Product Goal
 
@@ -39,6 +39,14 @@ Build a cross-platform music playback system for Web, Android, iOS, and desktop 
 - Media object administration must support metadata-only bulk lifecycle updates scoped by exactly one safe selection filter.
 - Bulk lifecycle updates must support dry-run previews that do not persist metadata changes.
 - Committed lifecycle updates must record latest transition metadata for audit preparation.
+
+### v5.39.1 - 2026-08-14
+
+- **fix: `TestUpdateAlbumChangesTitle` 间歇性失败——满载并行跑全量测试套件时约 1/5 概率报红** — `internal/catalog/service_test.go:1078` 用 `catalog.NewService(newMemRepo())`（`now` 默认真实 `time.Now`）背靠背调用 `CreateArtist`→`CreateAlbum`→`UpdateAlbum`，再断言 `updated.UpdatedAt.After(album.UpdatedAt)`。两次调用中间没有任何耗时操作，一旦两次 `time.Now()` 落进同一个时钟粒度——空跑时罕见，但机器满载并行跑全套测试时命中率显著升高——`After()` 为 false，测试失败。这不是新回归：该测试写法自 v1.27.0（2026-06-20）起就是这样，只是此前一直没有专项排查。v5.39.0 验证时已顺带确认过这条 flaky 与当次改动无关，本次是它的专项修复。
+- **修复：接到已有的时钟注入座子上，而不是放宽断言** — `catalog.Service` 早已有可注入时钟（`service.go:35` `now func() time.Time`，与 `storage.Service` 同一套模式；`catalog_test` 是外部测试包，通过公开的 `WithClock` 注入）。本文件的 `newSteppingService` 帮助函数（`service_test.go:1006`，构造每次调用前进 1 秒的假时钟）正是为这个问题存在的，`TestUpdateArtistChangesNameAndSortName`、`TestUpdateTrackChangesTitle`、`TestPlaylistUpdateMetadata` 三个姐妹测试都已经在用它做同构的 `.After(` 断言——`TestUpdateAlbumChangesTitle` 只是当初被漏掉了。修复是一行改动：`svc := catalog.NewService(newMemRepo())` 换成 `svc := newSteppingService(newMemRepo())`。断言原样保留，验证的仍是"更新真的推进了时间戳"这个真实意图，没有放宽成一个时间戳从不变化也能通过的弱条件，也没有加 `time.Sleep`。
+- **姐妹测试排查** — 搜索本文件全部 `.After(` 断言，共 5 处：本次修复的这一处之外，另外 4 处（含 1 处手动 `svc.WithClock(...)` 按小时错开、构造上天然确定性的用例）均已使用正确的时钟模式，不需要改动。
+- **修复前实测复现** — 用并发施压（每轮 4 份并发的 `go test -count=1 ./...` 制造与"满载并行跑全套件"同构的调度竞争）连续跑了 92 次完整套件，`TestUpdateAlbumChangesTitle` 失败 28 次（约 30%），失败信息全部精确指向同一行 `UpdatedAt must advance`，全程零其他测试受影响——证实且量化了这条 flaky。
+- **修复后验证** — `go test ./internal/catalog/ -count=20`：20/20 全绿；同一套并发施压手法连续跑 52 次完整套件：52/52 全绿；另加 3 次独立的 `go test ./...` 与 1 次 `go test -race ./...`，均全绿。`gofmt -l .` 无输出，`go vet ./...` 通过，`go build ./...` 通过，`go test ./...` **822 passed**，0 failed（与 v5.39.0 记录的基线数字一致——本次只改测试的构造方式，不增删任何测试用例）。
 
 ### v5.39.0 - 2026-08-14
 

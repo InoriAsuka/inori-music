@@ -1077,7 +1077,7 @@ func TestUpdateArtistNotFound(t *testing.T) {
 
 func TestUpdateAlbumChangesTitle(t *testing.T) {
 	ctx := context.Background()
-	svc := catalog.NewService(newMemRepo())
+	svc := newSteppingService(newMemRepo())
 	artist, _ := svc.CreateArtist(ctx, "Artist", "")
 	album, _ := svc.CreateAlbum(ctx, "Old Title", "", artist.ID, 2000)
 
