@@ -4,17 +4,20 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 	"unicode/utf8"
 
+	"inori-music/services/api/internal/artwork"
 	"inori-music/services/api/internal/catalog"
 	"inori-music/services/api/internal/storage"
 )
@@ -711,6 +714,30 @@ type albumArtworkResponse struct {
 	ExpiresIn int    `json:"expiresIn"`
 }
 
+// albumArtworkSignaturePayload namespaces the HMAC payload used for album
+// artwork signed URLs (see internal/streamsign) so a signature minted here
+// can never be replayed against the track-stream endpoint, or vice versa,
+// even if a track ID and an album ID happened to be identical strings.
+func albumArtworkSignaturePayload(albumID string) string {
+	return "album:" + albumID
+}
+
+// getAlbumArtwork resolves an artwork URL for an album, in two possible ways:
+//
+//  1. Presigned URL — only when the album has an explicit ArtworkMediaObjectID
+//     AND its backend supports presigned URLs (S3). This is the original,
+//     pre-v5.39.0 behaviour, preserved unchanged for that combination.
+//  2. Track-derived fallback — everything else, including local/NFS/SMB
+//     backends (which can never presign) and the common case where
+//     ArtworkMediaObjectID was never populated at all: the metadata-only
+//     ImportTrack workflow never opens the audio file, so it is empty for
+//     nearly every real track. Cover art is instead resolved on demand from
+//     one of the album's own tracks (see resolveAlbumArtworkCached) and
+//     served through the new artwork/file endpoint behind a signed URL —
+//     the same shape getTrackPlayback already uses for streamUrl.
+//
+// Only when neither path produces anything does this return 404 no_artwork.
+// No placeholder is ever synthesised server-side.
 func (handler *Handler) getAlbumArtwork(w http.ResponseWriter, r *http.Request) {
 	if !handler.requireCatalogService(w) {
 		return
@@ -720,30 +747,225 @@ func (handler *Handler) getAlbumArtwork(w http.ResponseWriter, r *http.Request) 
 		writeError(w, err)
 		return
 	}
-	if album.ArtworkMediaObjectID == "" {
-		writeAPIError(w, http.StatusNotFound, "no_artwork", "no artwork")
-		return
-	}
 	if handler.storage == nil {
 		writeAPIError(w, http.StatusServiceUnavailable, "storage_unavailable", "storage service not configured")
 		return
 	}
 	const artworkTTL = 900 * time.Second
-	mo, err := handler.mediaObjects.GetMediaObject(r.Context(), album.ArtworkMediaObjectID)
-	if err != nil {
-		// Propagate the error through the standard error writer so that a
-		// missing media object returns 404 via the domain sentinel while a DB
-		// or infrastructure failure returns the appropriate 5xx status.
-		writeError(w, err)
+	if url, ok := handler.presignAlbumArtworkURL(r.Context(), album, artworkTTL); ok {
+		writeJSON(w, http.StatusOK, albumArtworkResponse{URL: url, ExpiresIn: int(artworkTTL / time.Second)})
 		return
 	}
-	url, err := handler.storage.GeneratePresignedURL(r.Context(), mo.BackendID, mo.ObjectKey, artworkTTL)
-	if err != nil {
-		writeAPIError(w, http.StatusServiceUnavailable, "presign_failed", "failed to generate artwork URL")
+	if _, _, found := handler.resolveAlbumArtworkCached(r.Context(), album.ID); !found {
+		writeAPIError(w, http.StatusNotFound, "no_artwork", "no artwork")
 		return
+	}
+	base := "/api/v1/catalog/albums/" + album.ID + "/artwork/file"
+	url := base
+	if handler.streamSigner != nil {
+		url = base + "?" + handler.streamSigner.Sign(albumArtworkSignaturePayload(album.ID))
 	}
 	// Derive ExpiresIn from the TTL constant so they never drift independently.
 	writeJSON(w, http.StatusOK, albumArtworkResponse{URL: url, ExpiresIn: int(artworkTTL / time.Second)})
+}
+
+// presignAlbumArtworkURL attempts the S3-style presigned-URL path. Returns
+// ok=false for any reason it can't be used — no linked artwork object, the
+// media object lookup fails, the backend can't be resolved, the backend
+// doesn't advertise presigned URL support, or the presign call itself
+// errors — so the caller can fall through to the track-derived resolution
+// uniformly instead of threading multiple failure reasons through 5xx codes.
+func (handler *Handler) presignAlbumArtworkURL(ctx context.Context, album catalog.Album, ttl time.Duration) (string, bool) {
+	if album.ArtworkMediaObjectID == "" || handler.mediaObjects == nil {
+		return "", false
+	}
+	mo, err := handler.mediaObjects.GetMediaObject(ctx, album.ArtworkMediaObjectID)
+	if err != nil {
+		return "", false
+	}
+	backend, err := handler.storage.GetBackend(ctx, mo.BackendID)
+	if err != nil || !backend.Capabilities.PresignedURLs {
+		return "", false
+	}
+	url, err := handler.storage.GeneratePresignedURL(ctx, mo.BackendID, mo.ObjectKey, ttl)
+	if err != nil {
+		return "", false
+	}
+	return url, true
+}
+
+// getAlbumArtworkFile serves the resolved cover image's raw bytes for an
+// album. It mirrors streamTrack's dual authentication — a Bearer token in
+// the Authorization header, or an HMAC-signed ?exp=&sig= query string — since
+// an <img> element can no more set a custom request header than an <audio>
+// element can. It is intentionally not wrapped in requireViewerAuth, exactly
+// like streamTrack, because the signed-URL path is a *replacement* for
+// header-based auth, not an addition to it.
+func (handler *Handler) getAlbumArtworkFile(w http.ResponseWriter, r *http.Request) {
+	if !handler.requireCatalogService(w) {
+		return
+	}
+	albumID := r.PathValue("id")
+
+	rawToken := r.Header.Get("Authorization")
+	if rawToken != "" {
+		token, ok := bearerToken(rawToken)
+		if !ok {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="inori"`)
+			writeAPIError(w, http.StatusUnauthorized, "unauthorized", "valid bearer token is required")
+			return
+		}
+		if handler.authService == nil {
+			writeAPIError(w, http.StatusServiceUnavailable, "auth_not_configured", "authentication service is not configured")
+			return
+		}
+		if _, err := handler.authService.ValidateToken(r.Context(), token); err != nil {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="inori"`)
+			writeAPIError(w, http.StatusUnauthorized, "unauthorized", "valid bearer token is required")
+			return
+		}
+	} else {
+		if handler.streamSigner == nil {
+			writeAPIError(w, http.StatusServiceUnavailable, "stream_signer_not_configured", "stream signing is not configured")
+			return
+		}
+		q := r.URL.Query()
+		expStr := q.Get("exp")
+		sig := q.Get("sig")
+		if expStr == "" || sig == "" {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="inori"`)
+			writeAPIError(w, http.StatusUnauthorized, "unauthorized", "signed artwork URL or bearer token is required")
+			return
+		}
+		var exp int64
+		if _, err := fmt.Sscanf(expStr, "%d", &exp); err != nil {
+			writeAPIError(w, http.StatusBadRequest, "invalid_exp", "invalid exp parameter")
+			return
+		}
+		if err := handler.streamSigner.Verify(albumArtworkSignaturePayload(albumID), exp, sig); err != nil {
+			writeAPIError(w, http.StatusUnauthorized, "unauthorized", "artwork URL signature is invalid or expired")
+			return
+		}
+	}
+
+	if _, err := handler.catalogService.GetAlbum(r.Context(), albumID); err != nil {
+		writeError(w, err)
+		return
+	}
+	image, etag, found := handler.resolveAlbumArtworkCached(r.Context(), albumID)
+	if !found {
+		writeAPIError(w, http.StatusNotFound, "no_artwork", "no artwork")
+		return
+	}
+	mimeType := image.MIMEType
+	if mimeType == "" {
+		mimeType = "application/octet-stream"
+	}
+	w.Header().Set("Content-Type", mimeType)
+	w.Header().Set("Cache-Control", "private, max-age=3600")
+	if etag != "" {
+		w.Header().Set("ETag", etag)
+	}
+	// http.ServeContent handles If-None-Match / Range for us; a zero modtime
+	// just skips the Last-Modified/If-Modified-Since half of that (the ETag
+	// is content-addressed, which is the more meaningful identity here since
+	// "modified time" is ambiguous between the audio file and a sibling image).
+	http.ServeContent(w, r, "", time.Time{}, bytes.NewReader(image.Data))
+}
+
+// resolveAlbumArtworkCached resolves the cover image for an album, backed by
+// an in-process cache (artworkCache) so repeated requests for the same album
+// — the common case, since both the metadata endpoint and the bytes endpoint
+// resolve the same album, and any client re-rendering a grid re-requests
+// often — don't re-open and re-parse the source file or re-scan its
+// directory every time. A negative result is cached too.
+func (handler *Handler) resolveAlbumArtworkCached(ctx context.Context, albumID string) (artwork.Image, string, bool) {
+	if handler.artworkCache != nil {
+		if entry, ok := handler.artworkCache.get(albumID); ok {
+			return entry.image, entry.etag, entry.found
+		}
+	}
+	image, found := handler.resolveAlbumArtwork(ctx, albumID)
+	etag := ""
+	if found {
+		etag = artworkETag(image.Data)
+	}
+	if handler.artworkCache != nil {
+		handler.artworkCache.set(albumID, image, etag, found)
+	}
+	return image, etag, found
+}
+
+// resolveAlbumArtwork looks at one of the album's tracks (pickArtworkTrack
+// chooses deterministically) and tries, in order: an embedded picture in the
+// audio file, then a sibling cover/folder/front/album image file in the same
+// directory. Both require direct filesystem access to the object, which only
+// storage.Service.LocalPath can provide for local/NFS/SMB backends — it
+// returns ErrProbeUnsupported for S3, in which case this simply finds
+// nothing. That is correct: there is no cheap way to peek inside an
+// object-storage file without downloading it, and nothing in this version
+// adds that.
+func (handler *Handler) resolveAlbumArtwork(ctx context.Context, albumID string) (artwork.Image, bool) {
+	if handler.storage == nil || handler.mediaObjects == nil || handler.catalogService == nil {
+		return artwork.Image{}, false
+	}
+	track, ok := handler.pickArtworkTrack(ctx, albumID)
+	if !ok {
+		return artwork.Image{}, false
+	}
+	mo, err := handler.mediaObjects.GetMediaObject(ctx, track.MediaObjectID)
+	if err != nil {
+		return artwork.Image{}, false
+	}
+	path, err := handler.storage.LocalPath(ctx, mo.BackendID, mo.ObjectKey)
+	if err != nil {
+		return artwork.Image{}, false
+	}
+	if image, ok, _ := artwork.ExtractEmbedded(path); ok {
+		return image, true
+	}
+	if image, ok, _ := artwork.FindSibling(filepath.Dir(path)); ok {
+		return image, true
+	}
+	return artwork.Image{}, false
+}
+
+// pickArtworkTrack returns the album's "primary" track for cover-art
+// resolution: lowest disc number, then lowest track number, then track ID as
+// a final tie-breaker so the choice is fully deterministic regardless of
+// repository return order — legacy or partially-tagged tracks can share
+// disc/track number 0 when neither was ever set.
+func (handler *Handler) pickArtworkTrack(ctx context.Context, albumID string) (catalog.Track, bool) {
+	tracks, err := handler.catalogService.ListTracksByAlbum(ctx, albumID)
+	if err != nil || len(tracks) == 0 {
+		return catalog.Track{}, false
+	}
+	best := tracks[0]
+	for _, t := range tracks[1:] {
+		if lessArtworkTrack(t, best) {
+			best = t
+		}
+	}
+	return best, true
+}
+
+func lessArtworkTrack(a, b catalog.Track) bool {
+	if a.DiscNumber != b.DiscNumber {
+		return a.DiscNumber < b.DiscNumber
+	}
+	if a.TrackNumber != b.TrackNumber {
+		return a.TrackNumber < b.TrackNumber
+	}
+	return a.ID < b.ID
+}
+
+// artworkETag derives a content-addressed ETag from resolved image bytes so
+// http.ServeContent's conditional-GET handling (If-None-Match -> 304) works
+// without needing a meaningful "modified time" for a file that may have been
+// resolved from either the audio file's embedded tag or a sibling image.
+func artworkETag(data []byte) string {
+	sum := sha256.Sum256(data)
+	return `"` + hex.EncodeToString(sum[:])[:16] + `"`
 }
 
 type lyricsResponse struct {

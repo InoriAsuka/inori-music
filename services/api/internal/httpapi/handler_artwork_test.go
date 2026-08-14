@@ -173,16 +173,21 @@ func TestGetAlbumArtwork_CatalogNotConfigured(t *testing.T) {
 }
 
 // TestGetAlbumArtwork_WithArtworkMediaObject verifies that an album with an artwork
-// media object ID reaches the presign step. The in-memory backend has no presigned URL
-// support, so the handler returns 503 presign_failed — confirming that GetAlbum →
-// GetMediaObject → GeneratePresignedURL is wired correctly end-to-end.
+// media object ID whose backend cannot be resolved (registered here without ever
+// registering backend "b1") falls through to the track-derived resolution instead of
+// hard-failing. Before v5.39.0 this returned 503 presign_failed — GeneratePresignedURL
+// failing was the *only* path the handler had, so any presign failure was terminal even
+// though "album has no artwork we can serve" is not the same as "the service is down".
+// This album also has zero tracks, so the fallback finds nothing either: the end state
+// is an honest 404 no_artwork, not a 5xx. See TestGetAlbumArtwork_LocalBackend_* below
+// for the case where the fallback actually finds something.
 func TestGetAlbumArtwork_WithArtworkMediaObject(t *testing.T) {
 	const mediaObjectID = "artwork-mo-1"
 	h, viewerToken, adminToken := newArtworkViewerTestHandlerWithMedia(t, mediaObjectID)
 	albumID := seedArtworkAlbumWithToken(t, h, adminToken, mediaObjectID)
 	resp := performRequestWithAuthHeader(t, h, http.MethodGet, "/api/v1/catalog/albums/"+albumID+"/artwork",
 		"", "Bearer "+viewerToken)
-	// Memory backend has no presigned URL support → presign_failed 503.
-	// This confirms the code reached the presign step (album found, media object found).
-	assertAPIError(t, resp, http.StatusServiceUnavailable, "presign_failed")
+	// Backend "b1" was never registered → presign path fails → fallback runs →
+	// album has no tracks → fallback also finds nothing → honest 404, not 503.
+	assertAPIError(t, resp, http.StatusNotFound, "no_artwork")
 }

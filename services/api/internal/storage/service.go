@@ -317,6 +317,25 @@ func (service *Service) PutObject(ctx context.Context, backendID, objectKey stri
 	return nil
 }
 
+// LocalPath resolves the absolute filesystem path for an object on a
+// filesystem-backed storage backend (local / NFS / SMB), without opening it.
+// Returns ErrProbeUnsupported for backend types with no local filesystem
+// mapping (e.g. S3), the same sentinel GetObject/PutObject use, so callers
+// can treat "can't reach the bytes directly" uniformly. Intended for callers
+// that need the path itself — e.g. to read sibling files in the same
+// directory — rather than just the object's own contents.
+func (service *Service) LocalPath(ctx context.Context, backendID, objectKey string) (string, error) {
+	backend, err := service.repository.Get(ctx, backendID)
+	if err != nil {
+		return "", err
+	}
+	root, ok := localRootPath(backend)
+	if !ok {
+		return "", fmt.Errorf("%w: backend %s does not support direct filesystem access", ErrProbeUnsupported, backendID)
+	}
+	return SafeObjectPath(root, objectKey)
+}
+
 // GetObject returns a ReadCloser for the object identified by (backendID, objectKey)
 // on a filesystem-backed storage backend (local / NFS / SMB).
 func (service *Service) GetObject(ctx context.Context, backendID, objectKey string) (io.ReadCloser, error) {

@@ -26,6 +26,7 @@ import 'package:inori_music/src/catalog/catalog_cache_providers.dart';
 import 'package:inori_music/src/catalog/catalog_repository.dart';
 import 'package:inori_music/src/player/player_state.dart' as pstate;
 import 'package:inori_music/src/player/player_state_reporter.dart';
+import 'package:inori_music/src/shared/absolute_url.dart' show absoluteApiUrl;
 
 // ---------------------------------------------------------------------------
 // Providers
@@ -45,23 +46,14 @@ final historyApiProvider = Provider<HistoryApi>((ref) {
 
 /// Makes a playback descriptor URL absolute against the configured server.
 ///
-/// The server hands back `streamUrl` as a **relative** path —
-/// `/api/v1/catalog/tracks/<id>/stream?exp=…&sig=…`. That is correct for the
-/// web client, which is same-origin and lets the browser fill in the rest; it
-/// is unusable for a native player. `Uri.parse('/api/v1/…')` yields a URI with
-/// no scheme and no host, and handing that to AVPlayer produces
-/// `NSURLErrorUnsupportedURL (-1002)` — there is nothing to connect to.
-///
-/// The comment this replaces read "streamUrl already carries HMAC signature
-/// from the server — use as-is". The signature part is true (`exp`/`sig` mean
-/// no Authorization header is needed, which matters because the engine sends
-/// none). "Use as-is" was the mistake: signed does not imply addressable.
-///
-/// [Uri.resolve] covers both shapes — a presigned object-storage URL is
-/// already absolute, possibly on an entirely different host, and passes
-/// through untouched.
+/// Thin, name-preserving alias for [absoluteApiUrl] (generalised out of this
+/// file in v5.39.0 so album artwork URLs — resolved the same way, for the
+/// same reason — can reuse it instead of duplicating the logic). See that
+/// function's doc comment in `shared/absolute_url.dart` for the full
+/// explanation, including why the fix here specifically was "use as-is is
+/// wrong: signed does not imply addressable" (v5.37.1).
 String absolutePlaybackUrl(String url, String base) =>
-    Uri.parse(base).resolve(url).toString();
+    absoluteApiUrl(url, base);
 
 // ---------------------------------------------------------------------------
 // Player notifier — owns the just_audio AudioPlayer + queue logic

@@ -381,3 +381,70 @@ func TestGeneratePresignedURLSuccess(t *testing.T) {
 		t.Errorf("presigned URL missing object key: %s", purl)
 	}
 }
+
+func TestServiceLocalPathResolvesLocalBackend(t *testing.T) {
+	ctx := context.Background()
+	svc := NewService(NewMemoryRepository())
+	root := t.TempDir()
+	if _, err := svc.RegisterBackend(ctx, StorageBackend{
+		ID:          "local-path-test",
+		Type:        BackendTypeLocal,
+		DisplayName: "Local",
+		Enabled:     true,
+		Config:      BackendConfig{Local: &LocalConfig{RootPath: root}},
+	}); err != nil {
+		t.Fatalf("RegisterBackend: %v", err)
+	}
+
+	got, err := svc.LocalPath(ctx, "local-path-test", "albums/a1/cover.jpg")
+	if err != nil {
+		t.Fatalf("LocalPath: %v", err)
+	}
+	want := filepath.Join(root, "albums", "a1", "cover.jpg")
+	if got != want {
+		t.Errorf("LocalPath = %q, want %q", got, want)
+	}
+}
+
+func TestServiceLocalPathUnsupportedForS3(t *testing.T) {
+	ctx := context.Background()
+	svc := NewService(NewMemoryRepository())
+	if _, err := svc.RegisterBackend(ctx, StorageBackend{
+		ID:          "s3-path-test",
+		Type:        BackendTypeS3,
+		DisplayName: "S3",
+		Enabled:     true,
+		Config: BackendConfig{S3: &S3Config{
+			Endpoint:           "https://s3.example.com",
+			Bucket:             "music",
+			AccessKeySecretRef: "ACCESS",
+			SecretKeySecretRef: "SECRET",
+		}},
+	}); err != nil {
+		t.Fatalf("RegisterBackend: %v", err)
+	}
+
+	_, err := svc.LocalPath(ctx, "s3-path-test", "tracks/song.flac")
+	if !errors.Is(err, ErrProbeUnsupported) {
+		t.Fatalf("LocalPath error = %v, want ErrProbeUnsupported", err)
+	}
+}
+
+func TestServiceLocalPathRejectsEscapingObjectKey(t *testing.T) {
+	ctx := context.Background()
+	svc := NewService(NewMemoryRepository())
+	root := t.TempDir()
+	if _, err := svc.RegisterBackend(ctx, StorageBackend{
+		ID:          "local-path-escape-test",
+		Type:        BackendTypeLocal,
+		DisplayName: "Local",
+		Enabled:     true,
+		Config:      BackendConfig{Local: &LocalConfig{RootPath: root}},
+	}); err != nil {
+		t.Fatalf("RegisterBackend: %v", err)
+	}
+
+	if _, err := svc.LocalPath(ctx, "local-path-escape-test", "../../etc/passwd"); err == nil {
+		t.Fatal("LocalPath with an escaping object key should error, got nil")
+	}
+}

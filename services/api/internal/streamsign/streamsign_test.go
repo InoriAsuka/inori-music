@@ -64,4 +64,34 @@ func TestSigner(t *testing.T) {
 			t.Error("expected error when key mismatch")
 		}
 	})
+
+	// v5.39.0: album artwork reuses this signer with a namespaced payload
+	// ("album:<id>") instead of a bare ID. A signature minted for one
+	// resource kind must not verify for the other, even when the raw IDs are
+	// identical strings — otherwise a signed track-stream URL could be
+	// replayed against the artwork-file endpoint for a same-named album.
+	t.Run("namespaced resource ID does not collide with bare ID", func(t *testing.T) {
+		const id = "shared-id-123"
+		trackQuery := s.Sign(id)
+		var exp int64
+		var sig string
+		fmt.Sscanf(trackQuery, "exp=%d&sig=%s", &exp, &sig)
+
+		if err := s.Verify("album:"+id, exp, sig); err == nil {
+			t.Error("expected error verifying a bare-ID signature against a namespaced resource ID")
+		}
+
+		albumQuery := s.Sign("album:" + id)
+		var albumExp int64
+		var albumSig string
+		fmt.Sscanf(albumQuery, "exp=%d&sig=%s", &albumExp, &albumSig)
+
+		if err := s.Verify(id, albumExp, albumSig); err == nil {
+			t.Error("expected error verifying a namespaced-ID signature against the bare resource ID")
+		}
+		// The namespaced signature must still verify against its own ID.
+		if err := s.Verify("album:"+id, albumExp, albumSig); err != nil {
+			t.Errorf("Verify(album:%s) failed: %v", id, err)
+		}
+	})
 }

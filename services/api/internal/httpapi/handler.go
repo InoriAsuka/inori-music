@@ -230,6 +230,7 @@ type Handler struct {
 	info                 ServiceInfo
 	metricsMu            sync.Mutex
 	requestMetrics       map[requestMetricKey]requestMetricValue
+	artworkCache         *artworkCache
 }
 
 func defaultServiceInfo() ServiceInfo {
@@ -293,7 +294,12 @@ func readinessCheck(name string, ok bool, okMessage string, failureMessage strin
 }
 
 func NewHandler(storageService *storage.Service, options ...HandlerOption) *Handler {
-	handler := &Handler{storage: storageService, info: defaultServiceInfo(), requestMetrics: make(map[requestMetricKey]requestMetricValue)}
+	handler := &Handler{
+		storage:        storageService,
+		info:           defaultServiceInfo(),
+		requestMetrics: make(map[requestMetricKey]requestMetricValue),
+		artworkCache:   newArtworkCache(artworkCacheTTL),
+	}
 	for _, option := range options {
 		option(handler)
 	}
@@ -353,6 +359,7 @@ func (handler *Handler) Routes() http.Handler {
 	mux.HandleFunc("GET /api/v1/catalog/albums", handler.requireViewerAuth(handler.listAlbums))
 	mux.HandleFunc("GET /api/v1/catalog/albums/{id}", handler.requireViewerAuth(handler.getAlbum))
 	mux.HandleFunc("GET /api/v1/catalog/albums/{id}/artwork", handler.requireViewerAuth(handler.getAlbumArtwork))
+	mux.HandleFunc("GET /api/v1/catalog/albums/{id}/artwork/file", handler.getAlbumArtworkFile)
 	mux.HandleFunc("GET /api/v1/catalog/albums/{id}/tracks", handler.requireViewerAuth(handler.listTracksByAlbum))
 	mux.HandleFunc("GET /api/v1/catalog/tracks", handler.requireViewerAuth(handler.listTracks))
 	mux.HandleFunc("GET /api/v1/catalog/tracks/{id}", handler.requireViewerAuth(handler.getTrack))

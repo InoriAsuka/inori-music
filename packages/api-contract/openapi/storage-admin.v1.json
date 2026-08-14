@@ -2845,7 +2845,7 @@
   "info": {
     "description": "Server-managed media storage administration API.",
     "title": "Inori Music Storage Admin API",
-    "version": "5.35.0"
+    "version": "5.39.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -12985,6 +12985,64 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No artwork or album not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/catalog/albums/{id}/artwork/file": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/CatalogId"
+        }
+      ],
+      "get": {
+        "summary": "Get album artwork bytes",
+        "description": "Serves the resolved cover image's raw bytes: an embedded picture from one of the album's audio files, or a sibling cover/folder/front/album image file in the same directory, resolved on demand for storage backends that cannot issue presigned URLs (local/NFS/SMB). Authenticates via a Bearer token in the Authorization header, or the HMAC-signed ?exp=&sig= query string returned as `url` by GET .../artwork (required for <img> elements, which cannot set custom request headers). Responses carry an ETag and support conditional GET via If-None-Match.",
+        "operationId": "getAlbumArtworkFile",
+        "tags": [
+          "Catalog"
+        ],
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cover image bytes"
+          },
+          "304": {
+            "description": "Not modified (conditional GET via If-None-Match)"
           },
           "401": {
             "description": "Unauthorized",
